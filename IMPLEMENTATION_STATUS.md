@@ -4,7 +4,7 @@ Last Updated: 2026-02-11
 
 ## 🎉 MCP Server Status: **OPERATIONAL**
 
-**28 MCP tools** are now registered and ready to use!
+**34 MCP tools** are now registered and ready to use!
 
 ## Quick Summary
 
@@ -13,7 +13,7 @@ Last Updated: 2026-02-11
 | **Connection** | 2 | 2 | 0 | 0 |
 | **Document Management** | 6 | 5 | 0 | 1 |
 | **Sketching** | 10+ | 7 | 0 | 3+ |
-| **Basic Primitives** | 5 | 0 | 0 | 5 |
+| **Basic Primitives** | 5 | 4 | 0 | 1 |
 | **Extrusions** | 3 | 1 | 0 | 2 |
 | **Revolves** | 5 | 1 | 0 | 4 |
 | **Loft** | 2 | 0 | 0 | 2 |
@@ -22,11 +22,11 @@ Last Updated: 2026-02-11
 | **Sheet Metal** | 8+ | 0 | 0 | 8+ |
 | **Cutout Operations** | 0 | 0 | ALL | 0 |
 | **View/Display** | 4 | 2 | 0 | 2 |
-| **Query/Analysis** | 6+ | 5 | 0 | 1+ |
-| **Export** | 7 | 5 | 0 | 2 |
-| **Assembly** | 10+ | 3 | 0 | 7+ |
+| **Query/Analysis** | 6+ | 3 | 0 | 3+ |
+| **Export** | 7 | 4 | 0 | 3 |
+| **Assembly** | 10+ | 2 | 0 | 8+ |
 | **Diagnostics** | 2 | 2 | 0 | 0 |
-| **TOTAL** | **76+** | **33** | **ALL Cutouts** | **43+** |
+| **TOTAL** | **76+** | **34** | **ALL Cutouts** | **42+** |
 
 ---
 
@@ -75,11 +75,11 @@ Last Updated: 2026-02-11
 
 | Tool Name | Status | Collection/Module | API Method |
 |-----------|--------|-------------------|------------|
-| create_box_by_center | 📋 To Do | Models | AddBoxByCenter |
-| create_box_by_two_points | 📋 To Do | Models | AddBoxByTwoPoints |
+| create_box_by_center | ✅ Implemented | Models | AddBoxByCenter |
+| create_box_by_two_points | ✅ Implemented | Models | AddBoxByTwoPoints |
 | create_box_by_three_points | 📋 To Do | Models | AddBoxByThreePoints |
-| create_cylinder | 📋 To Do | Models | AddCylinderByCenterAndRadius |
-| create_sphere | 📋 To Do | Models | AddSphereByCenterAndRadius |
+| create_cylinder | ✅ Implemented | Models | AddCylinderByCenterAndRadius |
+| create_sphere | ✅ Implemented | Models | AddSphereByCenterAndRadius |
 
 ---
 

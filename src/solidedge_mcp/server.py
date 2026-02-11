@@ -10,7 +10,7 @@ from solidedge_mcp.backends.sketching import SketchManager
 from solidedge_mcp.backends.features import FeatureManager
 from solidedge_mcp.backends.assembly import AssemblyManager
 from solidedge_mcp.backends.query import QueryManager
-from solidedge_mcp.backends.export import ExportManager
+from solidedge_mcp.backends.export import ExportManager, ViewModel
 from solidedge_mcp.backends.diagnostics import diagnose_document, diagnose_feature
 
 # Create the FastMCP server
@@ -24,6 +24,7 @@ feature_manager = FeatureManager(doc_manager, sketch_manager)
 assembly_manager = AssemblyManager(doc_manager)
 query_manager = QueryManager(doc_manager)
 export_manager = ExportManager(doc_manager)
+view_manager = ViewModel(doc_manager)
 
 
 # ============================================================================
@@ -261,6 +262,98 @@ def create_revolve(angle: float, operation: str = "Add") -> dict:
 
 
 # ============================================================================
+# PRIMITIVE SHAPES
+# ============================================================================
+
+@mcp.tool()
+def create_box_by_center(
+    center_x: float,
+    center_y: float,
+    center_z: float,
+    length: float,
+    width: float,
+    height: float
+) -> dict:
+    """
+    Create a box primitive by center point and dimensions.
+
+    Args:
+        center_x, center_y, center_z: Center point coordinates (meters)
+        length: Length in meters (X direction)
+        width: Width in meters (Y direction)
+        height: Height in meters (Z direction)
+
+    Returns:
+        Box creation status
+    """
+    return feature_manager.create_box_by_center(
+        center_x, center_y, center_z, length, width, height
+    )
+
+
+@mcp.tool()
+def create_box_by_two_points(
+    x1: float, y1: float, z1: float,
+    x2: float, y2: float, z2: float
+) -> dict:
+    """
+    Create a box primitive by two opposite corners.
+
+    Args:
+        x1, y1, z1: First corner coordinates (meters)
+        x2, y2, z2: Opposite corner coordinates (meters)
+
+    Returns:
+        Box creation status
+    """
+    return feature_manager.create_box_by_two_points(x1, y1, z1, x2, y2, z2)
+
+
+@mcp.tool()
+def create_cylinder(
+    base_center_x: float,
+    base_center_y: float,
+    base_center_z: float,
+    radius: float,
+    height: float
+) -> dict:
+    """
+    Create a cylinder primitive.
+
+    Args:
+        base_center_x, base_center_y, base_center_z: Base circle center (meters)
+        radius: Cylinder radius (meters)
+        height: Cylinder height (meters)
+
+    Returns:
+        Cylinder creation status
+    """
+    return feature_manager.create_cylinder(
+        base_center_x, base_center_y, base_center_z, radius, height
+    )
+
+
+@mcp.tool()
+def create_sphere(
+    center_x: float,
+    center_y: float,
+    center_z: float,
+    radius: float
+) -> dict:
+    """
+    Create a sphere primitive.
+
+    Args:
+        center_x, center_y, center_z: Sphere center coordinates (meters)
+        radius: Sphere radius (meters)
+
+    Returns:
+        Sphere creation status
+    """
+    return feature_manager.create_sphere(center_x, center_y, center_z, radius)
+
+
+# ============================================================================
 # QUERY TOOLS
 # ============================================================================
 
@@ -355,6 +448,35 @@ def export_pdf(file_path: str) -> dict:
         Export status
     """
     return export_manager.export_pdf(file_path)
+
+
+# ============================================================================
+# VIEW & DISPLAY TOOLS
+# ============================================================================
+
+@mcp.tool()
+def set_view(view: str) -> dict:
+    """
+    Set the viewing orientation.
+
+    Args:
+        view: View orientation - 'Iso', 'Top', 'Front', 'Right', 'Left', 'Back', 'Bottom'
+
+    Returns:
+        View change status
+    """
+    return view_manager.set_view(view)
+
+
+@mcp.tool()
+def zoom_fit() -> dict:
+    """
+    Zoom to fit all geometry in the view.
+
+    Returns:
+        Zoom status
+    """
+    return view_manager.zoom_fit()
 
 
 # ============================================================================

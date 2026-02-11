@@ -396,3 +396,166 @@ class FeatureManager:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    # =================================================================
+    # PRIMITIVE SHAPES
+    # =================================================================
+
+    def create_box_by_center(
+        self,
+        center_x: float,
+        center_y: float,
+        center_z: float,
+        length: float,
+        width: float,
+        height: float
+    ) -> Dict[str, Any]:
+        """
+        Create a box primitive by center point and dimensions.
+
+        Args:
+            center_x, center_y, center_z: Center point coordinates (meters)
+            length: Length in meters (X direction)
+            width: Width in meters (Y direction)
+            height: Height in meters (Z direction)
+
+        Returns:
+            Dict with status and box info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # AddBoxByCenter(CenterX, CenterY, CenterZ, Length, Width, Height)
+            model = models.AddBoxByCenter(
+                center_x, center_y, center_z,
+                length, width, height
+            )
+
+            return {
+                "status": "created",
+                "type": "box",
+                "method": "by_center",
+                "center": [center_x, center_y, center_z],
+                "dimensions": {"length": length, "width": width, "height": height}
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_box_by_two_points(
+        self,
+        x1: float, y1: float, z1: float,
+        x2: float, y2: float, z2: float
+    ) -> Dict[str, Any]:
+        """
+        Create a box primitive by two opposite corners.
+
+        Args:
+            x1, y1, z1: First corner coordinates (meters)
+            x2, y2, z2: Opposite corner coordinates (meters)
+
+        Returns:
+            Dict with status and box info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # AddBoxByTwoPoints(X1, Y1, Z1, X2, Y2, Z2)
+            model = models.AddBoxByTwoPoints(x1, y1, z1, x2, y2, z2)
+
+            return {
+                "status": "created",
+                "type": "box",
+                "method": "by_two_points",
+                "corner1": [x1, y1, z1],
+                "corner2": [x2, y2, z2]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_cylinder(
+        self,
+        base_center_x: float,
+        base_center_y: float,
+        base_center_z: float,
+        radius: float,
+        height: float
+    ) -> Dict[str, Any]:
+        """
+        Create a cylinder primitive.
+
+        Args:
+            base_center_x, base_center_y, base_center_z: Base circle center (meters)
+            radius: Cylinder radius (meters)
+            height: Cylinder height (meters)
+
+        Returns:
+            Dict with status and cylinder info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # AddCylinderByCenterAndRadius(CenterX, CenterY, CenterZ, Radius, Height)
+            model = models.AddCylinderByCenterAndRadius(
+                base_center_x, base_center_y, base_center_z,
+                radius, height
+            )
+
+            return {
+                "status": "created",
+                "type": "cylinder",
+                "base_center": [base_center_x, base_center_y, base_center_z],
+                "radius": radius,
+                "height": height
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_sphere(
+        self,
+        center_x: float,
+        center_y: float,
+        center_z: float,
+        radius: float
+    ) -> Dict[str, Any]:
+        """
+        Create a sphere primitive.
+
+        Args:
+            center_x, center_y, center_z: Sphere center coordinates (meters)
+            radius: Sphere radius (meters)
+
+        Returns:
+            Dict with status and sphere info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # AddSphereByCenterAndRadius(CenterX, CenterY, CenterZ, Radius)
+            model = models.AddSphereByCenterAndRadius(
+                center_x, center_y, center_z, radius
+            )
+
+            return {
+                "status": "created",
+                "type": "sphere",
+                "center": [center_x, center_y, center_z],
+                "radius": radius
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
