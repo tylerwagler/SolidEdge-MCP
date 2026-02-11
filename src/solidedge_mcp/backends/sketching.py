@@ -260,7 +260,8 @@ class SketchManager:
             angle_rad = math.radians(angle)
 
             # Add ellipse by center and radii
-            ellipse = ellipses.AddByCenterRadii(
+            # API method is AddByCenter (not AddByCenterRadii)
+            ellipse = ellipses.AddByCenter(
                 center_x, center_y,
                 major_radius, minor_radius,
                 angle_rad
@@ -308,10 +309,11 @@ class SketchManager:
                 point_array.extend(point)
 
             # Add spline by points
+            # AddByPoints takes positional args: Order, NumPoints, PointArray
             spline = splines.AddByPoints(
-                Order=3,  # Cubic spline
-                NumPoints=len(points),
-                PointArray=tuple(point_array)
+                3,  # Order (cubic spline)
+                len(points),  # NumPoints
+                tuple(point_array)  # PointArray (flattened x,y,x,y,...)
             )
 
             return {

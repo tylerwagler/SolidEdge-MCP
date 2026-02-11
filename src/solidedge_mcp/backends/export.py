@@ -365,13 +365,13 @@ class ViewModel:
 
             # Map view names to constants
             view_map = {
-                "Iso": ViewOrientationConstants.igNamedViewIso,
-                "Top": ViewOrientationConstants.igNamedViewTop,
-                "Bottom": ViewOrientationConstants.igNamedViewBottom,
-                "Front": ViewOrientationConstants.igNamedViewFront,
-                "Back": ViewOrientationConstants.igNamedViewBack,
-                "Right": ViewOrientationConstants.igNamedViewRight,
-                "Left": ViewOrientationConstants.igNamedViewLeft
+                "Iso": ViewOrientationConstants.seIsoView,
+                "Top": ViewOrientationConstants.seTopView,
+                "Bottom": ViewOrientationConstants.seBottomView,
+                "Front": ViewOrientationConstants.seFrontView,
+                "Back": ViewOrientationConstants.seBackView,
+                "Right": ViewOrientationConstants.seRightView,
+                "Left": ViewOrientationConstants.seLeftView
             }
 
             view_const = view_map.get(view)

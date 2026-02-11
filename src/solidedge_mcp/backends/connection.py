@@ -80,13 +80,20 @@ class SolidEdgeConnection:
             return {"error": "Not connected to Solid Edge"}
 
         try:
-            return {
+            info = {
                 "version": self.application.Version,
                 "caption": self.application.Caption,
                 "visible": self.application.Visible,
-                "path": self.application.Path,
                 "documents_count": self.application.Documents.Count,
             }
+
+            # Path property may not exist in all Solid Edge versions
+            try:
+                info["path"] = self.application.Path
+            except:
+                info["path"] = "N/A"
+
+            return info
         except Exception as e:
             return {
                 "error": str(e),
