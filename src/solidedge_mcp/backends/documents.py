@@ -171,6 +171,9 @@ class DocumentManager:
 
             if save and not self.active_document.Saved:
                 self.active_document.Save()
+            elif not save:
+                # Mark as saved to suppress save prompt when closing
+                self.active_document.Saved = True
 
             self.active_document.Close()
             self.active_document = None

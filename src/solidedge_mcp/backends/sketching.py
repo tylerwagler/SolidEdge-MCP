@@ -256,15 +256,18 @@ class SketchManager:
             # Get Ellipses2d collection
             ellipses = self.active_profile.Ellipses2d
 
-            # Convert angle to radians
+            # Convert angle to radians for axis calculation
             angle_rad = math.radians(angle)
 
-            # Add ellipse by center and radii
-            # API method is AddByCenter (not AddByCenterRadii)
+            # AddByCenter takes 6 params: cx, cy, major_radius, minor_radius, axis_x, axis_y
+            # The axis defines the direction of the major axis
+            axis_x = math.cos(angle_rad)
+            axis_y = math.sin(angle_rad)
+
             ellipse = ellipses.AddByCenter(
                 center_x, center_y,
                 major_radius, minor_radius,
-                angle_rad
+                axis_x, axis_y
             )
 
             return {

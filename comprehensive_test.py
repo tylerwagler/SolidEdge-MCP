@@ -307,8 +307,8 @@ def main():
         else:
             failed.append("list_components")
 
-    # Close assembly
-    doc_manager.close_document()
+    # Close assembly (don't save test document)
+    doc_manager.close_document(save=False)
 
     # ========================================================================
     # SUMMARY
