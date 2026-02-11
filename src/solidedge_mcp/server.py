@@ -408,6 +408,26 @@ def create_cylinder(
 
 
 @mcp.tool()
+def create_box_by_three_points(
+    x1: float, y1: float, z1: float,
+    x2: float, y2: float, z2: float,
+    x3: float, y3: float, z3: float
+) -> dict:
+    """
+    Create a box primitive by three points.
+
+    Args:
+        x1, y1, z1: First corner point (meters)
+        x2, y2, z2: Second point defining width (meters)
+        x3, y3, z3: Third point defining height (meters)
+
+    Returns:
+        Box creation status
+    """
+    return feature_manager.create_box_by_three_points(x1, y1, z1, x2, y2, z2, x3, y3, z3)
+
+
+@mcp.tool()
 def create_sphere(
     center_x: float,
     center_y: float,
@@ -461,6 +481,104 @@ def create_sweep(path_profile_index: Optional[int] = None) -> dict:
     Note: Requires a cross-section profile and a path curve
     """
     return feature_manager.create_sweep(path_profile_index)
+
+
+# ============================================================================
+# HELIX & SPIRAL FEATURES
+# ============================================================================
+
+@mcp.tool()
+def create_helix(
+    pitch: float,
+    height: float,
+    revolutions: Optional[float] = None,
+    direction: str = "Right"
+) -> dict:
+    """
+    Create a helical feature (springs, threads, etc.).
+
+    Args:
+        pitch: Distance between coils in meters
+        height: Total height of helix in meters
+        revolutions: Number of turns (optional, calculated from pitch/height if not given)
+        direction: 'Right' or 'Left' hand helix
+
+    Returns:
+        Helix creation status
+    """
+    return feature_manager.create_helix(pitch, height, revolutions, direction)
+
+
+# ============================================================================
+# SHEET METAL FEATURES
+# ============================================================================
+
+@mcp.tool()
+def create_base_flange(
+    width: float,
+    thickness: float,
+    bend_radius: Optional[float] = None
+) -> dict:
+    """
+    Create a base contour flange (sheet metal).
+
+    Args:
+        width: Flange width in meters
+        thickness: Material thickness in meters
+        bend_radius: Bend radius in meters (optional, defaults to 2x thickness)
+
+    Returns:
+        Base flange creation status
+    """
+    return feature_manager.create_base_flange(width, thickness, bend_radius)
+
+
+@mcp.tool()
+def create_base_tab(thickness: float, width: Optional[float] = None) -> dict:
+    """
+    Create a base tab (sheet metal).
+
+    Args:
+        thickness: Material thickness in meters
+        width: Tab width in meters (optional)
+
+    Returns:
+        Base tab creation status
+    """
+    return feature_manager.create_base_tab(thickness, width)
+
+
+# ============================================================================
+# BODY OPERATIONS
+# ============================================================================
+
+@mcp.tool()
+def add_body(body_type: str = "Solid") -> dict:
+    """
+    Add a body to the part.
+
+    Args:
+        body_type: Type of body - 'Solid', 'Surface', 'Construction'
+
+    Returns:
+        Body creation status
+    """
+    return feature_manager.add_body(body_type)
+
+
+@mcp.tool()
+def thicken_surface(thickness: float, direction: str = "Both") -> dict:
+    """
+    Thicken a surface to create a solid.
+
+    Args:
+        thickness: Thickness in meters
+        direction: 'Both', 'Inside', or 'Outside'
+
+    Returns:
+        Thicken operation status
+    """
+    return feature_manager.thicken_surface(thickness, direction)
 
 
 # ============================================================================
@@ -631,6 +749,48 @@ def capture_screenshot(file_path: str, width: int = 1920, height: int = 1080) ->
         Screenshot capture status and file info
     """
     return export_manager.capture_screenshot(file_path, width, height)
+
+
+@mcp.tool()
+def export_dxf(file_path: str) -> dict:
+    """
+    Export the active document to DXF format.
+
+    Args:
+        file_path: Output file path (.dxf)
+
+    Returns:
+        Export status
+    """
+    return export_manager.export_to_dxf(file_path)
+
+
+@mcp.tool()
+def export_parasolid(file_path: str) -> dict:
+    """
+    Export the active document to Parasolid format.
+
+    Args:
+        file_path: Output file path (.x_t or .x_b)
+
+    Returns:
+        Export status
+    """
+    return export_manager.export_to_parasolid(file_path)
+
+
+@mcp.tool()
+def export_jt(file_path: str) -> dict:
+    """
+    Export the active document to JT format.
+
+    Args:
+        file_path: Output file path (.jt)
+
+    Returns:
+        Export status
+    """
+    return export_manager.export_to_jt(file_path)
 
 
 # ============================================================================

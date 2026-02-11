@@ -480,6 +480,44 @@ class FeatureManager:
                 "traceback": traceback.format_exc()
             }
 
+    def create_box_by_three_points(
+        self,
+        x1: float, y1: float, z1: float,
+        x2: float, y2: float, z2: float,
+        x3: float, y3: float, z3: float
+    ) -> Dict[str, Any]:
+        """
+        Create a box primitive by three points.
+
+        Args:
+            x1, y1, z1: First corner point (meters)
+            x2, y2, z2: Second point defining width (meters)
+            x3, y3, z3: Third point defining height (meters)
+
+        Returns:
+            Dict with status and box info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # AddBoxByThreePoints(X1, Y1, Z1, X2, Y2, Z2, X3, Y3, Z3)
+            model = models.AddBoxByThreePoints(x1, y1, z1, x2, y2, z2, x3, y3, z3)
+
+            return {
+                "status": "created",
+                "type": "box",
+                "method": "by_three_points",
+                "point1": [x1, y1, z1],
+                "point2": [x2, y2, z2],
+                "point3": [x3, y3, z3]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def create_cylinder(
         self,
         base_center_x: float,
@@ -763,6 +801,228 @@ class FeatureManager:
                 "type": "revolve_thin_wall",
                 "angle": angle,
                 "wall_thickness": wall_thickness
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # HELIX AND SPIRAL FEATURES
+    # =================================================================
+
+    def create_helix(
+        self,
+        pitch: float,
+        height: float,
+        revolutions: float = None,
+        direction: str = "Right"
+    ) -> Dict[str, Any]:
+        """
+        Create a helical feature.
+
+        Args:
+            pitch: Distance between coils (meters)
+            height: Total height of helix (meters)
+            revolutions: Number of turns (optional, calculated from pitch/height if not given)
+            direction: 'Right' or 'Left' hand helix
+
+        Returns:
+            Dict with status and helix info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            models = doc.Models
+
+            # Calculate revolutions if not provided
+            if revolutions is None:
+                revolutions = height / pitch
+
+            # AddFiniteBaseHelix
+            model = models.AddFiniteBaseHelix(
+                NumberOfProfiles=1,
+                ProfileArray=(profile,),
+                Pitch=pitch,
+                Height=height,
+                Revolutions=revolutions
+            )
+
+            return {
+                "status": "created",
+                "type": "helix",
+                "pitch": pitch,
+                "height": height,
+                "revolutions": revolutions,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # SHEET METAL FEATURES
+    # =================================================================
+
+    def create_base_flange(
+        self,
+        width: float,
+        thickness: float,
+        bend_radius: float = None
+    ) -> Dict[str, Any]:
+        """
+        Create a base contour flange (sheet metal).
+
+        Args:
+            width: Flange width (meters)
+            thickness: Material thickness (meters)
+            bend_radius: Bend radius (meters, optional)
+
+        Returns:
+            Dict with status and flange info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            models = doc.Models
+
+            if bend_radius is None:
+                bend_radius = thickness * 2
+
+            # AddBaseContourFlange
+            model = models.AddBaseContourFlange(
+                NumberOfProfiles=1,
+                ProfileArray=(profile,),
+                Thickness=thickness,
+                BendRadius=bend_radius
+            )
+
+            return {
+                "status": "created",
+                "type": "base_flange",
+                "thickness": thickness,
+                "bend_radius": bend_radius
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_base_tab(
+        self,
+        thickness: float,
+        width: float = None
+    ) -> Dict[str, Any]:
+        """
+        Create a base tab (sheet metal).
+
+        Args:
+            thickness: Material thickness (meters)
+            width: Tab width (meters, optional)
+
+        Returns:
+            Dict with status and tab info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            models = doc.Models
+
+            # AddBaseTab
+            model = models.AddBaseTab(
+                NumberOfProfiles=1,
+                ProfileArray=(profile,),
+                Thickness=thickness
+            )
+
+            return {
+                "status": "created",
+                "type": "base_tab",
+                "thickness": thickness
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # BODY OPERATIONS
+    # =================================================================
+
+    def add_body(self, body_type: str = "Solid") -> Dict[str, Any]:
+        """
+        Add a body to the part.
+
+        Args:
+            body_type: Type of body - 'Solid', 'Surface', 'Construction'
+
+        Returns:
+            Dict with status and body info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # AddBody
+            body = models.AddBody()
+
+            return {
+                "status": "created",
+                "type": "body",
+                "body_type": body_type
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def thicken_surface(
+        self,
+        thickness: float,
+        direction: str = "Both"
+    ) -> Dict[str, Any]:
+        """
+        Thicken a surface to create a solid.
+
+        Args:
+            thickness: Thickness (meters)
+            direction: 'Both', 'Inside', or 'Outside'
+
+        Returns:
+            Dict with status and thicken info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # AddThickenFeature
+            model = models.AddThickenFeature(
+                Thickness=thickness
+            )
+
+            return {
+                "status": "created",
+                "type": "thicken",
+                "thickness": thickness,
+                "direction": direction
             }
         except Exception as e:
             return {

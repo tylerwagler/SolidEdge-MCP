@@ -4,7 +4,7 @@ Last Updated: 2026-02-11
 
 ## 🎉 MCP Server Status: **OPERATIONAL**
 
-**54 MCP tools** are now registered and ready to use!
+**66 MCP tools** are now registered and ready to use!
 
 ## Quick Summary
 
@@ -13,20 +13,21 @@ Last Updated: 2026-02-11
 | **Connection** | 2 | 2 | 0 | 0 |
 | **Document Management** | 6 | 7 | 0 | 0 |
 | **Sketching** | 10+ | 7 | 0 | 3+ |
-| **Basic Primitives** | 5 | 4 | 0 | 1 |
+| **Basic Primitives** | 5 | 5 | 0 | 0 |
 | **Extrusions** | 3 | 2 | 0 | 1 |
 | **Revolves** | 5 | 3 | 0 | 2 |
 | **Loft** | 2 | 1 | 0 | 1 |
 | **Sweep** | 2 | 1 | 0 | 1 |
-| **Helix/Spiral** | 4 | 0 | 0 | 4 |
-| **Sheet Metal** | 8+ | 0 | 0 | 8+ |
+| **Helix/Spiral** | 4 | 1 | 0 | 3 |
+| **Sheet Metal** | 8+ | 2 | 0 | 6+ |
+| **Body Operations** | 6+ | 2 | 0 | 4+ |
 | **Cutout Operations** | 0 | 0 | ALL | 0 |
 | **View/Display** | 4 | 3 | 0 | 1 |
 | **Query/Analysis** | 6+ | 6 | 0 | 0+ |
-| **Export** | 9 | 6 | 0 | 3 |
+| **Export** | 9 | 9 | 0 | 0 |
 | **Assembly** | 10+ | 5 | 0 | 5+ |
 | **Diagnostics** | 2 | 2 | 0 | 0 |
-| **TOTAL** | **76+** | **54** | **ALL Cutouts** | **22+** |
+| **TOTAL** | **86+** | **66** | **ALL Cutouts** | **20+** |
 
 ---
 
@@ -77,7 +78,7 @@ Last Updated: 2026-02-11
 |-----------|--------|-------------------|------------|
 | create_box_by_center | ✅ Implemented | Models | AddBoxByCenter |
 | create_box_by_two_points | ✅ Implemented | Models | AddBoxByTwoPoints |
-| create_box_by_three_points | 📋 To Do | Models | AddBoxByThreePoints |
+| create_box_by_three_points | ✅ Implemented | Models | AddBoxByThreePoints |
 | create_cylinder | ✅ Implemented | Models | AddCylinderByCenterAndRadius |
 | create_sphere | ✅ Implemented | Models | AddSphereByCenterAndRadius |
 
@@ -127,7 +128,7 @@ Last Updated: 2026-02-11
 
 | Tool Name | Status | Collection/Module | API Method |
 |-----------|--------|-------------------|------------|
-| create_helix | 📋 To Do | Models | AddFiniteBaseHelix |
+| create_helix | ✅ Implemented | Models | AddFiniteBaseHelix |
 | create_helix_sync | 📋 To Do | Models | AddFiniteBaseHelixSync |
 | create_helix_thin_wall | 📋 To Do | Models | AddFiniteBaseHelixWithThinWall |
 | create_helix_sync_thin_wall | 📋 To Do | Models | AddFiniteBaseHelixSyncWithThinWall |
@@ -138,9 +139,9 @@ Last Updated: 2026-02-11
 
 | Tool Name | Status | Collection/Module | API Method |
 |-----------|--------|-------------------|------------|
-| add_base_contour_flange | 📋 To Do | Models | AddBaseContourFlange |
+| create_base_flange | ✅ Implemented | Models | AddBaseContourFlange |
 | add_base_contour_flange_advanced | 📋 To Do | Models | AddBaseContourFlangeByBendDeductionOrBendAllowance |
-| add_base_tab | 📋 To Do | Models | AddBaseTab |
+| create_base_tab | ✅ Implemented | Models | AddBaseTab |
 | add_base_tab_multi_profile | 📋 To Do | Models | AddBaseTabWithMultipleProfiles |
 | add_lofted_flange | 📋 To Do | Models | AddLoftedFlange |
 | add_lofted_flange_advanced | 📋 To Do | Models | AddLoftedFlangeByBendDeductionOrBendAllowance |
@@ -153,12 +154,12 @@ Last Updated: 2026-02-11
 
 | Tool Name | Status | Collection/Module | API Method |
 |-----------|--------|-------------------|------------|
-| add_body | 📋 To Do | Models | AddBody |
+| add_body | ✅ Implemented | Models | AddBody |
 | add_body_by_mesh | 📋 To Do | Models | AddBodyByMeshFacets |
 | add_body_by_tag | 📋 To Do | Models | AddBodyByTag |
 | add_body_feature | 📋 To Do | Models | AddBodyFeature |
 | add_by_construction | 📋 To Do | Models | AddByConstruction |
-| thicken_surface | 📋 To Do | Models | AddThickenFeature |
+| thicken_surface | ✅ Implemented | Models | AddThickenFeature |
 
 ---
 
@@ -252,9 +253,9 @@ Last Updated: 2026-02-11
 | export_pdf | ✅ Implemented | Document.SaveAs | Export to PDF |
 | create_drawing | ✅ Implemented | Documents | Create 2D drawing |
 | capture_screenshot | ✅ Implemented | Window | Capture view image |
-| export_parasolid | 📋 To Do | Document.SaveAs | Export to X_T/X_B |
-| export_jt | 📋 To Do | Document.SaveAs | Export to JT |
-| export_dxf | 📋 To Do | Document.SaveAs | Export to DXF |
+| export_parasolid | ✅ Implemented | Document.SaveAs | Export to X_T/X_B |
+| export_jt | ✅ Implemented | Document.SaveAs | Export to JT |
+| export_dxf | ✅ Implemented | Document.SaveAs | Export to DXF |
 
 ---
 

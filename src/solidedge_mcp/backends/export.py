@@ -238,6 +238,73 @@ class ExportManager:
             }
 
 
+    def export_to_dxf(self, file_path: str) -> Dict[str, Any]:
+        """Export to DXF format"""
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not file_path.lower().endswith('.dxf'):
+                file_path += '.dxf'
+
+            doc.SaveAs(file_path)
+
+            return {
+                "status": "exported",
+                "format": "DXF",
+                "path": file_path,
+                "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def export_to_parasolid(self, file_path: str) -> Dict[str, Any]:
+        """Export to Parasolid format (X_T or X_B)"""
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not (file_path.lower().endswith('.x_t') or file_path.lower().endswith('.x_b')):
+                file_path += '.x_t'
+
+            doc.SaveAs(file_path)
+
+            return {
+                "status": "exported",
+                "format": "Parasolid",
+                "path": file_path,
+                "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def export_to_jt(self, file_path: str) -> Dict[str, Any]:
+        """Export to JT format"""
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not file_path.lower().endswith('.jt'):
+                file_path += '.jt'
+
+            doc.SaveAs(file_path)
+
+            return {
+                "status": "exported",
+                "format": "JT",
+                "path": file_path,
+                "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+
 class ViewModel:
     """Manages view manipulation"""
 
