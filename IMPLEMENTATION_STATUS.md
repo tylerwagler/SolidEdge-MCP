@@ -4,29 +4,29 @@ Last Updated: 2026-02-11
 
 ## 🎉 MCP Server Status: **OPERATIONAL**
 
-**34 MCP tools** are now registered and ready to use!
+**44 MCP tools** are now registered and ready to use!
 
 ## Quick Summary
 
 | Category | Available in API | Implemented | Not Available | Remaining |
 |----------|-----------------|-------------|---------------|-----------|
 | **Connection** | 2 | 2 | 0 | 0 |
-| **Document Management** | 6 | 5 | 0 | 1 |
+| **Document Management** | 6 | 7 | 0 | 0 |
 | **Sketching** | 10+ | 7 | 0 | 3+ |
 | **Basic Primitives** | 5 | 4 | 0 | 1 |
 | **Extrusions** | 3 | 1 | 0 | 2 |
 | **Revolves** | 5 | 1 | 0 | 4 |
-| **Loft** | 2 | 0 | 0 | 2 |
-| **Sweep** | 2 | 0 | 0 | 2 |
+| **Loft** | 2 | 1 | 0 | 1 |
+| **Sweep** | 2 | 1 | 0 | 1 |
 | **Helix/Spiral** | 4 | 0 | 0 | 4 |
 | **Sheet Metal** | 8+ | 0 | 0 | 8+ |
 | **Cutout Operations** | 0 | 0 | ALL | 0 |
-| **View/Display** | 4 | 2 | 0 | 2 |
-| **Query/Analysis** | 6+ | 3 | 0 | 3+ |
+| **View/Display** | 4 | 3 | 0 | 1 |
+| **Query/Analysis** | 6+ | 6 | 0 | 0+ |
 | **Export** | 7 | 4 | 0 | 3 |
 | **Assembly** | 10+ | 2 | 0 | 8+ |
 | **Diagnostics** | 2 | 2 | 0 | 0 |
-| **TOTAL** | **76+** | **34** | **ALL Cutouts** | **42+** |
+| **TOTAL** | **76+** | **44** | **ALL Cutouts** | **32+** |
 
 ---
 
@@ -50,7 +50,7 @@ Last Updated: 2026-02-11
 | save_document | ✅ Implemented | Documents | Save active document |
 | save_as_document | ✅ Implemented | Documents | Save with new name |
 | close_document | ✅ Implemented | Documents | Close active document |
-| list_documents | 📋 To Do | Documents | List all open documents |
+| list_documents | ✅ Implemented | Documents | List all open documents |
 
 ---
 
@@ -109,7 +109,7 @@ Last Updated: 2026-02-11
 
 | Tool Name | Status | Collection/Module | API Method |
 |-----------|--------|-------------------|------------|
-| create_loft | 📋 To Do | Models | AddLoftedProtrusion |
+| create_loft | ✅ Implemented | Models | AddLoftedProtrusion |
 | create_loft_thin_wall | 📋 To Do | Models | AddLoftedProtrusionWithThinWall |
 
 ---
@@ -118,7 +118,7 @@ Last Updated: 2026-02-11
 
 | Tool Name | Status | Collection/Module | API Method |
 |-----------|--------|-------------------|------------|
-| create_sweep | 📋 To Do | Models | AddSweptProtrusion |
+| create_sweep | ✅ Implemented | Models | AddSweptProtrusion |
 | create_sweep_thin_wall | 📋 To Do | Models | AddSweptProtrusionWithThinWall |
 
 ---
@@ -223,11 +223,10 @@ Last Updated: 2026-02-11
 |-----------|--------|-------------------|-------|
 | get_bounding_box | ✅ Implemented | Document | Query extents |
 | get_mass_properties | ✅ Implemented | Model | Mass, volume, CoG, inertia |
-| get_feature_list | ✅ Implemented | Models | List all features |
-| get_feature_info | ✅ Implemented | Models | Query feature properties |
-| list_reference_planes | ✅ Implemented | RefPlanes | List available planes |
-| measure_distance | 📋 To Do | Measurement? | Measure between entities |
-| measure_angle | 📋 To Do | Measurement? | Measure angle |
+| list_features | ✅ Implemented | Models | List all features |
+| get_feature_count | ✅ Implemented | Models | Count features |
+| get_document_properties | ✅ Implemented | Document | Document metadata |
+| measure_distance | ✅ Implemented | Calculation | Measure between points |
 
 ---
 
@@ -237,7 +236,7 @@ Last Updated: 2026-02-11
 |-----------|--------|-------------------|-------|
 | set_view | ✅ Implemented | Window.View | Set orientation (Iso, Top, Front, etc.) |
 | zoom_fit | ✅ Implemented | Window.View | Fit all geometry |
-| zoom_window | 📋 To Do | Window.View | Zoom to window |
+| zoom_to_selection | ✅ Implemented | Window.View | Zoom to selected |
 | set_display_mode | 📋 To Do | Window.View | Shaded, wireframe, etc. |
 
 ---

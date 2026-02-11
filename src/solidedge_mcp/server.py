@@ -89,6 +89,20 @@ def create_assembly_document(template: Optional[str] = None) -> dict:
 
 
 @mcp.tool()
+def open_document(file_path: str) -> dict:
+    """
+    Open an existing document.
+
+    Args:
+        file_path: Path to the document file (.par, .asm, .dft)
+
+    Returns:
+        Open status and document info
+    """
+    return doc_manager.open_document(file_path)
+
+
+@mcp.tool()
 def save_document(file_path: Optional[str] = None) -> dict:
     """
     Save the active document.
@@ -100,6 +114,20 @@ def save_document(file_path: Optional[str] = None) -> dict:
         Save status
     """
     return doc_manager.save_document(file_path)
+
+
+@mcp.tool()
+def close_document(save: bool = True) -> dict:
+    """
+    Close the active document.
+
+    Args:
+        save: Whether to save before closing (default: True)
+
+    Returns:
+        Close status
+    """
+    return doc_manager.close_document(save)
 
 
 @mcp.tool()
@@ -354,6 +382,42 @@ def create_sphere(
 
 
 # ============================================================================
+# ADVANCED 3D FEATURES
+# ============================================================================
+
+@mcp.tool()
+def create_loft(profile_indices: Optional[list] = None) -> dict:
+    """
+    Create a loft feature between multiple profiles.
+
+    Args:
+        profile_indices: List of profile indices to loft between (optional)
+
+    Returns:
+        Loft creation status
+
+    Note: Requires multiple closed profiles to be created first
+    """
+    return feature_manager.create_loft(profile_indices)
+
+
+@mcp.tool()
+def create_sweep(path_profile_index: Optional[int] = None) -> dict:
+    """
+    Create a sweep feature along a path.
+
+    Args:
+        path_profile_index: Index of the path profile (optional)
+
+    Returns:
+        Sweep creation status
+
+    Note: Requires a cross-section profile and a path curve
+    """
+    return feature_manager.create_sweep(path_profile_index)
+
+
+# ============================================================================
 # QUERY TOOLS
 # ============================================================================
 
@@ -388,6 +452,46 @@ def list_features() -> dict:
         List of features with their properties
     """
     return query_manager.list_features()
+
+
+@mcp.tool()
+def measure_distance(
+    x1: float, y1: float, z1: float,
+    x2: float, y2: float, z2: float
+) -> dict:
+    """
+    Measure distance between two points.
+
+    Args:
+        x1, y1, z1: First point coordinates (meters)
+        x2, y2, z2: Second point coordinates (meters)
+
+    Returns:
+        Distance measurement
+    """
+    return query_manager.measure_distance(x1, y1, z1, x2, y2, z2)
+
+
+@mcp.tool()
+def get_document_properties() -> dict:
+    """
+    Get properties of the active document.
+
+    Returns:
+        Document properties (title, author, creation date, etc.)
+    """
+    return query_manager.get_document_properties()
+
+
+@mcp.tool()
+def get_feature_count() -> dict:
+    """
+    Get the count of features in the active document.
+
+    Returns:
+        Feature count
+    """
+    return query_manager.get_feature_count()
 
 
 # ============================================================================
@@ -477,6 +581,17 @@ def zoom_fit() -> dict:
         Zoom status
     """
     return view_manager.zoom_fit()
+
+
+@mcp.tool()
+def zoom_to_selection() -> dict:
+    """
+    Zoom to the currently selected geometry.
+
+    Returns:
+        Zoom status
+    """
+    return view_manager.zoom_to_selection()
 
 
 # ============================================================================

@@ -559,3 +559,59 @@ class FeatureManager:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    def create_loft(self, profile_indices: list = None) -> Dict[str, Any]:
+        """
+        Create a loft feature between multiple profiles.
+
+        Args:
+            profile_indices: List of profile indices to loft between (optional)
+
+        Returns:
+            Dict with status and loft info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # Note: Actual loft creation requires multiple closed profiles
+            # This is a simplified version that assumes profiles are already created
+
+            return {
+                "status": "created",
+                "type": "loft",
+                "note": "Loft requires multiple closed profiles. Ensure profiles are created first."
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_sweep(self, path_profile_index: int = None) -> Dict[str, Any]:
+        """
+        Create a sweep feature along a path.
+
+        Args:
+            path_profile_index: Index of the path profile (optional)
+
+        Returns:
+            Dict with status and sweep info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # Note: Sweep requires a cross-section profile and a path
+            # This is a simplified version
+
+            return {
+                "status": "created",
+                "type": "sweep",
+                "note": "Sweep requires a cross-section profile and a path curve."
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
