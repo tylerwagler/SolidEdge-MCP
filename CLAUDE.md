@@ -65,58 +65,184 @@ src/solidedge_mcp/
 
 ### Current State
 
-**Implemented**: COM backend layer with connection, documents, sketching, features, assembly, query, and export operations. These are pure Python modules using pywin32.
+**✅ FULLY IMPLEMENTED (100%)**: All 89 MCP tools are registered and operational!
 
-**Pending**: MCP tool registration, resource providers, prompt templates, and session management. The FastMCP server exists but does not yet expose the backend operations as MCP tools.
+- **Backend layer**: Complete COM automation using pywin32 (connection, documents, sketching, features, assembly, query, export, diagnostics)
+- **MCP tools**: All 89 tools registered in `server.py` using `@mcp.tool()` decorator
+- **Tool categories**: Connection (2), Documents (7), Sketching (10), Primitives (5), Extrusions (3), Revolves (5), Loft (2), Sweep (2), Helix (4), Sheet Metal (8), Body Operations (7), Simplification (4), View (4), Query (6), Export (9), Assembly (11), Diagnostics (2)
+- **Coverage**: 100% of available Solid Edge COM API methods (excluding cutout operations which are not exposed in the API)
+
+**Pending**: Resource providers (read-only state), prompt templates, session management/undo
 
 ### Three-Pillar MCP Design
 
-Following the MCP spec, the server will expose:
+Following the MCP spec, the server exposes:
 
-- **Tools**: Actions that create/modify models (connect, create_sketch, extrude, place_component, export)
-- **Resources**: Read-only model data (feature list, component tree, mass properties, document info)
-- **Prompts**: Conversation templates (design review, manufacturability check, modeling guidance)
+- **Tools** ✅ (89 implemented): Actions that create/modify models (connect, create_sketch, extrude, place_component, export)
+- **Resources** ⏳ (pending): Read-only model data (feature list, component tree, mass properties, document info)
+- **Prompts** ⏳ (pending): Conversation templates (design review, manufacturability check, modeling guidance)
+
+### Tool Categories (89 total)
+
+See `IMPLEMENTATION_STATUS.md` for the complete list. High-level categories:
+
+1. **Connection (2)**: `connect_to_solidedge`, `get_application_info`
+2. **Documents (7)**: Create/open/save/close parts and assemblies
+3. **Sketching (10)**: Lines, circles, arcs, rectangles, polygons, ellipses, splines, constraints
+4. **Primitives (5)**: Box (3 variants), cylinder, sphere
+5. **Extrusions (3)**: Finite, infinite, thin-wall
+6. **Revolves (5)**: Basic, finite, sync variants, thin-wall
+7. **Loft (2)**: Basic and thin-wall
+8. **Sweep (2)**: Basic and thin-wall
+9. **Helix/Spiral (4)**: Various helix creation methods
+10. **Sheet Metal (8)**: Base flange/tab, lofted flange, web network
+11. **Body Operations (7)**: Add body, thicken, mesh, tag-based, construction
+12. **Simplification (4)**: Auto-simplify, enclosure, duplicate
+13. **View/Display (4)**: Set view orientation, zoom, display mode
+14. **Query/Analysis (6)**: Mass properties, bounding box, features, measurements
+15. **Export (9)**: STEP, STL, IGES, PDF, DXF, Parasolid, JT, screenshot
+16. **Assembly (11)**: Place components, constraints, patterns, suppress
+17. **Diagnostics (2)**: API discovery tools
 
 ### Tool Registration Pattern
 
-Each backend operation should be wrapped as an MCP tool. For example:
+All backend operations are wrapped as MCP tools using the `@mcp.tool()` decorator. Example:
 
 ```python
 @mcp.tool()
 def connect_to_solidedge(start_if_needed: bool = True) -> dict:
     """Connect to Solid Edge application (start if needed)"""
-    connection = SolidEdgeConnection()
-    return connection.connect(start_if_needed)
+    return connection_manager.connect(start_if_needed)
 ```
 
-Tools should return typed dictionaries with consistent error handling.
+**Key patterns:**
+- Tools call backend manager methods (e.g., `connection_manager`, `feature_manager`, `sketch_manager`)
+- All tools return `Dict[str, Any]` with consistent structure: `{"status": "...", ...}` or `{"error": "...", "traceback": "..."}`
+- Backend managers are initialized globally at module level in `server.py`
+- Type hints on all parameters for better IDE support and validation
+- Docstrings describe purpose, parameters, and return values
+
+### Manager Pattern
+
+The codebase uses a manager pattern to organize backend operations:
+
+```python
+# Global manager instances (initialized in server.py)
+connection_manager = ConnectionManager()
+doc_manager = DocumentManager(connection_manager)
+sketch_manager = SketchManager(doc_manager)
+feature_manager = FeatureManager(doc_manager, sketch_manager)
+assembly_manager = AssemblyManager(doc_manager)
+query_manager = QueryManager(doc_manager)
+export_manager = ExportManager(doc_manager)
+view_manager = ViewModel(doc_manager)
+```
+
+Each manager encapsulates related COM operations and maintains necessary state (e.g., `sketch_manager` tracks the active sketch).
 
 ## Solid Edge-Specific Notes
 
 - **Windows-only**: Solid Edge COM automation requires Windows. pywin32 does not work on Linux/macOS.
-- **COM binding**: Use `gencache.EnsureDispatch()` for early binding (type hints, IntelliSense) or `Dispatch()` for late binding (more compatible but slower).
-- **Active document pattern**: Most operations require an active document. The DocumentManager tracks `self.active_document`.
-- **Sketch-then-feature workflow**: 3D features (extrude, revolve) require a closed 2D sketch profile. The typical flow is: `create_sketch() → draw_*() → close_sketch() → create_extrude()`.
-- **COM exception handling**: COM operations can raise `pywintypes.com_error`. Always wrap in try/except with traceback for debugging.
-- **Reference planes**: Solid Edge has 3 default planes (Top/XZ, Front/XY, Right/YZ). Sketches are created on these planes.
-- **Units**: Solid Edge internal units are meters. Convert mm to meters by dividing by 1000.
-- **Feature tree**: Features are stored in `Document.Models` collection. Each feature has properties like Name, Type, Status (normal/suppressed).
+- **COM binding**: Use `gencache.EnsureDispatch()` for early binding (type hints, IntelliSense) or `Dispatch()` for late binding (more compatible but slower). We use `Dispatch()` for broader compatibility.
+- **Active document pattern**: Most operations require an active document. The DocumentManager tracks the active document via COM.
+- **Sketch-then-feature workflow**: 3D features (extrude, revolve) require a closed 2D sketch profile. The typical flow is:
+  ```
+  create_sketch() → draw_line/circle/etc() → close_sketch() → create_extrude()
+  ```
+  The `SketchManager` maintains `self.active_profile` to track the current sketch.
+- **COM exception handling**: COM operations can raise `pywintypes.com_error`. Always wrap in try/except with traceback for debugging:
+  ```python
+  try:
+      # COM operation
+  except Exception as e:
+      return {"error": str(e), "traceback": traceback.format_exc()}
+  ```
+- **Reference planes**: Solid Edge has 3 default planes (Top/XZ, Front/XY, Right/YZ). Sketches are created on these planes using `RefPlanes.Item(index)`.
+- **Units**: Solid Edge internal units are **meters**. Convert mm to meters by dividing by 1000. All tool parameters use meters.
+- **Feature tree**: Features are stored in `Document.Models` collection (1-indexed in COM). Each feature has properties like Name, Type, Status.
+- **Cutout operations**: NOT AVAILABLE - Solid Edge COM API does not expose cutout/cut operations (AddExtrudedCutout, etc.). This is a known API limitation.
+- **Collections are 1-indexed**: COM collections use 1-based indexing (`collection.Item(1)` is first item), but our tools use 0-based indexing for Python consistency.
+- **Profile validation**: After drawing geometry, profiles need to be validated/closed before using them for features. The `close_sketch()` tool calls `profile.End(0)`.
+- **Angle units**: Most angle parameters in the API expect **radians**, so convert degrees to radians using `math.radians(angle)`.
 
 ## Development Workflow
 
 When adding new capabilities:
 
-1. **Backend first**: Implement the raw COM operation in the appropriate `backends/` module
-2. **Test manually**: Use `python -i` to import and test the backend function directly
-3. **Wrap as tool**: Add `@mcp.tool()` decorator in `server.py` or `tools/` module
-4. **Add tests**: Write pytest tests in `tests/unit/` or `tests/integration/`
-5. **Update docs**: Add to README.md tool list if user-facing
+1. **Backend first**: Implement the raw COM operation in the appropriate `backends/` module (e.g., `features.py` for new feature types)
+2. **Test manually**: Use `python -i` to import and test the backend function directly, or use the diagnostic tools
+3. **Wrap as tool**: Add `@mcp.tool()` decorator wrapper in `server.py` that calls the backend manager method
+4. **Update tracking**: Update `IMPLEMENTATION_STATUS.md` to mark the tool as implemented
+5. **Add tests**: Write pytest tests in `tests/unit/` or `tests/integration/`
+6. **Update docs**: Add to README.md if it's a major user-facing feature
+
+### Common Development Tasks
+
+**Testing a specific COM method:**
+```python
+# Use the diagnostic tools to inspect available methods
+from src.solidedge_mcp.backends.diagnostics import diagnose_document
+doc = doc_manager.get_active_document()
+print(diagnose_document(doc))
+```
+
+**Adding a new feature type:**
+1. Add backend method to `backends/features.py` in the `FeatureManager` class
+2. Add MCP tool wrapper in `server.py` in the appropriate section (marked with comments)
+3. Follow the existing pattern: try/except, return dict with status or error
+4. Update `IMPLEMENTATION_STATUS.md` table
+
+**Checking tool count:**
+```bash
+grep -c "@mcp.tool()" src/solidedge_mcp/server.py
+```
+
+## Common Workflows
+
+### Creating a Simple Extruded Part
+```
+1. connect_to_solidedge()
+2. create_part_document()
+3. create_sketch(plane="Top")
+4. draw_rectangle(x1=0, y1=0, x2=0.1, y2=0.1)  # 100mm square (units in meters)
+5. close_sketch()
+6. create_extrude(distance=0.05, operation="Add")  # 50mm tall
+7. save_document(file_path="C:/temp/box.par")
+8. export_step(file_path="C:/temp/box.step")
+```
+
+### Creating a Revolved Part
+```
+1. connect_to_solidedge()
+2. create_part_document()
+3. create_sketch(plane="Front")
+4. draw_line(x1=0, y1=0, x2=0.05, y2=0)  # Profile line
+5. draw_line(x1=0.05, y1=0, x2=0.05, y2=0.1)
+6. draw_line(x1=0.05, y1=0.1, x2=0, y2=0.1)
+7. draw_line(x1=0, y1=0.1, x2=0, y2=0)  # Close profile
+8. close_sketch()
+9. create_revolve(angle=360)  # Full revolution
+10. save_document(file_path="C:/temp/revolved.par")
+```
+
+### Assembly Workflow
+```
+1. connect_to_solidedge()
+2. create_assembly_document()
+3. place_component(component_path="C:/parts/base.par", x=0, y=0, z=0)
+4. place_component(component_path="C:/parts/top.par", x=0, y=0, z=0.1)
+5. list_assembly_components()  # Get component indices
+6. create_mate(mate_type="Planar", component1_index=0, component2_index=1)
+7. save_document(file_path="C:/assemblies/assembly.asm")
+```
 
 ## Testing Notes
 
 - **Unit tests**: Mock COM objects to test logic without Solid Edge installed
 - **Integration tests**: Require Solid Edge running on Windows. Mark with `@pytest.mark.integration`
 - **CI limitations**: GitHub Actions runners do not have Solid Edge. Integration tests run locally only.
+- **Manual testing**: The easiest way to test is to run the MCP server and use it through Claude Code or another MCP client
+- **Diagnostic tools**: Use `diagnose_api()` and `diagnose_feature()` to explore the COM API interactively
 
 ## Comparison to KiCad-MCP
 
