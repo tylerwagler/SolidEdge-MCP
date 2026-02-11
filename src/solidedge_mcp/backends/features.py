@@ -615,3 +615,157 @@ class FeatureManager:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    # =================================================================
+    # ADVANCED EXTRUDE/REVOLVE VARIANTS
+    # =================================================================
+
+    def create_extrude_thin_wall(
+        self,
+        distance: float,
+        wall_thickness: float,
+        direction: str = "Normal"
+    ) -> Dict[str, Any]:
+        """
+        Create a thin-walled extrusion.
+
+        Args:
+            distance: Extrusion distance (meters)
+            wall_thickness: Wall thickness (meters)
+            direction: 'Normal', 'Reverse', or 'Symmetric'
+
+        Returns:
+            Dict with status and extrusion info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            models = doc.Models
+
+            # Map direction
+            direction_map = {
+                "Normal": ExtrudedProtrusion.igRight,
+                "Reverse": ExtrudedProtrusion.igLeft,
+                "Symmetric": ExtrudedProtrusion.igSymmetric
+            }
+            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+
+            # AddExtrudedProtrusionWithThinWall
+            model = models.AddExtrudedProtrusionWithThinWall(
+                NumberOfProfiles=1,
+                ProfileArray=(profile,),
+                ProfilePlaneSide=dir_const,
+                ExtrusionDistance=distance,
+                WallThickness=wall_thickness
+            )
+
+            return {
+                "status": "created",
+                "type": "extrude_thin_wall",
+                "distance": distance,
+                "wall_thickness": wall_thickness,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_revolve_finite(
+        self,
+        angle: float,
+        axis_type: str = "CenterLine"
+    ) -> Dict[str, Any]:
+        """
+        Create a finite revolve feature.
+
+        Args:
+            angle: Revolution angle in degrees
+            axis_type: Type of revolution axis
+
+        Returns:
+            Dict with status and revolve info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            models = doc.Models
+
+            import math
+            angle_rad = math.radians(angle)
+
+            # AddFiniteRevolvedProtrusion
+            model = models.AddFiniteRevolvedProtrusion(
+                NumberOfProfiles=1,
+                ProfileArray=(profile,),
+                AxisOfRevolution=None,
+                Angle=angle_rad
+            )
+
+            return {
+                "status": "created",
+                "type": "revolve_finite",
+                "angle": angle
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_revolve_thin_wall(
+        self,
+        angle: float,
+        wall_thickness: float
+    ) -> Dict[str, Any]:
+        """
+        Create a thin-walled revolve feature.
+
+        Args:
+            angle: Revolution angle in degrees
+            wall_thickness: Wall thickness (meters)
+
+        Returns:
+            Dict with status and revolve info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            models = doc.Models
+
+            import math
+            angle_rad = math.radians(angle)
+
+            # AddRevolvedProtrusionWithThinWall
+            model = models.AddRevolvedProtrusionWithThinWall(
+                NumberOfProfiles=1,
+                ProfileArray=(profile,),
+                AxisOfRevolution=None,
+                Angle=angle_rad,
+                WallThickness=wall_thickness
+            )
+
+            return {
+                "status": "created",
+                "type": "revolve_thin_wall",
+                "angle": angle,
+                "wall_thickness": wall_thickness
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }

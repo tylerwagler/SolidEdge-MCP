@@ -4,7 +4,7 @@ Last Updated: 2026-02-11
 
 ## 🎉 MCP Server Status: **OPERATIONAL**
 
-**44 MCP tools** are now registered and ready to use!
+**54 MCP tools** are now registered and ready to use!
 
 ## Quick Summary
 
@@ -14,8 +14,8 @@ Last Updated: 2026-02-11
 | **Document Management** | 6 | 7 | 0 | 0 |
 | **Sketching** | 10+ | 7 | 0 | 3+ |
 | **Basic Primitives** | 5 | 4 | 0 | 1 |
-| **Extrusions** | 3 | 1 | 0 | 2 |
-| **Revolves** | 5 | 1 | 0 | 4 |
+| **Extrusions** | 3 | 2 | 0 | 1 |
+| **Revolves** | 5 | 3 | 0 | 2 |
 | **Loft** | 2 | 1 | 0 | 1 |
 | **Sweep** | 2 | 1 | 0 | 1 |
 | **Helix/Spiral** | 4 | 0 | 0 | 4 |
@@ -23,10 +23,10 @@ Last Updated: 2026-02-11
 | **Cutout Operations** | 0 | 0 | ALL | 0 |
 | **View/Display** | 4 | 3 | 0 | 1 |
 | **Query/Analysis** | 6+ | 6 | 0 | 0+ |
-| **Export** | 7 | 4 | 0 | 3 |
-| **Assembly** | 10+ | 2 | 0 | 8+ |
+| **Export** | 9 | 6 | 0 | 3 |
+| **Assembly** | 10+ | 5 | 0 | 5+ |
 | **Diagnostics** | 2 | 2 | 0 | 0 |
-| **TOTAL** | **76+** | **44** | **ALL Cutouts** | **32+** |
+| **TOTAL** | **76+** | **54** | **ALL Cutouts** | **22+** |
 
 ---
 
@@ -89,7 +89,7 @@ Last Updated: 2026-02-11
 |-----------|--------|-------------------|------------|
 | create_extrude (finite) | ✅ Implemented | Models | AddFiniteExtrudedProtrusion |
 | create_extrude (infinite) | 📋 To Do | Models | AddExtrudedProtrusion |
-| create_extrude_thin_wall | 📋 To Do | Models | AddExtrudedProtrusionWithThinWall |
+| create_extrude_thin_wall | ✅ Implemented | Models | AddExtrudedProtrusionWithThinWall |
 
 ---
 
@@ -98,10 +98,10 @@ Last Updated: 2026-02-11
 | Tool Name | Status | Collection/Module | API Method |
 |-----------|--------|-------------------|------------|
 | create_revolve (basic) | ✅ Implemented | Models | AddRevolvedProtrusion |
-| create_revolve_finite | 📋 To Do | Models | AddFiniteRevolvedProtrusion |
+| create_revolve_finite | ✅ Implemented | Models | AddFiniteRevolvedProtrusion |
 | create_revolve_sync | 📋 To Do | Models | AddRevolvedProtrusionSync |
 | create_revolve_finite_sync | 📋 To Do | Models | AddFiniteRevolvedProtrusionSync |
-| create_revolve_thin_wall | 📋 To Do | Models | AddRevolvedProtrusionWithThinWall |
+| create_revolve_thin_wall | ✅ Implemented | Models | AddRevolvedProtrusionWithThinWall |
 
 ---
 
@@ -207,7 +207,8 @@ Last Updated: 2026-02-11
 | place_component | ✅ Implemented | Occurrences | Place part in assembly |
 | list_components | ✅ Implemented | Occurrences | List assembly components |
 | get_component_info | ✅ Implemented | Occurrences | Query component properties |
-| add_mate_constraint | 📋 To Do | Relations3d | Mate two components |
+| create_mate | ✅ Implemented | Relations3d | Create mate constraint |
+| update_component_position | ✅ Implemented | Occurrences | Update component position |
 | add_align_constraint | 📋 To Do | Relations3d | Align components |
 | add_angle_constraint | 📋 To Do | Relations3d | Angle constraint |
 | add_planar_align_constraint | 📋 To Do | Relations3d | Planar align |
@@ -248,10 +249,12 @@ Last Updated: 2026-02-11
 | export_step | ✅ Implemented | Document.SaveAs | Export to STEP |
 | export_stl | ✅ Implemented | Document.SaveAs | Export to STL |
 | export_iges | ✅ Implemented | Document.SaveAs | Export to IGES |
-| export_dxf | ✅ Implemented | Document.SaveAs | Export to DXF |
 | export_pdf | ✅ Implemented | Document.SaveAs | Export to PDF |
+| create_drawing | ✅ Implemented | Documents | Create 2D drawing |
+| capture_screenshot | ✅ Implemented | Window | Capture view image |
 | export_parasolid | 📋 To Do | Document.SaveAs | Export to X_T/X_B |
 | export_jt | 📋 To Do | Document.SaveAs | Export to JT |
+| export_dxf | 📋 To Do | Document.SaveAs | Export to DXF |
 
 ---
 

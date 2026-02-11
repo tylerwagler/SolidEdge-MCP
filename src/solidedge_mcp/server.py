@@ -289,6 +289,52 @@ def create_revolve(angle: float, operation: str = "Add") -> dict:
     return feature_manager.create_revolve(angle, operation)
 
 
+@mcp.tool()
+def create_extrude_thin_wall(distance: float, wall_thickness: float, direction: str = "Normal") -> dict:
+    """
+    Create a thin-walled extrusion feature.
+
+    Args:
+        distance: Extrusion distance in meters
+        wall_thickness: Wall thickness in meters
+        direction: 'Normal', 'Reverse', or 'Symmetric'
+
+    Returns:
+        Thin-wall extrusion creation status
+    """
+    return feature_manager.create_extrude_thin_wall(distance, wall_thickness, direction)
+
+
+@mcp.tool()
+def create_revolve_finite(angle: float, axis_type: str = "CenterLine") -> dict:
+    """
+    Create a finite revolve feature.
+
+    Args:
+        angle: Revolution angle in degrees
+        axis_type: Type of revolution axis (default: 'CenterLine')
+
+    Returns:
+        Finite revolve creation status
+    """
+    return feature_manager.create_revolve_finite(angle, axis_type)
+
+
+@mcp.tool()
+def create_revolve_thin_wall(angle: float, wall_thickness: float) -> dict:
+    """
+    Create a thin-walled revolve feature.
+
+    Args:
+        angle: Revolution angle in degrees
+        wall_thickness: Wall thickness in meters
+
+    Returns:
+        Thin-wall revolve creation status
+    """
+    return feature_manager.create_revolve_thin_wall(angle, wall_thickness)
+
+
 # ============================================================================
 # PRIMITIVE SHAPES
 # ============================================================================
@@ -554,6 +600,39 @@ def export_pdf(file_path: str) -> dict:
     return export_manager.export_pdf(file_path)
 
 
+@mcp.tool()
+def create_drawing(template: Optional[str] = None, views: Optional[list] = None) -> dict:
+    """
+    Create a 2D drawing from the active 3D model.
+
+    Args:
+        template: Drawing template path (optional)
+        views: List of views to create - ['Front', 'Top', 'Right', 'Isometric'] (optional)
+
+    Returns:
+        Drawing creation status
+
+    Note: Drawing views require manual placement for detailed control
+    """
+    return export_manager.create_drawing(template, views)
+
+
+@mcp.tool()
+def capture_screenshot(file_path: str, width: int = 1920, height: int = 1080) -> dict:
+    """
+    Capture a screenshot of the current view.
+
+    Args:
+        file_path: Output image file path (.png, .jpg, .jpeg, .bmp)
+        width: Image width in pixels (default: 1920)
+        height: Image height in pixels (default: 1080)
+
+    Returns:
+        Screenshot capture status and file info
+    """
+    return export_manager.capture_screenshot(file_path, width, height)
+
+
 # ============================================================================
 # VIEW & DISPLAY TOOLS
 # ============================================================================
@@ -622,6 +701,55 @@ def list_assembly_components() -> dict:
         List of components with their properties
     """
     return assembly_manager.list_components()
+
+
+@mcp.tool()
+def create_mate(mate_type: str, component1_index: int, component2_index: int) -> dict:
+    """
+    Create a mate/assembly relationship between components.
+
+    Args:
+        mate_type: Type of mate - 'Planar', 'Axial', 'Insert', 'Match', 'Parallel', 'Angle'
+        component1_index: Index of first component (0-based)
+        component2_index: Index of second component (0-based)
+
+    Returns:
+        Mate creation status
+
+    Note: Actual mate creation requires face/edge selection
+    """
+    return assembly_manager.create_mate(mate_type, component1_index, component2_index)
+
+
+@mcp.tool()
+def get_component_info(component_index: int) -> dict:
+    """
+    Get detailed information about a specific component in assembly.
+
+    Args:
+        component_index: Index of the component (0-based)
+
+    Returns:
+        Component information (name, file path, visibility, etc.)
+    """
+    return assembly_manager.get_component_info(component_index)
+
+
+@mcp.tool()
+def update_component_position(component_index: int, x: float, y: float, z: float) -> dict:
+    """
+    Update a component's position in the assembly.
+
+    Args:
+        component_index: Index of the component (0-based)
+        x, y, z: New position coordinates (meters)
+
+    Returns:
+        Position update status
+
+    Note: May require adjusting assembly relationships
+    """
+    return assembly_manager.update_component_position(component_index, x, y, z)
 
 
 # ============================================================================
