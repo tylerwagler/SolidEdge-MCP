@@ -55,38 +55,10 @@ class FeatureManager:
             }
             dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
 
-            # Create the extrusion
-            if models.Count == 0:
-                # First feature - create base extrusion
-                model = models.AddFiniteExtrudedProtrusion(
-                    NumberOfProfiles=1,
-                    ProfileArray=(profile,),
-                    ProfilePlaneSide=dir_const,
-                    ExtrusionDistance=distance
-                )
-            else:
-                # Subsequent features
-                if operation == "Add":
-                    model = models.AddFiniteExtrudedProtrusion(
-                        NumberOfProfiles=1,
-                        ProfileArray=(profile,),
-                        ProfilePlaneSide=dir_const,
-                        ExtrusionDistance=distance
-                    )
-                elif operation == "Cut":
-                    model = models.AddFiniteExtrudedCutout(
-                        NumberOfProfiles=1,
-                        ProfileArray=(profile,),
-                        ProfilePlaneSide=dir_const,
-                        ExtrusionDistance=distance
-                    )
-                else:
-                    model = models.AddFiniteExtrudedProtrusion(
-                        NumberOfProfiles=1,
-                        ProfileArray=(profile,),
-                        ProfilePlaneSide=dir_const,
-                        ExtrusionDistance=distance
-                    )
+            # AddFiniteExtrudedProtrusion: NumProfiles, ProfileArray, ProfilePlaneSide, Distance
+            model = models.AddFiniteExtrudedProtrusion(
+                1, (profile,), dir_const, distance
+            )
 
             return {
                 "status": "created",
@@ -105,9 +77,12 @@ class FeatureManager:
         """
         Create a revolve feature from the active sketch profile.
 
+        Requires an axis of revolution to be set in the sketch before closing.
+        Use set_axis_of_revolution() in the sketch to define the axis.
+
         Args:
             angle: Revolution angle in degrees (360 for full revolution)
-            operation: 'Add' or 'Cut'
+            operation: 'Add' (Note: 'Cut' not available in COM API)
 
         Returns:
             Dict with status and feature info
@@ -115,34 +90,28 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
-                return {"error": "No active sketch profile"}
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            if not refaxis:
+                return {"error": "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."}
 
             models = doc.Models
 
-            # Convert angle to radians
             import math
             angle_rad = math.radians(angle)
 
-            # Create the revolve
-            # AddRevolvedProtrusion takes positional args: NumProfiles, ProfileArray, AxisOfRevolution, Angle
-            if models.Count == 0 or operation == "Add":
-                model = models.AddRevolvedProtrusion(
-                    1,  # NumberOfProfiles
-                    (profile,),  # ProfileArray
-                    None,  # AxisOfRevolution (None = use default from sketch)
-                    angle_rad  # Angle
-                )
-            elif operation == "Cut":
-                model = models.AddRevolvedCutout(
-                    1,  # NumberOfProfiles
-                    (profile,),  # ProfileArray
-                    None,  # AxisOfRevolution
-                    angle_rad  # Angle
-                )
-            else:
-                return {"error": f"Invalid operation: {operation}"}
+            # AddFiniteRevolvedProtrusion: NumProfiles, ProfileArray, ReferenceAxis, ProfilePlaneSide, Angle
+            # Do NOT pass None for optional params (KeyPointOrTangentFace, KeyPointFlags)
+            model = models.AddFiniteRevolvedProtrusion(
+                1,                              # NumberOfProfiles
+                (profile,),                     # ProfileArray
+                refaxis,                        # ReferenceAxis
+                ExtrudedProtrusion.igRight,     # ProfilePlaneSide (2)
+                angle_rad                       # AngleofRevolution
+            )
 
             return {
                 "status": "created",
@@ -402,6 +371,10 @@ class FeatureManager:
     # PRIMITIVE SHAPES
     # =================================================================
 
+    def _get_ref_plane(self, doc, plane_index: int = 1):
+        """Get a reference plane from the document (1=Top/XZ, 2=Front/XY, 3=Right/YZ)"""
+        return doc.RefPlanes.Item(plane_index)
+
     def create_box_by_center(
         self,
         center_x: float,
@@ -426,11 +399,21 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             models = doc.Models
+            top_plane = self._get_ref_plane(doc, 1)
 
-            # AddBoxByCenter(CenterX, CenterY, CenterZ, Length, Width, Height)
+            # AddBoxByCenter: x, y, z, dWidth, dHeight, dAngle, dDepth, pPlane,
+            #                  ExtentSide, vbKeyPointExtent, pKeyPointObj, pKeyPointFlags
             model = models.AddBoxByCenter(
                 center_x, center_y, center_z,
-                length, width, height
+                length,                         # dWidth
+                width,                          # dHeight
+                0,                              # dAngle (rotation)
+                height,                         # dDepth
+                top_plane,                      # pPlane
+                ExtrudedProtrusion.igRight,     # ExtentSide
+                False,                          # vbKeyPointExtent
+                None,                           # pKeyPointObj
+                0                               # pKeyPointFlags
             )
 
             return {
@@ -464,9 +447,24 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             models = doc.Models
+            top_plane = self._get_ref_plane(doc, 1)
 
-            # AddBoxByTwoPoints(X1, Y1, Z1, X2, Y2, Z2)
-            model = models.AddBoxByTwoPoints(x1, y1, z1, x2, y2, z2)
+            # Compute depth from z difference
+            depth = abs(z2 - z1) if abs(z2 - z1) > 0 else abs(y2 - y1)
+
+            # AddBoxByTwoPoints: x1, y1, z1, x2, y2, z2, dAngle, dDepth, pPlane,
+            #                     ExtentSide, vbKeyPointExtent, pKeyPointObj, pKeyPointFlags
+            model = models.AddBoxByTwoPoints(
+                x1, y1, z1,
+                x2, y2, z2,
+                0,                              # dAngle
+                depth,                          # dDepth
+                top_plane,                      # pPlane
+                ExtrudedProtrusion.igRight,     # ExtentSide
+                False,                          # vbKeyPointExtent
+                None,                           # pKeyPointObj
+                0                               # pKeyPointFlags
+            )
 
             return {
                 "status": "created",
@@ -501,9 +499,29 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             models = doc.Models
+            top_plane = self._get_ref_plane(doc, 1)
 
-            # AddBoxByThreePoints(X1, Y1, Z1, X2, Y2, Z2, X3, Y3, Z3)
-            model = models.AddBoxByThreePoints(x1, y1, z1, x2, y2, z2, x3, y3, z3)
+            import math
+            # Calculate depth from the three points
+            dx = x2 - x1
+            dy = y2 - y1
+            depth = math.sqrt(dx*dx + dy*dy)
+            if depth == 0:
+                depth = 0.01  # fallback
+
+            # AddBoxByThreePoints: x1,y1,z1, x2,y2,z2, x3,y3,z3, dDepth, pPlane,
+            #                       ExtentSide, vbKeyPointExtent, pKeyPointObj, pKeyPointFlags
+            model = models.AddBoxByThreePoints(
+                x1, y1, z1,
+                x2, y2, z2,
+                x3, y3, z3,
+                depth,                          # dDepth
+                top_plane,                      # pPlane
+                ExtrudedProtrusion.igRight,     # ExtentSide
+                False,                          # vbKeyPointExtent
+                None,                           # pKeyPointObj
+                0                               # pKeyPointFlags
+            )
 
             return {
                 "status": "created",
@@ -541,11 +559,19 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             models = doc.Models
+            top_plane = self._get_ref_plane(doc, 1)
 
-            # AddCylinderByCenterAndRadius(CenterX, CenterY, CenterZ, Radius, Height)
+            # AddCylinderByCenterAndRadius: x, y, z, dRadius, dDepth, pPlane,
+            #                                ExtentSide, vbKeyPointExtent, pKeyPointObj, pKeyPointFlags
             model = models.AddCylinderByCenterAndRadius(
                 base_center_x, base_center_y, base_center_z,
-                radius, height
+                radius,
+                height,                         # dDepth
+                top_plane,                      # pPlane
+                ExtrudedProtrusion.igRight,     # ExtentSide
+                False,                          # vbKeyPointExtent
+                None,                           # pKeyPointObj
+                0                               # pKeyPointFlags
             )
 
             return {
@@ -581,10 +607,19 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             models = doc.Models
+            top_plane = self._get_ref_plane(doc, 1)
 
-            # AddSphereByCenterAndRadius(CenterX, CenterY, CenterZ, Radius)
+            # AddSphereByCenterAndRadius: x, y, z, dRadius, pPlane, ExtentSide,
+            #                              vbKeyPointExtent, vbCreateLiveSection, pKeyPointObj, pKeyPointFlags
             model = models.AddSphereByCenterAndRadius(
-                center_x, center_y, center_z, radius
+                center_x, center_y, center_z,
+                radius,
+                top_plane,                      # pPlane
+                ExtrudedProtrusion.igRight,     # ExtentSide
+                False,                          # vbKeyPointExtent
+                False,                          # vbCreateLiveSection
+                None,                           # pKeyPointObj
+                0                               # pKeyPointFlags
             )
 
             return {
@@ -723,9 +758,11 @@ class FeatureManager:
         """
         Create a finite revolve feature.
 
+        Requires an axis of revolution to be set in the sketch before closing.
+
         Args:
             angle: Revolution angle in degrees
-            axis_type: Type of revolution axis
+            axis_type: Type of revolution axis (unused, axis comes from sketch)
 
         Returns:
             Dict with status and revolve info
@@ -733,21 +770,25 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+
+            if not refaxis:
+                return {"error": "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."}
 
             models = doc.Models
 
             import math
             angle_rad = math.radians(angle)
 
-            # AddFiniteRevolvedProtrusion - positional args
             model = models.AddFiniteRevolvedProtrusion(
-                1,  # NumberOfProfiles
-                (profile,),  # ProfileArray
-                None,  # AxisOfRevolution
-                Angle=angle_rad
+                1,                              # NumberOfProfiles
+                (profile,),                     # ProfileArray
+                refaxis,                        # ReferenceAxis
+                ExtrudedProtrusion.igRight,     # ProfilePlaneSide (2)
+                angle_rad                       # AngleofRevolution
             )
 
             return {
@@ -769,6 +810,8 @@ class FeatureManager:
         """
         Create a thin-walled revolve feature.
 
+        Requires an axis of revolution to be set in the sketch before closing.
+
         Args:
             angle: Revolution angle in degrees
             wall_thickness: Wall thickness (meters)
@@ -779,22 +822,26 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+
+            if not refaxis:
+                return {"error": "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."}
 
             models = doc.Models
 
             import math
             angle_rad = math.radians(angle)
 
-            # AddRevolvedProtrusionWithThinWall - positional args
             model = models.AddRevolvedProtrusionWithThinWall(
-                1,  # NumberOfProfiles
-                (profile,),  # ProfileArray
-                None,  # AxisOfRevolution
-                Angle=angle_rad,
-                WallThickness=wall_thickness
+                1,                              # NumberOfProfiles
+                (profile,),                     # ProfileArray
+                refaxis,                        # ReferenceAxis
+                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                angle_rad,                      # AngleofRevolution
+                wall_thickness                  # WallThickness
             )
 
             return {
@@ -1207,9 +1254,12 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+            if not refaxis:
+                return {"error": "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."}
 
             models = doc.Models
 
@@ -1217,10 +1267,11 @@ class FeatureManager:
             angle_rad = math.radians(angle)
 
             model = models.AddRevolvedProtrusionSync(
-                1,  # NumberOfProfiles
-                (profile,),  # ProfileArray
-                None,  # AxisOfRevolution
-                Angle=angle_rad
+                1,                              # NumberOfProfiles
+                (profile,),                     # ProfileArray
+                refaxis,                        # ReferenceAxis
+                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                angle_rad                       # AngleofRevolution
             )
 
             return {
@@ -1239,9 +1290,12 @@ class FeatureManager:
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+            if not refaxis:
+                return {"error": "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."}
 
             models = doc.Models
 
@@ -1249,10 +1303,11 @@ class FeatureManager:
             angle_rad = math.radians(angle)
 
             model = models.AddFiniteRevolvedProtrusionSync(
-                1,  # NumberOfProfiles
-                (profile,),  # ProfileArray
-                None,  # AxisOfRevolution
-                Angle=angle_rad
+                1,                              # NumberOfProfiles
+                (profile,),                     # ProfileArray
+                refaxis,                        # ReferenceAxis
+                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                angle_rad                       # AngleofRevolution
             )
 
             return {

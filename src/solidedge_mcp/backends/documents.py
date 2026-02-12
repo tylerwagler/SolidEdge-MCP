@@ -168,15 +168,34 @@ class DocumentManager:
                 return {"error": "No active document"}
 
             doc_name = self.active_document.Name
+            app = self.connection.get_application()
 
-            if save and not self.active_document.Saved:
-                self.active_document.Save()
-            elif not save:
-                # Mark as saved to suppress save prompt when closing
-                self.active_document.Saved = True
+            if save:
+                try:
+                    if not self.active_document.Saved:
+                        self.active_document.Save()
+                except Exception:
+                    self.active_document.Save()
+            else:
+                # Suppress save dialog: disable alerts, mark saved, then close
+                try:
+                    app.DisplayAlerts = False
+                except Exception:
+                    pass
+                try:
+                    self.active_document.Saved = True
+                except Exception:
+                    pass  # Some binding modes can't set Saved property
 
             self.active_document.Close()
             self.active_document = None
+
+            # Re-enable alerts
+            if not save:
+                try:
+                    app.DisplayAlerts = True
+                except Exception:
+                    pass
 
             return {
                 "status": "closed",
@@ -184,6 +203,12 @@ class DocumentManager:
                 "saved": save
             }
         except Exception as e:
+            # Make sure alerts are re-enabled
+            try:
+                app = self.connection.get_application()
+                app.DisplayAlerts = True
+            except Exception:
+                pass
             return {
                 "error": str(e),
                 "traceback": traceback.format_exc()

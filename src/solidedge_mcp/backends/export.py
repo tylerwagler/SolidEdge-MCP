@@ -460,31 +460,23 @@ class ViewModel:
             if not view_obj:
                 return {"error": "Cannot access view object"}
 
-            # Map mode names to display style values
-            # Note: Actual constants may vary by Solid Edge version
+            # Map mode names to seRenderMode constants (from type library)
             mode_map = {
-                "Shaded": 1,
-                "ShadedWithEdges": 2,
-                "Wireframe": 3,
-                "HiddenEdgesVisible": 4
+                "Wireframe": 1,           # seRenderModeWireframe
+                "Shaded": 8,              # seRenderModeSmooth
+                "ShadedWithEdges": 11,    # seRenderModeSmoothBoundary
+                "HiddenEdgesVisible": 6,  # seRenderModeVHL
             }
 
             mode_value = mode_map.get(mode)
             if mode_value is None:
                 return {"error": f"Invalid mode: {mode}. Use 'Shaded', 'ShadedWithEdges', 'Wireframe', or 'HiddenEdgesVisible'"}
 
-            # Set display style
-            if hasattr(view_obj, 'Style'):
-                view_obj.Style = mode_value
-                return {
-                    "status": "display_mode_set",
-                    "mode": mode
-                }
-            else:
-                return {
-                    "error": "Display mode not accessible",
-                    "note": "Use View > Display Style in Solid Edge UI"
-                }
+            view_obj.SetRenderMode(mode_value)
+            return {
+                "status": "display_mode_set",
+                "mode": mode
+            }
         except Exception as e:
             return {
                 "error": str(e),

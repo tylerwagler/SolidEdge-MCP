@@ -40,10 +40,30 @@ class FeatureOperationConstants:
 
 
 class ExtrudedProtrusion:
-    """Extrusion direction constants"""
-    igRight = 0  # Normal direction
-    igLeft = 1   # Reverse direction
-    igSymmetric = 2  # Symmetric (both directions)
+    """Extrusion/Revolve direction constants (from Solid Edge type library)"""
+    igLeft = 1       # Left/Reverse direction
+    igRight = 2      # Right/Normal direction
+    igSymmetric = 3  # Symmetric (both directions)
+
+
+class ProfileValidationConstants:
+    """Profile.End() validation flag constants (bitfield)"""
+    igProfileClosed = 1              # Profile must be closed
+    igProfileSingle = 4             # Single profile only
+    igProfileNoSelfIntersect = 8    # No self-intersection
+    igProfileRefAxisRequired = 16   # Reference axis required (for revolve)
+    igProfileNoRefAxisIntersect = 32  # Profile must not intersect axis
+    igProfileAllowNested = 8192     # Allow nested profiles
+
+    # Common combinations
+    igProfileDefault = 0                                  # Default (extrude)
+    igProfileForRevolve = 1 | 16   # igProfileClosed | igProfileRefAxisRequired = 17
+
+
+class ExtentTypeConstants:
+    """Extent type constants"""
+    igFinite = 13
+    igNone = 44
 
 
 class HoleTypeConstants:

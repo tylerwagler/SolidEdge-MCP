@@ -7,7 +7,7 @@ Handles creating and manipulating 2D sketches.
 from typing import Dict, Any, Optional, Tuple
 import traceback
 import math
-from .constants import RefPlaneConstants
+from .constants import RefPlaneConstants, ProfileValidationConstants
 
 
 class SketchManager:
@@ -17,6 +17,7 @@ class SketchManager:
         self.doc_manager = document_manager
         self.active_sketch = None
         self.active_profile = None
+        self.active_refaxis = None  # Reference axis for revolve operations
 
     def create_sketch(self, plane: str = "Top") -> Dict[str, Any]:
         """
@@ -62,6 +63,7 @@ class SketchManager:
 
             self.active_sketch = profile_set
             self.active_profile = profile
+            self.active_refaxis = None  # Clear any previous axis
 
             return {
                 "status": "created",
@@ -331,6 +333,46 @@ class SketchManager:
                 "traceback": traceback.format_exc()
             }
 
+    def set_axis_of_revolution(self, x1: float, y1: float, x2: float, y2: float) -> Dict[str, Any]:
+        """
+        Draw an axis of revolution line in the active sketch for revolve operations.
+
+        The axis line is drawn as a construction line and set as the revolution axis.
+        This must be called before close_sketch() when preparing a revolve feature.
+
+        Args:
+            x1, y1: Start point of axis line (meters)
+            x2, y2: End point of axis line (meters)
+
+        Returns:
+            Dict with status and axis info
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            # Draw the axis line
+            lines = self.active_profile.Lines2d
+            axis_line = lines.AddBy2Points(x1, y1, x2, y2)
+
+            # Mark as construction geometry
+            self.active_profile.ToggleConstruction(axis_line)
+
+            # Set as axis of revolution
+            self.active_refaxis = self.active_profile.SetAxisOfRevolution(axis_line)
+
+            return {
+                "status": "axis_set",
+                "start": [x1, y1],
+                "end": [x2, y2],
+                "note": "Axis of revolution set. Close sketch and use create_revolve()."
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def add_constraint(self, constraint_type: str, elements: list) -> Dict[str, Any]:
         """Add a geometric constraint to sketch elements"""
         try:
@@ -358,16 +400,25 @@ class SketchManager:
             if not self.active_profile:
                 return {"error": "No active sketch to close"}
 
+            # Use correct End() flags based on whether axis of revolution is set
+            if self.active_refaxis is not None:
+                # Revolve profile needs igProfileClosed | igProfileRefAxisRequired
+                end_flags = ProfileValidationConstants.igProfileForRevolve  # 17
+            else:
+                # Standard profile (extrude, etc.)
+                end_flags = ProfileValidationConstants.igProfileDefault  # 0
+
             # Validate the profile
             try:
-                status = self.active_profile.End(0)  # 0 = validate and close
+                status = self.active_profile.End(end_flags)
             except:
                 # Some versions use different methods
                 pass
 
             result = {
                 "status": "closed",
-                "sketch_id": self.active_sketch.Name if hasattr(self.active_sketch, 'Name') else "sketch"
+                "sketch_id": self.active_sketch.Name if hasattr(self.active_sketch, 'Name') else "sketch",
+                "has_revolution_axis": self.active_refaxis is not None
             }
 
             # NOTE: We keep active_profile valid after closing so it can be used
@@ -385,3 +436,7 @@ class SketchManager:
     def get_active_sketch(self):
         """Get the active sketch object"""
         return self.active_profile
+
+    def get_active_refaxis(self):
+        """Get the active reference axis for revolve operations"""
+        return self.active_refaxis

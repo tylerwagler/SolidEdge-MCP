@@ -296,6 +296,26 @@ def add_constraint(constraint_type: str, elements: list) -> dict:
 
 
 @mcp.tool()
+def set_axis_of_revolution(x1: float, y1: float, x2: float, y2: float) -> dict:
+    """
+    Draw an axis of revolution in the active sketch for revolve operations.
+
+    Must be called before close_sketch() when preparing a profile for revolve.
+    Draws a construction line and sets it as the revolution axis.
+
+    Args:
+        x1: Axis start X coordinate (meters)
+        y1: Axis start Y coordinate (meters)
+        x2: Axis end X coordinate (meters)
+        y2: Axis end Y coordinate (meters)
+
+    Returns:
+        Axis creation status
+    """
+    return sketch_manager.set_axis_of_revolution(x1, y1, x2, y2)
+
+
+@mcp.tool()
 def close_sketch() -> dict:
     """
     Close/finish the active sketch.
