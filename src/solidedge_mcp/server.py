@@ -198,6 +198,23 @@ def redo() -> dict:
 
 
 @mcp.tool()
+def create_draft_document(template: Optional[str] = None) -> dict:
+    """
+    Create a new draft (drawing) document.
+
+    Creates a blank 2D drawing document for creating engineering drawings.
+    Use create_drawing() instead if you want to auto-generate views from a 3D model.
+
+    Args:
+        template: Optional template file path
+
+    Returns:
+        Document creation status
+    """
+    return doc_manager.create_draft(template)
+
+
+@mcp.tool()
 def list_documents() -> dict:
     """
     List all open documents.
@@ -345,6 +362,24 @@ def draw_spline(points: list) -> dict:
         Spline creation status
     """
     return sketch_manager.draw_spline(points)
+
+
+@mcp.tool()
+def draw_point(x: float, y: float) -> dict:
+    """
+    Draw a construction point in the active sketch.
+
+    Creates a reference point at the given coordinates. Useful as
+    a hole center or constraint reference.
+
+    Args:
+        x: X coordinate (meters)
+        y: Y coordinate (meters)
+
+    Returns:
+        Point creation status
+    """
+    return sketch_manager.draw_point(x, y)
 
 
 @mcp.tool()
@@ -739,6 +774,60 @@ def create_hole(
         Hole creation status
     """
     return feature_manager.create_hole(x, y, diameter, depth, hole_type, plane_index, direction)
+
+
+@mcp.tool()
+def create_round_on_face(radius: float, face_index: int) -> dict:
+    """
+    Create a round (fillet) on edges of a specific face.
+
+    Unlike create_round() which rounds ALL edges, this targets only
+    the edges of one face. Use get_body_faces() to find face indices.
+
+    Args:
+        radius: Round radius in meters
+        face_index: 0-based face index (from get_body_faces)
+
+    Returns:
+        Round creation status with edge count
+    """
+    return feature_manager.create_round_on_face(radius, face_index)
+
+
+@mcp.tool()
+def create_chamfer_on_face(distance: float, face_index: int) -> dict:
+    """
+    Create a chamfer on edges of a specific face.
+
+    Unlike create_chamfer() which chamfers ALL edges, this targets only
+    the edges of one face. Use get_body_faces() to find face indices.
+
+    Args:
+        distance: Chamfer setback distance in meters
+        face_index: 0-based face index (from get_body_faces)
+
+    Returns:
+        Chamfer creation status with edge count
+    """
+    return feature_manager.create_chamfer_on_face(distance, face_index)
+
+
+@mcp.tool()
+def delete_faces(face_indices: list) -> dict:
+    """
+    Delete faces from the model body.
+
+    Removes specified faces from the body geometry. Useful for creating
+    openings or removing unwanted surfaces. Use get_body_faces() to see
+    available faces.
+
+    Args:
+        face_indices: List of 0-based face indices to delete
+
+    Returns:
+        Deletion status
+    """
+    return feature_manager.delete_faces(face_indices)
 
 
 # ============================================================================
@@ -1362,6 +1451,56 @@ def get_feature_count() -> dict:
         Feature count
     """
     return query_manager.get_feature_count()
+
+
+@mcp.tool()
+def set_body_color(red: int, green: int, blue: int) -> dict:
+    """
+    Set the body color of the active part.
+
+    Changes the visual appearance color of the model body.
+    Color values are 0-255 for each RGB component.
+
+    Args:
+        red: Red component (0-255)
+        green: Green component (0-255)
+        blue: Blue component (0-255)
+
+    Returns:
+        Color setting status with hex value
+    """
+    return query_manager.set_body_color(red, green, blue)
+
+
+@mcp.tool()
+def set_material_density(density: float) -> dict:
+    """
+    Set material density for mass property calculations.
+
+    Updates the density used when computing mass, center of gravity,
+    and moments of inertia. Default steel density is 7850 kg/m³.
+
+    Args:
+        density: Material density in kg/m³ (e.g., 7850 for steel, 2700 for aluminum)
+
+    Returns:
+        Recomputed mass properties with new density
+    """
+    return query_manager.set_material_density(density)
+
+
+@mcp.tool()
+def get_edge_count() -> dict:
+    """
+    Get total edge count on the model body.
+
+    Quick count of all edges across all faces. Useful for determining
+    if rounds or chamfers can be applied, and for topology inspection.
+
+    Returns:
+        Total edge references and face count
+    """
+    return query_manager.get_edge_count()
 
 
 # ============================================================================

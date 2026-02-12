@@ -375,6 +375,53 @@ class SketchManager:
                 "traceback": traceback.format_exc()
             }
 
+    def draw_point(self, x: float, y: float) -> Dict[str, Any]:
+        """
+        Draw a construction point in the active sketch.
+
+        Creates a point at the specified coordinates. Points are useful
+        as reference geometry for constraints and as hole center locations.
+
+        Args:
+            x: X coordinate (meters)
+            y: Y coordinate (meters)
+
+        Returns:
+            Dict with status and point info
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            # Use Holes2d.Add to place a point (standard sketch point method)
+            try:
+                holes = self.active_profile.Holes2d
+                point = holes.Add(x, y)
+                return {
+                    "status": "created",
+                    "type": "point",
+                    "position": [x, y],
+                    "method": "Holes2d"
+                }
+            except Exception:
+                pass
+
+            # Fallback: use a zero-radius circle as a point marker
+            circles = self.active_profile.Circles2d
+            point = circles.AddByCenterRadius(x, y, 0.0001)  # Very small circle
+            self.active_profile.ToggleConstruction(point)
+            return {
+                "status": "created",
+                "type": "point",
+                "position": [x, y],
+                "method": "construction_circle"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def set_axis_of_revolution(self, x1: float, y1: float, x2: float, y2: float) -> Dict[str, Any]:
         """
         Draw an axis of revolution line in the active sketch for revolve operations.

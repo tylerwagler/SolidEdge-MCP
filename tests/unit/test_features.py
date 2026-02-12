@@ -354,3 +354,108 @@ class TestCreateExtrude:
         result = feature_mgr.create_extrude(0.05)
         assert "error" in result
         assert "No active sketch" in result["error"]
+
+
+# ============================================================================
+# ROUND ON FACE (SELECTIVE)
+# ============================================================================
+
+class TestCreateRoundOnFace:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_round_on_face(0.002, 0)
+        assert result["status"] == "created"
+        assert result["type"] == "round"
+        assert result["radius"] == 0.002
+        assert result["face_index"] == 0
+        assert result["edge_count"] == 2
+        model.Rounds.Add.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_round_on_face(0.002, 0)
+        assert "error" in result
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        result = feature_mgr.create_round_on_face(0.002, 99)
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+    def test_face_no_edges(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        face = MagicMock()
+        no_edges = MagicMock()
+        no_edges.Count = 0
+        face.Edges = no_edges
+        faces = MagicMock()
+        faces.Count = 1
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+        result = feature_mgr.create_round_on_face(0.002, 0)
+        assert "error" in result
+        assert "no edges" in result["error"]
+
+
+# ============================================================================
+# CHAMFER ON FACE (SELECTIVE)
+# ============================================================================
+
+class TestCreateChamferOnFace:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_chamfer_on_face(0.001, 0)
+        assert result["status"] == "created"
+        assert result["type"] == "chamfer"
+        assert result["distance"] == 0.001
+        assert result["face_index"] == 0
+        assert result["edge_count"] == 2
+        model.Chamfers.AddEqualSetback.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_chamfer_on_face(0.001, 0)
+        assert "error" in result
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        result = feature_mgr.create_chamfer_on_face(0.001, 99)
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+
+# ============================================================================
+# DELETE FACES
+# ============================================================================
+
+class TestDeleteFaces:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.delete_faces([0])
+        assert result["status"] == "created"
+        assert result["type"] == "delete_faces"
+        assert result["face_count"] == 1
+        model.DeleteFaces.Add.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.delete_faces([0])
+        assert "error" in result
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        result = feature_mgr.delete_faces([99])
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+    def test_multiple_faces(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        # Set up 3 faces
+        faces = MagicMock()
+        faces.Count = 3
+        face1, face2, face3 = MagicMock(), MagicMock(), MagicMock()
+        faces.Item.side_effect = lambda i: {1: face1, 2: face2, 3: face3}[i]
+        model.Body.Faces.return_value = faces
+        result = feature_mgr.delete_faces([0, 2])
+        assert result["status"] == "created"
+        assert result["face_count"] == 2

@@ -2109,6 +2109,173 @@ class FeatureManager:
             }
 
     # =================================================================
+    # SELECTIVE ROUNDS AND CHAMFERS (ON SPECIFIC FACE)
+    # =================================================================
+
+    def create_round_on_face(self, radius: float, face_index: int) -> Dict[str, Any]:
+        """
+        Create a round (fillet) on edges of a specific face.
+
+        Unlike create_round() which rounds all edges, this targets only
+        the edges of a single face. Use get_body_faces() to find face indices.
+
+        Args:
+            radius: Round radius in meters
+            face_index: 0-based face index (from get_body_faces)
+
+        Returns:
+            Dict with status and round info
+        """
+        try:
+            from win32com.client import VARIANT
+            import pythoncom
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to add rounds to"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(6)  # igQueryAll = 6
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+            face_edges = face.Edges
+            if not hasattr(face_edges, 'Count') or face_edges.Count == 0:
+                return {"error": f"Face {face_index} has no edges"}
+
+            edge_list = []
+            for ei in range(1, face_edges.Count + 1):
+                edge_list.append(face_edges.Item(ei))
+
+            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
+            radius_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [radius])
+
+            rounds = model.Rounds
+            rnd = rounds.Add(1, edge_arr, radius_arr)
+
+            return {
+                "status": "created",
+                "type": "round",
+                "radius": radius,
+                "face_index": face_index,
+                "edge_count": len(edge_list)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_chamfer_on_face(self, distance: float, face_index: int) -> Dict[str, Any]:
+        """
+        Create a chamfer on edges of a specific face.
+
+        Unlike create_chamfer() which chamfers all edges, this targets only
+        the edges of a single face. Use get_body_faces() to find face indices.
+
+        Args:
+            distance: Chamfer setback distance in meters
+            face_index: 0-based face index (from get_body_faces)
+
+        Returns:
+            Dict with status and chamfer info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to add chamfers to"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(6)  # igQueryAll = 6
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+            face_edges = face.Edges
+            if not hasattr(face_edges, 'Count') or face_edges.Count == 0:
+                return {"error": f"Face {face_index} has no edges"}
+
+            edge_list = []
+            for ei in range(1, face_edges.Count + 1):
+                edge_list.append(face_edges.Item(ei))
+
+            chamfers = model.Chamfers
+            chamfer = chamfers.AddEqualSetback(len(edge_list), edge_list, distance)
+
+            return {
+                "status": "created",
+                "type": "chamfer",
+                "distance": distance,
+                "face_index": face_index,
+                "edge_count": len(edge_list)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def delete_faces(self, face_indices: List[int]) -> Dict[str, Any]:
+        """
+        Delete faces from the model body.
+
+        Uses model.DeleteFaces collection to remove specified faces.
+        Useful for creating openings or removing geometry.
+
+        Args:
+            face_indices: List of 0-based face indices to delete
+
+        Returns:
+            Dict with status and deletion info
+        """
+        try:
+            from win32com.client import VARIANT
+            import pythoncom
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to delete faces from"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(6)  # igQueryAll = 6
+            if faces.Count == 0:
+                return {"error": "No faces on body"}
+
+            face_objs = []
+            for idx in face_indices:
+                if idx < 0 or idx >= faces.Count:
+                    return {"error": f"Invalid face index: {idx}. Body has {faces.Count} faces."}
+                face_objs.append(faces.Item(idx + 1))
+
+            delete_faces = model.DeleteFaces
+            result = delete_faces.Add(len(face_objs), face_objs)
+
+            return {
+                "status": "created",
+                "type": "delete_faces",
+                "face_count": len(face_indices),
+                "face_indices": face_indices
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
     # ADDITIONAL SHEET METAL FEATURES
     # =================================================================
 

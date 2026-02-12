@@ -1133,6 +1133,125 @@ class QueryManager:
                 "traceback": traceback.format_exc()
             }
 
+    # =================================================================
+    # BODY APPEARANCE & MATERIAL
+    # =================================================================
+
+    def set_body_color(self, red: int, green: int, blue: int) -> Dict[str, Any]:
+        """
+        Set the body color of the active part.
+
+        Sets the foreground color of the body's style to the specified RGB values.
+        Color values are 0-255 for each component.
+
+        Args:
+            red: Red component (0-255)
+            green: Green component (0-255)
+            blue: Blue component (0-255)
+
+        Returns:
+            Dict with status and color info
+        """
+        try:
+            doc, model = self._get_first_model()
+            body = model.Body
+
+            # Clamp values to 0-255
+            red = max(0, min(255, red))
+            green = max(0, min(255, green))
+            blue = max(0, min(255, blue))
+
+            style = body.Style
+            style.SetForegroundColor(red, green, blue)
+
+            return {
+                "status": "set",
+                "color": {"red": red, "green": green, "blue": blue},
+                "hex": f"#{red:02x}{green:02x}{blue:02x}"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def set_material_density(self, density: float) -> Dict[str, Any]:
+        """
+        Set the material density for mass property calculations.
+
+        Stores the density value and recalculates mass properties.
+        Default steel density is 7850 kg/m³.
+
+        Args:
+            density: Material density in kg/m³
+
+        Returns:
+            Dict with status and recalculated mass
+        """
+        try:
+            doc, model = self._get_first_model()
+
+            if density <= 0:
+                return {"error": f"Density must be positive, got {density}"}
+
+            # Recompute with new density
+            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(
+                density, 0.99
+            )
+
+            mass = result[2] if len(result) > 2 else 0
+            volume = result[0] if len(result) > 0 else 0
+
+            return {
+                "status": "computed",
+                "density": density,
+                "mass": mass,
+                "volume": volume,
+                "units": {"density": "kg/m³", "mass": "kg", "volume": "m³"}
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_edge_count(self) -> Dict[str, Any]:
+        """
+        Get total edge count on the model body.
+
+        Quick count of all edges across all faces. Useful for
+        determining if rounds/chamfers can be applied.
+
+        Returns:
+            Dict with total edge count and face count
+        """
+        try:
+            doc, model = self._get_first_model()
+            body = model.Body
+
+            faces = body.Faces(6)  # igQueryAll = 6
+            total_edges = 0
+
+            for fi in range(1, faces.Count + 1):
+                try:
+                    face = faces.Item(fi)
+                    edges = face.Edges
+                    if hasattr(edges, 'Count'):
+                        total_edges += edges.Count
+                except Exception:
+                    pass
+
+            return {
+                "total_edge_references": total_edges,
+                "face_count": faces.Count,
+                "note": "Shared edges are counted once per face"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def recompute(self) -> Dict[str, Any]:
         """
         Recompute the active document and model.

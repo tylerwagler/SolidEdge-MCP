@@ -231,3 +231,73 @@ class TestRedo:
         result = dm.redo()
         assert result["status"] == "redone"
         doc.Redo.assert_called_once()
+
+
+# ============================================================================
+# CREATE DRAFT DOCUMENT
+# ============================================================================
+
+class TestCreateDraftDocument:
+    def test_success(self, doc_mgr):
+        dm, app = doc_mgr
+        draft_doc = MagicMock()
+        draft_doc.Name = "Draft1.dft"
+        app.Documents.Add.return_value = draft_doc
+
+        result = dm.create_draft()
+        assert result["status"] == "created"
+        app.Documents.Add.assert_called_once()
+
+    def test_with_template(self, doc_mgr):
+        dm, app = doc_mgr
+        draft_doc = MagicMock()
+        draft_doc.Name = "Draft1.dft"
+        app.Documents.Add.return_value = draft_doc
+
+        result = dm.create_draft("C:/templates/a3.dft")
+        assert result["status"] == "created"
+
+
+# ============================================================================
+# DRAW POINT (SKETCHING)
+# ============================================================================
+
+class TestDrawPoint:
+    def test_success(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        profile = MagicMock()
+        sm.active_profile = profile
+
+        result = sm.draw_point(0.05, 0.03)
+        assert result["status"] == "created"
+        assert result["type"] == "point"
+        assert result["position"] == [0.05, 0.03]
+        profile.Holes2d.Add.assert_called_once_with(0.05, 0.03)
+
+    def test_no_active_sketch(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        result = sm.draw_point(0.05, 0.03)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_fallback_method(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        profile = MagicMock()
+        # Holes2d.Add throws - force fallback to construction circle
+        profile.Holes2d.Add.side_effect = Exception("not available")
+        sm.active_profile = profile
+
+        result = sm.draw_point(0.01, 0.02)
+        assert result["status"] == "created"
+        assert result["method"] == "construction_circle"
+        profile.Circles2d.AddByCenterRadius.assert_called_once()
+        profile.ToggleConstruction.assert_called_once()

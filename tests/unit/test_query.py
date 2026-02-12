@@ -652,3 +652,129 @@ class TestSetPerformanceMode:
         assert result["status"] == "updated"
         assert "screen_updating" in result["settings"]
         assert "delay_compute" not in result["settings"]
+
+
+# ============================================================================
+# SET BODY COLOR
+# ============================================================================
+
+class TestSetBodyColor:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        result = qm.set_body_color(255, 0, 0)
+        assert result["status"] == "set"
+        assert result["color"]["red"] == 255
+        assert result["color"]["green"] == 0
+        assert result["color"]["blue"] == 0
+        assert result["hex"] == "#ff0000"
+        model.Body.Style.SetForegroundColor.assert_called_once_with(255, 0, 0)
+
+    def test_clamps_values(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        result = qm.set_body_color(300, -10, 128)
+        assert result["color"]["red"] == 255
+        assert result["color"]["green"] == 0
+        assert result["color"]["blue"] == 128
+
+    def test_no_model(self, query_mgr):
+        qm, doc = query_mgr
+        models = MagicMock()
+        models.Count = 0
+        doc.Models = models
+
+        result = qm.set_body_color(255, 0, 0)
+        assert "error" in result
+
+
+# ============================================================================
+# SET MATERIAL DENSITY
+# ============================================================================
+
+class TestSetMaterialDensity:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        # ComputePhysicalPropertiesWithSpecifiedDensity returns a tuple
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
+            0.001,   # volume
+            0.06,    # area
+            7.85,    # mass
+        )
+
+        result = qm.set_material_density(7850)
+        assert result["status"] == "computed"
+        assert result["density"] == 7850
+        assert result["mass"] == 7.85
+        assert result["volume"] == 0.001
+
+    def test_negative_density(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        result = qm.set_material_density(-100)
+        assert "error" in result
+        assert "positive" in result["error"]
+
+
+# ============================================================================
+# GET EDGE COUNT
+# ============================================================================
+
+class TestGetEdgeCount:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        face1 = MagicMock()
+        face1.Edges.Count = 4
+
+        face2 = MagicMock()
+        face2.Edges.Count = 4
+
+        faces = MagicMock()
+        faces.Count = 2
+        faces.Item.side_effect = lambda i: [None, face1, face2][i]
+        model.Body.Faces.return_value = faces
+
+        result = qm.get_edge_count()
+        assert result["total_edge_references"] == 8
+        assert result["face_count"] == 2
+
+    def test_no_model(self, query_mgr):
+        qm, doc = query_mgr
+        models = MagicMock()
+        models.Count = 0
+        doc.Models = models
+
+        result = qm.get_edge_count()
+        assert "error" in result
