@@ -65,12 +65,13 @@ src/solidedge_mcp/
 
 ### Current State
 
-**✅ FULLY IMPLEMENTED**: All 99 MCP tools are registered and operational!
+**✅ FULLY IMPLEMENTED**: All 124 MCP tools are registered and operational!
 
 - **Backend layer**: Complete COM automation using pywin32 (connection, documents, sketching, features, assembly, query, export, diagnostics)
-- **MCP tools**: All 99 tools registered in `server.py` using `@mcp.tool()` decorator
-- **Tool categories**: Connection (2), Documents (7), Sketching (11), Primitives (5), Extrusions (3), Revolves (5), Cutouts (3), Ref Planes (1), Rounds/Chamfers/Holes (3), Mirror (1), Loft (2), Sweep (2), Helix (4), Sheet Metal (8), Body Operations (7), Simplification (4), View (4), Query (6), Export (9), Assembly (11), Diagnostics (2)
+- **MCP tools**: All 124 tools registered in `server.py` using `@mcp.tool()` decorator
+- **Tool categories**: Connection (2), Documents (8), Sketching (11), Primitives (5), Extrusions (3), Revolves (5), Cutouts (5), Ref Planes (1), Rounds/Chamfers/Holes (3), Mirror (1), Loft (2), Sweep (2), Helix (4), Sheet Metal (8), Body Operations (7), Simplification (4), View (4), Variables (3), Custom Properties (3), Body Topology (3), Performance (2), Query/Analysis (10), Modeling Mode (2), Feature Management (2), Draft/Drawing (2), Export (9), Assembly (14), Diagnostics (2)
 - **Coverage**: 100% of core Solid Edge COM API methods including cutout operations via collection-level APIs
+- **Test suite**: 73 unit tests across 4 test files
 
 **Pending**: Resource providers (read-only state), prompt templates, session management/undo
 
@@ -78,33 +79,41 @@ src/solidedge_mcp/
 
 Following the MCP spec, the server exposes:
 
-- **Tools** ✅ (99 implemented): Actions that create/modify models (connect, create_sketch, extrude, cutout, round, chamfer, hole, mirror, place_component, export)
+- **Tools** ✅ (124 implemented): Actions that create/modify models (connect, create_sketch, extrude, cutout, round, chamfer, hole, mirror, place_component, export)
 - **Resources** ⏳ (pending): Read-only model data (feature list, component tree, mass properties, document info)
 - **Prompts** ⏳ (pending): Conversation templates (design review, manufacturability check, modeling guidance)
 
-### Tool Categories (95 total)
+### Tool Categories (124 total)
 
 See `IMPLEMENTATION_STATUS.md` for the complete list. High-level categories:
 
 1. **Connection (2)**: `connect_to_solidedge`, `get_application_info`
-2. **Documents (7)**: Create/open/save/close parts and assemblies
+2. **Documents (8)**: Create (part, assembly, sheet metal), open, save, close, list
 3. **Sketching (11)**: Lines, circles, arcs, rectangles, polygons, ellipses, splines, constraints, sketch on any plane
 4. **Primitives (5)**: Box (3 variants), cylinder, sphere
 5. **Extrusions (3)**: Finite, infinite, thin-wall
 6. **Revolves (5)**: Basic, finite, sync variants, thin-wall
-7. **Cutouts (3)**: Extruded (finite + through-all), revolved
+7. **Cutouts (5)**: Extruded (finite + through-all), revolved, normal, lofted
 8. **Reference Planes (1)**: Offset parallel plane
-9. **Loft (2)**: Basic and thin-wall
-10. **Sweep (2)**: Basic and thin-wall
-11. **Helix/Spiral (4)**: Various helix creation methods
-12. **Sheet Metal (8)**: Base flange/tab, lofted flange, web network
-13. **Body Operations (7)**: Add body, thicken, mesh, tag-based, construction
-14. **Simplification (4)**: Auto-simplify, enclosure, duplicate
-15. **View/Display (4)**: Set view orientation, zoom, display mode
-16. **Query/Analysis (6)**: Mass properties, bounding box, features, measurements
-17. **Export (9)**: STEP, STL, IGES, PDF, DXF, Parasolid, JT, screenshot, drawing
-18. **Assembly (11)**: Place components, constraints, patterns, suppress
-19. **Diagnostics (2)**: API discovery tools
+9. **Rounds/Chamfers/Holes (3)**: Round (fillet), chamfer, hole
+10. **Mirror (1)**: Mirror copy across plane
+11. **Loft (2)**: Basic and thin-wall
+12. **Sweep (2)**: Basic and thin-wall
+13. **Helix/Spiral (4)**: Various helix creation methods
+14. **Sheet Metal (8)**: Base flange/tab, lofted flange, web network
+15. **Body Operations (7)**: Add body, thicken, mesh, tag-based, construction
+16. **Simplification (4)**: Auto-simplify, enclosure, duplicate
+17. **View/Display (4)**: Set view orientation, zoom, display mode
+18. **Variables (3)**: Get all, get by name, set value
+19. **Custom Properties (3)**: Get all, set/create, delete
+20. **Body Topology (3)**: Body faces, body edges, face info
+21. **Performance (2)**: Set performance mode, recompute
+22. **Query/Analysis (10)**: Mass properties, bounding box, features, measurements, facets, solid bodies, modeling mode
+23. **Feature Management (2)**: Suppress, unsuppress features
+24. **Draft/Drawing (2)**: Add sheet, assembly drawing view
+25. **Export (9)**: STEP, STL, IGES, PDF, DXF, Parasolid, JT, screenshot, drawing
+26. **Assembly (14)**: Place, list, constraints, patterns, suppress, BOM, interference, bbox
+27. **Diagnostics (2)**: API discovery tools
 
 ### Tool Registration Pattern
 
