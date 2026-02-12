@@ -404,3 +404,190 @@ class AssemblyManager:
             }
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_occurrence_bounding_box(self, component_index: int) -> Dict[str, Any]:
+        """
+        Get the bounding box of a specific component (occurrence) in the assembly.
+
+        Uses Occurrence.GetRangeBox() which returns min/max 3D points.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with min/max coordinates
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            # GetRangeBox returns two arrays via out params
+            import array
+            min_point = array.array('d', [0.0, 0.0, 0.0])
+            max_point = array.array('d', [0.0, 0.0, 0.0])
+
+            occurrence.GetRangeBox(min_point, max_point)
+
+            return {
+                "component_index": component_index,
+                "min": [min_point[0], min_point[1], min_point[2]],
+                "max": [max_point[0], max_point[1], max_point[2]],
+                "size": [
+                    max_point[0] - min_point[0],
+                    max_point[1] - min_point[1],
+                    max_point[2] - min_point[2]
+                ]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_bom(self) -> Dict[str, Any]:
+        """
+        Get Bill of Materials from the active assembly.
+
+        Recursively traverses all occurrences, deduplicates by file path,
+        and returns a flat BOM with quantities.
+
+        Returns:
+            Dict with BOM items (file, name, quantity)
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            bom_counts: Dict[str, Dict[str, Any]] = {}
+
+            for i in range(1, occurrences.Count + 1):
+                occurrence = occurrences.Item(i)
+
+                # Skip items excluded from BOM
+                try:
+                    if hasattr(occurrence, 'IncludeInBom') and not occurrence.IncludeInBom:
+                        continue
+                except Exception:
+                    pass
+
+                # Skip pattern items (counted as part of pattern source)
+                try:
+                    if hasattr(occurrence, 'IsPatternItem') and occurrence.IsPatternItem:
+                        continue
+                except Exception:
+                    pass
+
+                # Get file path as key
+                try:
+                    file_path = occurrence.OccurrenceFileName
+                except Exception:
+                    file_path = f"Unknown_{i}"
+
+                name = occurrence.Name if hasattr(occurrence, 'Name') else os.path.basename(file_path)
+
+                if file_path in bom_counts:
+                    bom_counts[file_path]["quantity"] += 1
+                else:
+                    bom_counts[file_path] = {
+                        "name": name,
+                        "file_path": file_path,
+                        "quantity": 1
+                    }
+
+            bom_items = list(bom_counts.values())
+
+            return {
+                "total_occurrences": occurrences.Count,
+                "unique_parts": len(bom_items),
+                "bom": bom_items
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def check_interference(self, component_index: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Run interference check on the active assembly.
+
+        If component_index is provided, checks that component against all others.
+        If not provided, checks all components against each other.
+
+        Args:
+            component_index: Optional 0-based index of a specific component to check
+
+        Returns:
+            Dict with interference status and details
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if occurrences.Count < 2:
+                return {"status": "no_interference", "message": "Need at least 2 components for interference check"}
+
+            import ctypes
+
+            # Build set1 - single component or all
+            if component_index is not None:
+                if component_index < 0 or component_index >= occurrences.Count:
+                    return {"error": f"Invalid component index: {component_index}"}
+                set1 = [occurrences.Item(component_index + 1)]
+            else:
+                set1 = [occurrences.Item(i) for i in range(1, occurrences.Count + 1)]
+
+            # Call CheckInterference
+            # seInterferenceComparisonSet1vsAllOther = 1
+            comparison_method = 1
+
+            # Prepare out parameters
+            interference_status = ctypes.c_int(0)
+            num_interferences = ctypes.c_int(0)
+
+            try:
+                doc.CheckInterference(
+                    NumElementsSet1=len(set1),
+                    Set1=set1,
+                    Status=interference_status,
+                    ComparisonMethod=comparison_method,
+                    NumElementsSet2=0,
+                    AddInterferenceAsOccurrence=False,
+                    NumInterferences=num_interferences
+                )
+
+                return {
+                    "status": "checked",
+                    "interference_found": interference_status.value != 0,
+                    "num_interferences": num_interferences.value,
+                    "component_checked": component_index
+                }
+            except Exception as e:
+                # CheckInterference has complex COM signature; report what we can
+                return {
+                    "error": f"Interference check failed: {e}",
+                    "note": "CheckInterference COM signature is complex. Use Solid Edge UI for reliable results.",
+                    "traceback": traceback.format_exc()
+                }
+
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }

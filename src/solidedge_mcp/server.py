@@ -1565,6 +1565,45 @@ def create_drawing(template: Optional[str] = None, views: Optional[list] = None)
 
 
 @mcp.tool()
+def add_draft_sheet() -> dict:
+    """
+    Add a new sheet to the active draft document.
+
+    Creates a new sheet and activates it. The active document must be
+    a Draft document (created via create_drawing).
+
+    Returns:
+        Sheet creation status with sheet number
+    """
+    return export_manager.add_draft_sheet()
+
+
+@mcp.tool()
+def add_assembly_drawing_view(
+    x: float = 0.15,
+    y: float = 0.15,
+    orientation: str = "Isometric",
+    scale: float = 1.0
+) -> dict:
+    """
+    Add an assembly drawing view to the active draft document.
+
+    Places a view of the linked assembly model on the active sheet.
+    The active document must be a Draft with a model link.
+
+    Args:
+        x: View center X position on sheet (meters)
+        y: View center Y position on sheet (meters)
+        orientation: View orientation - 'Front', 'Top', 'Right', 'Isometric'
+        scale: View scale factor
+
+    Returns:
+        View creation status
+    """
+    return export_manager.add_assembly_drawing_view(x, y, orientation, scale)
+
+
+@mcp.tool()
 def capture_screenshot(file_path: str, width: int = 1920, height: int = 1080) -> dict:
     """
     Capture a screenshot of the current view.
@@ -1846,6 +1885,54 @@ def suppress_component(component_index: int, suppress: bool = True) -> dict:
         Component suppression status
     """
     return assembly_manager.suppress_component(component_index, suppress)
+
+
+@mcp.tool()
+def get_occurrence_bounding_box(component_index: int) -> dict:
+    """
+    Get the bounding box of a specific component in the assembly.
+
+    Returns min/max 3D coordinates and size for the specified occurrence.
+
+    Args:
+        component_index: Index of the component (0-based)
+
+    Returns:
+        Min/max coordinates and size in X, Y, Z
+    """
+    return assembly_manager.get_occurrence_bounding_box(component_index)
+
+
+@mcp.tool()
+def get_bom() -> dict:
+    """
+    Get Bill of Materials from the active assembly.
+
+    Traverses all occurrences, deduplicates by file path, and returns
+    a flat BOM with part names, file paths, and quantities.
+
+    Returns:
+        BOM with unique parts and quantities
+    """
+    return assembly_manager.get_bom()
+
+
+@mcp.tool()
+def check_interference(component_index: Optional[int] = None) -> dict:
+    """
+    Run interference check on the active assembly.
+
+    Checks for geometric interference between components.
+    If component_index is provided, checks that component against all others.
+    If not provided, checks all components.
+
+    Args:
+        component_index: Optional component to check (0-based)
+
+    Returns:
+        Interference status and count
+    """
+    return assembly_manager.check_interference(component_index)
 
 
 # ============================================================================

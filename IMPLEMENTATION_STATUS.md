@@ -4,7 +4,7 @@ Last Updated: 2026-02-12
 
 ## MCP Server Status: **OPERATIONAL**
 
-**113 MCP tools** are now registered and ready to use!
+**118 MCP tools** are now registered and ready to use!
 
 ## Quick Summary
 
@@ -32,9 +32,10 @@ Last Updated: 2026-02-12
 | **Performance** | 2 | Set performance mode, recompute |
 | **Query/Analysis** | 6 | Mass properties, bounding box, features, measurements |
 | **Export** | 9 | STEP, STL, IGES, PDF, DXF, Parasolid, JT, drawing, screenshot |
-| **Assembly** | 11 | Place, list, constraints, patterns, suppress |
+| **Assembly** | 14 | Place, list, constraints, patterns, suppress, BOM, interference, bbox |
+| **Draft/Drawing** | 2 | Add sheet, assembly drawing view |
 | **Diagnostics** | 2 | API and feature inspection |
-| **TOTAL** | **113** | |
+| **TOTAL** | **118** | |
 
 ---
 
@@ -200,7 +201,13 @@ Last Updated: 2026-02-12
 | create_drawing | DraftDocument + DrawingViews | Working |
 | capture_screenshot | View.SaveAsImage | Working |
 
-### 18. Assembly (11)
+### 17b. Draft/Drawing (2)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| add_draft_sheet | Sheets.AddSheet | Implemented |
+| add_assembly_drawing_view | DrawingViews.AddAssemblyView | Implemented |
+
+### 18. Assembly (14)
 | Tool | API Method | Status |
 |------|-----------|--------|
 | place_component | Occurrences.AddByFilename/AddWithMatrix | Working |
@@ -209,6 +216,9 @@ Last Updated: 2026-02-12
 | update_component_position | Occurrence.SetMatrix | Working |
 | pattern_component | Occurrences.AddWithMatrix (copies) | Working |
 | suppress_component | Occurrence.Suppress/Unsuppress | Working |
+| get_occurrence_bounding_box | Occurrence.GetRangeBox | Implemented |
+| get_bom | Occurrences iteration + dedup | Implemented |
+| check_interference | AssemblyDocument.CheckInterference | Implemented |
 | create_mate | Relations3d | Stub (needs face selection) |
 | add_align_constraint | Relations3d | Stub (needs face selection) |
 | add_angle_constraint | Relations3d | Stub (needs face selection) |

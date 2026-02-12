@@ -256,6 +256,108 @@ class ExportManager:
                 "traceback": traceback.format_exc()
             }
 
+    def add_draft_sheet(self) -> Dict[str, Any]:
+        """
+        Add a new sheet to the active draft document.
+
+        The active document must be a Draft document. Creates a new sheet
+        and activates it.
+
+        Returns:
+            Dict with status and new sheet info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Sheets'):
+                return {"error": "Active document is not a draft document. Create a drawing first."}
+
+            sheets = doc.Sheets
+            old_count = sheets.Count
+
+            sheet = sheets.AddSheet()
+            sheet.Activate()
+
+            return {
+                "status": "added",
+                "sheet_number": sheets.Count,
+                "total_sheets": sheets.Count,
+                "name": sheet.Name if hasattr(sheet, 'Name') else f"Sheet {sheets.Count}"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def add_assembly_drawing_view(
+        self,
+        x: float = 0.15,
+        y: float = 0.15,
+        orientation: str = "Isometric",
+        scale: float = 1.0
+    ) -> Dict[str, Any]:
+        """
+        Add an assembly drawing view to the active draft document.
+
+        The active document must be a Draft with a model link to an assembly.
+
+        Args:
+            x: View center X position on sheet (meters)
+            y: View center Y position on sheet (meters)
+            orientation: View orientation - 'Front', 'Top', 'Right', 'Isometric', etc.
+            scale: View scale factor
+
+        Returns:
+            Dict with status and view info
+        """
+        try:
+            import win32com.client.dynamic as dyn
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Sheets'):
+                return {"error": "Active document is not a draft document"}
+
+            # Get model link
+            if not hasattr(doc, 'ModelLinks') or doc.ModelLinks.Count == 0:
+                return {"error": "No model link found. Create a drawing with create_drawing() first."}
+
+            model_link = doc.ModelLinks.Item(1)
+
+            # View orientation constants
+            view_orient_map = {
+                'Front': 5, 'Back': 8, 'Top': 6, 'Bottom': 9,
+                'Right': 7, 'Left': 10, 'Isometric': 12, 'Iso': 12,
+            }
+
+            orient = view_orient_map.get(orientation)
+            if orient is None:
+                return {"error": f"Invalid orientation: {orientation}. Valid: {', '.join(view_orient_map.keys())}"}
+
+            sheet = doc.ActiveSheet
+            dvs_early = sheet.DrawingViews
+            dvs = dyn.Dispatch(dvs_early._oleobj_)
+
+            # seAssemblyDesignedView = 0
+            try:
+                dv = dvs.AddAssemblyView(model_link, orient, scale, x, y, 0)
+            except Exception:
+                # Fall back to AddPartView if AddAssemblyView not available
+                dv = dvs.AddPartView(model_link, orient, scale, x, y, 0)
+
+            return {
+                "status": "added",
+                "orientation": orientation,
+                "scale": scale,
+                "position": [x, y]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def capture_screenshot(self, file_path: str, width: int = 1920, height: int = 1080) -> Dict[str, Any]:
         """
         Capture a screenshot of the current view.

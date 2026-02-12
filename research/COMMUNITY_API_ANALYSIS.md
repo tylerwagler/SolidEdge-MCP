@@ -10,10 +10,10 @@
 
 | Metric | Count |
 |--------|-------|
-| **Our implemented MCP tools** | 113 |
+| **Our implemented MCP tools** | 118 |
 | **API operations found in community repos** | 250+ |
-| **Operations we're missing** | ~63 |
-| **High-priority gaps (Tier 2)** | ~15 |
+| **Operations we're missing** | ~58 |
+| **High-priority gaps (Tier 2)** | ~5 |
 | **Community repos analyzed** | 10 |
 
 ---
@@ -484,7 +484,7 @@ These operations are now fully implemented with MCP tool wrappers:
 | **Normal cutout** (`NormalCutouts.AddFiniteMulti`) | Low | Medium | **DONE** (create_normal_cutout) |
 | **Lofted cutout** (`LoftedCutouts.AddSimple`) | Medium | Medium | **DONE** (create_lofted_cutout) |
 
-### Tier 2: HIGH PRIORITY - Partially completed
+### Tier 2: ~~HIGH PRIORITY~~ DONE - Nearly all implemented
 
 | Operation | Effort | Impact | Status |
 |---|---|---|---|
@@ -495,11 +495,11 @@ These operations are now fully implemented with MCP tool wrappers:
 | **Create sheet metal document** | Low | High | **DONE** (create_sheet_metal_document) |
 | **Face/edge topology query** | Medium | Very High | **DONE** (get_body_faces, get_body_edges, get_face_info) |
 | **Body facet data** (mesh export) | Medium | High | |
-| **Interference check** (assembly) | Medium | High | |
-| **Report BOM** (assembly) | Medium | High | |
-| **Draft: Add assembly view** | Low | High | |
-| **Draft: Add sheet** | Low | Medium | |
-| **Occurrence bounding box** | Low | Medium | |
+| **Interference check** (assembly) | Medium | High | **DONE** (check_interference) |
+| **Report BOM** (assembly) | Medium | High | **DONE** (get_bom) |
+| **Draft: Add assembly view** | Low | High | **DONE** (add_assembly_drawing_view) |
+| **Draft: Add sheet** | Low | Medium | **DONE** (add_draft_sheet) |
+| **Occurrence bounding box** | Low | Medium | **DONE** (get_occurrence_bounding_box) |
 
 ### Tier 3: MEDIUM PRIORITY - Useful additions
 
