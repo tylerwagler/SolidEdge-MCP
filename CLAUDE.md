@@ -65,12 +65,12 @@ src/solidedge_mcp/
 
 ### Current State
 
-**✅ FULLY IMPLEMENTED (100%)**: All 89 MCP tools are registered and operational!
+**✅ FULLY IMPLEMENTED**: All 95 MCP tools are registered and operational!
 
 - **Backend layer**: Complete COM automation using pywin32 (connection, documents, sketching, features, assembly, query, export, diagnostics)
-- **MCP tools**: All 89 tools registered in `server.py` using `@mcp.tool()` decorator
-- **Tool categories**: Connection (2), Documents (7), Sketching (10), Primitives (5), Extrusions (3), Revolves (5), Loft (2), Sweep (2), Helix (4), Sheet Metal (8), Body Operations (7), Simplification (4), View (4), Query (6), Export (9), Assembly (11), Diagnostics (2)
-- **Coverage**: 100% of available Solid Edge COM API methods (excluding cutout operations which are not exposed in the API)
+- **MCP tools**: All 95 tools registered in `server.py` using `@mcp.tool()` decorator
+- **Tool categories**: Connection (2), Documents (7), Sketching (11), Primitives (5), Extrusions (3), Revolves (5), Cutouts (3), Ref Planes (1), Loft (2), Sweep (2), Helix (4), Sheet Metal (8), Body Operations (7), Simplification (4), View (4), Query (6), Export (9), Assembly (11), Diagnostics (2)
+- **Coverage**: 100% of core Solid Edge COM API methods including cutout operations via collection-level APIs
 
 **Pending**: Resource providers (read-only state), prompt templates, session management/undo
 
@@ -78,31 +78,33 @@ src/solidedge_mcp/
 
 Following the MCP spec, the server exposes:
 
-- **Tools** ✅ (89 implemented): Actions that create/modify models (connect, create_sketch, extrude, place_component, export)
+- **Tools** ✅ (95 implemented): Actions that create/modify models (connect, create_sketch, extrude, cutout, place_component, export)
 - **Resources** ⏳ (pending): Read-only model data (feature list, component tree, mass properties, document info)
 - **Prompts** ⏳ (pending): Conversation templates (design review, manufacturability check, modeling guidance)
 
-### Tool Categories (89 total)
+### Tool Categories (95 total)
 
 See `IMPLEMENTATION_STATUS.md` for the complete list. High-level categories:
 
 1. **Connection (2)**: `connect_to_solidedge`, `get_application_info`
 2. **Documents (7)**: Create/open/save/close parts and assemblies
-3. **Sketching (10)**: Lines, circles, arcs, rectangles, polygons, ellipses, splines, constraints
+3. **Sketching (11)**: Lines, circles, arcs, rectangles, polygons, ellipses, splines, constraints, sketch on any plane
 4. **Primitives (5)**: Box (3 variants), cylinder, sphere
 5. **Extrusions (3)**: Finite, infinite, thin-wall
 6. **Revolves (5)**: Basic, finite, sync variants, thin-wall
-7. **Loft (2)**: Basic and thin-wall
-8. **Sweep (2)**: Basic and thin-wall
-9. **Helix/Spiral (4)**: Various helix creation methods
-10. **Sheet Metal (8)**: Base flange/tab, lofted flange, web network
-11. **Body Operations (7)**: Add body, thicken, mesh, tag-based, construction
-12. **Simplification (4)**: Auto-simplify, enclosure, duplicate
-13. **View/Display (4)**: Set view orientation, zoom, display mode
-14. **Query/Analysis (6)**: Mass properties, bounding box, features, measurements
-15. **Export (9)**: STEP, STL, IGES, PDF, DXF, Parasolid, JT, screenshot
-16. **Assembly (11)**: Place components, constraints, patterns, suppress
-17. **Diagnostics (2)**: API discovery tools
+7. **Cutouts (3)**: Extruded (finite + through-all), revolved
+8. **Reference Planes (1)**: Offset parallel plane
+9. **Loft (2)**: Basic and thin-wall
+10. **Sweep (2)**: Basic and thin-wall
+11. **Helix/Spiral (4)**: Various helix creation methods
+12. **Sheet Metal (8)**: Base flange/tab, lofted flange, web network
+13. **Body Operations (7)**: Add body, thicken, mesh, tag-based, construction
+14. **Simplification (4)**: Auto-simplify, enclosure, duplicate
+15. **View/Display (4)**: Set view orientation, zoom, display mode
+16. **Query/Analysis (6)**: Mass properties, bounding box, features, measurements
+17. **Export (9)**: STEP, STL, IGES, PDF, DXF, Parasolid, JT, screenshot, drawing
+18. **Assembly (11)**: Place components, constraints, patterns, suppress
+19. **Diagnostics (2)**: API discovery tools
 
 ### Tool Registration Pattern
 
@@ -160,7 +162,7 @@ Each manager encapsulates related COM operations and maintains necessary state (
 - **Reference planes**: Solid Edge has 3 default planes (Top/XZ, Front/XY, Right/YZ). Sketches are created on these planes using `RefPlanes.Item(index)`.
 - **Units**: Solid Edge internal units are **meters**. Convert mm to meters by dividing by 1000. All tool parameters use meters.
 - **Feature tree**: Features are stored in `Document.Models` collection (1-indexed in COM). Each feature has properties like Name, Type, Status.
-- **Cutout operations**: NOT AVAILABLE - Solid Edge COM API does not expose cutout/cut operations (AddExtrudedCutout, etc.). This is a known API limitation.
+- **Cutout operations**: Available via collection-level APIs (`model.ExtrudedCutouts.AddFiniteMulti`, `model.RevolvedCutouts.AddFiniteMulti`), NOT via `models.AddExtrudedCutout` (which doesn't exist).
 - **Collections are 1-indexed**: COM collections use 1-based indexing (`collection.Item(1)` is first item), but our tools use 0-based indexing for Python consistency.
 - **Profile validation**: After drawing geometry, profiles need to be validated/closed before using them for features. The `close_sketch()` tool calls `profile.End(0)`.
 - **Angle units**: Most angle parameters in the API expect **radians**, so convert degrees to radians using `math.radians(angle)`.

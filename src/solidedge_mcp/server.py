@@ -316,6 +316,23 @@ def set_axis_of_revolution(x1: float, y1: float, x2: float, y2: float) -> dict:
 
 
 @mcp.tool()
+def create_sketch_on_plane(plane_index: int) -> dict:
+    """
+    Create a new 2D sketch on a reference plane by index.
+
+    Useful for sketching on user-created offset planes (index > 3).
+    Default planes: 1=Top/XZ, 2=Front/XY, 3=Right/YZ.
+
+    Args:
+        plane_index: 1-based index of the reference plane
+
+    Returns:
+        Sketch creation status
+    """
+    return sketch_manager.create_sketch_on_plane_index(plane_index)
+
+
+@mcp.tool()
 def close_sketch() -> dict:
     """
     Close/finish the active sketch.
@@ -447,6 +464,89 @@ def create_revolve_finite_sync(angle: float) -> dict:
         Finite synchronous revolve creation status
     """
     return feature_manager.create_revolve_finite_sync(angle)
+
+
+# ============================================================================
+# CUTOUT (CUT) OPERATIONS
+# ============================================================================
+
+@mcp.tool()
+def create_extruded_cutout(distance: float, direction: str = "Normal") -> dict:
+    """
+    Create an extruded cutout (cut) through the part.
+
+    Removes material by extruding the active sketch profile into the part.
+    Requires an existing base feature and a closed sketch profile.
+
+    Args:
+        distance: Cutout depth in meters
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Cutout creation status
+    """
+    return feature_manager.create_extruded_cutout(distance, direction)
+
+
+@mcp.tool()
+def create_extruded_cutout_through_all(direction: str = "Normal") -> dict:
+    """
+    Create an extruded cutout that goes through the entire part.
+
+    Removes material by extruding the active sketch profile through the whole body.
+    Requires an existing base feature and a closed sketch profile.
+
+    Args:
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Cutout creation status
+    """
+    return feature_manager.create_extruded_cutout_through_all(direction)
+
+
+@mcp.tool()
+def create_revolved_cutout(angle: float = 360) -> dict:
+    """
+    Create a revolved cutout (cut) in the part.
+
+    Removes material by revolving the active sketch profile around an axis.
+    Requires an existing base feature, a closed sketch profile, and an axis of revolution.
+
+    Args:
+        angle: Revolution angle in degrees (360 for full revolution)
+
+    Returns:
+        Cutout creation status
+    """
+    return feature_manager.create_revolved_cutout(angle)
+
+
+# ============================================================================
+# REFERENCE PLANE CREATION
+# ============================================================================
+
+@mcp.tool()
+def create_ref_plane_by_offset(
+    parent_plane_index: int,
+    distance: float,
+    normal_side: str = "Normal"
+) -> dict:
+    """
+    Create a reference plane parallel to an existing plane at an offset distance.
+
+    Useful for creating sketches at different heights/positions.
+    Default planes: 1=Top/XZ, 2=Front/XY, 3=Right/YZ.
+
+    Args:
+        parent_plane_index: Index of parent plane (1-based)
+        distance: Offset distance in meters
+        normal_side: 'Normal' or 'Reverse' for offset direction
+
+    Returns:
+        Reference plane creation status with new plane index
+    """
+    return feature_manager.create_ref_plane_by_offset(parent_plane_index, distance, normal_side)
 
 
 # ============================================================================

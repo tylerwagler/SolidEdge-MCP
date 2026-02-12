@@ -77,6 +77,47 @@ class SketchManager:
                 "traceback": traceback.format_exc()
             }
 
+    def create_sketch_on_plane_index(self, plane_index: int) -> Dict[str, Any]:
+        """
+        Create a new sketch on a reference plane by its 1-based index.
+
+        Useful for sketching on user-created offset planes (index > 3).
+
+        Args:
+            plane_index: 1-based index of the reference plane
+
+        Returns:
+            Dict with status and sketch info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            ref_planes = doc.RefPlanes
+
+            if plane_index < 1 or plane_index > ref_planes.Count:
+                return {"error": f"Invalid plane index: {plane_index}. Count: {ref_planes.Count}"}
+
+            ref_plane = ref_planes.Item(plane_index)
+
+            profile_sets = doc.ProfileSets
+            profile_set = profile_sets.Add()
+            profiles = profile_set.Profiles
+            profile = profiles.Add(ref_plane)
+
+            self.active_sketch = profile_set
+            self.active_profile = profile
+            self.active_refaxis = None
+
+            return {
+                "status": "created",
+                "plane_index": plane_index,
+                "sketch_id": profile_set.Name if hasattr(profile_set, 'Name') else "sketch"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def draw_line(self, x1: float, y1: float, x2: float, y2: float) -> Dict[str, Any]:
         """Draw a line in the active sketch"""
         try:

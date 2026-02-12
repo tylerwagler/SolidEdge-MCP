@@ -483,7 +483,7 @@ class ViewModel:
             }
 
     def zoom_to_selection(self) -> Dict[str, Any]:
-        """Zoom to selected geometry"""
+        """Zoom to fit all geometry (equivalent to View > Fit)."""
         try:
             doc = self.doc_manager.get_active_document()
 
@@ -495,6 +495,8 @@ class ViewModel:
 
             if not view_obj:
                 return {"error": "Cannot access view object"}
+
+            view_obj.Fit()
 
             return {"status": "zoomed_to_selection"}
         except Exception as e:

@@ -72,6 +72,9 @@ class AssemblyManager:
                 "traceback": traceback.format_exc()
             }
 
+    # Alias for MCP tool compatibility
+    place_component = add_component
+
     def list_components(self) -> Dict[str, Any]:
         """
         List all components in the active assembly.

@@ -1,314 +1,229 @@
 # Solid Edge MCP - Implementation Status
 
-Last Updated: 2026-02-11
+Last Updated: 2026-02-12
 
-## 🎉 MCP Server Status: **OPERATIONAL**
+## MCP Server Status: **OPERATIONAL**
 
-**89 MCP tools** are now registered and ready to use! (100% Complete)
+**95 MCP tools** are now registered and ready to use!
 
 ## Quick Summary
 
-| Category | Available in API | Implemented | Not Available | Remaining |
-|----------|-----------------|-------------|---------------|-----------|
-| **Connection** | 2 | 2 | 0 | 0 |
-| **Document Management** | 6 | 7 | 0 | 0 |
-| **Sketching** | 10 | 10 | 0 | 0 |
-| **Basic Primitives** | 5 | 5 | 0 | 0 |
-| **Extrusions** | 3 | 3 | 0 | 0 |
-| **Revolves** | 5 | 5 | 0 | 0 |
-| **Loft** | 2 | 2 | 0 | 0 |
-| **Sweep** | 2 | 2 | 0 | 0 |
-| **Simplification** | 4 | 4 | 0 | 0 |
-| **Helix/Spiral** | 4 | 4 | 0 | 0 |
-| **Sheet Metal** | 8 | 8 | 0 | 0 |
-| **Body Operations** | 7 | 7 | 0 | 0 |
-| **Cutout Operations** | 0 | 0 | ALL | 0 |
-| **View/Display** | 4 | 4 | 0 | 0 |
-| **Query/Analysis** | 6 | 6 | 0 | 0 |
-| **Export** | 9 | 9 | 0 | 0 |
-| **Assembly** | 11 | 11 | 0 | 0 |
-| **Diagnostics** | 2 | 2 | 0 | 0 |
-| **TOTAL** | **89** | **89** | **ALL Cutouts** | **0** |
+| Category | Implemented | Notes |
+|----------|-------------|-------|
+| **Connection** | 2 | Connect, app info |
+| **Document Management** | 7 | Create, open, save, close, list |
+| **Sketching** | 11 | Lines, circles, arcs, rects, polygons, ellipses, splines, constraints, axis |
+| **Basic Primitives** | 5 | Box (3 variants), cylinder, sphere |
+| **Extrusions** | 3 | Finite, infinite, thin-wall |
+| **Revolves** | 5 | Basic, finite, sync, thin-wall |
+| **Cutouts** | 3 | Extruded finite, through-all, revolved |
+| **Reference Planes** | 1 | Offset parallel plane |
+| **Loft** | 2 | Basic, thin-wall |
+| **Sweep** | 2 | Basic, thin-wall |
+| **Helix/Spiral** | 4 | Basic, sync, thin-wall variants |
+| **Sheet Metal** | 8 | Base flange/tab, lofted flange, web network |
+| **Body Operations** | 7 | Add body, thicken, mesh, tag, construction |
+| **Simplification** | 4 | Auto-simplify, enclosure, duplicate |
+| **View/Display** | 4 | Orientation, zoom, display mode |
+| **Query/Analysis** | 6 | Mass properties, bounding box, features, measurements |
+| **Export** | 9 | STEP, STL, IGES, PDF, DXF, Parasolid, JT, drawing, screenshot |
+| **Assembly** | 11 | Place, list, constraints, patterns, suppress |
+| **Diagnostics** | 2 | API and feature inspection |
+| **TOTAL** | **95** | |
 
 ---
 
-## 1. Connection & Application
+## Tool Categories
 
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| connect_to_solidedge | ✅ Implemented | Application | Connect/start Solid Edge |
-| get_application_info | ✅ Implemented | Application | Version, path, document count |
-| disconnect | ✅ Implemented | Application | Release COM connection |
+### 1. Connection & Application (2)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| connect_to_solidedge | GetActiveObject/Dispatch | Working |
+| get_application_info | Application properties | Working |
 
----
+### 2. Document Management (7)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_part_document | Documents.Add | Working |
+| create_assembly_document | Documents.Add | Working |
+| open_document | Documents.Open | Working |
+| save_document | Document.Save/SaveAs | Working |
+| close_document | Document.Close | Working |
+| list_documents | Documents collection | Working |
 
-## 2. Document Management
+### 3. Sketching & 2D Geometry (11)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_sketch | ProfileSets.Add/Profiles.Add | Working |
+| create_sketch_on_plane | ProfileSets.Add with plane index | Working |
+| draw_line | Lines2d.AddBy2Points | Working |
+| draw_circle | Circles2d.AddByCenterRadius | Working |
+| draw_rectangle | Lines2d (4 lines) | Working |
+| draw_arc | Arcs2d.AddByCenterStartEnd | Working |
+| draw_polygon | Lines2d (n lines) | Working |
+| draw_ellipse | Ellipses2d.AddByCenter | Working |
+| draw_spline | BSplineCurves2d.AddByPoints | Working |
+| set_axis_of_revolution | SetAxisOfRevolution | Working |
+| close_sketch | Profile.End | Working |
+| add_constraint | Relations2d | Stub (needs element refs) |
 
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| create_part_document | ✅ Implemented | Documents | Create new part |
-| create_assembly_document | ✅ Implemented | Documents | Create new assembly |
-| open_document | ✅ Implemented | Documents | Open existing file |
-| save_document | ✅ Implemented | Documents | Save active document |
-| save_as_document | ✅ Implemented | Documents | Save with new name |
-| close_document | ✅ Implemented | Documents | Close active document |
-| list_documents | ✅ Implemented | Documents | List all open documents |
+### 4. Primitives (5)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_box_by_center | Models.AddBoxByCenter | Working |
+| create_box_by_two_points | Models.AddBoxByTwoPoints | Working |
+| create_box_by_three_points | Models.AddBoxByThreePoints | Working |
+| create_cylinder | Models.AddCylinderByCenterAndRadius | Working |
+| create_sphere | Models.AddSphereByCenterAndRadius | Working |
 
----
+### 5. Extrusions (3)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_extrude | Models.AddFiniteExtrudedProtrusion | Working |
+| create_extrude_infinite | Models.AddExtrudedProtrusion | Untested |
+| create_extrude_thin_wall | Models.AddExtrudedProtrusionWithThinWall | Untested |
 
-## 3. Sketching & 2D Geometry
+### 6. Revolves (5)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_revolve | Models.AddFiniteRevolvedProtrusion | Working |
+| create_revolve_finite | Models.AddFiniteRevolvedProtrusion | Working |
+| create_revolve_sync | Models.AddRevolvedProtrusionSync | Untested |
+| create_revolve_finite_sync | Models.AddFiniteRevolvedProtrusionSync | Untested |
+| create_revolve_thin_wall | Models.AddRevolvedProtrusionWithThinWall | Untested |
 
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| create_sketch | ✅ Implemented | ProfileSets/Profiles | Create sketch on plane |
-| draw_line | ✅ Implemented | Profile.Lines2d | AddBy2Points |
-| draw_circle | ✅ Implemented | Profile.Circles2d | AddByCenterRadius |
-| draw_rectangle | ✅ Implemented | Profile.Lines2d | 4 lines |
-| draw_arc | ✅ Implemented | Profile.Arcs2d | AddByCenterStartEnd |
-| draw_polygon | ✅ Implemented | Profile.Lines2d | Regular polygon |
-| close_sketch | ✅ Implemented | Profile | End profile |
-| draw_ellipse | ✅ Implemented | Profile.Ellipses2d | AddByCenterRadii |
-| draw_spline | ✅ Implemented | Profile.BSplineCurves2d | AddByPoints |
-| add_constraint | ✅ Implemented | Profile.Relations2d | Geometric constraints |
+### 7. Cutouts - NEW! (3)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_extruded_cutout | ExtrudedCutouts.AddFiniteMulti | **Working** |
+| create_extruded_cutout_through_all | ExtrudedCutouts.AddThroughAllMulti | **Working** |
+| create_revolved_cutout | RevolvedCutouts.AddFiniteMulti | Implemented |
 
----
+### 8. Reference Planes - NEW! (1)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_ref_plane_by_offset | RefPlanes.AddParallelByDistance | **Working** |
 
-## 4. 3D Features - Primitives
+### 9. Loft (2)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_loft | LoftedProtrusions.AddSimple / Models.AddLoftedProtrusion | Working |
+| create_loft_thin_wall | Models.AddLoftedProtrusionWithThinWall | Untested |
 
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_box_by_center | ✅ Implemented | Models | AddBoxByCenter |
-| create_box_by_two_points | ✅ Implemented | Models | AddBoxByTwoPoints |
-| create_box_by_three_points | ✅ Implemented | Models | AddBoxByThreePoints |
-| create_cylinder | ✅ Implemented | Models | AddCylinderByCenterAndRadius |
-| create_sphere | ✅ Implemented | Models | AddSphereByCenterAndRadius |
+### 10. Sweep (2)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_sweep | Models.AddSweptProtrusion | Working |
+| create_sweep_thin_wall | Models.AddSweptProtrusionWithThinWall | Untested |
 
----
+### 11. Helix/Spiral (4)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_helix | Models.AddFiniteBaseHelix | Untested |
+| create_helix_sync | Models.AddFiniteBaseHelixSync | Untested |
+| create_helix_thin_wall | Models.AddFiniteBaseHelixWithThinWall | Untested |
+| create_helix_sync_thin_wall | Models.AddFiniteBaseHelixSyncWithThinWall | Untested |
 
-## 5. 3D Features - Extrusions
+### 12. Sheet Metal (8)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_base_flange | Models.AddBaseContourFlange | Untested |
+| create_base_tab | Models.AddBaseTab | Untested |
+| create_lofted_flange | Models.AddLoftedFlange | Untested |
+| create_web_network | Models.AddWebNetwork | Untested |
+| create_base_contour_flange_advanced | Models.AddBaseContourFlangeBy... | Untested |
+| create_base_tab_multi_profile | Models.AddBaseTabWithMultipleProfiles | Untested |
+| create_lofted_flange_advanced | Models.AddLoftedFlangeBy... | Untested |
+| create_lofted_flange_ex | Models.AddLoftedFlangeEx | Untested |
 
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_extrude (finite) | ✅ Implemented | Models | AddFiniteExtrudedProtrusion |
-| create_extrude (infinite) | ✅ Implemented | Models | AddExtrudedProtrusion |
-| create_extrude_thin_wall | ✅ Implemented | Models | AddExtrudedProtrusionWithThinWall |
+### 13. Body Operations (7)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| add_body | Models.AddBody | Untested |
+| thicken_surface | Models.AddThickenFeature | Untested |
+| add_body_by_mesh | Models.AddBodyByMeshFacets | Untested |
+| add_body_feature | Models.AddBodyFeature | Untested |
+| add_by_construction | Models.AddByConstruction | Untested |
+| add_body_by_tag | Models.AddBodyByTag | Untested |
 
----
+### 14. Simplification (4)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| auto_simplify | Models.AddAutoSimplify | Untested |
+| simplify_enclosure | Models.AddSimplifyEnclosure | Untested |
+| simplify_duplicate | Models.AddSimplifyDuplicate | Untested |
+| local_simplify_enclosure | Models.AddLocalSimplifyEnclosure | Untested |
 
-## 6. 3D Features - Revolves
+### 15. View & Display (4)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| set_view | View.ApplyNamedView | Working |
+| zoom_fit | View.Fit | Working |
+| zoom_to_selection | View.Fit | Working |
+| set_display_mode | View.SetRenderMode | Working |
 
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_revolve (basic) | ✅ Implemented | Models | AddRevolvedProtrusion |
-| create_revolve_finite | ✅ Implemented | Models | AddFiniteRevolvedProtrusion |
-| create_revolve_sync | ✅ Implemented | Models | AddRevolvedProtrusionSync |
-| create_revolve_finite_sync | ✅ Implemented | Models | AddFiniteRevolvedProtrusionSync |
-| create_revolve_thin_wall | ✅ Implemented | Models | AddRevolvedProtrusionWithThinWall |
+### 16. Query & Analysis (6)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| get_mass_properties | Model.ComputePhysicalProperties... | Working |
+| get_bounding_box | Body.GetRange | Working |
+| list_features | DesignEdgebarFeatures | Working |
+| get_feature_count | Models.Count | Working |
+| get_document_properties | Document properties | Working |
+| measure_distance | Math calculation | Working |
 
----
+### 17. Export (9)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| export_step | Document.SaveAs | Working |
+| export_stl | Document.SaveAs | Working |
+| export_iges | Document.SaveAs | Working |
+| export_pdf | Document.SaveAs | Working |
+| export_dxf | Document.SaveAs | Working |
+| export_parasolid | Document.SaveAs | Working |
+| export_jt | Document.SaveAs | Working |
+| create_drawing | DraftDocument + DrawingViews | Working |
+| capture_screenshot | View.SaveAsImage | Working |
 
-## 7. 3D Features - Loft
+### 18. Assembly (11)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| place_component | Occurrences.AddByFilename/AddWithMatrix | Working |
+| list_assembly_components | Occurrences iteration | Working |
+| get_component_info | Occurrence properties + GetTransform | Working |
+| update_component_position | Occurrence.SetMatrix | Working |
+| pattern_component | Occurrences.AddWithMatrix (copies) | Working |
+| suppress_component | Occurrence.Suppress/Unsuppress | Working |
+| create_mate | Relations3d | Stub (needs face selection) |
+| add_align_constraint | Relations3d | Stub (needs face selection) |
+| add_angle_constraint | Relations3d | Stub (needs face selection) |
+| add_planar_align_constraint | Relations3d | Stub (needs face selection) |
+| add_axial_align_constraint | Relations3d | Stub (needs face selection) |
 
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_loft | ✅ Implemented | Models | AddLoftedProtrusion |
-| create_loft_thin_wall | ✅ Implemented | Models | AddLoftedProtrusionWithThinWall |
-
----
-
-## 8. 3D Features - Sweep
-
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_sweep | ✅ Implemented | Models | AddSweptProtrusion |
-| create_sweep_thin_wall | ✅ Implemented | Models | AddSweptProtrusionWithThinWall |
-
----
-
-## 9. 3D Features - Helix/Spiral
-
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_helix | ✅ Implemented | Models | AddFiniteBaseHelix |
-| create_helix_sync | ✅ Implemented | Models | AddFiniteBaseHelixSync |
-| create_helix_thin_wall | ✅ Implemented | Models | AddFiniteBaseHelixWithThinWall |
-| create_helix_sync_thin_wall | ✅ Implemented | Models | AddFiniteBaseHelixSyncWithThinWall |
-
----
-
-## 10. 3D Features - Sheet Metal
-
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_base_flange | ✅ Implemented | Models | AddBaseContourFlange |
-| add_base_contour_flange_advanced | ✅ Implemented | Models | AddBaseContourFlangeByBendDeductionOrBendAllowance |
-| create_base_tab | ✅ Implemented | Models | AddBaseTab |
-| add_base_tab_multi_profile | ✅ Implemented | Models | AddBaseTabWithMultipleProfiles |
-| add_lofted_flange | ✅ Implemented | Models | AddLoftedFlange |
-| add_lofted_flange_advanced | ✅ Implemented | Models | AddLoftedFlangeByBendDeductionOrBendAllowance |
-| add_lofted_flange_ex | ✅ Implemented | Models | AddLoftedFlangeEx |
-| add_web_network | ✅ Implemented | Models | AddWebNetwork |
-
----
-
-## 11. 3D Features - Body Operations
-
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| add_body | ✅ Implemented | Models | AddBody |
-| add_body_by_mesh | ✅ Implemented | Models | AddBodyByMeshFacets |
-| add_body_by_tag | ✅ Implemented | Models | AddBodyByTag |
-| add_body_feature | ✅ Implemented | Models | AddBodyFeature |
-| add_by_construction | ✅ Implemented | Models | AddByConstruction |
-| thicken_surface | ✅ Implemented | Models | AddThickenFeature |
-
----
-
-## 12. 3D Features - Simplification
-
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| auto_simplify | ✅ Implemented | Models | AddAutoSimplify |
-| simplify_duplicate | ✅ Implemented | Models | AddSimplifyDuplicate |
-| simplify_enclosure | ✅ Implemented | Models | AddSimplifyEnclosure |
-| local_simplify_enclosure | ✅ Implemented | Models | AddLocalSimplifyEnclosure |
-
----
-
-## 13. 3D Features - Cutouts (NOT AVAILABLE)
-
-| Tool Name | Status | Collection/Module | API Method |
-|-----------|--------|-------------------|------------|
-| create_extrude_cut | ❌ Not Available | N/A | AddExtrudedCutout - DOES NOT EXIST |
-| create_revolve_cut | ❌ Not Available | N/A | AddRevolvedCutout - DOES NOT EXIST |
-| create_swept_cut | ❌ Not Available | N/A | AddSweptCutout - DOES NOT EXIST |
-| ANY cut operation | ❌ Not Available | N/A | No cutout methods exposed via COM |
-
-**Note**: Cut/cutout operations are NOT exposed in the Solid Edge COM API. This is a confirmed API limitation, not an implementation gap.
-
----
-
-## 14. 3D Features - Other (Unknown Status)
-
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| create_hole | ❓ Unknown | Holes? | Collection not yet diagnosed |
-| create_round/fillet | ❓ Unknown | Rounds? | Collection not yet diagnosed |
-| create_chamfer | ❓ Unknown | Chamfers? | Collection not yet diagnosed |
-| create_pattern | ❓ Unknown | Patterns? | Collection not yet diagnosed |
-| create_thread | ❓ Unknown | Threads? | Collection not yet diagnosed |
-| create_rib | ❓ Unknown | RibWebs? | Collection not yet diagnosed |
-| create_web | ❓ Unknown | RibWebs? | Collection not yet diagnosed |
-
----
-
-## 15. Assembly Operations
-
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| place_component | ✅ Implemented | Occurrences | Place part in assembly |
-| list_components | ✅ Implemented | Occurrences | List assembly components |
-| get_component_info | ✅ Implemented | Occurrences | Query component properties |
-| create_mate | ✅ Implemented | Relations3d | Create mate constraint |
-| update_component_position | ✅ Implemented | Occurrences | Update component position |
-| add_align_constraint | ✅ Implemented | Relations3d | Align components |
-| add_angle_constraint | ✅ Implemented | Relations3d | Angle constraint |
-| add_planar_align_constraint | ✅ Implemented | Relations3d | Planar align |
-| add_axial_align_constraint | ✅ Implemented | Relations3d | Axial align |
-| pattern_component | ✅ Implemented | Occurrences | Pattern components |
-| suppress_component | ✅ Implemented | Occurrences | Suppress/unsuppress |
+### 19. Diagnostics (2)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| diagnose_api | Runtime introspection | Working |
+| diagnose_feature | Feature property inspection | Working |
 
 ---
 
-## 16. Query & Analysis
+## Known Limitations
 
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| get_bounding_box | ✅ Implemented | Document | Query extents |
-| get_mass_properties | ✅ Implemented | Model | Mass, volume, CoG, inertia |
-| list_features | ✅ Implemented | Models | List all features |
-| get_feature_count | ✅ Implemented | Models | Count features |
-| get_document_properties | ✅ Implemented | Document | Document metadata |
-| measure_distance | ✅ Implemented | Calculation | Measure between points |
+1. **Assembly constraints** require face/edge geometry selection which is complex to automate via COM
+2. **Feature patterns** (model.Patterns) require SAFEARRAY(IDispatch) marshaling that fails in late binding
+3. **Shell/Thinwalls** requires face selection for open faces, not automatable via COM
+4. **Sketch constraints** (add_constraint) needs specific element references, partially stubbed
+5. **Cutout via models.Add*Cutout** does NOT work - must use collection-level methods (ExtrudedCutouts.AddFiniteMulti)
 
----
+## Available but Not Yet Implemented
 
-## 17. View & Display
-
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| set_view | ✅ Implemented | Window.View | Set orientation (Iso, Top, Front, etc.) |
-| zoom_fit | ✅ Implemented | Window.View | Fit all geometry |
-| zoom_to_selection | ✅ Implemented | Window.View | Zoom to selected |
-| set_display_mode | ✅ Implemented | Window.View | Shaded, wireframe, etc. |
-
----
-
-## 18. Export Operations
-
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| export_step | ✅ Implemented | Document.SaveAs | Export to STEP |
-| export_stl | ✅ Implemented | Document.SaveAs | Export to STL |
-| export_iges | ✅ Implemented | Document.SaveAs | Export to IGES |
-| export_pdf | ✅ Implemented | Document.SaveAs | Export to PDF |
-| create_drawing | ✅ Implemented | Documents | Create 2D drawing |
-| capture_screenshot | ✅ Implemented | Window | Capture view image |
-| export_parasolid | ✅ Implemented | Document.SaveAs | Export to X_T/X_B |
-| export_jt | ✅ Implemented | Document.SaveAs | Export to JT |
-| export_dxf | ✅ Implemented | Document.SaveAs | Export to DXF |
-
----
-
-## 19. Diagnostic Tools
-
-| Tool Name | Status | Collection/Module | Notes |
-|-----------|--------|-------------------|-------|
-| diagnose_api | ✅ Implemented | diagnostics.py | Enumerate available collections/methods |
-| diagnose_feature | ✅ Implemented | diagnostics.py | Inspect feature properties |
-
----
-
-## Implementation Priority
-
-### High Priority (Core Functionality)
-1. ✅ Connection and document management
-2. ✅ Basic sketching (lines, circles, rectangles)
-3. ✅ Basic extrude and revolve
-4. 🔨 Primitives (box, cylinder, sphere) - **Next**
-5. 🔨 Advanced extrude/revolve variants
-
-### Medium Priority (Extended Modeling)
-1. Loft and sweep operations
-2. Sheet metal features
-3. Holes, rounds, chamfers (if available)
-4. Assembly constraints
-5. Pattern operations
-
-### Low Priority (Advanced Features)
-1. Helix/spiral features
-2. Body operations and simplification
-3. Advanced sheet metal
-4. Mesh import
-
----
-
-## Legend
-
-| Symbol | Meaning |
-|--------|---------|
-| ✅ | Implemented and working |
-| 📋 | Available in API, not yet implemented |
-| ❌ | Not available in COM API |
-| ❓ | Unknown - needs investigation |
-| 🔨 | In progress |
-
----
-
-## Next Steps
-
-1. **Implement primitive shapes** (5 tools) - AddBoxByCenter, AddCylinder, AddSphere
-2. **Create MCP tool wrappers** - Wrap all implemented backend functions as MCP tools
-3. **Extended diagnostic** - Check for Holes, Rounds, Chamfers, Patterns collections
-4. **Implement loft/sweep** (4 tools) - Common advanced features
-5. **Assembly constraints** (7 tools) - Complete assembly workflow
+Feature collections accessible on Model object that could be wrapped as tools:
+- **MirrorCopies** - Add(PatternPlane, NumFeatures, FeatureArray), AddSync
+- **Drafts** - Add(DraftPlane, NumFaceSets, FaceSetArray, DraftAngleArray, DraftSide)
+- **Threads** - Add(HoleData, NumCylinders, CylinderArray, CylinderEndArray)
+- **Ribs** - Add(RibProfile, ExtensionType, ThicknessType, MaterialSide, ThicknessSide, Thickness)
+- **Slots** - Add (22 params, complex)
+- **Blends** - Add, AddSurfaceBlend, AddVariable
+- **DeleteFaces** - Add(FaceSetToDelete)
+- **Dimples, Gussets, Louvers, Beads, Lips** - Various sheet metal features

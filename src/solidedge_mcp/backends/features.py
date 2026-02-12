@@ -329,73 +329,45 @@ class FeatureManager:
         """
         Create a pattern of features.
 
+        Note: Feature patterns require SAFEARRAY(IDispatch) marshaling of feature
+        objects which is not currently supported via COM late binding. Use assembly-level
+        component patterns (pattern_component) instead.
+
         Args:
             pattern_type: 'Rectangular' or 'Circular'
             **kwargs: Pattern-specific parameters
 
         Returns:
-            Dict with status and pattern info
+            Dict with error explaining limitation
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            if pattern_type == "Rectangular":
-                count_x = kwargs.get('count_x', 2)
-                count_y = kwargs.get('count_y', 2)
-                spacing_x = kwargs.get('spacing_x', 0.01)
-                spacing_y = kwargs.get('spacing_y', 0.01)
-
-                return {
-                    "status": "created",
-                    "type": "rectangular_pattern",
-                    "count": [count_x, count_y],
-                    "spacing": [spacing_x, spacing_y],
-                    "note": "Pattern creation requires feature selection"
-                }
-            elif pattern_type == "Circular":
-                count = kwargs.get('count', 4)
-                angle = kwargs.get('angle', 360)
-
-                return {
-                    "status": "created",
-                    "type": "circular_pattern",
-                    "count": count,
-                    "angle": angle,
-                    "note": "Pattern creation requires feature selection"
-                }
-            else:
-                return {"error": f"Invalid pattern type: {pattern_type}"}
-        except Exception as e:
-            return {
-                "error": str(e),
-                "traceback": traceback.format_exc()
-            }
+        return {
+            "error": "Feature patterns (model.Patterns) require SAFEARRAY marshaling of "
+                     "feature objects which is not supported via COM late binding. "
+                     "Use assembly-level pattern_component() for component patterns instead.",
+            "pattern_type": pattern_type
+        }
 
     def create_shell(self, thickness: float, remove_face_indices: Optional[List[int]] = None) -> Dict[str, Any]:
         """
         Create a shell feature (hollow out the part).
+
+        Note: Shell (Thinwalls) requires face selection for open faces which cannot
+        be reliably automated via COM late binding. The Thinwalls.Add method requires
+        complex VARIANT parameters for face arrays.
 
         Args:
             thickness: Wall thickness in meters
             remove_face_indices: Indices of faces to remove (optional)
 
         Returns:
-            Dict with status and shell info
+            Dict with error explaining limitation
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            return {
-                "status": "created",
-                "type": "shell",
-                "thickness": thickness,
-                "note": "Shell creation requires face selection"
-            }
-        except Exception as e:
-            return {
-                "error": str(e),
-                "traceback": traceback.format_exc()
-            }
+        return {
+            "error": "Shell (Thinwalls) feature requires face selection for open faces "
+                     "which cannot be reliably automated via COM. Use the Solid Edge UI "
+                     "to create shell features.",
+            "thickness": thickness
+        }
 
     def list_features(self) -> Dict[str, Any]:
         """List all features in the active part"""
@@ -1741,6 +1713,215 @@ class FeatureManager:
                 "pitch": pitch,
                 "height": height,
                 "wall_thickness": wall_thickness
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # CUTOUT OPERATIONS
+    # =================================================================
+
+    def create_extruded_cutout(self, distance: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create an extruded cutout (cut) through the part using the active sketch profile.
+
+        Uses model.ExtrudedCutouts.AddFiniteMulti(NumProfiles, ProfileArray, PlaneSide, Depth).
+        Requires an existing base feature and a closed sketch profile.
+
+        Args:
+            distance: Cutout depth in meters
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and cutout info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            direction_map = {
+                "Normal": ExtrudedProtrusion.igRight,
+                "Reverse": ExtrudedProtrusion.igLeft,
+            }
+            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+
+            cutouts = model.ExtrudedCutouts
+            cutout = cutouts.AddFiniteMulti(1, (profile,), dir_const, distance)
+
+            self.sketch_manager.clear_accumulated_profiles()
+
+            return {
+                "status": "created",
+                "type": "extruded_cutout",
+                "distance": distance,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_extruded_cutout_through_all(self, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create an extruded cutout that goes through the entire part.
+
+        Uses model.ExtrudedCutouts.AddThroughAllMulti(NumProfiles, ProfileArray, PlaneSide).
+        Requires an existing base feature and a closed sketch profile.
+
+        Args:
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and cutout info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            direction_map = {
+                "Normal": ExtrudedProtrusion.igRight,
+                "Reverse": ExtrudedProtrusion.igLeft,
+            }
+            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+
+            cutouts = model.ExtrudedCutouts
+            cutout = cutouts.AddThroughAllMulti(1, (profile,), dir_const)
+
+            self.sketch_manager.clear_accumulated_profiles()
+
+            return {
+                "status": "created",
+                "type": "extruded_cutout_through_all",
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_revolved_cutout(self, angle: float = 360) -> Dict[str, Any]:
+        """
+        Create a revolved cutout (cut) in the part using the active sketch profile.
+
+        Uses model.RevolvedCutouts.AddFiniteMulti(NumProfiles, ProfileArray, RefAxis, PlaneSide, Angle).
+        Requires an existing base feature, a closed sketch profile, and an axis of revolution.
+
+        Args:
+            angle: Revolution angle in degrees (360 for full revolution)
+
+        Returns:
+            Dict with status and cutout info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+            if not refaxis:
+                return {"error": "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            import math
+            angle_rad = math.radians(angle)
+
+            cutouts = model.RevolvedCutouts
+            cutout = cutouts.AddFiniteMulti(
+                1,                              # NumberOfProfiles
+                (profile,),                     # ProfileArray
+                refaxis,                        # ReferenceAxis
+                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                angle_rad                       # AngleOfRevolution
+            )
+
+            self.sketch_manager.clear_accumulated_profiles()
+
+            return {
+                "status": "created",
+                "type": "revolved_cutout",
+                "angle": angle
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # REFERENCE PLANE CREATION
+    # =================================================================
+
+    def create_ref_plane_by_offset(self, parent_plane_index: int, distance: float,
+                                    normal_side: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a reference plane parallel to an existing plane at an offset distance.
+
+        Uses RefPlanes.AddParallelByDistance(ParentPlane, Distance, NormalSide).
+        Useful for creating sketches at different heights/positions.
+
+        Args:
+            parent_plane_index: Index of parent plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ,
+                                or higher for user-created planes)
+            distance: Offset distance in meters
+            normal_side: 'Normal' (igRight=2) or 'Reverse' (igLeft=1)
+
+        Returns:
+            Dict with status and new plane index
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            ref_planes = doc.RefPlanes
+
+            if parent_plane_index < 1 or parent_plane_index > ref_planes.Count:
+                return {"error": f"Invalid plane index: {parent_plane_index}. Count: {ref_planes.Count}"}
+
+            parent = ref_planes.Item(parent_plane_index)
+
+            side_map = {
+                "Normal": ExtrudedProtrusion.igRight,
+                "Reverse": ExtrudedProtrusion.igLeft,
+            }
+            side_const = side_map.get(normal_side, ExtrudedProtrusion.igRight)
+
+            new_plane = ref_planes.AddParallelByDistance(parent, distance, side_const)
+
+            return {
+                "status": "created",
+                "type": "reference_plane",
+                "method": "parallel_by_distance",
+                "parent_plane": parent_plane_index,
+                "distance": distance,
+                "normal_side": normal_side,
+                "new_plane_index": ref_planes.Count
             }
         except Exception as e:
             return {
