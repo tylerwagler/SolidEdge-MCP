@@ -672,6 +672,133 @@ class AssemblyManager:
                 "traceback": traceback.format_exc()
             }
 
+    def set_component_visibility(self, component_index: int, visible: bool) -> Dict[str, Any]:
+        """
+        Set the visibility of a component in the assembly.
+
+        Args:
+            component_index: 0-based index of the component
+            visible: True to show, False to hide
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+            occurrence.Visible = visible
+
+            return {
+                "status": "updated",
+                "component_index": component_index,
+                "visible": visible
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def delete_component(self, component_index: int) -> Dict[str, Any]:
+        """
+        Delete/remove a component from the assembly.
+
+        Args:
+            component_index: 0-based index of the component to remove
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+            name = occurrence.Name if hasattr(occurrence, 'Name') else f"Component_{component_index}"
+            occurrence.Delete()
+
+            return {
+                "status": "deleted",
+                "component_index": component_index,
+                "name": name
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def ground_component(self, component_index: int, ground: bool = True) -> Dict[str, Any]:
+        """
+        Ground (fix in place) or unground a component in the assembly.
+
+        Args:
+            component_index: 0-based index of the component
+            ground: True to ground, False to unground
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            if ground:
+                # Add a ground constraint
+                relations = doc.Relations3d
+                relations.AddGround(occurrence)
+                return {
+                    "status": "grounded",
+                    "component_index": component_index
+                }
+            else:
+                # Find and delete ground relation for this occurrence
+                relations = doc.Relations3d
+                for i in range(relations.Count, 0, -1):
+                    try:
+                        rel = relations.Item(i)
+                        # Ground relations have Type = 0
+                        if hasattr(rel, 'Type') and rel.Type == 0:
+                            rel.Delete()
+                            return {
+                                "status": "ungrounded",
+                                "component_index": component_index
+                            }
+                    except Exception:
+                        continue
+
+                return {"error": "No ground relation found for this component"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def check_interference(self, component_index: Optional[int] = None) -> Dict[str, Any]:
         """
         Run interference check on the active assembly.

@@ -225,6 +225,17 @@ def list_documents() -> dict:
     return doc_manager.list_documents()
 
 
+@mcp.tool()
+def get_active_document_type() -> dict:
+    """
+    Get the type of the currently active document.
+
+    Returns:
+        Document type (Part, Assembly, Draft, SheetMetal), name, and path
+    """
+    return doc_manager.get_active_document_type()
+
+
 # ============================================================================
 # SKETCHING TOOLS
 # ============================================================================
@@ -443,6 +454,20 @@ def close_sketch() -> dict:
         Sketch closure status
     """
     return sketch_manager.close_sketch()
+
+
+@mcp.tool()
+def get_sketch_info() -> dict:
+    """
+    Get information about the active sketch.
+
+    Returns element counts for each geometry type (lines, circles, arcs,
+    ellipses, splines, points) and a total element count.
+
+    Returns:
+        Sketch geometry counts by type
+    """
+    return sketch_manager.get_sketch_info()
 
 
 # ============================================================================
@@ -2187,6 +2212,45 @@ def export_flat_dxf(file_path: str) -> dict:
 
 
 @mcp.tool()
+def add_text_box(x: float, y: float, text: str, height: float = 0.005) -> dict:
+    """
+    Add a text box annotation to the active draft sheet.
+
+    Places a text annotation at the specified position on the drawing.
+
+    Args:
+        x: X position on sheet (meters)
+        y: Y position on sheet (meters)
+        text: Text content to display
+        height: Text height in meters (default 0.005 = 5mm)
+
+    Returns:
+        Text box creation status
+    """
+    return export_manager.add_text_box(x, y, text, height)
+
+
+@mcp.tool()
+def add_leader(x1: float, y1: float, x2: float, y2: float, text: str = "") -> dict:
+    """
+    Add a leader annotation to the active draft sheet.
+
+    A leader is an arrow pointing to geometry with optional text.
+
+    Args:
+        x1: Arrow tip X position (meters)
+        y1: Arrow tip Y position (meters)
+        x2: Text position X (meters)
+        y2: Text position Y (meters)
+        text: Optional text at the leader end
+
+    Returns:
+        Leader creation status
+    """
+    return export_manager.add_leader(x1, y1, x2, y2, text)
+
+
+@mcp.tool()
 def capture_screenshot(file_path: str, width: int = 1920, height: int = 1080) -> dict:
     """
     Capture a screenshot of the current view.
@@ -2468,6 +2532,56 @@ def suppress_component(component_index: int, suppress: bool = True) -> dict:
         Component suppression status
     """
     return assembly_manager.suppress_component(component_index, suppress)
+
+
+@mcp.tool()
+def set_component_visibility(component_index: int, visible: bool) -> dict:
+    """
+    Set the visibility of a component in the assembly.
+
+    Toggle whether a component is visible or hidden in the assembly view.
+
+    Args:
+        component_index: Index of the component (0-based)
+        visible: True to show, False to hide
+
+    Returns:
+        Visibility update status
+    """
+    return assembly_manager.set_component_visibility(component_index, visible)
+
+
+@mcp.tool()
+def delete_component(component_index: int) -> dict:
+    """
+    Delete/remove a component from the assembly.
+
+    Permanently removes the component occurrence from the assembly.
+
+    Args:
+        component_index: Index of the component to remove (0-based)
+
+    Returns:
+        Deletion status with component name
+    """
+    return assembly_manager.delete_component(component_index)
+
+
+@mcp.tool()
+def ground_component(component_index: int, ground: bool = True) -> dict:
+    """
+    Ground (fix in place) or unground a component.
+
+    Grounding a component prevents it from moving in the assembly.
+
+    Args:
+        component_index: Index of the component (0-based)
+        ground: True to ground (fix), False to unground (free)
+
+    Returns:
+        Ground/unground status
+    """
+    return assembly_manager.ground_component(component_index, ground)
 
 
 @mcp.tool()

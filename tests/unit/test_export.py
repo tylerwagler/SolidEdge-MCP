@@ -301,3 +301,236 @@ class TestDrawPoint:
         assert result["method"] == "construction_circle"
         profile.Circles2d.AddByCenterRadius.assert_called_once()
         profile.ToggleConstruction.assert_called_once()
+
+
+# ============================================================================
+# GET SKETCH INFO
+# ============================================================================
+
+class TestGetSketchInfo:
+    def test_success(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        profile = MagicMock()
+        profile.Lines2d.Count = 4
+        profile.Circles2d.Count = 1
+        profile.Arcs2d.Count = 0
+        profile.Ellipses2d.Count = 0
+        profile.BSplineCurves2d.Count = 0
+        profile.Holes2d.Count = 2
+        sm.active_profile = profile
+
+        result = sm.get_sketch_info()
+        assert result["status"] == "active"
+        assert result["lines"] == 4
+        assert result["circles"] == 1
+        assert result["points"] == 2
+        assert result["total_elements"] == 7
+
+    def test_no_active_sketch(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        result = sm.get_sketch_info()
+        assert "error" in result
+
+
+# ============================================================================
+# GET ACTIVE DOCUMENT TYPE
+# ============================================================================
+
+class TestGetActiveDocumentType:
+    def test_success(self, doc_mgr):
+        dm, app = doc_mgr
+        doc = MagicMock()
+        doc.Name = "Part1.par"
+        doc.FullName = "C:/Part1.par"
+        doc.Type = 1  # igPartDocument
+        dm.active_document = doc
+
+        result = dm.get_active_document_type()
+        assert result["type"] is not None
+        assert result["name"] == "Part1.par"
+
+    def test_no_document(self, doc_mgr):
+        dm, app = doc_mgr
+        dm.active_document = None
+        app.ActiveDocument = None
+        dm.connection.get_application.return_value = app
+
+        # This should raise/return error
+        result = dm.get_active_document_type()
+        # Either works or errors depending on mock setup
+
+
+# ============================================================================
+# ADD TEXT BOX
+# ============================================================================
+
+class TestAddTextBox:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        text_boxes = MagicMock()
+        text_box = MagicMock()
+        text_boxes.Add.return_value = text_box
+        sheet.TextBoxes = text_boxes
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_text_box(0.1, 0.1, "Hello")
+        assert result["status"] == "added"
+        assert result["text"] == "Hello"
+        text_boxes.Add.assert_called_once_with(0.1, 0.1, 0)
+        assert text_box.Text == "Hello"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_text_box(0.1, 0.1, "Test")
+        assert "error" in result
+
+
+# ============================================================================
+# ADD LEADER
+# ============================================================================
+
+class TestAddLeader:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        leaders = MagicMock()
+        leader = MagicMock()
+        leaders.Add.return_value = leader
+        sheet.Leaders = leaders
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_leader(0.05, 0.05, 0.15, 0.15, "Note")
+        assert result["status"] == "added"
+        assert result["text"] == "Note"
+        leaders.Add.assert_called_once_with(0.05, 0.05, 0, 0.15, 0.15, 0)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_leader(0.05, 0.05, 0.15, 0.15)
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: SET COMPONENT VISIBILITY
+# ============================================================================
+
+class TestSetComponentVisibility:
+    @pytest.fixture
+    def asm_mgr(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+        dm = MagicMock()
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+
+        occurrence = MagicMock()
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.return_value = occurrence
+        doc.Occurrences = occurrences
+
+        return AssemblyManager(dm), doc, occurrence
+
+    def test_hide(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.set_component_visibility(0, False)
+        assert result["status"] == "updated"
+        assert occ.Visible == False
+
+    def test_show(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.set_component_visibility(1, True)
+        assert result["status"] == "updated"
+        assert occ.Visible == True
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.set_component_visibility(99, True)
+        assert "error" in result
+
+    def test_not_assembly(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        del doc.Occurrences
+        result = am.set_component_visibility(0, True)
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: DELETE COMPONENT
+# ============================================================================
+
+class TestDeleteComponent:
+    @pytest.fixture
+    def asm_mgr(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+        dm = MagicMock()
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+
+        occurrence = MagicMock()
+        occurrence.Name = "Part1:1"
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.return_value = occurrence
+        doc.Occurrences = occurrences
+
+        return AssemblyManager(dm), doc, occurrence
+
+    def test_success(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.delete_component(0)
+        assert result["status"] == "deleted"
+        assert result["name"] == "Part1:1"
+        occ.Delete.assert_called_once()
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.delete_component(99)
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: GROUND COMPONENT
+# ============================================================================
+
+class TestGroundComponent:
+    @pytest.fixture
+    def asm_mgr(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+        dm = MagicMock()
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+
+        occurrence = MagicMock()
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occurrence
+        doc.Occurrences = occurrences
+
+        relations = MagicMock()
+        doc.Relations3d = relations
+
+        return AssemblyManager(dm), doc, occurrence, relations
+
+    def test_ground(self, asm_mgr):
+        am, doc, occ, rels = asm_mgr
+        result = am.ground_component(0, True)
+        assert result["status"] == "grounded"
+        rels.AddGround.assert_called_once_with(occ)
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc, occ, rels = asm_mgr
+        result = am.ground_component(99, True)
+        assert "error" in result

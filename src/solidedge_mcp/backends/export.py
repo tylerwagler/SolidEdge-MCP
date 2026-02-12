@@ -512,6 +512,98 @@ class ExportManager:
                 "traceback": traceback.format_exc()
             }
 
+    def add_text_box(self, x: float, y: float, text: str, height: float = 0.005) -> Dict[str, Any]:
+        """
+        Add a text box annotation to the active draft sheet.
+
+        Args:
+            x: X position on sheet (meters)
+            y: Y position on sheet (meters)
+            text: Text content
+            height: Text height in meters (default 0.005 = 5mm)
+
+        Returns:
+            Dict with status and text box info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Sheets'):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+
+            # TextBoxes.Add(x, y, 0) for 2D sheets
+            text_boxes = sheet.TextBoxes
+            text_box = text_boxes.Add(x, y, 0)
+
+            # Set the text content
+            text_box.Text = text
+
+            # Set text height if possible
+            try:
+                text_box.TextHeight = height
+            except Exception:
+                pass
+
+            return {
+                "status": "added",
+                "type": "text_box",
+                "text": text,
+                "position": [x, y]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def add_leader(self, x1: float, y1: float, x2: float, y2: float, text: str = "") -> Dict[str, Any]:
+        """
+        Add a leader annotation to the active draft sheet.
+
+        A leader is an arrow pointing to geometry with optional text.
+
+        Args:
+            x1: Arrow start X (meters)
+            y1: Arrow start Y (meters)
+            x2: Text end X (meters)
+            y2: Text end Y (meters)
+            text: Optional text at the leader end
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Sheets'):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+
+            leaders = sheet.Leaders
+            leader = leaders.Add(x1, y1, 0, x2, y2, 0)
+
+            if text:
+                try:
+                    leader.Text = text
+                except Exception:
+                    pass
+
+            return {
+                "status": "added",
+                "type": "leader",
+                "start": [x1, y1],
+                "end": [x2, y2],
+                "text": text
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     # Aliases for consistency with MCP tool names
     def export_step(self, file_path: str) -> Dict[str, Any]:
         """Alias for export_to_step"""

@@ -526,6 +526,51 @@ class SketchManager:
                 "traceback": traceback.format_exc()
             }
 
+    def get_sketch_info(self) -> Dict[str, Any]:
+        """
+        Get information about the active sketch.
+
+        Returns element counts for each geometry type in the active sketch.
+
+        Returns:
+            Dict with sketch geometry counts
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            profile = self.active_profile
+            info = {"status": "active"}
+
+            # Count elements in each collection
+            collections = {
+                "lines": "Lines2d",
+                "circles": "Circles2d",
+                "arcs": "Arcs2d",
+                "ellipses": "Ellipses2d",
+                "splines": "BSplineCurves2d",
+                "points": "Holes2d",
+            }
+
+            total = 0
+            for key, collection_name in collections.items():
+                try:
+                    coll = getattr(profile, collection_name)
+                    count = coll.Count
+                    info[key] = count
+                    total += count
+                except Exception:
+                    info[key] = 0
+
+            info["total_elements"] = total
+
+            return info
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def get_active_sketch(self):
         """Get the active sketch object"""
         return self.active_profile

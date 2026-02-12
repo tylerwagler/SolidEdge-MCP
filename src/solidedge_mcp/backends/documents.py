@@ -335,6 +335,28 @@ class DocumentManager:
                 raise Exception("No active document")
         return self.active_document
 
+    def get_active_document_type(self) -> Dict[str, Any]:
+        """
+        Get the type of the currently active document.
+
+        Returns:
+            Dict with document type, name, and path
+        """
+        try:
+            doc = self.get_active_document()
+            doc_type = self._get_document_type(doc)
+
+            return {
+                "type": doc_type,
+                "name": doc.Name if hasattr(doc, 'Name') else "Unknown",
+                "path": doc.FullName if hasattr(doc, 'FullName') else "untitled"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def _get_document_type(self, doc) -> str:
         """Determine document type"""
         try:
