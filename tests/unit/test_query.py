@@ -778,3 +778,196 @@ class TestGetEdgeCount:
 
         result = qm.get_edge_count()
         assert "error" in result
+
+
+# ============================================================================
+# DESIGN EDGEBAR FEATURES
+# ============================================================================
+
+class TestGetDesignEdgebarFeatures:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat1 = MagicMock()
+        feat1.Name = "Sketch 1"
+        feat1.Type = 1
+        feat2 = MagicMock()
+        feat2.Name = "ExtrudedProtrusion 1"
+        feat2.Type = 3
+
+        features = MagicMock()
+        features.Count = 2
+        features.Item.side_effect = lambda i: [None, feat1, feat2][i]
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_design_edgebar_features()
+        assert result["count"] == 2
+        assert result["features"][0]["name"] == "Sketch 1"
+        assert result["features"][1]["name"] == "ExtrudedProtrusion 1"
+
+    def test_not_available(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.DesignEdgebarFeatures
+
+        result = qm.get_design_edgebar_features()
+        assert "error" in result
+
+
+# ============================================================================
+# RENAME FEATURE
+# ============================================================================
+
+class TestRenameFeature:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "OldName"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.rename_feature("OldName", "NewName")
+        assert result["status"] == "renamed"
+        assert feat.Name == "NewName"
+
+    def test_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.rename_feature("Nonexistent", "NewName")
+        assert "error" in result
+
+
+# ============================================================================
+# SET DOCUMENT PROPERTY
+# ============================================================================
+
+class TestSetDocumentProperty:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        summary = MagicMock()
+        doc.SummaryInfo = summary
+
+        result = qm.set_document_property("Title", "My Part")
+        assert result["status"] == "set"
+        assert summary.Title == "My Part"
+
+    def test_invalid_property(self, query_mgr):
+        qm, doc = query_mgr
+        summary = MagicMock()
+        doc.SummaryInfo = summary
+
+        result = qm.set_document_property("InvalidProp", "value")
+        assert "error" in result
+
+    def test_no_summary_info(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.SummaryInfo
+
+        result = qm.set_document_property("Title", "Test")
+        assert "error" in result
+
+
+# ============================================================================
+# GET FACE AREA
+# ============================================================================
+
+class TestGetFaceArea:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        face = MagicMock()
+        face.Area = 0.01  # 10000 mm²
+        faces = MagicMock()
+        faces.Count = 1
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+
+        result = qm.get_face_area(0)
+        assert result["area"] == 0.01
+        assert result["area_mm2"] == 10000.0
+
+    def test_invalid_index(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        faces = MagicMock()
+        faces.Count = 1
+        model.Body.Faces.return_value = faces
+
+        result = qm.get_face_area(5)
+        assert "error" in result
+
+
+# ============================================================================
+# GET SURFACE AREA
+# ============================================================================
+
+class TestGetSurfaceArea:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        model.Body.SurfaceArea = 0.06  # 60000 mm²
+
+        result = qm.get_surface_area()
+        assert result["surface_area"] == 0.06
+        assert result["surface_area_mm2"] == 60000.0
+
+    def test_no_model(self, query_mgr):
+        qm, doc = query_mgr
+        models = MagicMock()
+        models.Count = 0
+        doc.Models = models
+
+        result = qm.get_surface_area()
+        assert "error" in result
+
+
+# ============================================================================
+# GET VOLUME
+# ============================================================================
+
+class TestGetVolume:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        model.Body.Volume = 0.001  # 1e6 mm³ = 1000 cm³
+
+        result = qm.get_volume()
+        assert result["volume"] == 0.001
+        assert result["volume_cm3"] == 1000.0
+
+    def test_no_model(self, query_mgr):
+        qm, doc = query_mgr
+        models = MagicMock()
+        models.Count = 0
+        doc.Models = models
+
+        result = qm.get_volume()
+        assert "error" in result

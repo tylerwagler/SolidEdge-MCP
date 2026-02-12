@@ -1285,3 +1285,245 @@ class QueryManager:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    def get_design_edgebar_features(self) -> Dict[str, Any]:
+        """
+        Get the full feature tree from DesignEdgebarFeatures.
+
+        Unlike list_features() which only shows Models, this shows the
+        complete design tree including sketches, reference planes, etc.
+
+        Returns:
+            Dict with list of all feature tree entries
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'DesignEdgebarFeatures'):
+                return {"error": "DesignEdgebarFeatures not available"}
+
+            features = doc.DesignEdgebarFeatures
+            feature_list = []
+
+            for i in range(1, features.Count + 1):
+                try:
+                    feat = features.Item(i)
+                    entry = {"index": i - 1}
+                    try:
+                        entry["name"] = feat.Name
+                    except Exception:
+                        entry["name"] = f"Feature_{i}"
+                    try:
+                        entry["type"] = feat.Type
+                    except Exception:
+                        pass
+                    try:
+                        entry["suppressed"] = feat.IsSuppressed
+                    except Exception:
+                        pass
+                    feature_list.append(entry)
+                except Exception:
+                    feature_list.append({"index": i - 1, "name": f"Feature_{i}"})
+
+            return {
+                "features": feature_list,
+                "count": len(feature_list)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def rename_feature(self, old_name: str, new_name: str) -> Dict[str, Any]:
+        """
+        Rename a feature in the design tree.
+
+        Args:
+            old_name: Current feature name
+            new_name: New feature name
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'DesignEdgebarFeatures'):
+                return {"error": "DesignEdgebarFeatures not available"}
+
+            features = doc.DesignEdgebarFeatures
+
+            for i in range(1, features.Count + 1):
+                try:
+                    feat = features.Item(i)
+                    if hasattr(feat, 'Name') and feat.Name == old_name:
+                        feat.Name = new_name
+                        return {
+                            "status": "renamed",
+                            "old_name": old_name,
+                            "new_name": new_name
+                        }
+                except Exception:
+                    continue
+
+            return {"error": f"Feature '{old_name}' not found"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def set_document_property(self, name: str, value: str) -> Dict[str, Any]:
+        """
+        Set a summary/document property (Title, Subject, Author, etc.).
+
+        Args:
+            name: Property name (Title, Subject, Author, Manager, Company,
+                  Category, Keywords, Comments)
+            value: Property value
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            # SummaryInfo contains standard document properties
+            if not hasattr(doc, 'SummaryInfo'):
+                return {"error": "SummaryInfo not available on this document"}
+
+            summary = doc.SummaryInfo
+
+            prop_map = {
+                "Title": "Title",
+                "Subject": "Subject",
+                "Author": "Author",
+                "Manager": "Manager",
+                "Company": "Company",
+                "Category": "Category",
+                "Keywords": "Keywords",
+                "Comments": "Comments",
+            }
+
+            prop_attr = prop_map.get(name)
+            if prop_attr is None:
+                return {
+                    "error": f"Unknown property: {name}. "
+                             f"Valid: {', '.join(prop_map.keys())}"
+                }
+
+            setattr(summary, prop_attr, value)
+
+            return {
+                "status": "set",
+                "property": name,
+                "value": value
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_face_area(self, face_index: int) -> Dict[str, Any]:
+        """
+        Get the area of a specific face on the body.
+
+        Args:
+            face_index: 0-based index of the face
+
+        Returns:
+            Dict with face area in square meters
+        """
+        try:
+            doc, model = self._get_first_model()
+            body = model.Body
+            faces = body.Faces(6)  # igQueryAll = 6
+
+            if face_index < 0 or face_index >= faces.Count:
+                return {
+                    "error": f"Invalid face index: {face_index}. "
+                             f"Body has {faces.Count} faces."
+                }
+
+            face = faces.Item(face_index + 1)
+
+            area = face.Area
+
+            return {
+                "face_index": face_index,
+                "area": area,
+                "area_mm2": area * 1e6  # Convert m² to mm²
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_surface_area(self) -> Dict[str, Any]:
+        """
+        Get the total surface area of the body.
+
+        Returns:
+            Dict with total surface area
+        """
+        try:
+            doc, model = self._get_first_model()
+            body = model.Body
+
+            # Try body.SurfaceArea first
+            try:
+                area = body.SurfaceArea
+                return {
+                    "surface_area": area,
+                    "surface_area_mm2": area * 1e6
+                }
+            except Exception:
+                pass
+
+            # Fallback: sum face areas
+            faces = body.Faces(6)
+            total_area = 0.0
+            for i in range(1, faces.Count + 1):
+                try:
+                    face = faces.Item(i)
+                    total_area += face.Area
+                except Exception:
+                    pass
+
+            return {
+                "surface_area": total_area,
+                "surface_area_mm2": total_area * 1e6,
+                "face_count": faces.Count,
+                "method": "sum_of_faces"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_volume(self) -> Dict[str, Any]:
+        """
+        Get the volume of the body.
+
+        Returns:
+            Dict with body volume
+        """
+        try:
+            doc, model = self._get_first_model()
+            body = model.Body
+            volume = body.Volume
+
+            return {
+                "volume": volume,
+                "volume_mm3": volume * 1e9,  # m³ to mm³
+                "volume_cm3": volume * 1e6   # m³ to cm³
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }

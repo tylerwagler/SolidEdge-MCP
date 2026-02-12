@@ -1661,6 +1661,89 @@ def get_edge_count() -> dict:
     return query_manager.get_edge_count()
 
 
+@mcp.tool()
+def get_design_edgebar_features() -> dict:
+    """
+    Get the full design feature tree.
+
+    Unlike list_features() which shows only Models, this returns the
+    complete design tree including sketches, reference planes, and all features.
+
+    Returns:
+        Complete list of design tree entries with name, type, and status
+    """
+    return query_manager.get_design_edgebar_features()
+
+
+@mcp.tool()
+def rename_feature(old_name: str, new_name: str) -> dict:
+    """
+    Rename a feature in the design tree.
+
+    Args:
+        old_name: Current feature name
+        new_name: New feature name
+
+    Returns:
+        Rename status
+    """
+    return query_manager.rename_feature(old_name, new_name)
+
+
+@mcp.tool()
+def set_document_property(name: str, value: str) -> dict:
+    """
+    Set a summary/document property.
+
+    Sets standard document properties like Title, Subject, Author, etc.
+
+    Args:
+        name: Property name (Title, Subject, Author, Manager,
+              Company, Category, Keywords, Comments)
+        value: Property value string
+
+    Returns:
+        Property setting status
+    """
+    return query_manager.set_document_property(name, value)
+
+
+@mcp.tool()
+def get_face_area(face_index: int) -> dict:
+    """
+    Get the area of a specific face on the body.
+
+    Args:
+        face_index: 0-based index of the face
+
+    Returns:
+        Face area in square meters and square millimeters
+    """
+    return query_manager.get_face_area(face_index)
+
+
+@mcp.tool()
+def get_surface_area() -> dict:
+    """
+    Get the total surface area of the body.
+
+    Returns:
+        Total surface area in square meters and square millimeters
+    """
+    return query_manager.get_surface_area()
+
+
+@mcp.tool()
+def get_volume() -> dict:
+    """
+    Get the volume of the body.
+
+    Returns:
+        Body volume in cubic meters, cubic millimeters, and cubic centimeters
+    """
+    return query_manager.get_volume()
+
+
 # ============================================================================
 # VARIABLES
 # ============================================================================
