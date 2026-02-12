@@ -714,3 +714,187 @@ class TestIsConnected:
         conn = SolidEdgeConnection()
 
         assert conn.is_connected() is False
+
+
+# ============================================================================
+# ASSEMBLY: REPLACE COMPONENT
+# ============================================================================
+
+class TestReplaceComponent:
+    @pytest.fixture
+    def asm_mgr(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+        dm = MagicMock()
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+
+        occurrence = MagicMock()
+        occurrence.Name = "Part1:1"
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.return_value = occurrence
+        doc.Occurrences = occurrences
+
+        return AssemblyManager(dm), doc, occurrence
+
+    def test_not_assembly(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        del doc.Occurrences
+        result = am.replace_component(0, "C:/parts/new.par")
+        assert "error" in result
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.replace_component(99, "C:/parts/new.par")
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: GET COMPONENT TRANSFORM
+# ============================================================================
+
+class TestGetComponentTransform:
+    @pytest.fixture
+    def asm_mgr(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+        dm = MagicMock()
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+
+        occurrence = MagicMock()
+        occurrence.Name = "Part1:1"
+        occurrence.GetTransform.return_value = (0.1, 0.2, 0.3, 0.0, 0.0, 0.0)
+        occurrence.GetMatrix.return_value = tuple(range(16))
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occurrence
+        doc.Occurrences = occurrences
+
+        return AssemblyManager(dm), doc, occurrence
+
+    def test_success(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.get_component_transform(0)
+        assert result["name"] == "Part1:1"
+        assert result["origin"] == [0.1, 0.2, 0.3]
+        assert len(result["matrix"]) == 16
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.get_component_transform(5)
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: GET STRUCTURED BOM
+# ============================================================================
+
+class TestGetStructuredBom:
+    @pytest.fixture
+    def asm_mgr(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+        dm = MagicMock()
+        doc = MagicMock()
+        doc.Name = "Asm1.asm"
+        dm.get_active_document.return_value = doc
+
+        occ1 = MagicMock()
+        occ1.Name = "Part1:1"
+        occ1.OccurrenceFileName = "C:/part1.par"
+        occ1.Visible = True
+        occ1.IsSuppressed = False
+        sub_occs = MagicMock()
+        sub_occs.Count = 0
+        occ1.SubOccurrences = sub_occs
+
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occ1
+        doc.Occurrences = occurrences
+
+        return AssemblyManager(dm), doc
+
+    def test_success(self, asm_mgr):
+        am, doc = asm_mgr
+        result = am.get_structured_bom()
+        assert result["top_level_count"] == 1
+        assert result["bom"][0]["name"] == "Part1:1"
+        assert result["bom"][0]["type"] == "part"
+
+    def test_not_assembly(self, asm_mgr):
+        am, doc = asm_mgr
+        del doc.Occurrences
+        result = am.get_structured_bom()
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: SET COMPONENT COLOR
+# ============================================================================
+
+class TestSetComponentColor:
+    @pytest.fixture
+    def asm_mgr(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+        dm = MagicMock()
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+
+        occurrence = MagicMock()
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.return_value = occurrence
+        doc.Occurrences = occurrences
+
+        return AssemblyManager(dm), doc, occurrence
+
+    def test_success(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.set_component_color(0, 255, 0, 0)
+        assert result["status"] == "updated"
+        assert result["color"] == [255, 0, 0]
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc, occ = asm_mgr
+        result = am.set_component_color(99, 0, 0, 255)
+        assert "error" in result
+
+
+# ============================================================================
+# DOCUMENTS: CREATE WELDMENT
+# ============================================================================
+
+class TestCreateWeldment:
+    def test_success(self, doc_mgr):
+        dm, app = doc_mgr
+        doc = MagicMock()
+        doc.Name = "Weld1.pwd"
+        doc.FullName = "C:/weld.pwd"
+        app.Documents.Add.return_value = doc
+
+        result = dm.create_weldment()
+        assert result["status"] == "created"
+        assert result["type"] == "Weldment"
+
+
+# ============================================================================
+# DOCUMENTS: IMPORT FILE
+# ============================================================================
+
+class TestImportFile:
+    def test_not_found(self, doc_mgr):
+        dm, app = doc_mgr
+        result = dm.import_file("C:/nonexistent/file.step")
+        assert "error" in result
+
+
+# ============================================================================
+# DOCUMENTS: GET DOCUMENT COUNT
+# ============================================================================
+
+class TestGetDocumentCount:
+    def test_success(self, doc_mgr):
+        dm, app = doc_mgr
+        app.Documents.Count = 3
+        result = dm.get_document_count()
+        assert result["count"] == 3

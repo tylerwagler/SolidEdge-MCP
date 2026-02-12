@@ -779,3 +779,109 @@ class TestCreateSplit:
         sketch_mgr.get_active_sketch.return_value = None
         result = feature_mgr.create_split()
         assert "error" in result
+
+
+# ============================================================================
+# SKETCH FILLET
+# ============================================================================
+
+class TestSketchFillet:
+    def test_success(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        profile = MagicMock()
+        line1 = MagicMock()
+        line2 = MagicMock()
+        lines = MagicMock()
+        lines.Count = 2
+        lines.Item.side_effect = lambda i: [None, line1, line2][i]
+        profile.Lines2d = lines
+        sm.active_profile = profile
+
+        result = sm.sketch_fillet(0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "sketch_fillet"
+        profile.Arcs2d.AddByFillet.assert_called_once_with(line1, line2, 0.005)
+
+    def test_no_sketch(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        result = sm.sketch_fillet(0.005)
+        assert "error" in result
+
+
+# ============================================================================
+# SKETCH CHAMFER
+# ============================================================================
+
+class TestSketchChamfer:
+    def test_success(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        profile = MagicMock()
+        line1 = MagicMock()
+        line2 = MagicMock()
+        lines = MagicMock()
+        lines.Count = 2
+        lines.Item.side_effect = lambda i: [None, line1, line2][i]
+        profile.Lines2d = lines
+        sm.active_profile = profile
+
+        result = sm.sketch_chamfer(0.003)
+        assert result["status"] == "created"
+        assert result["type"] == "sketch_chamfer"
+        profile.Lines2d.AddByChamfer.assert_called_once_with(line1, line2, 0.003, 0.003)
+
+    def test_no_sketch(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        result = sm.sketch_chamfer(0.003)
+        assert "error" in result
+
+
+# ============================================================================
+# SKETCH MIRROR
+# ============================================================================
+
+class TestSketchMirror:
+    def test_mirror_x(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        profile = MagicMock()
+        line = MagicMock()
+        line.StartPoint.X = 0.01
+        line.StartPoint.Y = 0.02
+        line.EndPoint.X = 0.03
+        line.EndPoint.Y = 0.04
+        lines = MagicMock()
+        lines.Count = 1
+        lines.Item.return_value = line
+        profile.Lines2d = lines
+
+        circles = MagicMock()
+        circles.Count = 0
+        profile.Circles2d = circles
+        sm.active_profile = profile
+
+        result = sm.sketch_mirror("X")
+        assert result["status"] == "created"
+        assert result["mirrored_elements"] == 1
+        profile.Lines2d.AddBy2Points.assert_called_once_with(0.01, -0.02, 0.03, -0.04)
+
+    def test_no_sketch(self):
+        from solidedge_mcp.backends.sketching import SketchManager
+        dm = MagicMock()
+        sm = SketchManager(dm)
+
+        result = sm.sketch_mirror()
+        assert "error" in result

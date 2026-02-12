@@ -260,6 +260,47 @@ def get_active_document_type() -> dict:
     return doc_manager.get_active_document_type()
 
 
+@mcp.tool()
+def create_weldment_document(template: Optional[str] = None) -> dict:
+    """
+    Create a new weldment document.
+
+    Args:
+        template: Optional template file path
+
+    Returns:
+        Document creation status
+    """
+    return doc_manager.create_weldment(template)
+
+
+@mcp.tool()
+def import_file(file_path: str) -> dict:
+    """
+    Import an external CAD file (STEP, IGES, Parasolid, etc.).
+
+    Opens the file using Solid Edge's import translators.
+
+    Args:
+        file_path: Path to the file to import
+
+    Returns:
+        Import status with document info
+    """
+    return doc_manager.import_file(file_path)
+
+
+@mcp.tool()
+def get_document_count() -> dict:
+    """
+    Get the count of open documents.
+
+    Returns:
+        Document count
+    """
+    return doc_manager.get_document_count()
+
+
 # ============================================================================
 # SKETCHING TOOLS
 # ============================================================================
@@ -492,6 +533,70 @@ def get_sketch_info() -> dict:
         Sketch geometry counts by type
     """
     return sketch_manager.get_sketch_info()
+
+
+@mcp.tool()
+def sketch_fillet(radius: float) -> dict:
+    """
+    Add fillet (round) to sketch corners.
+
+    Rounds sharp corners between consecutive lines in the active sketch.
+
+    Args:
+        radius: Fillet radius in meters
+
+    Returns:
+        Fillet creation status with count
+    """
+    return sketch_manager.sketch_fillet(radius)
+
+
+@mcp.tool()
+def sketch_chamfer(distance: float) -> dict:
+    """
+    Add chamfer to sketch corners.
+
+    Chamfers sharp corners between consecutive lines in the active sketch.
+
+    Args:
+        distance: Chamfer setback distance in meters
+
+    Returns:
+        Chamfer creation status with count
+    """
+    return sketch_manager.sketch_chamfer(distance)
+
+
+@mcp.tool()
+def sketch_offset(distance: float) -> dict:
+    """
+    Create an offset copy of the sketch profile.
+
+    Offsets all geometry in the active sketch by the given distance.
+
+    Args:
+        distance: Offset distance in meters (positive = outward)
+
+    Returns:
+        Offset creation status
+    """
+    return sketch_manager.sketch_offset(distance)
+
+
+@mcp.tool()
+def sketch_mirror(axis: str = "X") -> dict:
+    """
+    Mirror sketch geometry about an axis.
+
+    Creates mirrored copies of all sketch elements about the X or Y axis.
+
+    Args:
+        axis: 'X' (mirror about X-axis) or 'Y' (mirror about Y-axis)
+
+    Returns:
+        Mirror creation status with element count
+    """
+    return sketch_manager.sketch_mirror(axis)
 
 
 # ============================================================================
@@ -2882,6 +2987,70 @@ def check_interference(component_index: Optional[int] = None) -> dict:
         Interference status and count
     """
     return assembly_manager.check_interference(component_index)
+
+
+@mcp.tool()
+def replace_component(component_index: int, new_file_path: str) -> dict:
+    """
+    Replace a component in the assembly with a different part/assembly file.
+
+    Preserves position and attempts to maintain assembly relations.
+
+    Args:
+        component_index: 0-based index of the component to replace
+        new_file_path: Path to the replacement file (.par or .asm)
+
+    Returns:
+        Replacement status
+    """
+    return assembly_manager.replace_component(component_index, new_file_path)
+
+
+@mcp.tool()
+def get_component_transform(component_index: int) -> dict:
+    """
+    Get the full transformation matrix of a component.
+
+    Returns origin coordinates, rotation angles, and 4x4 matrix.
+
+    Args:
+        component_index: 0-based index of the component
+
+    Returns:
+        Transform with origin, rotation angles, and matrix
+    """
+    return assembly_manager.get_component_transform(component_index)
+
+
+@mcp.tool()
+def get_structured_bom() -> dict:
+    """
+    Get a hierarchical Bill of Materials with subassembly structure.
+
+    Unlike get_bom() which returns a flat list, this preserves the
+    parent-child hierarchy of subassemblies.
+
+    Returns:
+        Structured BOM tree with component types
+    """
+    return assembly_manager.get_structured_bom()
+
+
+@mcp.tool()
+def set_component_color(component_index: int, red: int, green: int, blue: int) -> dict:
+    """
+    Set the color of a component in the assembly.
+
+    Args:
+        component_index: 0-based index of the component
+        red: Red component (0-255)
+        green: Green component (0-255)
+        blue: Blue component (0-255)
+
+    Returns:
+        Color update status
+    """
+    return assembly_manager.set_component_color(component_index, red, green, blue)
 
 
 # ============================================================================

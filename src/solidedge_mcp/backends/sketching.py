@@ -586,3 +586,227 @@ class SketchManager:
     def clear_accumulated_profiles(self):
         """Clear the accumulated profiles list."""
         self.accumulated_profiles.clear()
+
+    def sketch_fillet(self, radius: float) -> Dict[str, Any]:
+        """
+        Add fillet (round) to sketch corners.
+
+        Rounds all sharp corners in the active sketch by the given radius.
+        Works on Line2d intersections.
+
+        Args:
+            radius: Fillet radius in meters
+
+        Returns:
+            Dict with status and count of fillets added
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            profile = self.active_profile
+            lines = profile.Lines2d
+
+            if lines.Count < 2:
+                return {"error": "Need at least 2 lines to create a fillet"}
+
+            fillet_count = 0
+            # Try to fillet between consecutive line pairs
+            for i in range(1, lines.Count):
+                try:
+                    line1 = lines.Item(i)
+                    line2 = lines.Item(i + 1)
+                    profile.Arcs2d.AddByFillet(line1, line2, radius)
+                    fillet_count += 1
+                except Exception:
+                    pass
+
+            return {
+                "status": "created",
+                "type": "sketch_fillet",
+                "radius": radius,
+                "fillet_count": fillet_count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def sketch_chamfer(self, distance: float) -> Dict[str, Any]:
+        """
+        Add chamfer to sketch corners.
+
+        Chamfers sharp corners in the active sketch at the given distance.
+
+        Args:
+            distance: Chamfer setback distance in meters
+
+        Returns:
+            Dict with status
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            profile = self.active_profile
+            lines = profile.Lines2d
+
+            if lines.Count < 2:
+                return {"error": "Need at least 2 lines to create a chamfer"}
+
+            chamfer_count = 0
+            for i in range(1, lines.Count):
+                try:
+                    line1 = lines.Item(i)
+                    line2 = lines.Item(i + 1)
+                    profile.Lines2d.AddByChamfer(line1, line2, distance, distance)
+                    chamfer_count += 1
+                except Exception:
+                    pass
+
+            return {
+                "status": "created",
+                "type": "sketch_chamfer",
+                "distance": distance,
+                "chamfer_count": chamfer_count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def sketch_offset(self, distance: float) -> Dict[str, Any]:
+        """
+        Create an offset copy of the sketch profile.
+
+        Offsets all geometry in the active sketch by the given distance.
+
+        Args:
+            distance: Offset distance in meters (positive = outward)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            profile = self.active_profile
+
+            # Try using the profile offset method
+            try:
+                profile.OffsetProfile(distance)
+                return {
+                    "status": "created",
+                    "type": "sketch_offset",
+                    "distance": distance
+                }
+            except Exception:
+                pass
+
+            # Fallback: manual offset of lines
+            lines = profile.Lines2d
+            if lines.Count == 0:
+                return {"error": "No sketch geometry to offset"}
+
+            offset_count = 0
+            for i in range(1, lines.Count + 1):
+                try:
+                    line = lines.Item(i)
+                    x1 = line.StartPoint.X
+                    y1 = line.StartPoint.Y
+                    x2 = line.EndPoint.X
+                    y2 = line.EndPoint.Y
+
+                    # Calculate normal offset
+                    dx = x2 - x1
+                    dy = y2 - y1
+                    length = math.sqrt(dx * dx + dy * dy)
+                    if length > 0:
+                        nx = -dy / length * distance
+                        ny = dx / length * distance
+                        profile.Lines2d.AddBy2Points(x1 + nx, y1 + ny, x2 + nx, y2 + ny)
+                        offset_count += 1
+                except Exception:
+                    pass
+
+            return {
+                "status": "created",
+                "type": "sketch_offset",
+                "distance": distance,
+                "offset_lines": offset_count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def sketch_mirror(self, axis: str = "X") -> Dict[str, Any]:
+        """
+        Mirror sketch geometry about an axis.
+
+        Creates mirrored copies of all sketch elements about the
+        X or Y axis.
+
+        Args:
+            axis: 'X' (mirror about X-axis, flip Y) or 'Y' (mirror about Y-axis, flip X)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            profile = self.active_profile
+            mirror_count = 0
+
+            # Mirror lines
+            lines = profile.Lines2d
+            for i in range(1, lines.Count + 1):
+                try:
+                    line = lines.Item(i)
+                    x1 = line.StartPoint.X
+                    y1 = line.StartPoint.Y
+                    x2 = line.EndPoint.X
+                    y2 = line.EndPoint.Y
+
+                    if axis.upper() == "X":
+                        profile.Lines2d.AddBy2Points(x1, -y1, x2, -y2)
+                    else:
+                        profile.Lines2d.AddBy2Points(-x1, y1, -x2, y2)
+                    mirror_count += 1
+                except Exception:
+                    pass
+
+            # Mirror circles
+            circles = profile.Circles2d
+            for i in range(1, circles.Count + 1):
+                try:
+                    circle = circles.Item(i)
+                    cx = circle.CenterPoint.X
+                    cy = circle.CenterPoint.Y
+                    r = circle.Radius
+
+                    if axis.upper() == "X":
+                        profile.Circles2d.AddByCenterRadius(cx, -cy, r)
+                    else:
+                        profile.Circles2d.AddByCenterRadius(-cx, cy, r)
+                    mirror_count += 1
+                except Exception:
+                    pass
+
+            return {
+                "status": "created",
+                "type": "sketch_mirror",
+                "axis": axis,
+                "mirrored_elements": mirror_count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }

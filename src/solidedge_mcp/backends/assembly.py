@@ -871,3 +871,235 @@ class AssemblyManager:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    def replace_component(self, component_index: int, new_file_path: str) -> Dict[str, Any]:
+        """
+        Replace a component in the assembly with a different part/assembly file.
+
+        Preserves position and attempts to maintain assembly relations.
+
+        Args:
+            component_index: 0-based index of the component to replace
+            new_file_path: Path to the replacement file (.par or .asm)
+
+        Returns:
+            Dict with replacement status
+        """
+        try:
+            import os
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            if not os.path.exists(new_file_path):
+                return {"error": f"File not found: {new_file_path}"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+            old_name = occurrence.Name
+
+            try:
+                occurrence.Replace(new_file_path)
+            except Exception:
+                # Try alternative method
+                occurrence.OccurrenceFileName = new_file_path
+
+            return {
+                "status": "replaced",
+                "component_index": component_index,
+                "old_name": old_name,
+                "new_file": new_file_path
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_component_transform(self, component_index: int) -> Dict[str, Any]:
+        """
+        Get the full transformation matrix of a component.
+
+        Returns the 4x4 homogeneous transformation matrix and
+        decomposed origin + rotation.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with matrix, origin, and rotation
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            result = {
+                "component_index": component_index,
+                "name": occurrence.Name,
+            }
+
+            # Try GetTransform (origin + angles)
+            try:
+                transform = occurrence.GetTransform()
+                result["origin"] = [transform[0], transform[1], transform[2]]
+                result["rotation_angles"] = [transform[3], transform[4], transform[5]]
+            except Exception:
+                pass
+
+            # Try GetMatrix (full 4x4)
+            try:
+                matrix = occurrence.GetMatrix()
+                result["matrix"] = list(matrix)
+            except Exception:
+                pass
+
+            return result
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_structured_bom(self) -> Dict[str, Any]:
+        """
+        Get a hierarchical Bill of Materials with subassembly structure.
+
+        Unlike get_bom() which returns a flat list, this preserves the
+        parent-child hierarchy of subassemblies.
+
+        Returns:
+            Dict with structured BOM tree
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            def build_bom_item(occ, depth=0):
+                item = {}
+                try:
+                    item["name"] = occ.Name
+                except Exception:
+                    item["name"] = "Unknown"
+
+                try:
+                    item["file"] = occ.OccurrenceFileName
+                except Exception:
+                    item["file"] = "Unknown"
+
+                try:
+                    item["visible"] = occ.Visible
+                except Exception:
+                    pass
+
+                try:
+                    item["suppressed"] = occ.IsSuppressed
+                except Exception:
+                    item["suppressed"] = False
+
+                # Check for sub-occurrences (subassembly)
+                children = []
+                try:
+                    sub_occs = occ.SubOccurrences
+                    if sub_occs and hasattr(sub_occs, 'Count') and sub_occs.Count > 0:
+                        item["type"] = "assembly"
+                        for j in range(1, sub_occs.Count + 1):
+                            try:
+                                children.append(build_bom_item(sub_occs.Item(j), depth + 1))
+                            except Exception:
+                                children.append({"name": f"SubItem_{j}", "error": "unreadable"})
+                    else:
+                        item["type"] = "part"
+                except Exception:
+                    item["type"] = "part"
+
+                if children:
+                    item["children"] = children
+                    item["child_count"] = len(children)
+
+                return item
+
+            bom = []
+            for i in range(1, occurrences.Count + 1):
+                try:
+                    bom.append(build_bom_item(occurrences.Item(i)))
+                except Exception:
+                    bom.append({"name": f"Component_{i}", "error": "unreadable"})
+
+            return {
+                "bom": bom,
+                "top_level_count": len(bom),
+                "document": doc.Name if hasattr(doc, 'Name') else "Unknown"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def set_component_color(self, component_index: int, red: int, green: int, blue: int) -> Dict[str, Any]:
+        """
+        Set the color of a component in the assembly.
+
+        Args:
+            component_index: 0-based index of the component
+            red: Red component (0-255)
+            green: Green component (0-255)
+            blue: Blue component (0-255)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            # OLE color: BGR format packed into integer
+            ole_color = red | (green << 8) | (blue << 16)
+
+            try:
+                occurrence.SetColor(red, green, blue)
+            except Exception:
+                try:
+                    occurrence.Color = ole_color
+                except Exception:
+                    # Try style-based approach
+                    occurrence.UseOccurrenceColor = True
+                    occurrence.OccurrenceColor = ole_color
+
+            return {
+                "status": "updated",
+                "component_index": component_index,
+                "color": [red, green, blue]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }

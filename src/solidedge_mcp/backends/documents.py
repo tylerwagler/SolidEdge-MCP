@@ -357,6 +357,78 @@ class DocumentManager:
                 "traceback": traceback.format_exc()
             }
 
+    def create_weldment(self, template: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new weldment document"""
+        try:
+            app = self.connection.get_application()
+
+            if template and os.path.exists(template):
+                doc = app.Documents.Add(template)
+            else:
+                doc = app.Documents.Add("SolidEdge.WeldmentDocument")
+
+            self.active_document = doc
+
+            return {
+                "status": "created",
+                "type": "Weldment",
+                "name": doc.Name,
+                "path": doc.FullName if doc.FullName else "untitled"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def import_file(self, file_path: str) -> Dict[str, Any]:
+        """
+        Import an external CAD file (STEP, IGES, Parasolid, etc.).
+
+        Opens the file using Solid Edge's import translators.
+
+        Args:
+            file_path: Path to the file to import
+
+        Returns:
+            Dict with import status
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"error": f"File not found: {file_path}"}
+
+            app = self.connection.get_application()
+            doc = app.Documents.Open(file_path)
+            self.active_document = doc
+
+            return {
+                "status": "imported",
+                "path": file_path,
+                "name": doc.Name,
+                "type": self._get_document_type(doc)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_document_count(self) -> Dict[str, Any]:
+        """
+        Get the count of open documents.
+
+        Returns:
+            Dict with document count
+        """
+        try:
+            app = self.connection.get_application()
+            return {"count": app.Documents.Count}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def _get_document_type(self, doc) -> str:
         """Determine document type"""
         try:
