@@ -134,18 +134,21 @@ class FeatureManager:
             }
 
     def create_hole(self, x: float, y: float, diameter: float, depth: float,
-                   hole_type: str = "Simple") -> Dict[str, Any]:
+                   hole_type: str = "Simple", plane_index: int = 1,
+                   direction: str = "Normal") -> Dict[str, Any]:
         """
-        Create a hole feature.
+        Create a hole feature (circular cutout).
 
-        Creates a hole at (x, y) on the first reference plane. Requires an existing
-        base feature. Uses HoleDataCollection + Holes.AddFinite from the COM API.
+        Creates a circular cutout at (x, y) on a reference plane using
+        ExtrudedCutouts.AddFiniteMulti for reliable geometry creation.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
             depth: Hole depth in meters
-            hole_type: 'Simple', 'Counterbore', or 'Countersink'
+            hole_type: 'Simple' (only type currently supported)
+            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            direction: 'Normal' or 'Reverse'
 
         Returns:
             Dict with status and hole info
@@ -158,29 +161,23 @@ class FeatureManager:
                 return {"error": "No base feature exists. Create a base feature first."}
 
             model = models.Item(1)
+            radius = diameter / 2.0
 
-            # Map hole type
-            type_map = {
-                "Simple": HoleTypeConstants.igRegularHole,
-                "Counterbore": HoleTypeConstants.igCounterboreHole,
-                "Countersink": HoleTypeConstants.igCountersinkHole
-            }
-            hole_type_const = type_map.get(hole_type, HoleTypeConstants.igRegularHole)
+            # Map direction
+            dir_const = ExtrudedProtrusion.igRight  # Normal
+            if direction == "Reverse":
+                dir_const = ExtrudedProtrusion.igLeft
 
-            # Create HoleData via doc.HoleDataCollection
-            hdc = doc.HoleDataCollection
-            hole_data = hdc.Add(hole_type_const, diameter, 90)
-
-            # Create a profile with a Holes2d point for placement
+            # Create a circular profile on the specified plane
             ps = doc.ProfileSets.Add()
-            plane = doc.RefPlanes.Item(1)  # Top plane
+            plane = doc.RefPlanes.Item(plane_index)
             profile = ps.Profiles.Add(plane)
-            profile.Holes2d.Add(x, y)
+            profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
-            # Holes.AddFinite(Profile, PlaneSide, FiniteDepth, HoleData)
-            holes = model.Holes
-            hole = holes.AddFinite(profile, ExtrudedProtrusion.igRight, depth, hole_data)
+            # Use ExtrudedCutouts.AddFiniteMulti for reliable hole creation
+            cutouts = model.ExtrudedCutouts
+            cutout = cutouts.AddFiniteMulti(1, (profile,), dir_const, depth)
 
             return {
                 "status": "created",
@@ -196,21 +193,23 @@ class FeatureManager:
                 "traceback": traceback.format_exc()
             }
 
-    def create_round(self, radius: float, edge_indices: Optional[List[int]] = None) -> Dict[str, Any]:
+    def create_round(self, radius: float) -> Dict[str, Any]:
         """
-        Create a round (fillet) feature on body edges.
+        Create a round (fillet) feature on all body edges.
 
-        Rounds all edges of the first face, or specific edges if indices are given.
-        Uses model.Rounds.Add(count, edgeArray, radiusArray).
+        Rounds all edges of the body using model.Rounds.Add(). All edges
+        are grouped as one edge set with a single radius value.
 
         Args:
             radius: Round radius in meters
-            edge_indices: Not used currently; rounds all edges of first face
 
         Returns:
             Dict with status and round info
         """
         try:
+            from win32com.client import VARIANT
+            import pythoncom
+
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
@@ -220,35 +219,29 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            # Get edges from body faces (body.Edges() doesn't work in late binding)
+            # Collect all edges from all body faces
             faces = body.Faces(6)  # igQueryAll = 6
             if faces.Count == 0:
                 return {"error": "No faces found on body"}
 
-            # Collect edges from all faces (deduplicated by COM identity)
             edge_list = []
-            radius_list = []
-            seen_edges = set()
-
             for fi in range(1, faces.Count + 1):
                 face = faces.Item(fi)
                 face_edges = face.Edges
                 if not hasattr(face_edges, 'Count'):
                     continue
                 for ei in range(1, face_edges.Count + 1):
-                    edge = face_edges.Item(ei)
-                    # Use id as dedup key (COM objects)
-                    eid = id(edge)
-                    if eid not in seen_edges:
-                        seen_edges.add(eid)
-                        edge_list.append(edge)
-                        radius_list.append(radius)
+                    edge_list.append(face_edges.Item(ei))
 
             if not edge_list:
                 return {"error": "No edges found on body"}
 
+            # Group all edges as one edge set with one radius
+            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
+            radius_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [radius])
+
             rounds = model.Rounds
-            rnd = rounds.Add(len(edge_list), edge_list, radius_list)
+            rnd = rounds.Add(1, edge_arr, radius_arr)
 
             return {
                 "status": "created",
@@ -262,21 +255,22 @@ class FeatureManager:
                 "traceback": traceback.format_exc()
             }
 
-    def create_chamfer(self, distance: float, edge_indices: Optional[List[int]] = None) -> Dict[str, Any]:
+    def create_chamfer(self, distance: float) -> Dict[str, Any]:
         """
-        Create a chamfer feature with equal setback on body edges.
+        Create an equal-setback chamfer on all body edges.
 
-        Chamfers all edges of the first face, or specific edges if indices are given.
-        Uses model.Chamfers.AddEqualSetback(count, edgeArray, setbackDistance).
+        Chamfers all edges of the body using model.Chamfers.AddEqualSetback().
 
         Args:
             distance: Chamfer setback distance in meters
-            edge_indices: Not used currently; chamfers all edges of first face
 
         Returns:
             Dict with status and chamfer info
         """
         try:
+            from win32com.client import VARIANT
+            import pythoncom
+
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
@@ -286,26 +280,19 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            # Get edges from body faces
+            # Collect all edges from all body faces
             faces = body.Faces(6)  # igQueryAll = 6
             if faces.Count == 0:
                 return {"error": "No faces found on body"}
 
-            # Collect edges from all faces
             edge_list = []
-            seen_edges = set()
-
             for fi in range(1, faces.Count + 1):
                 face = faces.Item(fi)
                 face_edges = face.Edges
                 if not hasattr(face_edges, 'Count'):
                     continue
                 for ei in range(1, face_edges.Count + 1):
-                    edge = face_edges.Item(ei)
-                    eid = id(edge)
-                    if eid not in seen_edges:
-                        seen_edges.add(eid)
-                        edge_list.append(edge)
+                    edge_list.append(face_edges.Item(ei))
 
             if not edge_list:
                 return {"error": "No edges found on body"}
@@ -1869,6 +1856,198 @@ class FeatureManager:
                 "status": "created",
                 "type": "revolved_cutout",
                 "angle": angle
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_normal_cutout(self, distance: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a normal cutout (cut) through the part using the active sketch profile.
+
+        Uses model.NormalCutouts.AddFiniteMulti(NumProfiles, ProfileArray, PlaneSide, Depth).
+        A normal cutout extrudes the profile perpendicular to the sketch plane face,
+        following the surface normal rather than a fixed direction.
+        Requires an existing base feature and a closed sketch profile.
+
+        Args:
+            distance: Cutout depth in meters
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and cutout info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            direction_map = {
+                "Normal": ExtrudedProtrusion.igRight,
+                "Reverse": ExtrudedProtrusion.igLeft,
+            }
+            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+
+            cutouts = model.NormalCutouts
+            cutout = cutouts.AddFiniteMulti(1, (profile,), dir_const, distance)
+
+            self.sketch_manager.clear_accumulated_profiles()
+
+            return {
+                "status": "created",
+                "type": "normal_cutout",
+                "distance": distance,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_lofted_cutout(self, profile_indices: list = None) -> Dict[str, Any]:
+        """
+        Create a lofted cutout between multiple profiles.
+
+        Uses accumulated profiles from close_sketch() calls. Create 2+ sketches
+        on different parallel planes, close each one, then call create_lofted_cutout().
+        Requires an existing base feature (cutout removes material).
+
+        Uses model.LoftedCutouts.AddSimple(count, profiles, types, origins, side, startTan, endTan).
+
+        Args:
+            profile_indices: Optional list of profile indices to select from
+                accumulated profiles. If None, uses all accumulated profiles.
+
+        Returns:
+            Dict with status and lofted cutout info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            # Get accumulated profiles from sketch manager
+            all_profiles = self.sketch_manager.get_accumulated_profiles()
+
+            if profile_indices is not None:
+                profiles = [all_profiles[i] for i in profile_indices]
+            else:
+                profiles = all_profiles
+
+            if len(profiles) < 2:
+                return {
+                    "error": f"Lofted cutout requires at least 2 profiles, got {len(profiles)}. "
+                    "Create sketches on different planes and close each one before calling create_lofted_cutout()."
+                }
+
+            v_profiles, v_types, v_origins = self._make_loft_variant_arrays(profiles)
+
+            igRight = 2   # Material side
+            igNone = 44   # No tangent control
+
+            lc = model.LoftedCutouts
+            cutout = lc.AddSimple(
+                len(profiles), v_profiles, v_types, v_origins,
+                igRight, igNone, igNone
+            )
+
+            self.sketch_manager.clear_accumulated_profiles()
+
+            return {
+                "status": "created",
+                "type": "lofted_cutout",
+                "num_profiles": len(profiles),
+                "method": "LoftedCutouts.AddSimple"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # MIRROR COPY
+    # =================================================================
+
+    def create_mirror(self, feature_name: str, mirror_plane_index: int) -> Dict[str, Any]:
+        """
+        Create a mirror copy of a feature across a reference plane.
+
+        Note: MirrorCopies via COM has known limitations. The ordered-mode
+        Add() method creates a feature object but doesn't persist geometry.
+        AddSync() persists the feature tree entry but may not compute geometry.
+        This is a known Solid Edge COM API limitation.
+
+        Args:
+            feature_name: Name of the feature to mirror (from list_features)
+            mirror_plane_index: 1-based index of the mirror plane
+                (1=Top/XZ, 2=Front/XY, 3=Right/YZ, or higher for user planes)
+
+        Returns:
+            Dict with status and mirror info
+        """
+        try:
+            import win32com.client as win32
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No base feature exists."}
+
+            model = models.Item(1)
+
+            # Find the feature by name in DesignEdgebarFeatures
+            features = doc.DesignEdgebarFeatures
+            target_feature = None
+            for i in range(1, features.Count + 1):
+                f = features.Item(i)
+                if f.Name == feature_name:
+                    target_feature = f
+                    break
+
+            if target_feature is None:
+                names = []
+                for i in range(1, features.Count + 1):
+                    names.append(features.Item(i).Name)
+                return {
+                    "error": f"Feature '{feature_name}' not found.",
+                    "available_features": names
+                }
+
+            # Get the mirror plane
+            ref_planes = doc.RefPlanes
+            if mirror_plane_index < 1 or mirror_plane_index > ref_planes.Count:
+                return {"error": f"Invalid plane index: {mirror_plane_index}. Count: {ref_planes.Count}"}
+
+            mirror_plane = ref_planes.Item(mirror_plane_index)
+
+            # Use AddSync which persists the feature tree entry
+            mc = win32.gencache.EnsureDispatch(model.MirrorCopies)
+            mirror = mc.AddSync(1, [target_feature], mirror_plane, False)
+
+            return {
+                "status": "created",
+                "type": "mirror_copy",
+                "feature": feature_name,
+                "mirror_plane": mirror_plane_index,
+                "name": mirror.Name if hasattr(mirror, 'Name') else None,
+                "note": "Mirror feature created via AddSync. Geometry may require manual verification in Solid Edge UI."
             }
         except Exception as e:
             return {

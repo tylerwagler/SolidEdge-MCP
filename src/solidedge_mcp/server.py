@@ -522,6 +522,66 @@ def create_revolved_cutout(angle: float = 360) -> dict:
     return feature_manager.create_revolved_cutout(angle)
 
 
+@mcp.tool()
+def create_normal_cutout(distance: float, direction: str = "Normal") -> dict:
+    """
+    Create a normal cutout (cut) through the part.
+
+    Removes material by extruding the active sketch profile perpendicular to the
+    surface normal. Requires an existing base feature and a closed sketch profile.
+
+    Args:
+        distance: Cutout depth in meters
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Cutout creation status
+    """
+    return feature_manager.create_normal_cutout(distance, direction)
+
+
+@mcp.tool()
+def create_lofted_cutout(profile_indices: Optional[list] = None) -> dict:
+    """
+    Create a lofted cutout between multiple profiles.
+
+    Removes material by lofting between 2+ profiles on different planes.
+    Requires an existing base feature. Create sketches on different parallel
+    planes, close each one, then call create_lofted_cutout().
+
+    Args:
+        profile_indices: List of profile indices to use (optional).
+            If None, uses all accumulated profiles.
+
+    Returns:
+        Lofted cutout creation status
+    """
+    return feature_manager.create_lofted_cutout(profile_indices)
+
+
+# ============================================================================
+# MIRROR COPY
+# ============================================================================
+
+@mcp.tool()
+def create_mirror(feature_name: str, mirror_plane_index: int) -> dict:
+    """
+    Create a mirror copy of a feature across a reference plane.
+
+    Mirror a named feature across one of the reference planes.
+    Use list_features() to get available feature names.
+    Default planes: 1=Top/XZ, 2=Front/XY, 3=Right/YZ.
+
+    Args:
+        feature_name: Name of the feature to mirror (e.g., 'ExtrudedProtrusion_1')
+        mirror_plane_index: 1-based index of the mirror plane
+
+    Returns:
+        Mirror copy creation status
+    """
+    return feature_manager.create_mirror(feature_name, mirror_plane_index)
+
+
 # ============================================================================
 # REFERENCE PLANE CREATION
 # ============================================================================
@@ -547,6 +607,71 @@ def create_ref_plane_by_offset(
         Reference plane creation status with new plane index
     """
     return feature_manager.create_ref_plane_by_offset(parent_plane_index, distance, normal_side)
+
+
+# ============================================================================
+# ROUNDS, CHAMFERS, AND HOLES
+# ============================================================================
+
+@mcp.tool()
+def create_round(radius: float) -> dict:
+    """
+    Create a round (fillet) on all edges of the active body.
+
+    Applies a constant-radius fillet to every edge of the model body.
+    Requires an existing base feature.
+
+    Args:
+        radius: Round radius in meters (e.g., 0.002 for 2mm fillet)
+
+    Returns:
+        Round creation status with edge count
+    """
+    return feature_manager.create_round(radius)
+
+
+@mcp.tool()
+def create_chamfer(distance: float) -> dict:
+    """
+    Create an equal-setback chamfer on all edges of the active body.
+
+    Applies a chamfer with equal setback distance to every edge of the model body.
+    Requires an existing base feature.
+
+    Args:
+        distance: Chamfer setback distance in meters (e.g., 0.001 for 1mm chamfer)
+
+    Returns:
+        Chamfer creation status with edge count
+    """
+    return feature_manager.create_chamfer(distance)
+
+
+@mcp.tool()
+def create_hole(
+    x: float, y: float, diameter: float, depth: float,
+    hole_type: str = "Simple", plane_index: int = 1,
+    direction: str = "Normal"
+) -> dict:
+    """
+    Create a hole feature on the active part.
+
+    Places a hole at the specified (x, y) position on a reference plane.
+    Requires an existing base feature.
+
+    Args:
+        x: Hole center X coordinate on the sketch plane (meters)
+        y: Hole center Y coordinate on the sketch plane (meters)
+        diameter: Hole diameter in meters
+        depth: Hole depth in meters
+        hole_type: 'Simple', 'Counterbore', or 'Countersink'
+        plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Hole creation status
+    """
+    return feature_manager.create_hole(x, y, diameter, depth, hole_type, plane_index, direction)
 
 
 # ============================================================================

@@ -4,7 +4,7 @@ Last Updated: 2026-02-12
 
 ## MCP Server Status: **OPERATIONAL**
 
-**95 MCP tools** are now registered and ready to use!
+**101 MCP tools** are now registered and ready to use!
 
 ## Quick Summary
 
@@ -16,7 +16,8 @@ Last Updated: 2026-02-12
 | **Basic Primitives** | 5 | Box (3 variants), cylinder, sphere |
 | **Extrusions** | 3 | Finite, infinite, thin-wall |
 | **Revolves** | 5 | Basic, finite, sync, thin-wall |
-| **Cutouts** | 3 | Extruded finite, through-all, revolved |
+| **Cutouts** | 5 | Extruded finite, through-all, revolved, normal, lofted |
+| **Rounds/Chamfers/Holes** | 3 | Round (fillet), chamfer, hole |
 | **Reference Planes** | 1 | Offset parallel plane |
 | **Loft** | 2 | Basic, thin-wall |
 | **Sweep** | 2 | Basic, thin-wall |
@@ -29,7 +30,7 @@ Last Updated: 2026-02-12
 | **Export** | 9 | STEP, STL, IGES, PDF, DXF, Parasolid, JT, drawing, screenshot |
 | **Assembly** | 11 | Place, list, constraints, patterns, suppress |
 | **Diagnostics** | 2 | API and feature inspection |
-| **TOTAL** | **95** | |
+| **TOTAL** | **101** | |
 
 ---
 
@@ -92,12 +93,21 @@ Last Updated: 2026-02-12
 | create_revolve_finite_sync | Models.AddFiniteRevolvedProtrusionSync | Untested |
 | create_revolve_thin_wall | Models.AddRevolvedProtrusionWithThinWall | Untested |
 
-### 7. Cutouts - NEW! (3)
+### 7. Cutouts (5)
 | Tool | API Method | Status |
 |------|-----------|--------|
 | create_extruded_cutout | ExtrudedCutouts.AddFiniteMulti | **Working** |
 | create_extruded_cutout_through_all | ExtrudedCutouts.AddThroughAllMulti | **Working** |
 | create_revolved_cutout | RevolvedCutouts.AddFiniteMulti | Implemented |
+| create_normal_cutout | NormalCutouts.AddFiniteMulti | Implemented |
+| create_lofted_cutout | LoftedCutouts.AddSimple | Implemented |
+
+### 7b. Rounds, Chamfers & Holes (3)
+| Tool | API Method | Status |
+|------|-----------|--------|
+| create_round | Rounds.Add | **Working** |
+| create_chamfer | Chamfers.AddEqualSetback | **Working** |
+| create_hole | ExtrudedCutouts.AddFiniteMulti (circular) | **Working** |
 
 ### 8. Reference Planes - NEW! (1)
 | Tool | API Method | Status |
