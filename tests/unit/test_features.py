@@ -459,3 +459,232 @@ class TestDeleteFaces:
         result = feature_mgr.delete_faces([0, 2])
         assert result["status"] == "created"
         assert result["face_count"] == 2
+
+
+# ============================================================================
+# GET FEATURE INFO
+# ============================================================================
+
+class TestGetFeatureInfo:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        model.Name = "ExtrudedProtrusion_1"
+        model.Type = 3
+        model.Visible = True
+        model.Suppressed = False
+        result = feature_mgr.get_feature_info(0)
+        assert result["index"] == 0
+        assert result["name"] == "ExtrudedProtrusion_1"
+
+    def test_invalid_index(self, feature_mgr, managers):
+        result = feature_mgr.get_feature_info(99)
+        assert "error" in result
+
+    def test_negative_index(self, feature_mgr, managers):
+        result = feature_mgr.get_feature_info(-1)
+        assert "error" in result
+
+
+# ============================================================================
+# DIMPLE
+# ============================================================================
+
+class TestCreateDimple:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        dimples = MagicMock()
+        model.Dimples = dimples
+        result = feature_mgr.create_dimple(0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "dimple"
+        assert result["depth"] == 0.01
+        dimples.Add.assert_called_once_with(profile, 0.01, 1, 2)
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        dimples = MagicMock()
+        model.Dimples = dimples
+        result = feature_mgr.create_dimple(0.005, "Reverse")
+        assert result["status"] == "created"
+        dimples.Add.assert_called_once_with(profile, 0.005, 2, 1)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_dimple(0.01)
+        assert "error" in result
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_dimple(0.01)
+        assert "error" in result
+
+
+# ============================================================================
+# ETCH
+# ============================================================================
+
+class TestCreateEtch:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        etches = MagicMock()
+        model.Etches = etches
+        result = feature_mgr.create_etch()
+        assert result["status"] == "created"
+        assert result["type"] == "etch"
+        etches.Add.assert_called_once_with(profile)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_etch()
+        assert "error" in result
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_etch()
+        assert "error" in result
+
+
+# ============================================================================
+# RIB
+# ============================================================================
+
+class TestCreateRib:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        ribs = MagicMock()
+        model.Ribs = ribs
+        result = feature_mgr.create_rib(0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "rib"
+        ribs.Add.assert_called_once_with(profile, 1, 0, 2, 0.005)
+
+    def test_symmetric(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        ribs = MagicMock()
+        model.Ribs = ribs
+        result = feature_mgr.create_rib(0.01, "Symmetric")
+        assert result["status"] == "created"
+        assert result["direction"] == "Symmetric"
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_rib(0.005)
+        assert "error" in result
+
+
+# ============================================================================
+# LIP
+# ============================================================================
+
+class TestCreateLip:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        lips = MagicMock()
+        model.Lips = lips
+        result = feature_mgr.create_lip(0.003)
+        assert result["status"] == "created"
+        assert result["type"] == "lip"
+        lips.Add.assert_called_once_with(profile, 2, 0.003)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_lip(0.003)
+        assert "error" in result
+
+
+# ============================================================================
+# DRAWN CUTOUT
+# ============================================================================
+
+class TestCreateDrawnCutout:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        drawn_cutouts = MagicMock()
+        model.DrawnCutouts = drawn_cutouts
+        result = feature_mgr.create_drawn_cutout(0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "drawn_cutout"
+        drawn_cutouts.Add.assert_called_once_with(profile, 2, 0.002)
+
+    def test_reverse(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        drawn_cutouts = MagicMock()
+        model.DrawnCutouts = drawn_cutouts
+        result = feature_mgr.create_drawn_cutout(0.002, "Reverse")
+        assert result["status"] == "created"
+        drawn_cutouts.Add.assert_called_once_with(profile, 1, 0.002)
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_drawn_cutout(0.002)
+        assert "error" in result
+
+
+# ============================================================================
+# BEAD
+# ============================================================================
+
+class TestCreateBead:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        beads = MagicMock()
+        model.Beads = beads
+        result = feature_mgr.create_bead(0.003)
+        assert result["status"] == "created"
+        assert result["type"] == "bead"
+        beads.Add.assert_called_once_with(profile, 2, 0.003)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_bead(0.003)
+        assert "error" in result
+
+
+# ============================================================================
+# LOUVER
+# ============================================================================
+
+class TestCreateLouver:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        louvers = MagicMock()
+        model.Louvers = louvers
+        result = feature_mgr.create_louver(0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "louver"
+        louvers.Add.assert_called_once_with(profile, 2, 0.005)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_louver(0.005)
+        assert "error" in result
+
+
+# ============================================================================
+# GUSSET
+# ============================================================================
+
+class TestCreateGusset:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        gussets = MagicMock()
+        model.Gussets = gussets
+        result = feature_mgr.create_gusset(0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "gusset"
+        gussets.Add.assert_called_once_with(profile, 2, 0.002)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_gusset(0.002)
+        assert "error" in result

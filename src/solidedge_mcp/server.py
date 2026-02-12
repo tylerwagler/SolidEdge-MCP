@@ -1235,6 +1235,150 @@ def create_lofted_flange_ex(thickness: float) -> dict:
 
 
 # ============================================================================
+# ADDITIONAL FORMED FEATURES (Dimple, Etch, Rib, Lip, Bead, Louver, etc.)
+# ============================================================================
+
+@mcp.tool()
+def create_dimple(depth: float, direction: str = "Normal") -> dict:
+    """
+    Create a dimple feature (sheet metal).
+
+    Creates a formed dimple from the active sketch profile.
+    Requires an active sketch profile and an existing sheet metal base feature.
+
+    Args:
+        depth: Dimple depth in meters
+        direction: 'Normal' or 'Reverse' for dimple direction
+
+    Returns:
+        Dimple creation status
+    """
+    return feature_manager.create_dimple(depth, direction)
+
+
+@mcp.tool()
+def create_etch() -> dict:
+    """
+    Create an etch feature (sheet metal).
+
+    Etches the active sketch profile into the sheet metal body.
+    Requires an active sketch profile and an existing sheet metal base feature.
+
+    Returns:
+        Etch creation status
+    """
+    return feature_manager.create_etch()
+
+
+@mcp.tool()
+def create_rib(thickness: float, direction: str = "Normal") -> dict:
+    """
+    Create a rib feature from the active sketch profile.
+
+    Ribs are structural reinforcements extending from a profile to existing geometry.
+    Requires an active sketch profile and an existing base feature.
+
+    Args:
+        thickness: Rib thickness in meters
+        direction: 'Normal', 'Reverse', or 'Symmetric'
+
+    Returns:
+        Rib creation status
+    """
+    return feature_manager.create_rib(thickness, direction)
+
+
+@mcp.tool()
+def create_lip(depth: float, direction: str = "Normal") -> dict:
+    """
+    Create a lip feature from the active sketch profile.
+
+    Lips are raised edges or ridges on parts. Requires an active
+    sketch profile and an existing base feature.
+
+    Args:
+        depth: Lip depth/height in meters
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Lip creation status
+    """
+    return feature_manager.create_lip(depth, direction)
+
+
+@mcp.tool()
+def create_drawn_cutout(depth: float, direction: str = "Normal") -> dict:
+    """
+    Create a drawn cutout feature (sheet metal).
+
+    Creates a formed cutout that follows bend characteristics.
+    Different from extruded cutouts. Requires an active sketch profile.
+
+    Args:
+        depth: Cutout depth in meters
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Drawn cutout creation status
+    """
+    return feature_manager.create_drawn_cutout(depth, direction)
+
+
+@mcp.tool()
+def create_bead(depth: float, direction: str = "Normal") -> dict:
+    """
+    Create a bead feature (sheet metal stiffener).
+
+    Beads are raised ridges used to stiffen sheet metal parts.
+    Requires an active sketch profile and an existing sheet metal base feature.
+
+    Args:
+        depth: Bead depth in meters
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Bead creation status
+    """
+    return feature_manager.create_bead(depth, direction)
+
+
+@mcp.tool()
+def create_louver(depth: float, direction: str = "Normal") -> dict:
+    """
+    Create a louver feature (sheet metal vent).
+
+    Louvers are formed openings for ventilation in sheet metal parts.
+    Requires an active sketch profile and an existing sheet metal base feature.
+
+    Args:
+        depth: Louver depth in meters
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Louver creation status
+    """
+    return feature_manager.create_louver(depth, direction)
+
+
+@mcp.tool()
+def create_gusset(thickness: float, direction: str = "Normal") -> dict:
+    """
+    Create a gusset feature (sheet metal reinforcement).
+
+    Gussets are triangular reinforcement plates in sheet metal.
+    Requires an active sketch profile and an existing sheet metal base feature.
+
+    Args:
+        thickness: Gusset thickness in meters
+        direction: 'Normal' or 'Reverse'
+
+    Returns:
+        Gusset creation status
+    """
+    return feature_manager.create_gusset(thickness, direction)
+
+
+# ============================================================================
 # BODY OPERATIONS
 # ============================================================================
 
@@ -1411,6 +1555,20 @@ def list_features() -> dict:
         List of features with their properties
     """
     return query_manager.list_features()
+
+
+@mcp.tool()
+def get_feature_info(feature_index: int) -> dict:
+    """
+    Get detailed information about a specific feature by index.
+
+    Args:
+        feature_index: 0-based index of the feature
+
+    Returns:
+        Feature name, type, visibility, and suppression state
+    """
+    return feature_manager.get_feature_info(feature_index)
 
 
 @mcp.tool()

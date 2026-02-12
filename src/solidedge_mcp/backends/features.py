@@ -2505,3 +2505,361 @@ class FeatureManager:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    # =================================================================
+    # ADDITIONAL FEATURE TYPES (Dimple, Etch, Rib, Lip, Slot, etc.)
+    # =================================================================
+
+    def create_dimple(self, depth: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a dimple feature (sheet metal).
+
+        Creates a dimple from the active sketch profile on the sheet metal body.
+        Requires an active sketch profile and an existing sheet metal base feature.
+
+        Args:
+            depth: Dimple depth in meters
+            direction: 'Normal' or 'Reverse' for dimple direction
+
+        Returns:
+            Dict with status and dimple info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a sheet metal base feature first."}
+
+            model = models.Item(1)
+
+            # seDimpleDepthLeft=1, seDimpleDepthRight=2
+            profile_side = 1 if direction == "Normal" else 2
+            depth_side = 2 if direction == "Normal" else 1
+
+            dimples = model.Dimples
+            dimple = dimples.Add(profile, depth, profile_side, depth_side)
+
+            return {
+                "status": "created",
+                "type": "dimple",
+                "depth": depth,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_etch(self) -> Dict[str, Any]:
+        """
+        Create an etch feature (sheet metal).
+
+        Etches the active sketch profile into the sheet metal body.
+        Requires an active sketch profile and an existing sheet metal base feature.
+
+        Returns:
+            Dict with status and etch info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a sheet metal base feature first."}
+
+            model = models.Item(1)
+
+            etches = model.Etches
+            etch = etches.Add(profile)
+
+            return {
+                "status": "created",
+                "type": "etch"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_rib(self, thickness: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a rib feature from the active sketch profile.
+
+        Ribs are structural reinforcements that extend from a profile to
+        existing geometry. Requires an active sketch profile.
+
+        Args:
+            thickness: Rib thickness in meters
+            direction: 'Normal', 'Reverse', or 'Symmetric'
+
+        Returns:
+            Dict with status and rib info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            # igRight=2, igLeft=1, igSymmetric=3
+            dir_map = {"Normal": 2, "Reverse": 1, "Symmetric": 3}
+            side = dir_map.get(direction, 2)
+
+            ribs = model.Ribs
+            rib = ribs.Add(profile, 1, 0, side, thickness)
+
+            return {
+                "status": "created",
+                "type": "rib",
+                "thickness": thickness,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_lip(self, depth: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a lip feature from the active sketch profile.
+
+        Lips are raised edges or ridges on plastic or sheet metal parts.
+        Requires an active sketch profile and an existing base feature.
+
+        Args:
+            depth: Lip depth/height in meters
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and lip info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            # igRight=2, igLeft=1
+            side = 2 if direction == "Normal" else 1
+
+            lips = model.Lips
+            lip = lips.Add(profile, side, depth)
+
+            return {
+                "status": "created",
+                "type": "lip",
+                "depth": depth,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_drawn_cutout(self, depth: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a drawn cutout feature (sheet metal).
+
+        Creates a formed cutout from the active sketch profile. Unlike extruded
+        cutouts, drawn cutouts follow the material's bend characteristics.
+        Requires an active sketch profile and existing base feature.
+
+        Args:
+            depth: Cutout depth in meters
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and cutout info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            # igLeft=1, igRight=2
+            side = 2 if direction == "Normal" else 1
+
+            drawn_cutouts = model.DrawnCutouts
+            cutout = drawn_cutouts.Add(profile, side, depth)
+
+            return {
+                "status": "created",
+                "type": "drawn_cutout",
+                "depth": depth,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_bead(self, depth: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a bead feature (sheet metal stiffener).
+
+        Beads are raised ridges used to stiffen sheet metal parts.
+        Requires an active sketch profile and an existing sheet metal base feature.
+
+        Args:
+            depth: Bead depth in meters
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and bead info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            # igLeft=1, igRight=2
+            side = 2 if direction == "Normal" else 1
+
+            beads = model.Beads
+            bead = beads.Add(profile, side, depth)
+
+            return {
+                "status": "created",
+                "type": "bead",
+                "depth": depth,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_louver(self, depth: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a louver feature (sheet metal vent).
+
+        Louvers are formed openings used for ventilation in sheet metal parts.
+        Requires an active sketch profile and an existing sheet metal base feature.
+
+        Args:
+            depth: Louver depth in meters
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and louver info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            # igLeft=1, igRight=2
+            side = 2 if direction == "Normal" else 1
+
+            louvers = model.Louvers
+            louver = louvers.Add(profile, side, depth)
+
+            return {
+                "status": "created",
+                "type": "louver",
+                "depth": depth,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_gusset(self, thickness: float, direction: str = "Normal") -> Dict[str, Any]:
+        """
+        Create a gusset feature (sheet metal reinforcement).
+
+        Gussets are triangular reinforcement plates used in sheet metal.
+        Requires an active sketch profile and an existing sheet metal base feature.
+
+        Args:
+            thickness: Gusset thickness in meters
+            direction: 'Normal' or 'Reverse'
+
+        Returns:
+            Dict with status and gusset info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+
+            # igLeft=1, igRight=2
+            side = 2 if direction == "Normal" else 1
+
+            gussets = model.Gussets
+            gusset = gussets.Add(profile, side, thickness)
+
+            return {
+                "status": "created",
+                "type": "gusset",
+                "thickness": thickness,
+                "direction": direction
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
