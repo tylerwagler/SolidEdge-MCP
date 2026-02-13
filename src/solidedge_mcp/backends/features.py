@@ -8,7 +8,20 @@ from typing import Dict, Any, Optional, List
 import traceback
 import pythoncom
 from win32com.client import VARIANT
-from .constants import FeatureOperationConstants, ExtrudedProtrusion, HoleTypeConstants
+from .constants import (
+    DirectionConstants,
+    ExtentTypeConstants,
+    FaceQueryConstants,
+    FeatureOperationConstants,
+    KeyPointExtentConstants,
+    LoftSweepConstants,
+    OffsetSideConstants,
+    TreatmentTypeConstants,
+    DraftSideConstants,
+    TreatmentCrownTypeConstants,
+    TreatmentCrownSideConstants,
+    TreatmentCrownCurvatureSideConstants,
+)
 
 
 class FeatureManager:
@@ -51,11 +64,11 @@ class FeatureManager:
 
             # Map direction string to constant
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
-                "Symmetric": ExtrudedProtrusion.igSymmetric
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
+                "Symmetric": DirectionConstants.igSymmetric
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             # AddFiniteExtrudedProtrusion: NumProfiles, ProfileArray, ProfilePlaneSide, Distance
             model = models.AddFiniteExtrudedProtrusion(
@@ -114,7 +127,7 @@ class FeatureManager:
                 1,                              # NumberOfProfiles
                 (profile,),                     # ProfileArray
                 refaxis,                        # ReferenceAxis
-                ExtrudedProtrusion.igRight,     # ProfilePlaneSide (2)
+                DirectionConstants.igRight,     # ProfilePlaneSide (2)
                 angle_rad                       # AngleofRevolution
             )
 
@@ -164,9 +177,9 @@ class FeatureManager:
             radius = diameter / 2.0
 
             # Map direction
-            dir_const = ExtrudedProtrusion.igRight  # Normal
+            dir_const = DirectionConstants.igRight  # Normal
             if direction == "Reverse":
-                dir_const = ExtrudedProtrusion.igLeft
+                dir_const = DirectionConstants.igLeft
 
             # Create a circular profile on the specified plane
             ps = doc.ProfileSets.Add()
@@ -220,7 +233,7 @@ class FeatureManager:
             body = model.Body
 
             # Collect all edges from all body faces
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if faces.Count == 0:
                 return {"error": "No faces found on body"}
 
@@ -281,7 +294,7 @@ class FeatureManager:
             body = model.Body
 
             # Collect all edges from all body faces
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if faces.Count == 0:
                 return {"error": "No faces found on body"}
 
@@ -457,7 +470,7 @@ class FeatureManager:
                 0,                              # dAngle (rotation)
                 height,                         # dDepth
                 top_plane,                      # pPlane
-                ExtrudedProtrusion.igRight,     # ExtentSide
+                DirectionConstants.igRight,     # ExtentSide
                 False,                          # vbKeyPointExtent
                 None,                           # pKeyPointObj
                 0                               # pKeyPointFlags
@@ -507,7 +520,7 @@ class FeatureManager:
                 0,                              # dAngle
                 depth,                          # dDepth
                 top_plane,                      # pPlane
-                ExtrudedProtrusion.igRight,     # ExtentSide
+                DirectionConstants.igRight,     # ExtentSide
                 False,                          # vbKeyPointExtent
                 None,                           # pKeyPointObj
                 0                               # pKeyPointFlags
@@ -564,7 +577,7 @@ class FeatureManager:
                 x3, y3, z3,
                 depth,                          # dDepth
                 top_plane,                      # pPlane
-                ExtrudedProtrusion.igRight,     # ExtentSide
+                DirectionConstants.igRight,     # ExtentSide
                 False,                          # vbKeyPointExtent
                 None,                           # pKeyPointObj
                 0                               # pKeyPointFlags
@@ -615,7 +628,7 @@ class FeatureManager:
                 radius,
                 height,                         # dDepth
                 top_plane,                      # pPlane
-                ExtrudedProtrusion.igRight,     # ExtentSide
+                DirectionConstants.igRight,     # ExtentSide
                 False,                          # vbKeyPointExtent
                 None,                           # pKeyPointObj
                 0                               # pKeyPointFlags
@@ -662,7 +675,7 @@ class FeatureManager:
                 center_x, center_y, center_z,
                 radius,
                 top_plane,                      # pPlane
-                ExtrudedProtrusion.igRight,     # ExtentSide
+                DirectionConstants.igRight,     # ExtentSide
                 False,                          # vbKeyPointExtent
                 False,                          # vbCreateLiveSection
                 None,                           # pKeyPointObj
@@ -693,11 +706,10 @@ class FeatureManager:
         Returns:
             Tuple of (v_profiles, v_types, v_origins) VARIANT arrays
         """
-        igProfileBasedCrossSection = 48
         v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, profiles)
         v_types = VARIANT(
             pythoncom.VT_ARRAY | pythoncom.VT_I4,
-            [igProfileBasedCrossSection] * len(profiles)
+            [LoftSweepConstants.igProfileBasedCrossSection] * len(profiles)
         )
         v_origins = VARIANT(
             pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
@@ -740,16 +752,13 @@ class FeatureManager:
 
             v_profiles, v_types, v_origins = self._make_loft_variant_arrays(profiles)
 
-            igRight = 2  # Material side
-            igNone = 44  # No tangent control
-
             # Try LoftedProtrusions.AddSimple first (works when a base feature exists)
             try:
                 model = models.Item(1)
                 lp = model.LoftedProtrusions
                 loft = lp.AddSimple(
                     len(profiles), v_profiles, v_types, v_origins,
-                    igRight, igNone, igNone
+                    DirectionConstants.igRight, ExtentTypeConstants.igNone, ExtentTypeConstants.igNone
                 )
                 self.sketch_manager.clear_accumulated_profiles()
                 return {
@@ -765,12 +774,12 @@ class FeatureManager:
             v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
             model = models.AddLoftedProtrusion(
                 len(profiles), v_profiles, v_types, v_origins,
-                v_seg,          # SegmentMaps (empty)
-                igRight,        # MaterialSide
-                igNone, 0.0, None,  # Start extent
-                igNone, 0.0, None,  # End extent
-                igNone, 0.0,        # Start tangent
-                igNone, 0.0,        # End tangent
+                v_seg,                                  # SegmentMaps (empty)
+                DirectionConstants.igRight,             # MaterialSide
+                ExtentTypeConstants.igNone, 0.0, None,  # Start extent
+                ExtentTypeConstants.igNone, 0.0, None,  # End extent
+                ExtentTypeConstants.igNone, 0.0,         # Start tangent
+                ExtentTypeConstants.igNone, 0.0,         # End tangent
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -818,19 +827,17 @@ class FeatureManager:
             path_profile = all_profiles[path_idx]
             cross_sections = [p for i, p in enumerate(all_profiles) if i != path_idx]
 
-            igProfileBasedCrossSection = 48
-            igRight = 2
-            igNone = 44
+            _CS = LoftSweepConstants.igProfileBasedCrossSection
 
             # Path arrays
             v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [igProfileBasedCrossSection])
+            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS])
 
             # Cross-section arrays
             v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
             v_section_types = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_I4,
-                [igProfileBasedCrossSection] * len(cross_sections)
+                [_CS] * len(cross_sections)
             )
             v_origins = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
@@ -843,9 +850,9 @@ class FeatureManager:
             model = models.AddSweptProtrusion(
                 1, v_paths, v_path_types,                   # Path (1 curve)
                 len(cross_sections), v_sections, v_section_types, v_origins, v_seg,  # Sections
-                igRight,                                     # MaterialSide
-                igNone, 0.0, None,                          # Start extent
-                igNone, 0.0, None,                          # End extent
+                DirectionConstants.igRight,                  # MaterialSide
+                ExtentTypeConstants.igNone, 0.0, None,       # Start extent
+                ExtentTypeConstants.igNone, 0.0, None,       # End extent
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -893,11 +900,11 @@ class FeatureManager:
 
             # Map direction
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
-                "Symmetric": ExtrudedProtrusion.igSymmetric
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
+                "Symmetric": DirectionConstants.igSymmetric
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             # AddExtrudedProtrusionWithThinWall
             model = models.AddExtrudedProtrusionWithThinWall(
@@ -958,7 +965,7 @@ class FeatureManager:
                 1,                              # NumberOfProfiles
                 (profile,),                     # ProfileArray
                 refaxis,                        # ReferenceAxis
-                ExtrudedProtrusion.igRight,     # ProfilePlaneSide (2)
+                DirectionConstants.igRight,     # ProfilePlaneSide (2)
                 angle_rad                       # AngleofRevolution
             )
 
@@ -1010,7 +1017,7 @@ class FeatureManager:
                 1,                              # NumberOfProfiles
                 (profile,),                     # ProfileArray
                 refaxis,                        # ReferenceAxis
-                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                DirectionConstants.igRight,     # ProfilePlaneSide
                 angle_rad,                      # AngleofRevolution
                 wall_thickness                  # WallThickness
             )
@@ -1050,11 +1057,11 @@ class FeatureManager:
             models = doc.Models
 
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
-                "Symmetric": ExtrudedProtrusion.igSymmetric
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
+                "Symmetric": DirectionConstants.igSymmetric
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             # AddExtrudedProtrusion (infinite)
             model = models.AddExtrudedProtrusion(
@@ -1105,59 +1112,47 @@ class FeatureManager:
             # Build profile array
             profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
 
-            # Constants
-            igFinite = 13
-            igRight = 2
-            igLeft = 1
-            igTangentNormal = 0
-            seOffsetNone = 0
-            seTreatmentNone = 0
-            seDraftNone = 0
-            seTreatmentCrownByOffset = 1
-            seTreatmentCrownSideInside = 0
-            seTreatmentCrownCurvatureInside = 0
-
             depth1 = distance
             depth2 = distance if direction == "Symmetric" else 0.0
-            side1 = igRight
-            side2 = igLeft if direction == "Symmetric" else igRight
+            side1 = DirectionConstants.igRight
+            side2 = DirectionConstants.igLeft if direction == "Symmetric" else DirectionConstants.igRight
 
             extruded_surface = extruded_surfaces.Add(
                 1,                      # NumberOfProfiles
                 profile_array,          # ProfileArray
-                igFinite,               # ExtentType1
+                ExtentTypeConstants.igFinite,  # ExtentType1
                 side1,                  # ExtentSide1
-                depth1,                 # FiniteDepth1
-                None,                   # KeyPointOrTangentFace1
-                igTangentNormal,        # KeyPointFlags1
-                None,                   # FromFaceOrRefPlane
-                seOffsetNone,           # FromFaceOffsetSide
-                0.0,                    # FromFaceOffsetDistance
-                seTreatmentNone,        # TreatmentType1
-                seDraftNone,            # TreatmentDraftSide1
-                0.0,                    # TreatmentDraftAngle1
-                seTreatmentCrownByOffset,       # TreatmentCrownType1
-                seTreatmentCrownSideInside,     # TreatmentCrownSide1
-                seTreatmentCrownCurvatureInside, # TreatmentCrownCurvatureSide1
-                0.0,                    # TreatmentCrownRadiusOrOffset1
-                0.0,                    # TreatmentCrownTakeOffAngle1
-                igFinite,               # ExtentType2
-                side2,                  # ExtentSide2
-                depth2,                 # FiniteDepth2
-                None,                   # KeyPointOrTangentFace2
-                igTangentNormal,        # KeyPointFlags2
-                None,                   # ToFaceOrRefPlane
-                seOffsetNone,           # ToFaceOffsetSide
-                0.0,                    # ToFaceOffsetDistance
-                seTreatmentNone,        # TreatmentType2
-                seDraftNone,            # TreatmentDraftSide2
-                0.0,                    # TreatmentDraftAngle2
-                seTreatmentCrownByOffset,       # TreatmentCrownType2
-                seTreatmentCrownSideInside,     # TreatmentCrownSide2
-                seTreatmentCrownCurvatureInside, # TreatmentCrownCurvatureSide2
-                0.0,                    # TreatmentCrownRadiusOrOffset2
-                0.0,                    # TreatmentCrownTakeOffAngle2
-                end_caps                # WantEndCaps
+                depth1,                                          # FiniteDepth1
+                None,                                            # KeyPointOrTangentFace1
+                KeyPointExtentConstants.igTangentNormal,         # KeyPointFlags1
+                None,                                            # FromFaceOrRefPlane
+                OffsetSideConstants.seOffsetNone,                # FromFaceOffsetSide
+                0.0,                                             # FromFaceOffsetDistance
+                TreatmentTypeConstants.seTreatmentNone,          # TreatmentType1
+                DraftSideConstants.seDraftNone,                  # TreatmentDraftSide1
+                0.0,                                             # TreatmentDraftAngle1
+                TreatmentCrownTypeConstants.seTreatmentCrownByOffset,       # TreatmentCrownType1
+                TreatmentCrownSideConstants.seTreatmentCrownSideInside,     # TreatmentCrownSide1
+                TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,  # TreatmentCrownCurvatureSide1
+                0.0,                                             # TreatmentCrownRadiusOrOffset1
+                0.0,                                             # TreatmentCrownTakeOffAngle1
+                ExtentTypeConstants.igFinite,                    # ExtentType2
+                side2,                                           # ExtentSide2
+                depth2,                                          # FiniteDepth2
+                None,                                            # KeyPointOrTangentFace2
+                KeyPointExtentConstants.igTangentNormal,         # KeyPointFlags2
+                None,                                            # ToFaceOrRefPlane
+                OffsetSideConstants.seOffsetNone,                # ToFaceOffsetSide
+                0.0,                                             # ToFaceOffsetDistance
+                TreatmentTypeConstants.seTreatmentNone,          # TreatmentType2
+                DraftSideConstants.seDraftNone,                  # TreatmentDraftSide2
+                0.0,                                             # TreatmentDraftAngle2
+                TreatmentCrownTypeConstants.seTreatmentCrownByOffset,       # TreatmentCrownType2
+                TreatmentCrownSideConstants.seTreatmentCrownSideInside,     # TreatmentCrownSide2
+                TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,  # TreatmentCrownCurvatureSide2
+                0.0,                                             # TreatmentCrownRadiusOrOffset2
+                0.0,                                             # TreatmentCrownTakeOffAngle2
+                end_caps                                         # WantEndCaps
             )
 
             return {
@@ -1431,17 +1426,14 @@ class FeatureManager:
             v_profiles, v_types, v_origins = self._make_loft_variant_arrays(profiles)
             v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
 
-            igRight = 2
-            igNone = 44
-
             model = models.AddLoftedProtrusionWithThinWall(
                 len(profiles), v_profiles, v_types, v_origins,
-                v_seg,              # SegmentMaps
-                igRight,            # MaterialSide
-                igNone, 0.0, None,  # Start extent
-                igNone, 0.0, None,  # End extent
-                igNone, 0.0,        # Start tangent
-                igNone, 0.0,        # End tangent
+                v_seg,                                          # SegmentMaps
+                DirectionConstants.igRight,                     # MaterialSide
+                ExtentTypeConstants.igNone, 0.0, None,          # Start extent
+                ExtentTypeConstants.igNone, 0.0, None,          # End extent
+                ExtentTypeConstants.igNone, 0.0,                # Start tangent
+                ExtentTypeConstants.igNone, 0.0,                # End tangent
                 wall_thickness,     # WallThickness
             )
 
@@ -1491,16 +1483,14 @@ class FeatureManager:
             path_profile = all_profiles[path_idx]
             cross_sections = [p for i, p in enumerate(all_profiles) if i != path_idx]
 
-            igProfileBasedCrossSection = 48
-            igRight = 2
-            igNone = 44
+            _CS = LoftSweepConstants.igProfileBasedCrossSection
 
             v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [igProfileBasedCrossSection])
+            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS])
             v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
             v_section_types = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_I4,
-                [igProfileBasedCrossSection] * len(cross_sections)
+                [_CS] * len(cross_sections)
             )
             v_origins = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
@@ -1512,9 +1502,9 @@ class FeatureManager:
             model = models.AddSweptProtrusionWithThinWall(
                 1, v_paths, v_path_types,
                 len(cross_sections), v_sections, v_section_types, v_origins, v_seg,
-                igRight,
-                igNone, 0.0, None,
-                igNone, 0.0, None,
+                DirectionConstants.igRight,
+                ExtentTypeConstants.igNone, 0.0, None,
+                ExtentTypeConstants.igNone, 0.0, None,
                 wall_thickness,
             )
 
@@ -1632,7 +1622,7 @@ class FeatureManager:
                 1,                              # NumberOfProfiles
                 (profile,),                     # ProfileArray
                 refaxis,                        # ReferenceAxis
-                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                DirectionConstants.igRight,     # ProfilePlaneSide
                 angle_rad                       # AngleofRevolution
             )
 
@@ -1668,7 +1658,7 @@ class FeatureManager:
                 1,                              # NumberOfProfiles
                 (profile,),                     # ProfileArray
                 refaxis,                        # ReferenceAxis
-                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                DirectionConstants.igRight,     # ProfilePlaneSide
                 angle_rad                       # AngleofRevolution
             )
 
@@ -1838,10 +1828,10 @@ class FeatureManager:
             model = models.Item(1)
 
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             cutouts = model.ExtrudedCutouts
             cutout = cutouts.AddFiniteMulti(1, (profile,), dir_const, distance)
@@ -1887,10 +1877,10 @@ class FeatureManager:
             model = models.Item(1)
 
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             cutouts = model.ExtrudedCutouts
             cutout = cutouts.AddThroughAllMulti(1, (profile,), dir_const)
@@ -1945,7 +1935,7 @@ class FeatureManager:
                 1,                              # NumberOfProfiles
                 (profile,),                     # ProfileArray
                 refaxis,                        # ReferenceAxis
-                ExtrudedProtrusion.igRight,     # ProfilePlaneSide
+                DirectionConstants.igRight,     # ProfilePlaneSide
                 angle_rad                       # AngleOfRevolution
             )
 
@@ -1992,10 +1982,10 @@ class FeatureManager:
             model = models.Item(1)
 
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             cutouts = model.NormalCutouts
             cutout = cutouts.AddFiniteMulti(1, (profile,), dir_const, distance)
@@ -2056,13 +2046,10 @@ class FeatureManager:
 
             v_profiles, v_types, v_origins = self._make_loft_variant_arrays(profiles)
 
-            igRight = 2   # Material side
-            igNone = 44   # No tangent control
-
             lc = model.LoftedCutouts
             cutout = lc.AddSimple(
                 len(profiles), v_profiles, v_types, v_origins,
-                igRight, igNone, igNone
+                DirectionConstants.igRight, ExtentTypeConstants.igNone, ExtentTypeConstants.igNone
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -2185,10 +2172,10 @@ class FeatureManager:
             parent = ref_planes.Item(parent_plane_index)
 
             side_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
             }
-            side_const = side_map.get(normal_side, ExtrudedProtrusion.igRight)
+            side_const = side_map.get(normal_side, DirectionConstants.igRight)
 
             new_plane = ref_planes.AddParallelByDistance(parent, distance, side_const)
 
@@ -2238,7 +2225,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -2294,7 +2281,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -2349,7 +2336,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if faces.Count == 0:
                 return {"error": "No faces on body"}
 
@@ -2606,6 +2593,193 @@ class FeatureManager:
             }
 
     # =================================================================
+    # EMBOSS AND FLANGE
+    # =================================================================
+
+    def create_emboss(
+        self,
+        face_indices: list,
+        clearance: float = 0.001,
+        thickness: float = 0.0,
+        thicken: bool = False,
+        default_side: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Create an emboss feature using face geometry as tools.
+
+        Uses selected faces as embossing tool geometry on the target body.
+        Requires an existing base feature.
+
+        Args:
+            face_indices: List of 0-based face indices to use as emboss tools
+            clearance: Clearance in meters (default 0.001)
+            thickness: Thickness in meters (default 0.0)
+            thicken: Enable thickening (default False)
+            default_side: Default side (default True)
+
+        Returns:
+            Dict with status and emboss info
+        """
+        try:
+            from win32com.client import VARIANT
+            import pythoncom
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+            body = model.Body
+
+            if not face_indices:
+                return {"error": "face_indices must contain at least one face index."}
+
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
+
+            face_list = []
+            for fi in face_indices:
+                if fi < 0 or fi >= faces.Count:
+                    return {"error": f"Invalid face index: {fi}. Body has {faces.Count} faces."}
+                face_list.append(faces.Item(fi + 1))
+
+            tools_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, face_list)
+
+            emboss_features = model.EmbossFeatures
+            emboss = emboss_features.Add(
+                body, len(face_list), tools_arr,
+                thicken, default_side, clearance, thickness
+            )
+
+            return {
+                "status": "created",
+                "type": "emboss",
+                "face_count": len(face_list),
+                "clearance": clearance,
+                "thickness": thickness,
+                "thicken": thicken,
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_flange(
+        self,
+        face_index: int,
+        edge_index: int,
+        flange_length: float,
+        side: str = "Right",
+        inside_radius: float = None,
+        bend_angle: float = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a flange feature on a sheet metal edge.
+
+        Adds a flange to the specified edge of a sheet metal body.
+        Requires an existing sheet metal base feature.
+
+        Args:
+            face_index: 0-based face index containing the target edge
+            edge_index: 0-based edge index within that face
+            flange_length: Flange length in meters
+            side: 'Left' (1), 'Right' (2), or 'Both' (6)
+            inside_radius: Bend inside radius in meters (optional)
+            bend_angle: Bend angle in degrees (optional)
+
+        Returns:
+            Dict with status and flange info
+        """
+        try:
+            import math
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a sheet metal base feature first."}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+            face_edges = face.Edges
+            if not hasattr(face_edges, 'Count') or face_edges.Count == 0:
+                return {"error": f"Face {face_index} has no edges."}
+
+            if edge_index < 0 or edge_index >= face_edges.Count:
+                return {"error": f"Invalid edge index: {edge_index}. Face has {face_edges.Count} edges."}
+
+            edge = face_edges.Item(edge_index + 1)
+
+            side_map = {
+                "Left": DirectionConstants.igLeft,
+                "Right": DirectionConstants.igRight,
+                "Both": DirectionConstants.igBoth,
+            }
+            side_const = side_map.get(side, DirectionConstants.igRight)
+
+            flanges = model.Flanges
+
+            # Build optional args
+            args = [edge, side_const, flange_length]
+            kwargs_to_add = []
+
+            # Optional params: ThicknessSide, InsideRadius, DimSide, BRType, BRWidth,
+            # BRLength, CRType, NeutralFactor, BnParamType, BendAngle
+            if inside_radius is not None or bend_angle is not None:
+                # ThicknessSide (skip) -> InsideRadius
+                # We need to pass positional VT_VARIANT optional params
+                # In late binding, pass them positionally
+                if inside_radius is not None and bend_angle is not None:
+                    bend_angle_rad = math.radians(bend_angle)
+                    flange = flanges.Add(
+                        edge, side_const, flange_length,
+                        None, inside_radius, None, None, None, None, None, None, None,
+                        bend_angle_rad
+                    )
+                elif inside_radius is not None:
+                    flange = flanges.Add(
+                        edge, side_const, flange_length,
+                        None, inside_radius
+                    )
+                else:
+                    bend_angle_rad = math.radians(bend_angle)
+                    flange = flanges.Add(
+                        edge, side_const, flange_length,
+                        None, None, None, None, None, None, None, None, None,
+                        bend_angle_rad
+                    )
+            else:
+                flange = flanges.Add(edge, side_const, flange_length)
+
+            result = {
+                "status": "created",
+                "type": "flange",
+                "face_index": face_index,
+                "edge_index": edge_index,
+                "flange_length": flange_length,
+                "side": side,
+            }
+            if inside_radius is not None:
+                result["inside_radius"] = inside_radius
+            if bend_angle is not None:
+                result["bend_angle"] = bend_angle
+
+            return result
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
     # ADDITIONAL FEATURE TYPES (Dimple, Etch, Rib, Lip, Slot, etc.)
     # =================================================================
 
@@ -2718,9 +2892,12 @@ class FeatureManager:
 
             model = models.Item(1)
 
-            # igRight=2, igLeft=1, igSymmetric=3
-            dir_map = {"Normal": 2, "Reverse": 1, "Symmetric": 3}
-            side = dir_map.get(direction, 2)
+            dir_map = {
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
+                "Symmetric": DirectionConstants.igSymmetric,
+            }
+            side = dir_map.get(direction, DirectionConstants.igRight)
 
             ribs = model.Ribs
             rib = ribs.Add(profile, 1, 0, side, thickness)
@@ -2764,8 +2941,7 @@ class FeatureManager:
 
             model = models.Item(1)
 
-            # igRight=2, igLeft=1
-            side = 2 if direction == "Normal" else 1
+            side = DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
 
             lips = model.Lips
             lip = lips.Add(profile, side, depth)
@@ -2986,7 +3162,7 @@ class FeatureManager:
 
             model = models.Item(1)
             body = model.Body
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
@@ -3127,7 +3303,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -3187,7 +3363,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -3251,7 +3427,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -3314,7 +3490,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -3384,7 +3560,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -3502,19 +3678,17 @@ class FeatureManager:
             path_profile = all_profiles[path_idx]
             cross_sections = [p for i, p in enumerate(all_profiles) if i != path_idx]
 
-            igProfileBasedCrossSection = 48
-            igRight = 2
-            igNone = 44
+            _CS = LoftSweepConstants.igProfileBasedCrossSection
 
             # Path arrays
             v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [igProfileBasedCrossSection])
+            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS])
 
             # Cross-section arrays
             v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
             v_section_types = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_I4,
-                [igProfileBasedCrossSection] * len(cross_sections)
+                [_CS] * len(cross_sections)
             )
             v_origins = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
@@ -3526,11 +3700,11 @@ class FeatureManager:
             # SweptCutouts.Add: same 15 params as SweptProtrusions
             swept_cutouts = model.SweptCutouts
             cutout = swept_cutouts.Add(
-                1, v_paths, v_path_types,                   # Path (1 curve)
+                1, v_paths, v_path_types,                        # Path (1 curve)
                 len(cross_sections), v_sections, v_section_types, v_origins, v_seg,
-                igRight,                                     # MaterialSide
-                igNone, 0.0, None,                          # Start extent
-                igNone, 0.0, None,                          # End extent
+                DirectionConstants.igRight,                      # MaterialSide
+                ExtentTypeConstants.igNone, 0.0, None,           # Start extent
+                ExtentTypeConstants.igNone, 0.0, None,           # End extent
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -3594,13 +3768,8 @@ class FeatureManager:
             if revolutions is None:
                 revolutions = height / pitch
 
-            igRight = 2
-            igLeft = 1
-            # AxisStart: igRight = start from sketch plane in normal direction
-            axis_start = igRight
-
-            # Helix direction
-            dir_const = igRight if direction == "Right" else igLeft
+            axis_start = DirectionConstants.igRight
+            dir_const = DirectionConstants.igRight if direction == "Right" else DirectionConstants.igLeft
 
             # Wrap cross-section profile in SAFEARRAY
             v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
@@ -3611,7 +3780,7 @@ class FeatureManager:
                 axis_start,     # AxisStart
                 1,              # NumCrossSections
                 v_profiles,     # CrossSectionArray
-                igRight,        # ProfileSide
+                DirectionConstants.igRight,  # ProfileSide
                 height,         # Height
                 pitch,          # Pitch
                 revolutions,    # NumberOfTurns
@@ -3664,7 +3833,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if faces.Count == 0:
                 return {"error": "No faces found on body"}
 
@@ -3743,7 +3912,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if faces.Count == 0:
                 return {"error": "No faces found on body"}
 
@@ -3825,10 +3994,10 @@ class FeatureManager:
             parent = ref_planes.Item(parent_plane_index)
 
             side_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
             }
-            side_const = side_map.get(normal_side, ExtrudedProtrusion.igRight)
+            side_const = side_map.get(normal_side, DirectionConstants.igRight)
 
             # Angle in radians for the COM API
             angle_rad = math.radians(angle)
@@ -3985,9 +4154,9 @@ class FeatureManager:
             model = models.Item(1)
             radius = diameter / 2.0
 
-            dir_const = ExtrudedProtrusion.igRight  # Normal
+            dir_const = DirectionConstants.igRight  # Normal
             if direction == "Reverse":
-                dir_const = ExtrudedProtrusion.igLeft
+                dir_const = DirectionConstants.igLeft
 
             # Create a circular profile on the specified plane
             ps = doc.ProfileSets.Add()
@@ -4064,7 +4233,7 @@ class FeatureManager:
                 0,                              # dAngle
                 depth,                          # dDepth
                 top_plane,                      # pPlane
-                ExtrudedProtrusion.igRight,     # ExtentSide
+                DirectionConstants.igRight,     # ExtentSide
                 False,                          # vbKeyPointExtent
                 None,                           # pKeyPointObj
                 0                               # pKeyPointFlags
@@ -4134,8 +4303,8 @@ class FeatureManager:
                 radius,
                 height,                             # dDepth
                 top_plane,                          # pPlane
-                ExtrudedProtrusion.igRight,         # ProfileSide
-                ExtrudedProtrusion.igRight,         # ExtentSide
+                DirectionConstants.igRight,         # ProfileSide
+                DirectionConstants.igRight,         # ExtentSide
                 False,                              # vbKeyPointExtent
                 None,                               # pKeyPointObj
                 0                                   # pKeyPointFlags
@@ -4203,8 +4372,8 @@ class FeatureManager:
                 center_x, center_y, center_z,
                 radius,
                 top_plane,                          # pPlane
-                ExtrudedProtrusion.igRight,         # ProfileSide
-                ExtrudedProtrusion.igRight,         # ExtentSide
+                DirectionConstants.igRight,         # ProfileSide
+                DirectionConstants.igRight,         # ExtentSide
                 False,                              # vbKeyPointExtent
                 False,                              # vbCreateLiveSection
                 None,                               # pKeyPointObj
@@ -4254,10 +4423,10 @@ class FeatureManager:
             model = models.Item(1)
 
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             cutouts = model.ExtrudedCutouts
             cutout = cutouts.AddThroughNextMulti(1, (profile,), dir_const)
@@ -4306,10 +4475,10 @@ class FeatureManager:
             model = models.Item(1)
 
             direction_map = {
-                "Normal": ExtrudedProtrusion.igRight,
-                "Reverse": ExtrudedProtrusion.igLeft,
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, ExtrudedProtrusion.igRight)
+            dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             # igNormalCutoutMethod_Normal = 0 (default method)
             cutouts = model.NormalCutouts
@@ -4407,7 +4576,7 @@ class FeatureManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
 
@@ -4461,7 +4630,6 @@ class FeatureManager:
                 return {"error": "No axis of revolution set. Use set_axis_of_revolution() first."}
 
             models = doc.Models
-            igRight = ExtrudedProtrusion.igRight
             angle_rad = math.radians(angle)
 
             v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
@@ -4471,12 +4639,12 @@ class FeatureManager:
                 model = models.Item(1)
                 rev_surfaces = model.RevolvedSurfaces
                 surface = rev_surfaces.AddFinite(
-                    1, v_profiles, refaxis, igRight, angle_rad, want_end_caps
+                    1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
                 )
             else:
                 # First feature - use Models method if available
                 surface = models.AddFiniteRevolvedSurface(
-                    1, v_profiles, refaxis, igRight, angle_rad, want_end_caps
+                    1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
                 )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -4523,13 +4691,12 @@ class FeatureManager:
                     f"got {len(all_profiles)}."
                 }
 
-            igProfileBasedCrossSection = 48
-            igNone = 44
+            _CS = LoftSweepConstants.igProfileBasedCrossSection
 
             v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
             v_types = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_I4,
-                [igProfileBasedCrossSection] * len(all_profiles)
+                [_CS] * len(all_profiles)
             )
             v_origins = VARIANT(
                 pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
@@ -4542,8 +4709,8 @@ class FeatureManager:
                 loft_surfaces = model.LoftedSurfaces
                 surface = loft_surfaces.Add(
                     len(all_profiles), v_sections, v_types, v_origins,
-                    igNone,     # StartExtentType
-                    igNone,     # EndExtentType
+                    ExtentTypeConstants.igNone,     # StartExtentType
+                    ExtentTypeConstants.igNone,     # EndExtentType
                     0, 0.0,     # StartTangentType, StartTangentMagnitude
                     0, 0.0,     # EndTangentType, EndTangentMagnitude
                     0, None,    # NumGuideCurves, GuideCurves
@@ -4606,19 +4773,18 @@ class FeatureManager:
             path_profile = all_profiles[path_idx]
             cross_sections = [p for i, p in enumerate(all_profiles) if i != path_idx]
 
-            igProfileBasedCrossSection = 48
-            igNone = 44
+            _CS = LoftSweepConstants.igProfileBasedCrossSection
 
             v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
             v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
 
             swept_surfaces = model.SweptSurfaces
             surface = swept_surfaces.Add(
-                1, v_paths, igProfileBasedCrossSection,     # Path
-                len(cross_sections), v_sections, igProfileBasedCrossSection,  # Sections
-                None, None,             # Origins, OriginRefs
-                igNone,                 # StartExtentType
-                igNone,                 # EndExtentType
+                1, v_paths, _CS,                            # Path
+                len(cross_sections), v_sections, _CS,       # Sections
+                None, None,                                 # Origins, OriginRefs
+                ExtentTypeConstants.igNone,                 # StartExtentType
+                ExtentTypeConstants.igNone,                 # EndExtentType
                 want_end_caps
             )
 

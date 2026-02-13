@@ -1977,3 +1977,114 @@ class TestConvertFeatureType:
         result = feature_mgr.convert_feature_type("Protrusion_1", "invalid")
         assert "error" in result
         assert "Invalid target_type" in result["error"]
+
+
+# ============================================================================
+# EMBOSS
+# ============================================================================
+
+class TestCreateEmboss:
+    def test_basic_emboss(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        emboss_features = MagicMock()
+        model.EmbossFeatures = emboss_features
+
+        result = feature_mgr.create_emboss([0])
+        assert result["status"] == "created"
+        assert result["type"] == "emboss"
+        assert result["face_count"] == 1
+        emboss_features.Add.assert_called_once()
+
+    def test_multiple_faces(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        body = model.Body
+        face2 = MagicMock()
+        faces = body.Faces.return_value
+        faces.Count = 3
+        faces.Item.side_effect = lambda i: MagicMock()
+
+        emboss_features = MagicMock()
+        model.EmbossFeatures = emboss_features
+
+        result = feature_mgr.create_emboss([0, 1, 2], clearance=0.002, thickness=0.001, thicken=True)
+        assert result["status"] == "created"
+        assert result["face_count"] == 3
+        assert result["clearance"] == 0.002
+        assert result["thickness"] == 0.001
+        assert result["thicken"] is True
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        models.Count = 0
+
+        result = feature_mgr.create_emboss([0])
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+
+        result = feature_mgr.create_emboss([99])
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+    def test_empty_face_indices(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+
+        result = feature_mgr.create_emboss([])
+        assert "error" in result
+        assert "at least one" in result["error"]
+
+
+# ============================================================================
+# FLANGE
+# ============================================================================
+
+class TestCreateFlange:
+    def test_basic_flange(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        flanges = MagicMock()
+        model.Flanges = flanges
+
+        result = feature_mgr.create_flange(face_index=0, edge_index=0, flange_length=0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "flange"
+        assert result["flange_length"] == 0.01
+        assert result["side"] == "Right"
+        flanges.Add.assert_called_once()
+
+    def test_flange_with_options(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        flanges = MagicMock()
+        model.Flanges = flanges
+
+        result = feature_mgr.create_flange(
+            face_index=0, edge_index=0, flange_length=0.02,
+            side="Left", inside_radius=0.003, bend_angle=90.0
+        )
+        assert result["status"] == "created"
+        assert result["side"] == "Left"
+        assert result["inside_radius"] == 0.003
+        assert result["bend_angle"] == 90.0
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        models.Count = 0
+
+        result = feature_mgr.create_flange(face_index=0, edge_index=0, flange_length=0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+
+        result = feature_mgr.create_flange(face_index=99, edge_index=0, flange_length=0.01)
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+    def test_invalid_edge_index(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+
+        result = feature_mgr.create_flange(face_index=0, edge_index=99, flange_length=0.01)
+        assert "error" in result
+        assert "Invalid edge index" in result["error"]

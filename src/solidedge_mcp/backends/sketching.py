@@ -7,7 +7,7 @@ Handles creating and manipulating 2D sketches.
 from typing import Dict, Any, Optional, Tuple
 import traceback
 import math
-from .constants import RefPlaneConstants, ProfileValidationConstants
+from .constants import RefPlaneConstants, ProfileValidationConstants, FaceQueryConstants
 
 
 class SketchManager:
@@ -1201,7 +1201,7 @@ class SketchManager:
             body = model.Body
 
             # Get the edge from face
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
 
@@ -1254,7 +1254,7 @@ class SketchManager:
             model = models.Item(1)
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
 

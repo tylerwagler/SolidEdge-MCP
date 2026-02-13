@@ -2178,6 +2178,67 @@ def create_lofted_flange_ex(thickness: float) -> dict:
 
 
 # ============================================================================
+# EMBOSS AND FLANGE
+# ============================================================================
+
+@mcp.tool()
+def create_emboss(
+    face_indices: list,
+    clearance: float = 0.001,
+    thickness: float = 0.0,
+    thicken: bool = False,
+    default_side: bool = True,
+) -> dict:
+    """
+    Create an emboss feature using face geometry as tools.
+
+    Uses selected faces as embossing tool geometry on the target body.
+    Requires an existing base feature. Use get_body_faces() to find face indices.
+
+    Args:
+        face_indices: List of 0-based face indices to use as emboss tools
+        clearance: Clearance in meters (default 0.001)
+        thickness: Thickness in meters (default 0.0)
+        thicken: Enable thickening (default False)
+        default_side: Default side (default True)
+
+    Returns:
+        Emboss feature creation status
+    """
+    return feature_manager.create_emboss(face_indices, clearance, thickness, thicken, default_side)
+
+
+@mcp.tool()
+def create_flange(
+    face_index: int,
+    edge_index: int,
+    flange_length: float,
+    side: str = "Right",
+    inside_radius: Optional[float] = None,
+    bend_angle: Optional[float] = None,
+) -> dict:
+    """
+    Create a flange feature on a sheet metal edge.
+
+    Adds a flange to the specified edge of a sheet metal body.
+    Requires an existing sheet metal base feature.
+    Use get_body_faces() and get_face_info() to find face/edge indices.
+
+    Args:
+        face_index: 0-based face index containing the target edge
+        edge_index: 0-based edge index within that face
+        flange_length: Flange length in meters
+        side: 'Left' (1), 'Right' (2), or 'Both' (6)
+        inside_radius: Bend inside radius in meters (optional)
+        bend_angle: Bend angle in degrees (optional)
+
+    Returns:
+        Flange creation status
+    """
+    return feature_manager.create_flange(face_index, edge_index, flange_length, side, inside_radius, bend_angle)
+
+
+# ============================================================================
 # ADDITIONAL FORMED FEATURES (Dimple, Etch, Rib, Lip, Bead, Louver, etc.)
 # ============================================================================
 

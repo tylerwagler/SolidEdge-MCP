@@ -1,59 +1,58 @@
 # Solid Edge Type Library Implementation Map
 
 Generated: 2026-02-12 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 252 MCP tools implemented
+Current: 254 MCP tools implemented
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
 
 ## Coverage Summary
 
-| Category              | Available         | Implemented   | Coverage  | Priority  |
-|-----------------------|-------------------|---------------|-----------|-----------|
-| **Part Features**     | 42 collections    | 41            |    98%    |   HIGH    |
-| **Assembly**          | 18 key interfaces | 14            |    78%    |   HIGH    |
-| **Draft/Drawing**     | 15 key interfaces | 9             |    60%    |  MEDIUM   |
-| **Framework/App**     | 12 key interfaces | 12            |   100%    |    LOW    |
-| **Constants**         | 745 enums         | ~30 in code   |     4%    | REFERENCE |
-| **Query/Topology**    | 25+ methods       | 24            |    96%    |  MEDIUM   |
-| **Export/Import**     | 12 formats        | 10            |    83%    |    LOW    |
-|-----------------------------------------------------------------------------------|
-|      **Total **       |  869 items        | 140           |    16%    |   --      |
-|-----------------------------------------------------------------------------------|
+|       Category        |       Available       |  Implemented  | Coverage  | Priority  |
+|-----------------------|-----------------------|---------------|-----------|-----------|
+|   **Part Features**   |    42     collections |       41      |    98%    |   HIGH    |
+|     **Assembly**      |    18  key interfaces |       14      |    78%    |   HIGH    |
+|   **Draft/Drawing**   |    15  key interfaces |        9      |    60%    |  MEDIUM   |
+|   **Framework/App**   |    12  key interfaces |       12      |   100%    |    LOW    |
+|  **Query/Topology**   |    25+        methods |       24      |    96%    |  MEDIUM   |
+|   **Export/Import**   |    12         formats |       10      |    83%    |    LOW    |
+|---------------------------------------------------------------------------------------|
+|      **Total **       |   124           items |      110      |    89%    |    --     |
+|---------------------------------------------------------------------------------------|
 
 ## Tool Count by Category (252 total)
 
-| Category | Count | Tools |
-|----------|-------|-------|
-| Connection | 7 | Connect, disconnect, app info, quit, is_connected, process_info, start_command |
-| Document Management | 13 | Create (part, assembly, sheet metal, draft), open, save, close, list, activate, undo, redo |
-| Sketching | 24 | Lines, circles, arcs (multiple), rects, polygons, ellipses, splines, points, constraints (9 types), fillet, chamfer, mirror, construction, hide profile, project_edge, include_edge |
-| Basic Primitives | 8 | Box (3 variants), cylinder, sphere, box cutout, cylinder cutout, sphere cutout |
-| Extrusions | 4 | Finite, infinite, thin-wall, extruded surface |
-| Revolves | 5 | Basic, finite, sync, thin-wall |
-| Cutouts | 9 | Extruded finite/through-all/through-next, revolved, normal/normal-through-all, lofted, swept, helix |
-| Rounds/Chamfers/Holes | 9 | Round (all/face), variable round, blend, chamfer (equal/unequal/angle/face), hole, hole through-all |
-| Reference Planes | 5 | Offset, normal-to-curve, angle, 3-points, mid-plane |
-| Loft | 2 | Basic, thin-wall |
-| Sweep | 2 | Basic, thin-wall |
-| Helix/Spiral | 4 | Basic, sync, thin-wall variants |
-| Construction Surfaces | 3 | Revolved surface, lofted surface, swept surface |
-| Sheet Metal | 8 | Base flange/tab, lofted flange, web network, advanced variants |
-| Body Operations | 9 | Add body, thicken, mesh, tag, construction, delete holes, delete blends |
-| Simplification | 4 | Auto-simplify, enclosure, duplicate |
-| View/Display | 7 | Orientation, zoom, display mode, background color, get/set camera |
-| Variables | 5 | Get all, get by name, set value, add variable, query/search |
-| Custom Properties | 3 | Get all, set/create, delete |
-| Body Topology | 3 | Body faces, body edges, face info |
-| Performance | 2 | Set performance mode, recompute |
-| Query/Analysis | 25 | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property |
-| Feature Management | 6 | Suppress, unsuppress, face rotate (2), draft angle, convert feature type |
-| Export | 10 | STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, drawing, screenshot |
-| Assembly | 24 | Place, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations, doc tree, replace, delete, visibility, color, transform, count, move, rotate |
-| Draft/Drawing | 11 | Sheets (add, activate, delete, rename), views, annotations (dimension, balloon, note, leader, text box), parts list |
-| Part Features | 10 | Dimple, etch, rib, lip, drawn cutout, bead, louver, gusset, thread, slot, split |
-| Diagnostics | 2 | API and feature inspection |
-| Select Set | 3 | Get selection, clear selection, add to selection |
+| Category                  | Count | Tools |
+|:--------------------------|:-----:|:---|
+| **Connection**            | 7     | Connect, disconnect, app info, quit, is_connected, process_info, start_command |
+| **Document Management**   | 13    | Create (part, assembly, sheet metal, draft), open, save, close, list, activate, undo, redo |
+| **Sketching**             | 24    | Lines, circles, arcs (multiple), rects, polygons, ellipses, splines, points, constraints (9 types), fillet, chamfer, mirror, construction, hide profile, project_edge, include_edge |
+| **Basic Primitives**      | 8     | Box (3 variants), cylinder, sphere, box cutout, cylinder cutout, sphere cutout |
+| **Extrusions**            | 4     | Finite, infinite, thin-wall, extruded surface |
+| **Revolves**              | 5     | Basic, finite, sync, thin-wall |
+| **Cutouts**               | 9     | Extruded finite/through-all/through-next, revolved, normal/normal-through-all, lofted, swept, helix |
+| **Rounds/Chamfers/Holes** | 9     | Round (all/face), variable round, blend, chamfer (equal/unequal/angle/face), hole, hole through-all |
+| **Reference Planes**      | 5     | Offset, normal-to-curve, angle, 3-points, mid-plane |
+| **Loft**                  | 2     | Basic, thin-wall |
+| **Sweep**                 | 2     | Basic, thin-wall |
+| **Helix/Spiral**          | 4     | Basic, sync, thin-wall variants |
+| **Construction Surfaces** | 3     | Revolved surface, lofted surface, swept surface |
+| **Sheet Metal**           | 10    | Base flange/tab, lofted flange, web network, advanced variants, emboss, flange |
+| **Body Operations**       | 9     | Add body, thicken, mesh, tag, construction, delete holes, delete blends |
+| **Simplification**        | 4     | Auto-simplify, enclosure, duplicate |
+| **View/Display**          | 7     | Orientation, zoom, display mode, background color, get/set camera |
+| **Variables**             | 5     | Get all, get by name, set value, add variable, query/search |
+| **Custom Properties**     | 3     | Get all, set/create, delete |
+| **Body Topology**         | 3     | Body faces, body edges, face info |
+| **Performance**           | 2     | Set performance mode, recompute |
+| **Query/Analysis**        | 25    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property |
+| **Feature Management**    | 6     | Suppress, unsuppress, face rotate (2), draft angle, convert feature type |
+| **Export**                | 10    | STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, drawing, screenshot |
+| **Assembly**              | 24    | Place, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations, doc tree, replace, delete, visibility, color, transform, count, move, rotate |
+| **Draft/Drawing**         | 11    | Sheets (add, activate, delete, rename), views, annotations (dimension, balloon, note, leader, text box), parts list |
+| **Part Features**         | 10    | Dimple, etch, rib, lip, drawn cutout, bead, louver, gusset, thread, slot, split |
+| **Diagnostics**           | 2     | API and feature inspection |
+| **Select Set**            | 3     | Get selection, clear selection, add to selection |
 
 ## Part 1: Part Feature Collections (Part.tlb)
 
@@ -266,7 +265,7 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 - [ ] `AddEx` - Extended drawn cutout
 
 #### EmbossFeatures Collection (2 methods)
-- [ ] `Add` - **Emboss feature (NOT IMPLEMENTED)**
+- [x] `Add` - via `create_emboss`
 
 #### Lips Collection (2 methods)
 - [x] `Add` - via `create_lip`
@@ -309,7 +308,7 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 ### 1.8 Sheet Metal Features
 
 #### Flanges Collection (9 Add methods)
-- [ ] `Add` - **Flange on edge (NOT IMPLEMENTED)**
+- [x] `Add` - via `create_flange`
 - [ ] `AddByMatchFace` - Flange matching adjacent face
 - [ ] `AddSync` - Sync flange
 - [ ] `AddFlangeByFace` - Flange from face
@@ -668,7 +667,7 @@ Key interfaces for precise geometry queries:
 
 ## Part 6: Priority Implementation Roadmap
 
-### Tier 1: HIGH IMPACT, LIKELY FEASIBLE (14 tools) - ✅ 12/14 IMPLEMENTED
+### Tier 1: HIGH IMPACT, LIKELY FEASIBLE (14 tools) - ✅ 14/14 COMPLETE
 
 These fill critical gaps and use proven API patterns:
 
@@ -678,12 +677,12 @@ These fill critical gaps and use proven API patterns:
 | 2 | `create_helix_cutout` | HelixCutouts.AddFinite | ✅ Implemented |
 | 3 | `create_variable_round` | Rounds.AddVariable | ✅ Implemented |
 | 4 | `create_blend` | Blends.Add | ✅ Implemented |
-| 5 | `create_emboss` | EmbossFeatures.Add | ⏳ Pending (requires face selection) |
+| 5 | `create_emboss` | EmbossFeatures.Add | ✅ Implemented |
 | 6 | `create_ref_plane_by_angle` | RefPlanes.AddAngularByAngle | ✅ Implemented |
 | 7 | `create_ref_plane_by_3_points` | RefPlanes.AddBy3Points | ✅ Implemented |
 | 8 | `create_ref_plane_midplane` | RefPlanes.AddMidPlane | ✅ Implemented |
 | 9 | `create_hole_through_all` | ExtrudedCutouts.AddThroughAllMulti | ✅ Implemented |
-| 10 | `create_flange` | Flanges.Add | ⏳ Pending (requires edge selection) |
+| 10 | `create_flange` | Flanges.Add | ✅ Implemented |
 | 11 | `add_variable` | Variables.Add | ✅ Implemented |
 | 12 | `select_add` | SelectSet.Add | ✅ Implemented |
 | 13 | `create_box_cutout` | BoxFeatures.AddCutoutByTwoPoints | ✅ Implemented |

@@ -8,6 +8,8 @@ from typing import Dict, Any
 import math
 import traceback
 
+from .constants import FaceQueryConstants, ModelingModeConstants
+
 
 class QueryManager:
     """Manages query and inspection operations"""
@@ -721,7 +723,7 @@ class QueryManager:
                     pass
 
             # Now enumerate all faces
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             face_list = []
 
             for i in range(1, faces.Count + 1):
@@ -771,7 +773,7 @@ class QueryManager:
             doc, model = self._get_first_model()
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             total_edges = 0
             face_edges = []
 
@@ -814,7 +816,7 @@ class QueryManager:
             doc, model = self._get_first_model()
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
 
@@ -1019,8 +1021,12 @@ class QueryManager:
 
             try:
                 mode = doc.ModelingMode
-                # seModelingModeOrdered = 1, seModelingModeSynchronous = 2
-                mode_name = "ordered" if mode == 1 else "synchronous" if mode == 2 else f"unknown ({mode})"
+                if mode == ModelingModeConstants.seModelingModeSynchronous:
+                    mode_name = "synchronous"
+                elif mode == ModelingModeConstants.seModelingModeOrdered:
+                    mode_name = "ordered"
+                else:
+                    mode_name = f"unknown ({mode})"
                 return {
                     "mode": mode_name,
                     "mode_value": mode
@@ -1047,8 +1053,8 @@ class QueryManager:
             doc = self.doc_manager.get_active_document()
 
             mode_map = {
-                "ordered": 1,      # seModelingModeOrdered
-                "synchronous": 2,  # seModelingModeSynchronous
+                "ordered": ModelingModeConstants.seModelingModeOrdered,
+                "synchronous": ModelingModeConstants.seModelingModeSynchronous,
             }
 
             mode_value = mode_map.get(mode.lower())
@@ -1061,8 +1067,8 @@ class QueryManager:
                 new_mode = doc.ModelingMode
                 return {
                     "status": "changed",
-                    "old_mode": "ordered" if old_mode == 1 else "synchronous",
-                    "new_mode": "ordered" if new_mode == 1 else "synchronous"
+                    "old_mode": "ordered" if old_mode == ModelingModeConstants.seModelingModeOrdered else "synchronous",
+                    "new_mode": "ordered" if new_mode == ModelingModeConstants.seModelingModeOrdered else "synchronous"
                 }
             except Exception as e:
                 return {"error": f"Cannot change modeling mode: {e}"}
@@ -1243,7 +1249,7 @@ class QueryManager:
                     return {"error": "No model features exist"}
                 model = models.Item(1)
                 body = model.Body
-                faces = body.Faces(1)  # igQueryAll = 1
+                faces = body.Faces(FaceQueryConstants.igQueryAll)
                 if index < 0 or index >= faces.Count:
                     return {"error": f"Invalid face index: {index}. Count: {faces.Count}"}
                 obj = faces.Item(index + 1)
@@ -1369,7 +1375,7 @@ class QueryManager:
             doc, model = self._get_first_model()
             body = model.Body
 
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             total_edges = 0
 
             for fi in range(1, faces.Count + 1):
@@ -1579,7 +1585,7 @@ class QueryManager:
         try:
             doc, model = self._get_first_model()
             body = model.Body
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {
@@ -1624,7 +1630,7 @@ class QueryManager:
                 pass
 
             # Fallback: sum face areas
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             total_area = 0.0
             for i in range(1, faces.Count + 1):
                 try:
@@ -1678,7 +1684,7 @@ class QueryManager:
         try:
             doc, model = self._get_first_model()
             body = model.Body
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
             return {
                 "face_count": faces.Count
             }
@@ -1702,7 +1708,7 @@ class QueryManager:
         try:
             doc, model = self._get_first_model()
             body = model.Body
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
@@ -1762,7 +1768,7 @@ class QueryManager:
         try:
             doc, model = self._get_first_model()
             body = model.Body
-            faces = body.Faces(1)  # igQueryAll = 1
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}

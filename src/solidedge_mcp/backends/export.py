@@ -7,7 +7,7 @@ Handles exporting to various formats and creating drawings.
 from typing import Dict, Any, Optional, List
 import os
 import traceback
-from .constants import ViewOrientationConstants
+from .constants import DrawingViewOrientationConstants, RenderModeConstants
 
 
 class ExportManager:
@@ -185,16 +185,15 @@ class ExportManager:
             if views is None:
                 views = ['Front', 'Top', 'Right', 'Isometric']
 
-            # View orientation constants (Solid Edge ViewOrientationConstants)
             view_orient_map = {
-                'Front': 5,       # igFrontView
-                'Back': 8,        # igBackView
-                'Top': 6,         # igTopView
-                'Bottom': 9,      # igBottomView
-                'Right': 7,       # igRightView
-                'Left': 10,       # igLeftView
-                'Isometric': 12,  # igISOView
-                'Iso': 12,
+                'Front': DrawingViewOrientationConstants.Front,
+                'Back': DrawingViewOrientationConstants.Back,
+                'Top': DrawingViewOrientationConstants.Top,
+                'Bottom': DrawingViewOrientationConstants.Bottom,
+                'Right': DrawingViewOrientationConstants.Right,
+                'Left': DrawingViewOrientationConstants.Left,
+                'Isometric': DrawingViewOrientationConstants.Isometric,
+                'Iso': DrawingViewOrientationConstants.Isometric,
             }
 
             # Create a new draft document
@@ -1132,12 +1131,11 @@ class ViewModel:
             if not view_obj:
                 return {"error": "Cannot access view object"}
 
-            # Map mode names to seRenderMode constants (from type library)
             mode_map = {
-                "Wireframe": 1,           # seRenderModeWireframe
-                "Shaded": 8,              # seRenderModeSmooth
-                "ShadedWithEdges": 11,    # seRenderModeSmoothBoundary
-                "HiddenEdgesVisible": 6,  # seRenderModeVHL
+                "Wireframe": RenderModeConstants.seRenderModeWireframe,
+                "Shaded": RenderModeConstants.seRenderModeSmooth,
+                "ShadedWithEdges": RenderModeConstants.seRenderModeSmoothBoundary,
+                "HiddenEdgesVisible": RenderModeConstants.seRenderModeVHL,
             }
 
             mode_value = mode_map.get(mode)

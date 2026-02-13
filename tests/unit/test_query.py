@@ -515,19 +515,19 @@ class TestGetSolidBodies:
 # ============================================================================
 
 class TestGetModelingMode:
-    def test_ordered(self, query_mgr):
-        qm, doc = query_mgr
-        doc.ModelingMode = 1
-
-        result = qm.get_modeling_mode()
-        assert result["mode"] == "ordered"
-
     def test_synchronous(self, query_mgr):
         qm, doc = query_mgr
-        doc.ModelingMode = 2
+        doc.ModelingMode = 1  # seModelingModeSynchronous = 1
 
         result = qm.get_modeling_mode()
         assert result["mode"] == "synchronous"
+
+    def test_ordered(self, query_mgr):
+        qm, doc = query_mgr
+        doc.ModelingMode = 2  # seModelingModeOrdered = 2
+
+        result = qm.get_modeling_mode()
+        assert result["mode"] == "ordered"
 
 
 class TestSetModelingMode:
