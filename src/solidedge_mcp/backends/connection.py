@@ -276,3 +276,24 @@ class SolidEdgeConnection:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    def do_idle(self) -> Dict[str, Any]:
+        """
+        Allow Solid Edge to process pending operations.
+
+        Calls Application.DoIdle() to give Solid Edge a chance to complete
+        background processing. Useful after batch operations or before
+        querying results that depend on recomputation.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.DoIdle()
+            return {"status": "success"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }

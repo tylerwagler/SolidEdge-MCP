@@ -1122,6 +1122,25 @@ def create_ref_plane_by_offset(
     return feature_manager.create_ref_plane_by_offset(parent_plane_index, distance, normal_side)
 
 
+@mcp.tool()
+def create_ref_plane_normal_to_curve(curve_end: str = "End",
+                                      pivot_plane_index: int = 2) -> dict:
+    """
+    Create a reference plane normal (perpendicular) to a curve at its endpoint.
+
+    Useful for creating sweep cross-section sketches perpendicular to a path.
+    Requires an active sketch profile that defines the curve.
+
+    Args:
+        curve_end: Which end of the curve to place the plane at - 'Start' or 'End'
+        pivot_plane_index: 1-based index of the pivot reference plane (default: 2 = Front)
+
+    Returns:
+        Reference plane creation status with new plane index
+    """
+    return feature_manager.create_ref_plane_normal_to_curve(curve_end, pivot_plane_index)
+
+
 # ============================================================================
 # ROUNDS, CHAMFERS, AND HOLES
 # ============================================================================
@@ -1224,6 +1243,46 @@ def create_chamfer_on_face(distance: float, face_index: int) -> dict:
 
 
 @mcp.tool()
+def create_chamfer_unequal(distance1: float, distance2: float,
+                           face_index: int = 0) -> dict:
+    """
+    Create a chamfer with two different setback distances.
+
+    Creates an asymmetric chamfer where each side has a different setback.
+    Requires a reference face to determine which direction each distance applies.
+
+    Args:
+        distance1: First setback distance in meters
+        distance2: Second setback distance in meters
+        face_index: 0-based face index for the reference face
+
+    Returns:
+        Chamfer creation status with edge count
+    """
+    return feature_manager.create_chamfer_unequal(distance1, distance2, face_index)
+
+
+@mcp.tool()
+def create_chamfer_angle(distance: float, angle: float,
+                         face_index: int = 0) -> dict:
+    """
+    Create a chamfer defined by a setback distance and an angle.
+
+    Instead of two distances, this chamfer type uses one distance and an angle
+    to define the cut profile.
+
+    Args:
+        distance: Setback distance in meters
+        angle: Chamfer angle in degrees
+        face_index: 0-based face index for the reference face
+
+    Returns:
+        Chamfer creation status with edge count
+    """
+    return feature_manager.create_chamfer_angle(distance, angle, face_index)
+
+
+@mcp.tool()
 def delete_faces(face_indices: list) -> dict:
     """
     Delete faces from the model body.
@@ -1239,6 +1298,69 @@ def delete_faces(face_indices: list) -> dict:
         Deletion status
     """
     return feature_manager.delete_faces(face_indices)
+
+
+@mcp.tool()
+def create_face_rotate_by_edge(face_index: int, edge_index: int,
+                                angle: float) -> dict:
+    """
+    Rotate a face around an edge axis.
+
+    Tilts a face by rotating it around a specified edge. Useful for
+    creating draft angles or adjusting face orientations on existing geometry.
+
+    Args:
+        face_index: 0-based face index to rotate
+        edge_index: 0-based edge index on that face to use as rotation axis
+        angle: Rotation angle in degrees
+
+    Returns:
+        Face rotate creation status
+    """
+    return feature_manager.create_face_rotate_by_edge(face_index, edge_index, angle)
+
+
+@mcp.tool()
+def create_face_rotate_by_points(face_index: int,
+                                  vertex1_index: int, vertex2_index: int,
+                                  angle: float) -> dict:
+    """
+    Rotate a face around an axis defined by two vertex points.
+
+    Defines the rotation axis by selecting two vertices on the face.
+    Use get_body_faces() and topology queries to find vertex indices.
+
+    Args:
+        face_index: 0-based face index to rotate
+        vertex1_index: 0-based index of first vertex defining rotation axis
+        vertex2_index: 0-based index of second vertex defining rotation axis
+        angle: Rotation angle in degrees
+
+    Returns:
+        Face rotate creation status
+    """
+    return feature_manager.create_face_rotate_by_points(
+        face_index, vertex1_index, vertex2_index, angle)
+
+
+@mcp.tool()
+def create_draft_angle(face_index: int, angle: float,
+                       plane_index: int = 1) -> dict:
+    """
+    Add a draft angle to a face.
+
+    Draft angles are used in injection molding to facilitate part removal
+    from the mold. The draft is applied relative to a reference plane.
+
+    Args:
+        face_index: 0-based face index to apply draft to
+        angle: Draft angle in degrees
+        plane_index: 1-based reference plane index for draft direction (default: 1 = Top)
+
+    Returns:
+        Draft angle creation status
+    """
+    return feature_manager.create_draft_angle(face_index, angle, plane_index)
 
 
 # ============================================================================
@@ -2507,6 +2629,21 @@ def set_performance_mode(
     return connection.set_performance_mode(
         delay_compute, screen_updating, interactive, display_alerts
     )
+
+
+@mcp.tool()
+def do_idle() -> dict:
+    """
+    Allow Solid Edge to process pending operations.
+
+    Calls Application.DoIdle() to give Solid Edge a chance to complete
+    background processing. Useful after batch operations or before
+    querying results that depend on recomputation.
+
+    Returns:
+        Success status
+    """
+    return connection.do_idle()
 
 
 @mcp.tool()

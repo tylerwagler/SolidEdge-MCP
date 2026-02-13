@@ -3096,3 +3096,368 @@ class FeatureManager:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    # =================================================================
+    # UNEQUAL CHAMFER
+    # =================================================================
+
+    def create_chamfer_unequal(self, distance1: float, distance2: float,
+                               face_index: int = 0) -> Dict[str, Any]:
+        """
+        Create a chamfer with two different setback distances.
+
+        Unlike equal chamfer, this creates an asymmetric chamfer where each side
+        has a different setback. Requires a reference face to determine direction.
+
+        Args:
+            distance1: First setback distance in meters
+            distance2: Second setback distance in meters
+            face_index: 0-based face index for the reference face
+
+        Returns:
+            Dict with status and chamfer info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to add chamfers to"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(1)  # igQueryAll = 1
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+            face_edges = face.Edges
+            if not hasattr(face_edges, 'Count') or face_edges.Count == 0:
+                return {"error": f"Face {face_index} has no edges"}
+
+            edge_list = []
+            for ei in range(1, face_edges.Count + 1):
+                edge_list.append(face_edges.Item(ei))
+
+            chamfers = model.Chamfers
+            chamfer = chamfers.AddUnequalSetback(
+                face, len(edge_list), edge_list, distance1, distance2)
+
+            return {
+                "status": "created",
+                "type": "chamfer_unequal",
+                "distance1": distance1,
+                "distance2": distance2,
+                "face_index": face_index,
+                "edge_count": len(edge_list)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # ANGLE CHAMFER
+    # =================================================================
+
+    def create_chamfer_angle(self, distance: float, angle: float,
+                             face_index: int = 0) -> Dict[str, Any]:
+        """
+        Create a chamfer defined by a setback distance and an angle.
+
+        Args:
+            distance: Setback distance in meters
+            angle: Chamfer angle in degrees
+            face_index: 0-based face index for the reference face
+
+        Returns:
+            Dict with status and chamfer info
+        """
+        try:
+            import math
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to add chamfers to"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(1)  # igQueryAll = 1
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+            face_edges = face.Edges
+            if not hasattr(face_edges, 'Count') or face_edges.Count == 0:
+                return {"error": f"Face {face_index} has no edges"}
+
+            edge_list = []
+            for ei in range(1, face_edges.Count + 1):
+                edge_list.append(face_edges.Item(ei))
+
+            chamfers = model.Chamfers
+            angle_rad = math.radians(angle)
+            chamfer = chamfers.AddSetbackAngle(
+                face, len(edge_list), edge_list, distance, angle_rad)
+
+            return {
+                "status": "created",
+                "type": "chamfer_angle",
+                "distance": distance,
+                "angle_degrees": angle,
+                "face_index": face_index,
+                "edge_count": len(edge_list)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # FACE ROTATE
+    # =================================================================
+
+    def create_face_rotate_by_edge(self, face_index: int, edge_index: int,
+                                    angle: float) -> Dict[str, Any]:
+        """
+        Rotate a face around an edge axis.
+
+        Tilts a face by rotating it around a specified edge. Useful for
+        creating draft angles or adjusting face orientations.
+
+        Args:
+            face_index: 0-based face index to rotate
+            edge_index: 0-based edge index to use as rotation axis
+            angle: Rotation angle in degrees
+
+        Returns:
+            Dict with status and face rotate info
+        """
+        try:
+            import math
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to rotate faces on"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(1)  # igQueryAll = 1
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+
+            # Get edge from the face
+            face_edges = face.Edges
+            if not hasattr(face_edges, 'Count') or face_edges.Count == 0:
+                return {"error": f"Face {face_index} has no edges"}
+            if edge_index < 0 or edge_index >= face_edges.Count:
+                return {"error": f"Invalid edge index: {edge_index}. Face has {face_edges.Count} edges."}
+
+            edge = face_edges.Item(edge_index + 1)
+
+            angle_rad = math.radians(angle)
+
+            face_rotates = model.FaceRotates
+            # igFaceRotateByGeometry = 1, igFaceRotateRecreateBlends = 1, igFaceRotateAxisEnd = 2
+            face_rotate = face_rotates.Add(
+                face, 1, 1, None, None, edge, 2, angle_rad)
+
+            return {
+                "status": "created",
+                "type": "face_rotate",
+                "method": "by_edge",
+                "face_index": face_index,
+                "edge_index": edge_index,
+                "angle_degrees": angle
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_face_rotate_by_points(self, face_index: int,
+                                      vertex1_index: int, vertex2_index: int,
+                                      angle: float) -> Dict[str, Any]:
+        """
+        Rotate a face around an axis defined by two vertex points.
+
+        Args:
+            face_index: 0-based face index to rotate
+            vertex1_index: 0-based index of first vertex defining rotation axis
+            vertex2_index: 0-based index of second vertex defining rotation axis
+            angle: Rotation angle in degrees
+
+        Returns:
+            Dict with status and face rotate info
+        """
+        try:
+            import math
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to rotate faces on"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(1)  # igQueryAll = 1
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+
+            # Get vertices from the face
+            vertices = face.Vertices
+            if vertex1_index < 0 or vertex1_index >= vertices.Count:
+                return {"error": f"Invalid vertex1 index: {vertex1_index}. Face has {vertices.Count} vertices."}
+            if vertex2_index < 0 or vertex2_index >= vertices.Count:
+                return {"error": f"Invalid vertex2 index: {vertex2_index}. Face has {vertices.Count} vertices."}
+
+            point1 = vertices.Item(vertex1_index + 1)
+            point2 = vertices.Item(vertex2_index + 1)
+
+            angle_rad = math.radians(angle)
+
+            face_rotates = model.FaceRotates
+            # igFaceRotateByPoints = 2, igFaceRotateRecreateBlends = 1, igFaceRotateNone = 0
+            face_rotate = face_rotates.Add(
+                face, 2, 1, point1, point2, None, 0, angle_rad)
+
+            return {
+                "status": "created",
+                "type": "face_rotate",
+                "method": "by_points",
+                "face_index": face_index,
+                "vertex1_index": vertex1_index,
+                "vertex2_index": vertex2_index,
+                "angle_degrees": angle
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # DRAFT ANGLE
+    # =================================================================
+
+    def create_draft_angle(self, face_index: int, angle: float,
+                           plane_index: int = 1) -> Dict[str, Any]:
+        """
+        Add a draft angle to a face.
+
+        Draft angles are used in injection molding to facilitate part removal
+        from the mold. Uses the model.Drafts collection.
+
+        Args:
+            face_index: 0-based face index to apply draft to
+            angle: Draft angle in degrees
+            plane_index: 1-based reference plane index for draft direction (default: 1 = Top)
+
+        Returns:
+            Dict with status and draft info
+        """
+        try:
+            import math
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to add draft to"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(1)  # igQueryAll = 1
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+            ref_plane = doc.RefPlanes.Item(plane_index)
+
+            angle_rad = math.radians(angle)
+
+            # igRight = 2 (draft direction side)
+            drafts = model.Drafts
+            draft = drafts.Add(ref_plane, 1, [face], [angle_rad], 2)
+
+            return {
+                "status": "created",
+                "type": "draft_angle",
+                "face_index": face_index,
+                "angle_degrees": angle,
+                "plane_index": plane_index
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    # =================================================================
+    # REFERENCE PLANE NORMAL TO CURVE
+    # =================================================================
+
+    def create_ref_plane_normal_to_curve(self, curve_end: str = "End",
+                                         pivot_plane_index: int = 2) -> Dict[str, Any]:
+        """
+        Create a reference plane normal (perpendicular) to a curve at its endpoint.
+
+        Useful for creating sweep cross-section sketches perpendicular to a path.
+        Requires an active sketch profile that defines the curve.
+
+        Args:
+            curve_end: Which end of the curve to place the plane at - 'Start' or 'End'
+            pivot_plane_index: 1-based index of the pivot reference plane (default: 2 = Front)
+
+        Returns:
+            Dict with status and new plane index
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+
+            ref_planes = doc.RefPlanes
+            pivot_plane = ref_planes.Item(pivot_plane_index)
+
+            # igCurveEnd = 2, igCurveStart = 1
+            curve_end_const = 2 if curve_end == "End" else 1
+            # igPivotEnd = 2
+            pivot_end_const = 2
+
+            new_plane = ref_planes.AddNormalToCurve(
+                profile, curve_end_const, pivot_plane, pivot_end_const, True)
+
+            new_index = ref_planes.Count
+
+            return {
+                "status": "created",
+                "type": "ref_plane_normal_to_curve",
+                "curve_end": curve_end,
+                "pivot_plane_index": pivot_plane_index,
+                "new_plane_index": new_index
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }

@@ -939,3 +939,326 @@ class TestCreateExtrudedSurface:
 
         result = fm.create_extruded_surface(0.05)
         assert "error" in result
+
+
+# ============================================================================
+# UNEQUAL CHAMFER
+# ============================================================================
+
+class TestChamferUnequal:
+    def _make_fm_with_body(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        model = MagicMock()
+        doc.Models.Count = 1
+        doc.Models.Item.return_value = model
+        body = MagicMock()
+        model.Body = body
+
+        edge1, edge2 = MagicMock(), MagicMock()
+        face = MagicMock()
+        face_edges = MagicMock()
+        face_edges.Count = 2
+        face_edges.Item.side_effect = lambda i: [None, edge1, edge2][i]
+        face.Edges = face_edges
+
+        faces = MagicMock()
+        faces.Count = 3
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        return fm, model, face
+
+    def test_success(self):
+        fm, model, face = self._make_fm_with_body()
+        result = fm.create_chamfer_unequal(0.009, 0.001, face_index=0)
+        assert result["status"] == "created"
+        assert result["type"] == "chamfer_unequal"
+        assert result["distance1"] == 0.009
+        assert result["distance2"] == 0.001
+        model.Chamfers.AddUnequalSetback.assert_called_once()
+
+    def test_no_features(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        doc.Models.Count = 0
+        result = fm.create_chamfer_unequal(0.009, 0.001)
+        assert "error" in result
+
+
+# ============================================================================
+# ANGLE CHAMFER
+# ============================================================================
+
+class TestChamferAngle:
+    def _make_fm_with_body(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        model = MagicMock()
+        doc.Models.Count = 1
+        doc.Models.Item.return_value = model
+        body = MagicMock()
+        model.Body = body
+
+        edge1 = MagicMock()
+        face = MagicMock()
+        face_edges = MagicMock()
+        face_edges.Count = 1
+        face_edges.Item.return_value = edge1
+        face.Edges = face_edges
+
+        faces = MagicMock()
+        faces.Count = 3
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        return fm, model, face
+
+    def test_success(self):
+        fm, model, face = self._make_fm_with_body()
+        result = fm.create_chamfer_angle(0.003, 45.0, face_index=0)
+        assert result["status"] == "created"
+        assert result["type"] == "chamfer_angle"
+        assert result["angle_degrees"] == 45.0
+        model.Chamfers.AddSetbackAngle.assert_called_once()
+
+    def test_no_features(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        doc.Models.Count = 0
+        result = fm.create_chamfer_angle(0.003, 45.0)
+        assert "error" in result
+
+
+# ============================================================================
+# FACE ROTATE BY EDGE
+# ============================================================================
+
+class TestFaceRotateByEdge:
+    def _make_fm_with_body(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        model = MagicMock()
+        doc.Models.Count = 1
+        doc.Models.Item.return_value = model
+        body = MagicMock()
+        model.Body = body
+
+        edge = MagicMock()
+        face = MagicMock()
+        face_edges = MagicMock()
+        face_edges.Count = 4
+        face_edges.Item.return_value = edge
+        face.Edges = face_edges
+
+        faces = MagicMock()
+        faces.Count = 6
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        return fm, model
+
+    def test_success(self):
+        fm, model = self._make_fm_with_body()
+        result = fm.create_face_rotate_by_edge(1, 0, 5.0)
+        assert result["status"] == "created"
+        assert result["type"] == "face_rotate"
+        assert result["method"] == "by_edge"
+        model.FaceRotates.Add.assert_called_once()
+
+    def test_invalid_face(self):
+        fm, model = self._make_fm_with_body()
+        result = fm.create_face_rotate_by_edge(10, 0, 5.0)
+        assert "error" in result
+
+    def test_no_features(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        doc.Models.Count = 0
+        result = fm.create_face_rotate_by_edge(0, 0, 5.0)
+        assert "error" in result
+
+
+# ============================================================================
+# FACE ROTATE BY POINTS
+# ============================================================================
+
+class TestFaceRotateByPoints:
+    def test_success(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        model = MagicMock()
+        doc.Models.Count = 1
+        doc.Models.Item.return_value = model
+        body = MagicMock()
+        model.Body = body
+
+        face = MagicMock()
+        v1, v2 = MagicMock(), MagicMock()
+        vertices = MagicMock()
+        vertices.Count = 4
+        vertices.Item.side_effect = lambda i: [None, v1, v2, MagicMock(), MagicMock()][i]
+        face.Vertices = vertices
+
+        faces = MagicMock()
+        faces.Count = 6
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        result = fm.create_face_rotate_by_points(0, 0, 1, 5.0)
+        assert result["status"] == "created"
+        assert result["method"] == "by_points"
+        model.FaceRotates.Add.assert_called_once()
+
+    def test_no_features(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        doc.Models.Count = 0
+        result = fm.create_face_rotate_by_points(0, 0, 1, 5.0)
+        assert "error" in result
+
+
+# ============================================================================
+# DRAFT ANGLE
+# ============================================================================
+
+class TestDraftAngle:
+    def test_success(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        model = MagicMock()
+        doc.Models.Count = 1
+        doc.Models.Item.return_value = model
+        body = MagicMock()
+        model.Body = body
+
+        face = MagicMock()
+        faces = MagicMock()
+        faces.Count = 6
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        ref_plane = MagicMock()
+        doc.RefPlanes.Item.return_value = ref_plane
+
+        result = fm.create_draft_angle(0, 3.0, plane_index=1)
+        assert result["status"] == "created"
+        assert result["type"] == "draft_angle"
+        assert result["angle_degrees"] == 3.0
+        model.Drafts.Add.assert_called_once()
+
+    def test_no_features(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        doc.Models.Count = 0
+        result = fm.create_draft_angle(0, 3.0)
+        assert "error" in result
+
+
+# ============================================================================
+# REF PLANE NORMAL TO CURVE
+# ============================================================================
+
+class TestRefPlaneNormalToCurve:
+    def test_success(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+
+        doc = MagicMock()
+        dm.get_active_document.return_value = doc
+        profile = MagicMock()
+        sm.get_active_sketch.return_value = profile
+
+        pivot_plane = MagicMock()
+        doc.RefPlanes.Item.return_value = pivot_plane
+        doc.RefPlanes.Count = 4
+
+        result = fm.create_ref_plane_normal_to_curve("End", 2)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_normal_to_curve"
+        assert result["new_plane_index"] == 4
+        doc.RefPlanes.AddNormalToCurve.assert_called_once()
+
+    def test_no_profile(self):
+        from solidedge_mcp.backends.features import FeatureManager
+        dm = MagicMock()
+        sm = MagicMock()
+        fm = FeatureManager(dm, sm)
+
+        dm.get_active_document.return_value = MagicMock()
+        sm.get_active_sketch.return_value = None
+
+        result = fm.create_ref_plane_normal_to_curve()
+        assert "error" in result
+
+
+# ============================================================================
+# DO IDLE
+# ============================================================================
+
+class TestDoIdle:
+    def test_success(self):
+        from solidedge_mcp.backends.connection import SolidEdgeConnection
+        cm = SolidEdgeConnection()
+        cm._is_connected = True
+        cm.application = MagicMock()
+
+        result = cm.do_idle()
+        assert result["status"] == "success"
+        cm.application.DoIdle.assert_called_once()
+
+    def test_not_connected(self):
+        from solidedge_mcp.backends.connection import SolidEdgeConnection
+        cm = SolidEdgeConnection()
+        cm._is_connected = False
+        cm.application = None
+
+        result = cm.do_idle()
+        assert "error" in result

@@ -10,7 +10,7 @@
 
 | Metric | Count |
 |--------|-------|
-| **Our implemented MCP tools** | 211 |
+| **Our implemented MCP tools** | 218 |
 | **API operations found in community repos** | 250+ |
 | **Operations we're missing** | ~20 |
 | **High-priority gaps remaining** | ~3 |
@@ -173,7 +173,7 @@
 | Loft thin-wall | `Models.AddLoftedProtrusionWithThinWall(...)` | YES (untested) | Untested | — |
 | Sweep | `Models.AddSweptProtrusion(...)` | YES | Working | Samples |
 | Sweep thin-wall | `Models.AddSweptProtrusionWithThinWall(...)` | YES (untested) | Untested | — |
-| Ref plane normal to curve | `RefPlanes.AddNormalToCurve(...)` | NO | **Available** | Samples |
+| Ref plane normal to curve | `RefPlanes.AddNormalToCurve(...)` | YES | Working | Samples |
 
 ## 9. Rounds, Chamfers, Fillets
 
@@ -183,8 +183,8 @@
 | Round on specific face | `Rounds.Add` with face-specific edges | YES | Working | — |
 | Chamfer - equal setback | `Chamfers.AddEqualSetback(count, edges, distance)` | YES | Working | Samples |
 | Chamfer on specific face | `Chamfers.AddEqualSetback` with face-specific edges | YES | Working | — |
-| Chamfer - unequal setback | `Chamfers.AddUnequalSetback(face, count, edges, d1, d2)` | NO | **Available** | Samples |
-| Chamfer - setback + angle | `Chamfers.AddSetbackAngle(face, count, edges, dist, angle)` | NO | **Available** | Samples |
+| Chamfer - unequal setback | `Chamfers.AddUnequalSetback(face, count, edges, d1, d2)` | YES | Working | Samples |
+| Chamfer - setback + angle | `Chamfers.AddSetbackAngle(face, count, edges, dist, angle)` | YES | Working | Samples |
 | Blend | `Blends.Add(...)` / `AddSurfaceBlend` / `AddVariable` | NO | Available | MEMORY |
 
 ## 10. Holes & Patterns
@@ -209,9 +209,9 @@
 | Lip | `Lips.Add(...)` | YES | Working | MEMORY |
 | Delete faces | `DeleteFaces.Add(faceSetToDelete)` | YES | Working | MEMORY |
 | Thicken feature | `Thickens.Add(side, thickness, faceCount, facesArray)` | YES (untested) | Untested | Samples |
-| Face rotate (by geometry) | `FaceRotates.Add(face, ByGeometry, ..., edge, ..., angle)` | NO | **Available** | Samples |
-| Face rotate (by points) | `FaceRotates.Add(face, ByPoints, ..., pt1, pt2, ..., angle)` | NO | **Available** | Samples |
-| Draft angle | `Drafts.Add(plane, numSets, faceArray, draftAngleArray, side)` | NO | **Available** | MEMORY |
+| Face rotate (by geometry) | `FaceRotates.Add(face, ByGeometry, ..., edge, ..., angle)` | YES | Working | Samples |
+| Face rotate (by points) | `FaceRotates.Add(face, ByPoints, ..., pt1, pt2, ..., angle)` | YES | Working | Samples |
+| Draft angle | `Drafts.Add(plane, numSets, faceArray, draftAngleArray, side)` | YES | Working | MEMORY |
 | Emboss | `EmbossFeatures.Add(...)` | NO | Available | MEMORY |
 | Shell (thin wall) | Shell feature (requires face selection) | NO | Complex | — |
 | Suppress feature | `Feature.Suppress()` | YES | Working | — |
@@ -226,7 +226,7 @@
 |---|---|---|---|---|
 | Offset parallel plane | `RefPlanes.AddParallelByDistance(parent, dist, side)` | YES | Working | Samples |
 | List reference planes | `RefPlanes` iteration | YES | Working | — |
-| Normal to curve | `RefPlanes.AddNormalToCurve(curve, end, plane, pivot, ...)` | NO | **Available** | Samples |
+| Normal to curve | `RefPlanes.AddNormalToCurve(curve, end, plane, pivot, ...)` | YES | Working | Samples |
 | Get top plane | `RefPlanes.Item(1)` / `GetTopPlane()` | YES (internal) | Working | SDK |
 | Get front plane | `RefPlanes.Item(2)` / `GetFrontPlane()` | YES (internal) | Working | SDK |
 | Get right plane | `RefPlanes.Item(3)` / `GetRightPlane()` | YES (internal) | Working | SDK |
@@ -471,7 +471,7 @@ From `SolidEdge.Community.Reader` - reads OLE compound storage files directly.
 | Disable alerts | `Application.DisplayAlerts = false` | YES | Working | Samples |
 | Non-interactive mode | `Application.Interactive = false` | YES | Working | Samples |
 | Disable screen updates | `Application.ScreenUpdating = false` | YES | Working | Samples |
-| Do idle | `Application.DoIdle()` | NO | Available | Samples |
+| Do idle | `Application.DoIdle()` | YES | Working | Samples |
 
 ## 26. Feature Management
 
@@ -537,16 +537,12 @@ All Tier 1 and Tier 2 items are now fully implemented with MCP tool wrappers:
 
 | Operation | Effort | Impact |
 |---|---|---|
-| **Draft angle** (`Drafts.Add`) | Medium | Medium |
-| **Face rotate** | Medium | Low |
 | **Emboss** (`EmbossFeatures.Add`) | Medium | Low |
 | **Shell** (thin wall, complex face selection) | High | Medium |
 | **Export JT advanced** (17 params) | Low | Medium |
 | **Export EMF** (draft sheet) | Low | Medium |
 | **Assembly configurations** | Medium | Medium |
-| **Ref plane normal to curve** | Low | Medium |
-| **Extruded surfaces** (construction) | Medium | Low |
-| **Unequal chamfer / angle chamfer** | Low | Low |
+| **Blend** (`Blends.Add`) | Medium | Low |
 
 ### Tier 4: LOW PRIORITY / COMPLEX
 
@@ -606,11 +602,11 @@ Constraints                 8              8            100%
 Extrusions                  5              5            100%
 Revolves                    5              5            100%
 Cutouts                     6              6            100%
-Loft & Sweep                4              6            67%
-Rounds/Chamfers             4              7            57%
+Loft & Sweep                6              6            100%
+Rounds/Chamfers             6              7            86%
 Holes & Patterns            2              5            40%
-Advanced Features           12             18           67%
-Reference Planes            2              4            50%
+Advanced Features           15             18           83%
+Reference Planes            3              4            75%
 Primitives                  5              5            100%
 Sheet Metal                 12             14           86%
 Assembly                    21             28           75%
@@ -621,11 +617,11 @@ View & Display              5              5            100%
 Selection & UI              2              7            29%
 Properties                  6              9            67%
 Variables                   4              7            57%
-Performance                 4              5            80%
+Performance                 5              5            100%
 Feature Management          6              8            75%
 Topology Query              8              13           62%
 ─────────────────────────────────────────────────────────────
-TOTAL                       211            ~250         84%
+TOTAL                       218            ~250         87%
 ```
 
 ---
