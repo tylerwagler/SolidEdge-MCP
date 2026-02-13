@@ -2361,6 +2361,98 @@ class FeatureManager:
                 "traceback": traceback.format_exc()
             }
 
+    def delete_faces_no_heal(self, face_indices: List[int]) -> Dict[str, Any]:
+        """
+        Delete faces from the model body without healing.
+
+        Unlike delete_faces which attempts to heal/close resulting gaps,
+        this removes faces leaving the gap open. Useful when you need
+        to create deliberate openings.
+
+        Args:
+            face_indices: List of 0-based face indices to delete
+
+        Returns:
+            Dict with status and deletion info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No features exist to delete faces from"}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            if faces.Count == 0:
+                return {"error": "No faces on body"}
+
+            face_objs = []
+            for idx in face_indices:
+                if idx < 0 or idx >= faces.Count:
+                    return {"error": f"Invalid face index: {idx}. Body has {faces.Count} faces."}
+                face_objs.append(faces.Item(idx + 1))
+
+            delete_faces = model.DeleteFaces
+            result = delete_faces.AddNoHeal(len(face_objs), face_objs)
+
+            return {
+                "status": "created",
+                "type": "delete_faces_no_heal",
+                "face_count": len(face_indices),
+                "face_indices": face_indices
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def delete_hole_by_face(self, face_index: int) -> Dict[str, Any]:
+        """
+        Delete a specific hole by selecting its face.
+
+        Unlike create_delete_hole which deletes holes by type/size criteria,
+        this targets a specific hole identified by its face index.
+
+        Args:
+            face_index: 0-based face index of the hole to delete
+
+        Returns:
+            Dict with status and deletion info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            model = models.Item(1)
+            body = model.Body
+
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+
+            face = faces.Item(face_index + 1)
+
+            delete_holes = model.DeleteHoles
+            result_feat = delete_holes.AddByFace(face)
+
+            return {
+                "status": "created",
+                "type": "delete_hole_by_face",
+                "face_index": face_index
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     # =================================================================
     # ADDITIONAL SHEET METAL FEATURES
     # =================================================================
@@ -4245,6 +4337,140 @@ class FeatureManager:
                 "method": "by_two_points",
                 "corner1": [x1, y1, z1],
                 "corner2": [x2, y2, z2]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_box_cutout_by_center(
+        self,
+        center_x: float, center_y: float, center_z: float,
+        length: float, width: float, height: float
+    ) -> Dict[str, Any]:
+        """
+        Create a box-shaped cutout by center point and dimensions.
+
+        Removes a rectangular volume centered at the given point.
+        Requires an existing base feature.
+
+        Args:
+            center_x, center_y, center_z: Center point coordinates (meters)
+            length: Length in meters (X direction)
+            width: Width in meters (Y direction)
+            height: Height in meters (Z direction)
+
+        Returns:
+            Dict with status and cutout info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            top_plane = self._get_ref_plane(doc, 1)
+
+            box_features = models.BoxFeatures if hasattr(models, 'BoxFeatures') else None
+            if box_features is None:
+                model = models.Item(1)
+                box_features = model.BoxFeatures if hasattr(model, 'BoxFeatures') else None
+
+            if box_features is None:
+                return {"error": "BoxFeatures collection not accessible"}
+
+            cutout = box_features.AddCutoutByCenter(
+                center_x, center_y, center_z,
+                length,                         # dWidth
+                width,                          # dHeight
+                0,                              # dAngle
+                height,                         # dDepth
+                top_plane,                      # pPlane
+                DirectionConstants.igRight,     # ExtentSide
+                False,                          # vbKeyPointExtent
+                None,                           # pKeyPointObj
+                0                               # pKeyPointFlags
+            )
+
+            return {
+                "status": "created",
+                "type": "box_cutout",
+                "method": "by_center",
+                "center": [center_x, center_y, center_z],
+                "dimensions": {"length": length, "width": width, "height": height}
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def create_box_cutout_by_three_points(
+        self,
+        x1: float, y1: float, z1: float,
+        x2: float, y2: float, z2: float,
+        x3: float, y3: float, z3: float
+    ) -> Dict[str, Any]:
+        """
+        Create a box-shaped cutout by three points.
+
+        Removes a rectangular volume defined by three corner points.
+        Requires an existing base feature.
+
+        Args:
+            x1, y1, z1: First corner point (meters)
+            x2, y2, z2: Second point defining width (meters)
+            x3, y3, z3: Third point defining height (meters)
+
+        Returns:
+            Dict with status and cutout info
+        """
+        try:
+            import math
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+
+            top_plane = self._get_ref_plane(doc, 1)
+
+            dx = x2 - x1
+            dy = y2 - y1
+            depth = math.sqrt(dx * dx + dy * dy)
+            if depth == 0:
+                depth = 0.01
+
+            box_features = models.BoxFeatures if hasattr(models, 'BoxFeatures') else None
+            if box_features is None:
+                model = models.Item(1)
+                box_features = model.BoxFeatures if hasattr(model, 'BoxFeatures') else None
+
+            if box_features is None:
+                return {"error": "BoxFeatures collection not accessible"}
+
+            cutout = box_features.AddCutoutByThreePoints(
+                x1, y1, z1,
+                x2, y2, z2,
+                x3, y3, z3,
+                depth,                          # dDepth
+                top_plane,                      # pPlane
+                DirectionConstants.igRight,     # ExtentSide
+                False,                          # vbKeyPointExtent
+                None,                           # pKeyPointObj
+                0                               # pKeyPointFlags
+            )
+
+            return {
+                "status": "created",
+                "type": "box_cutout",
+                "method": "by_three_points",
+                "point1": [x1, y1, z1],
+                "point2": [x2, y2, z2],
+                "point3": [x3, y3, z3]
             }
         except Exception as e:
             return {

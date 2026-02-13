@@ -462,6 +462,31 @@ class TestDeleteFaces:
 
 
 # ============================================================================
+# DELETE FACES NO HEAL
+# ============================================================================
+
+class TestDeleteFacesNoHeal:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.delete_faces_no_heal([0])
+        assert result["status"] == "created"
+        assert result["type"] == "delete_faces_no_heal"
+        assert result["face_count"] == 1
+        model.DeleteFaces.AddNoHeal.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.delete_faces_no_heal([0])
+        assert "error" in result
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        result = feature_mgr.delete_faces_no_heal([99])
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+
+# ============================================================================
 # GET FEATURE INFO
 # ============================================================================
 
@@ -1624,6 +1649,65 @@ class TestBoxCutout:
 
 
 # ============================================================================
+# BOX CUTOUT BY CENTER
+# ============================================================================
+
+class TestBoxCutoutByCenter:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        ref_planes = MagicMock()
+        doc.RefPlanes = ref_planes
+        box_features = MagicMock()
+        models.BoxFeatures = box_features
+
+        result = feature_mgr.create_box_cutout_by_center(
+            0, 0, 0, 0.1, 0.1, 0.05
+        )
+        assert result["status"] == "created"
+        assert result["type"] == "box_cutout"
+        assert result["method"] == "by_center"
+        assert result["center"] == [0, 0, 0]
+        box_features.AddCutoutByCenter.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_box_cutout_by_center(0, 0, 0, 1, 1, 1)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BOX CUTOUT BY THREE POINTS
+# ============================================================================
+
+class TestBoxCutoutByThreePoints:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        ref_planes = MagicMock()
+        doc.RefPlanes = ref_planes
+        box_features = MagicMock()
+        models.BoxFeatures = box_features
+
+        result = feature_mgr.create_box_cutout_by_three_points(
+            0, 0, 0, 0.1, 0, 0, 0, 0.1, 0
+        )
+        assert result["status"] == "created"
+        assert result["type"] == "box_cutout"
+        assert result["method"] == "by_three_points"
+        box_features.AddCutoutByThreePoints.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_box_cutout_by_three_points(
+            0, 0, 0, 1, 0, 0, 0, 1, 0
+        )
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
 # TIER 1: CYLINDER CUTOUT
 # ============================================================================
 
@@ -1768,6 +1852,32 @@ class TestDeleteHole:
         result = feature_mgr.create_delete_hole()
         assert "error" in result
         assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# DELETE HOLE BY FACE
+# ============================================================================
+
+class TestDeleteHoleByFace:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.delete_hole_by_face(0)
+        assert result["status"] == "created"
+        assert result["type"] == "delete_hole_by_face"
+        assert result["face_index"] == 0
+        model.DeleteHoles.AddByFace.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.delete_hole_by_face(0)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        result = feature_mgr.delete_hole_by_face(99)
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
 
 
 # ============================================================================

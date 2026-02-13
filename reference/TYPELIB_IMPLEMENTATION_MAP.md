@@ -1,33 +1,32 @@
 # Solid Edge Type Library Implementation Map
 
 Generated: 2026-02-12 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 254 MCP tools implemented
+Current: 258 MCP tools implemented
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
 
 ## Coverage Summary
 
-|       Category        |       Available       |  Implemented  | Coverage  | Priority  |
-|-----------------------|-----------------------|---------------|-----------|-----------|
-|   **Part Features**   |    42     collections |       41      |    98%    |   HIGH    |
-|     **Assembly**      |    18  key interfaces |       14      |    78%    |   HIGH    |
-|   **Draft/Drawing**   |    15  key interfaces |        9      |    60%    |  MEDIUM   |
-|   **Framework/App**   |    12  key interfaces |       12      |   100%    |    LOW    |
-|  **Query/Topology**   |    25+        methods |       24      |    96%    |  MEDIUM   |
-|   **Export/Import**   |    12         formats |       10      |    83%    |    LOW    |
-|---------------------------------------------------------------------------------------|
-|      **Total **       |   124           items |      110      |    89%    |    --     |
-|---------------------------------------------------------------------------------------|
+|     Category      | Sections | Complete | Partial | Not Started | Methods (impl/total) |
+|-------------------|----------|----------|---------|-------------|----------------------|
+| **Part Features** |    52    |    15    |    28   |      9      |       71 / 181       |
+| **Assembly**      |    11    |     0    |     3   |      8      |       10 /  60       |
+| **Draft/Drawing** |     5    |     0    |     3   |      2      |       11 /  49       |
+| **Framework/App** |     7    |     0    |     6   |      1      |       22 /  53       |
+| **Total**         | **75**   |  **15**  |  **40** |   **20**    | **114 / 343 (33%)**  |
 
-## Tool Count by Category (252 total)
+**258 MCP tools** registered (many tools cover multiple methods or provide capabilities
+beyond what the type library tracks, e.g. primitives, view controls, export formats).
+
+## Tool Count by Category (258 total)
 
 | Category                  | Count | Tools |
 |:--------------------------|:-----:|:---|
 | **Connection**            | 7     | Connect, disconnect, app info, quit, is_connected, process_info, start_command |
 | **Document Management**   | 13    | Create (part, assembly, sheet metal, draft), open, save, close, list, activate, undo, redo |
 | **Sketching**             | 24    | Lines, circles, arcs (multiple), rects, polygons, ellipses, splines, points, constraints (9 types), fillet, chamfer, mirror, construction, hide profile, project_edge, include_edge |
-| **Basic Primitives**      | 8     | Box (3 variants), cylinder, sphere, box cutout, cylinder cutout, sphere cutout |
+| **Basic Primitives**      | 10    | Box (3 variants), cylinder, sphere, box cutout (3 variants), cylinder cutout, sphere cutout |
 | **Extrusions**            | 4     | Finite, infinite, thin-wall, extruded surface |
 | **Revolves**              | 5     | Basic, finite, sync, thin-wall |
 | **Cutouts**               | 9     | Extruded finite/through-all/through-next, revolved, normal/normal-through-all, lofted, swept, helix |
@@ -38,7 +37,7 @@ against our current MCP tool coverage. It identifies gaps and prioritizes what t
 | **Helix/Spiral**          | 4     | Basic, sync, thin-wall variants |
 | **Construction Surfaces** | 3     | Revolved surface, lofted surface, swept surface |
 | **Sheet Metal**           | 10    | Base flange/tab, lofted flange, web network, advanced variants, emboss, flange |
-| **Body Operations**       | 9     | Add body, thicken, mesh, tag, construction, delete holes, delete blends |
+| **Body Operations**       | 11    | Add body, thicken, mesh, tag, construction, delete faces (2), delete holes (2), delete blends |
 | **Simplification**        | 4     | Auto-simplify, enclosure, duplicate |
 | **View/Display**          | 7     | Orientation, zoom, display mode, background color, get/set camera |
 | **Variables**             | 5     | Get all, get by name, set value, add variable, query/search |
@@ -247,11 +246,11 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 
 #### DeleteFaces Collection (4 methods)
 - [x] `Add` - via `delete_faces`
-- [ ] `AddNoHeal` - Delete without healing
+- [x] `AddNoHeal` - via `delete_faces_no_heal`
 
 #### DeleteHoles Collection (3 methods)
 - [x] `Add` - via `create_delete_hole`
-- [ ] `AddByFace` - Delete holes by face
+- [x] `AddByFace` - via `delete_hole_by_face`
 
 #### DeleteBlends Collection (2 methods)
 - [x] `Add` - via `create_delete_blend`
@@ -293,9 +292,9 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 
 #### BoxFeatures Collection (7 methods)
 - [x] `AddByCenter` / `AddByTwoPoints` / `AddByThreePoints` - via box tools
-- [ ] `AddCutoutByCenter` - Box cutout by center
+- [x] `AddCutoutByCenter` - via `create_box_cutout_by_center`
 - [x] `AddCutoutByTwoPoints` - via `create_box_cutout`
-- [ ] `AddCutoutByThreePoints` - Box cutout by 3 points
+- [x] `AddCutoutByThreePoints` - via `create_box_cutout_by_three_points`
 
 #### CylinderFeatures Collection (3 methods)
 - [x] `AddByCenterAndRadius` - via `create_cylinder`
