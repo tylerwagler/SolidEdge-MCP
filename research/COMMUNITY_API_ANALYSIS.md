@@ -10,7 +10,7 @@
 
 | Metric | Count |
 |--------|-------|
-| **Our implemented MCP tools** | 200 |
+| **Our implemented MCP tools** | 202 |
 | **API operations found in community repos** | 250+ |
 | **Operations we're missing** | ~20 |
 | **High-priority gaps remaining** | ~3 |
@@ -62,8 +62,8 @@
 | Quit application | `Application.Quit()` | YES | Working | Interop |
 | Disconnect (release COM) | Release COM references | YES | Working | — |
 | Check connection status | Connection state check | YES | Working | — |
-| Get installation path | SEInstallData.dll | NO | Available | SDK |
-| Get installed language | `SEInstallData.GetInstalledLanguage()` | NO | Available | SDK |
+| Get process info (PID, hWnd) | `Application.ProcessID`, `Application.hWnd` | YES | Working | SDK |
+| Get installation info | `SEInstallData.GetInstalledPath/Language/Version` | YES | Working | SDK |
 
 ## 2. Document Management
 
@@ -599,7 +599,7 @@ All Tier 1 and Tier 2 items are now fully implemented with MCP tool wrappers:
 ```
 Category                    Implemented    Available    Coverage
 ─────────────────────────────────────────────────────────────
-Connection                  6              8            75%
+Connection                  8              8            100%
 Documents                   15             19           79%
 Sketching 2D                20             25           80%
 Constraints                 1 (stub)       8            13%
@@ -625,7 +625,7 @@ Performance                 4              5            80%
 Feature Management          6              8            75%
 Topology Query              8              13           62%
 ─────────────────────────────────────────────────────────────
-TOTAL                       200            ~250         80%
+TOTAL                       202            ~250         81%
 ```
 
 ---

@@ -94,6 +94,31 @@ def is_connected() -> dict:
     return {"connected": connection.is_connected()}
 
 
+@mcp.tool()
+def get_process_info() -> dict:
+    """
+    Get Solid Edge process information.
+
+    Returns:
+        Process ID and window handle of the running Solid Edge instance
+    """
+    return connection.get_process_info()
+
+
+@mcp.tool()
+def get_install_info() -> dict:
+    """
+    Get Solid Edge installation information.
+
+    Returns install path, language, and version from the SEInstallData library.
+    Falls back to Application.Path if the SEInstallData COM library is not available.
+
+    Returns:
+        Installation path, language, and version
+    """
+    return connection.get_install_info()
+
+
 # ============================================================================
 # DOCUMENT MANAGEMENT TOOLS
 # ============================================================================

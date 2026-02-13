@@ -1062,3 +1062,55 @@ class TestGetOccurrenceCount:
         del doc.Occurrences
         result = am.get_occurrence_count()
         assert "error" in result
+
+
+# ============================================================================
+# CONNECTION: GET PROCESS INFO
+# ============================================================================
+
+class TestGetProcessInfo:
+    def test_success(self):
+        from solidedge_mcp.backends.connection import SolidEdgeConnection
+        conn = SolidEdgeConnection()
+        conn._is_connected = True
+        conn.application = MagicMock()
+        conn.application.ProcessID = 12345
+        conn.application.hWnd = 67890
+
+        result = conn.get_process_info()
+        assert result["status"] == "success"
+        assert result["process_id"] == 12345
+        assert result["window_handle"] == 67890
+
+    def test_not_connected(self):
+        from solidedge_mcp.backends.connection import SolidEdgeConnection
+        conn = SolidEdgeConnection()
+
+        result = conn.get_process_info()
+        assert "error" in result
+
+
+# ============================================================================
+# CONNECTION: GET INSTALL INFO
+# ============================================================================
+
+class TestGetInstallInfo:
+    def test_fallback_to_app_path(self):
+        from solidedge_mcp.backends.connection import SolidEdgeConnection
+        conn = SolidEdgeConnection()
+        conn._is_connected = True
+        conn.application = MagicMock()
+        conn.application.Path = "C:\\Program Files\\Solid Edge"
+
+        # SEInstallData will fail (not registered in test env),
+        # so it should fall back to Application.Path
+        result = conn.get_install_info()
+        assert result["status"] == "success"
+        assert "install_path" in result
+
+    def test_no_connection_no_installdata(self):
+        from solidedge_mcp.backends.connection import SolidEdgeConnection
+        conn = SolidEdgeConnection()
+        # Not connected and SEInstallData won't work
+        result = conn.get_install_info()
+        assert "error" in result

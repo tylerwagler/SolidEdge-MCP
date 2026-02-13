@@ -144,6 +144,73 @@ class SolidEdgeConnection:
                 "traceback": traceback.format_exc()
             }
 
+    def get_process_info(self) -> Dict[str, Any]:
+        """
+        Get Solid Edge process information (PID, window handle).
+
+        Returns:
+            Dict with process_id and window_handle
+        """
+        try:
+            self.ensure_connected()
+            app = self.application
+
+            info = {}
+            try:
+                info["process_id"] = app.ProcessID
+            except Exception:
+                info["process_id"] = None
+
+            try:
+                info["window_handle"] = app.hWnd
+            except Exception:
+                info["window_handle"] = None
+
+            return {"status": "success", **info}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_install_info(self) -> Dict[str, Any]:
+        """
+        Get Solid Edge installation information (path, language).
+
+        Uses the SEInstallData COM library to read install location and language.
+
+        Returns:
+            Dict with install_path and language
+        """
+        try:
+            info = {}
+
+            try:
+                install_data = win32com.client.Dispatch("SEInstallDataLib.SEInstallData")
+                try:
+                    info["install_path"] = install_data.GetInstalledPath()
+                except Exception:
+                    pass
+                try:
+                    info["language"] = install_data.GetInstalledLanguage()
+                except Exception:
+                    pass
+                try:
+                    info["version"] = install_data.GetInstalledVersion()
+                except Exception:
+                    pass
+            except Exception:
+                # SEInstallData may not be registered; fall back to Application.Path
+                if self._is_connected and self.application is not None:
+                    try:
+                        info["install_path"] = self.application.Path
+                    except Exception:
+                        pass
+
+            if not info:
+                return {"error": "Could not retrieve installation info. SEInstallData COM library may not be registered."}
+
+            return {"status": "success", **info}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
     def set_performance_mode(
         self,
         delay_compute: bool = None,
