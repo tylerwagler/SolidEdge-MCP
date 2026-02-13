@@ -2,17 +2,21 @@
 
 AI-assisted CAD design through the [Model Context Protocol](https://modelcontextprotocol.io). Create, analyze, modify, and export Solid Edge models — all from your AI assistant.
 
+**252 MCP tools** | **404 unit tests** | Windows-only (COM automation)
+
 ## What It Does
 
-This MCP server gives AI assistants (Claude, etc.) access to Solid Edge CAD workflows:
+This MCP server gives AI assistants (Claude, etc.) full access to Solid Edge CAD workflows:
 
 - **Connect to Solid Edge** application via COM automation
-- **Create and manage** parts and assemblies
-- **Sketch 2D geometry** - lines, circles, arcs, rectangles, polygons
-- **Create 3D features** - extrude, revolve, sweep, loft
-- **Query and analyze** models - dimensions, mass properties, feature trees
-- **Export** models to various formats (STEP, STL, IGES, PDF, DXF)
-- **View control** - set viewpoints, zoom, fit
+- **Create and manage** parts, assemblies, sheet metal, and drafts
+- **Sketch 2D geometry** - lines, circles, arcs, rectangles, polygons, splines, constraints
+- **Create 3D features** - extrude, revolve, sweep, loft, helix, cutouts, rounds, chamfers, holes
+- **Query and analyze** models - dimensions, mass properties, feature trees, materials
+- **Assemblies** - place components, move/rotate, BOM, interference checks
+- **Draft/Drawing** - create views, annotations, parts lists
+- **Export** models to STEP, STL, IGES, PDF, DXF, Parasolid, JT
+- **View control** - set viewpoints, zoom, camera, display modes
 
 ## Quick Start
 
@@ -23,9 +27,30 @@ This MCP server gives AI assistants (Claude, etc.) access to Solid Edge CAD work
 uv sync --all-extras
 ```
 
-### Configure Your AI Client
+### Configure Claude Code CLI
 
-Add to your MCP client configuration (e.g. Claude Desktop `claude_desktop_config.json`):
+Add to your MCP configuration file at `~/.claude/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "solidedge": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:/path/to/SolidEdge_MCP",
+        "run",
+        "solidedge-mcp"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+### Configure Claude Desktop
+
+Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -44,6 +69,20 @@ Add to your MCP client configuration (e.g. Claude Desktop `claude_desktop_config
 uv run solidedge-mcp
 ```
 
+### Verify Setup
+
+1. Restart your AI client if it's running
+2. The SolidEdge MCP server will auto-start when needed
+3. Ask: "Connect to Solid Edge" to test
+
+### Troubleshooting
+
+If the server doesn't load:
+1. Check that `uv` is in your PATH
+2. Verify the directory path is correct
+3. Test manually: `uv --directory C:/path/to/SolidEdge_MCP run solidedge-mcp`
+4. Check your client's logs for errors
+
 ## Architecture
 
 ### COM Automation Backend
@@ -54,14 +93,15 @@ The server communicates with Solid Edge through Windows COM automation (pywin32)
 - **Document handling** - Create, open, save, close parts and assemblies
 - **Sketching** - 2D profile creation on reference planes
 - **Features** - 3D modeling operations (extrude, revolve, etc.)
-- **Query** - Extract geometry, dimensions, properties
+- **Assembly** - Component placement, constraints, patterns
+- **Query** - Extract geometry, dimensions, properties, materials
 - **Export** - Convert models to standard CAD formats
 
 ### Package Layout
 
 ```
 src/solidedge_mcp/
-├── server.py           # FastMCP server entry point
+├── server.py           # FastMCP server entry point (252 @mcp.tool() wrappers)
 ├── backends/           # COM automation implementations
 │   ├── connection.py   # Application connection management
 │   ├── documents.py    # Document operations
@@ -69,20 +109,9 @@ src/solidedge_mcp/
 │   ├── features.py     # 3D feature operations
 │   ├── assembly.py     # Assembly operations
 │   ├── query.py        # Model interrogation
-│   └── export.py       # Export operations
-├── tools/              # MCP tools (pending implementation)
-├── resources/          # MCP resources (pending implementation)
-├── prompts/            # MCP prompt templates (pending implementation)
-└── session/            # Session/undo management (pending implementation)
+│   ├── export.py       # Export and view operations
+│   └── constants.py    # Solid Edge API constants
 ```
-
-### Three-Pillar MCP Design
-
-Following the MCP specification, the server will expose:
-
-- **Tools**: Actions that create/modify models (create sketch, extrude, place component)
-- **Resources**: Read-only model data (feature list, component tree, mass properties)
-- **Prompts**: Conversation templates (design review, manufacturability check)
 
 ## Requirements
 
