@@ -1114,3 +1114,87 @@ class TestGetInstallInfo:
         # Not connected and SEInstallData won't work
         result = conn.get_install_info()
         assert "error" in result
+
+
+# ============================================================================
+# DOCUMENTS: OPEN IN BACKGROUND
+# ============================================================================
+
+class TestOpenInBackground:
+    @pytest.fixture
+    def doc_mgr(self):
+        from solidedge_mcp.backends.documents import DocumentManager
+        conn = MagicMock()
+        app = MagicMock()
+        conn.get_application.return_value = app
+        return DocumentManager(conn), app
+
+    def test_success(self, doc_mgr, tmp_path):
+        dm, app = doc_mgr
+        doc = MagicMock()
+        doc.Name = "test.par"
+        doc.Type = 1
+        app.Documents.Open.return_value = doc
+
+        f = tmp_path / "test.par"
+        f.write_text("")
+
+        result = dm.open_in_background(str(f))
+        assert result["status"] == "opened_in_background"
+        assert result["name"] == "test.par"
+        app.Documents.Open.assert_called_once_with(str(f), 0x8)
+
+    def test_file_not_found(self, doc_mgr):
+        dm, _ = doc_mgr
+        result = dm.open_in_background("C:\\nonexistent\\file.par")
+        assert "error" in result
+        assert "not found" in result["error"]
+
+
+# ============================================================================
+# DOCUMENTS: CLOSE ALL DOCUMENTS
+# ============================================================================
+
+class TestCloseAllDocuments:
+    @pytest.fixture
+    def doc_mgr(self):
+        from solidedge_mcp.backends.documents import DocumentManager
+        conn = MagicMock()
+        app = MagicMock()
+        conn.get_application.return_value = app
+        return DocumentManager(conn), app
+
+    def test_success(self, doc_mgr):
+        dm, app = doc_mgr
+        doc1 = MagicMock()
+        doc1.Name = "doc1.par"
+        doc2 = MagicMock()
+        doc2.Name = "doc2.par"
+        app.Documents.Count = 2
+        app.Documents.Item.side_effect = lambda i: {2: doc2, 1: doc1}[i]
+
+        result = dm.close_all_documents(save=False)
+        assert result["status"] == "closed_all"
+        assert result["closed"] == 2
+        doc1.Close.assert_called_once()
+        doc2.Close.assert_called_once()
+
+    def test_no_documents(self, doc_mgr):
+        dm, app = doc_mgr
+        app.Documents.Count = 0
+
+        result = dm.close_all_documents()
+        assert result["status"] == "no_documents"
+        assert result["closed"] == 0
+
+    def test_with_save(self, doc_mgr):
+        dm, app = doc_mgr
+        doc1 = MagicMock()
+        doc1.Name = "doc1.par"
+        app.Documents.Count = 1
+        app.Documents.Item.return_value = doc1
+
+        result = dm.close_all_documents(save=True)
+        assert result["status"] == "closed_all"
+        doc1.Save.assert_called_once()
+        doc1.Close.assert_called_once()

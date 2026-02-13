@@ -326,6 +326,37 @@ def get_document_count() -> dict:
     return doc_manager.get_document_count()
 
 
+@mcp.tool()
+def open_in_background(file_path: str) -> dict:
+    """
+    Open a document in the background without showing a window.
+
+    Useful for batch processing or reading data from files without
+    displaying the UI. The document is opened with the hidden flag.
+
+    Args:
+        file_path: Path to the document file (.par, .asm, .dft, .psm)
+
+    Returns:
+        Open status with document info
+    """
+    return doc_manager.open_in_background(file_path)
+
+
+@mcp.tool()
+def close_all_documents(save: bool = False) -> dict:
+    """
+    Close all open documents.
+
+    Args:
+        save: If True, save each document before closing. Default is False.
+
+    Returns:
+        Count of closed documents
+    """
+    return doc_manager.close_all_documents(save)
+
+
 # ============================================================================
 # SKETCHING TOOLS
 # ============================================================================

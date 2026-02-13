@@ -10,7 +10,7 @@
 
 | Metric | Count |
 |--------|-------|
-| **Our implemented MCP tools** | 202 |
+| **Our implemented MCP tools** | 204 |
 | **API operations found in community repos** | 250+ |
 | **Operations we're missing** | ~20 |
 | **High-priority gaps remaining** | ~3 |
@@ -76,11 +76,11 @@
 | Create weldment document | `Documents.Add("SolidEdge.WeldmentDocument")` | YES | Working | SDK |
 | Open document | `Documents.Open(filename)` | YES | Working | Samples |
 | Import file (auto type detection) | `Documents.Open(filename)` | YES | Working | — |
-| Open in background (no window) | `Documents.Open(filename, 0x8)` | NO | Available | SDK |
+| Open in background (no window) | `Documents.Open(filename, 0x8)` | YES | Working | SDK |
 | Save document | `Document.Save()` | YES | Working | Samples |
 | Save as | `Document.SaveAs(filename)` | YES | Working | Samples |
 | Close document | `Document.Close()` | YES | Working | Samples |
-| Close all documents | `Documents.CloseDocument(...)` per doc | NO | Available | Samples |
+| Close all documents | Iterate + close each doc | YES | Working | Samples |
 | List documents | Documents collection iteration | YES | Working | — |
 | Get active document type | `Application.ActiveDocument` type detection | YES | Working | — |
 | Get document count | `Application.Documents.Count` | YES | Working | — |
@@ -600,7 +600,7 @@ All Tier 1 and Tier 2 items are now fully implemented with MCP tool wrappers:
 Category                    Implemented    Available    Coverage
 ─────────────────────────────────────────────────────────────
 Connection                  8              8            100%
-Documents                   15             19           79%
+Documents                   17             19           89%
 Sketching 2D                20             25           80%
 Constraints                 1 (stub)       8            13%
 Extrusions                  3              5            60%
@@ -625,7 +625,7 @@ Performance                 4              5            80%
 Feature Management          6              8            75%
 Topology Query              8              13           62%
 ─────────────────────────────────────────────────────────────
-TOTAL                       202            ~250         81%
+TOTAL                       204            ~250         82%
 ```
 
 ---

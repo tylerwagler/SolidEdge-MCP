@@ -429,6 +429,109 @@ class DocumentManager:
                 "traceback": traceback.format_exc()
             }
 
+    def open_in_background(self, file_path: str) -> Dict[str, Any]:
+        """
+        Open a document in the background (no visible window).
+
+        Uses the 0x8 flag to suppress the UI window. Useful for batch
+        processing or reading data without user interaction.
+
+        Args:
+            file_path: Path to the document file
+
+        Returns:
+            Dict with open status
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"error": f"File not found: {file_path}"}
+
+            app = self.connection.get_application()
+            doc = app.Documents.Open(file_path, 0x8)
+            self.active_document = doc
+
+            return {
+                "status": "opened_in_background",
+                "path": file_path,
+                "name": doc.Name,
+                "type": self._get_document_type(doc)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def close_all_documents(self, save: bool = False) -> Dict[str, Any]:
+        """
+        Close all open documents.
+
+        Args:
+            save: If True, save each document before closing
+
+        Returns:
+            Dict with close status and count of closed documents
+        """
+        try:
+            app = self.connection.get_application()
+            docs = app.Documents
+            count = docs.Count
+
+            if count == 0:
+                return {"status": "no_documents", "closed": 0}
+
+            closed = 0
+            errors = []
+
+            if not save:
+                try:
+                    app.DisplayAlerts = False
+                except Exception:
+                    pass
+
+            # Close in reverse order (COM collections shift on removal)
+            for i in range(count, 0, -1):
+                try:
+                    doc = docs.Item(i)
+                    doc_name = doc.Name
+                    if save:
+                        try:
+                            doc.Save()
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            doc.Saved = True
+                        except Exception:
+                            pass
+                    doc.Close()
+                    closed += 1
+                except Exception as e:
+                    errors.append(str(e))
+
+            if not save:
+                try:
+                    app.DisplayAlerts = True
+                except Exception:
+                    pass
+
+            self.active_document = None
+
+            result = {"status": "closed_all", "closed": closed, "total": count}
+            if errors:
+                result["errors"] = errors
+            return result
+        except Exception as e:
+            try:
+                app = self.connection.get_application()
+                app.DisplayAlerts = True
+            except Exception:
+                pass
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def _get_document_type(self, doc) -> str:
         """Determine document type"""
         try:
