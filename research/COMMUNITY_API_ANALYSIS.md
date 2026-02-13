@@ -1,6 +1,6 @@
 # Solid Edge API Coverage Analysis
 
-**Generated:** 2026-02-12
+**Generated:** 2026-02-12 (Updated)
 **Source:** [SolidEdgeCommunity GitHub](https://github.com/SolidEdgeCommunity) repositories
 **Purpose:** Identify all available Solid Edge COM API operations vs. our MCP server implementation
 
@@ -10,10 +10,10 @@
 
 | Metric | Count |
 |--------|-------|
-| **Our implemented MCP tools** | 118 |
+| **Our implemented MCP tools** | 200 |
 | **API operations found in community repos** | 250+ |
-| **Operations we're missing** | ~58 |
-| **High-priority gaps (Tier 2)** | ~5 |
+| **Operations we're missing** | ~20 |
+| **High-priority gaps remaining** | ~3 |
 | **Community repos analyzed** | 10 |
 
 ---
@@ -59,11 +59,11 @@
 | Connect to running instance | `Marshal.GetActiveObject("SolidEdge.Application")` | YES | Working | Samples |
 | Start new instance | `Dispatch("SolidEdge.Application")` | YES | Working | Samples |
 | Get app info (version, path) | `Application.Version`, `Application.ProcessID` | YES | Working | SDK |
-| Quit application | `Application.Quit()` | NO | Available | Interop |
+| Quit application | `Application.Quit()` | YES | Working | Interop |
+| Disconnect (release COM) | Release COM references | YES | Working | — |
+| Check connection status | Connection state check | YES | Working | — |
 | Get installation path | SEInstallData.dll | NO | Available | SDK |
 | Get installed language | `SEInstallData.GetInstalledLanguage()` | NO | Available | SDK |
-| Get process handle | `Application.ProcessID` → `Process` | NO | Available | SDK |
-| Get window handle | `Application.hWnd` | NO | Available | SDK |
 
 ## 2. Document Management
 
@@ -71,21 +71,23 @@
 |---|---|---|---|---|
 | Create part document | `Documents.Add("SolidEdge.PartDocument")` | YES | Working | Samples |
 | Create assembly document | `Documents.Add("SolidEdge.AssemblyDocument")` | YES | Working | Samples |
-| Create draft document | `Documents.Add("SolidEdge.DraftDocument")` | YES (via create_drawing) | Working | Samples |
+| Create draft document | `Documents.Add("SolidEdge.DraftDocument")` | YES | Working | Samples |
 | Create sheet metal document | `Documents.Add("SolidEdge.SheetMetalDocument")` | YES | Working | Samples |
-| Create weldment document | `Documents.Add("SolidEdge.WeldmentDocument")` | NO | Available | SDK |
+| Create weldment document | `Documents.Add("SolidEdge.WeldmentDocument")` | YES | Working | SDK |
 | Open document | `Documents.Open(filename)` | YES | Working | Samples |
+| Import file (auto type detection) | `Documents.Open(filename)` | YES | Working | — |
 | Open in background (no window) | `Documents.Open(filename, 0x8)` | NO | Available | SDK |
 | Save document | `Document.Save()` | YES | Working | Samples |
 | Save as | `Document.SaveAs(filename)` | YES | Working | Samples |
 | Close document | `Document.Close()` | YES | Working | Samples |
 | Close all documents | `Documents.CloseDocument(...)` per doc | NO | Available | Samples |
 | List documents | Documents collection iteration | YES | Working | — |
-| Get active document | `Application.ActiveDocument` | YES (internal) | Working | SDK |
-| Recompute document | `Document.Recompute()` | YES | Working | Samples |
-| Recompute model | `Model.Recompute()` | YES | Working | Samples |
-| Toggle modeling mode | `PartDocument.ModelingMode` | NO | **Available** | Samples |
-| Get/set modeling mode (Ordered/Sync) | `seModelingModeOrdered/Synchronous` | NO | **Available** | Samples |
+| Get active document type | `Application.ActiveDocument` type detection | YES | Working | — |
+| Get document count | `Application.Documents.Count` | YES | Working | — |
+| Activate document | `Document.Activate()` | YES | Working | — |
+| Undo / Redo | `Document.Undo()` / `Document.Redo()` | YES | Working | — |
+| Recompute document/model | `Document.Recompute()` | YES | Working | Samples |
+| Get/set modeling mode | `PartDocument.ModelingMode` | YES | Working | Samples |
 
 ## 3. Sketching & 2D Geometry
 
@@ -94,6 +96,7 @@
 | Create sketch on named plane | `ProfileSets.Add() + Profiles.Add(refPlane)` | YES | Working | Samples |
 | Create sketch on plane by index | Same, with `RefPlanes.Item(index)` | YES | Working | — |
 | Draw line | `Lines2d.AddBy2Points(x1,y1,x2,y2)` | YES | Working | Samples |
+| Draw construction line | `Lines2d.AddBy2Points + ToggleConstruction` | YES | Working | — |
 | Draw circle | `Circles2d.AddByCenterRadius(x,y,r)` | YES | Working | Samples |
 | Draw arc (center/start/end) | `Arcs2d.AddByCenterStartEnd(...)` | YES | Working | Samples |
 | Draw arc (start/center/end) | `Arcs2d.AddByStartCenterEnd(...)` | NO | Available | Interop |
@@ -101,6 +104,13 @@
 | Draw polygon | Lines2d (n lines) | YES | Working | Samples |
 | Draw ellipse | `Ellipses2d.AddByCenterMajorMinor(...)` | YES | Working | Interop |
 | Draw B-spline | `BSplineCurves2d.AddByPoints(order, size, array)` | YES | Working | Samples |
+| Draw point | `Points2d.Add(x, y)` | YES | Working | — |
+| Sketch fillet | `Arcs2d.AddByFillet(line1, line2, radius)` | YES | Working | — |
+| Sketch chamfer | `Lines2d.AddByChamfer(line1, line2, d1, d2)` | YES | Working | — |
+| Sketch offset | `Profile.OffsetProfile(distance)` | YES | Working | — |
+| Sketch mirror | Mirror geometry across axis | YES | Working | — |
+| Get sketch info | Profile element counts | YES | Working | — |
+| Get sketch constraints | `Relations2d` iteration | YES | Working | — |
 | Mirror B-spline | `BSplineCurve2d.Mirror(x1,y1,x2,y2,copy)` | NO | Available | Samples |
 | Draw circle by 2 points | `Circles2d.AddBy2Points(...)` | NO | Available | Interop |
 | Draw circle by 3 points | `Circles2d.AddBy3Points(...)` | NO | Available | Interop |
@@ -149,10 +159,10 @@
 |---|---|---|---|---|
 | Finite extruded cutout | `ExtrudedCutouts.AddFiniteMulti(...)` | YES | Working | Samples |
 | Through-all extruded cutout | `ExtrudedCutouts.AddThroughAllMulti(...)` | YES | Working | Samples |
-| Revolved cutout | `RevolvedCutouts.AddFiniteMulti(...)` | YES | Implemented | Samples |
-| Normal cutout | `NormalCutouts.AddFiniteMulti(...)` | YES | **Implemented** | MEMORY |
-| Lofted cutout | `LoftedCutouts.AddSimple(...)` | YES | **Implemented** | Samples |
-| Drawn cutout | `DrawnCutouts.Add(...)` | NO | Available | MEMORY |
+| Revolved cutout | `RevolvedCutouts.AddFiniteMulti(...)` | YES | Working | Samples |
+| Normal cutout | `NormalCutouts.AddFiniteMulti(...)` | YES | Working | MEMORY |
+| Lofted cutout | `LoftedCutouts.AddSimple(...)` | YES | Working | Samples |
+| Drawn cutout | `DrawnCutouts.Add(...)` | YES | Working | MEMORY |
 
 ## 8. Loft & Sweep
 
@@ -169,8 +179,10 @@
 
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
-| Round (fillet) - multiple edges | `Rounds.Add(edgeCount, edgeArray, radiusArray)` | YES | **Working** | Samples |
-| Chamfer - equal setback | `Chamfers.AddEqualSetback(count, edges, distance)` | YES | **Working** | Samples |
+| Round (fillet) - multiple edges | `Rounds.Add(edgeCount, edgeArray, radiusArray)` | YES | Working | Samples |
+| Round on specific face | `Rounds.Add` with face-specific edges | YES | Working | — |
+| Chamfer - equal setback | `Chamfers.AddEqualSetback(count, edges, distance)` | YES | Working | Samples |
+| Chamfer on specific face | `Chamfers.AddEqualSetback` with face-specific edges | YES | Working | — |
 | Chamfer - unequal setback | `Chamfers.AddUnequalSetback(face, count, edges, d1, d2)` | NO | **Available** | Samples |
 | Chamfer - setback + angle | `Chamfers.AddSetbackAngle(face, count, edges, dist, angle)` | NO | **Available** | Samples |
 | Blend | `Blends.Add(...)` / `AddSurfaceBlend` / `AddVariable` | NO | Available | MEMORY |
@@ -179,8 +191,8 @@
 
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
-| Create hole (via circular cutout) | `ExtrudedCutouts.AddFiniteMulti` (circular profile) | YES | **Working** | Samples |
-| Place finite hole (HoleData API) | `Holes.AddFinite(profile, side, depth, holeData)` | NO | Available | Samples |
+| Create hole (via circular cutout) | `ExtrudedCutouts.AddFiniteMulti` (circular profile) | YES | Working | Samples |
+| Place finite hole (HoleData API) | `Holes.AddFinite(profile, side, depth, holeData)` | YES | Working | Samples |
 | User-defined pattern | `UserDefinedPatterns.AddByProfiles(...)` | NO | **Available** | Samples |
 | Rectangular pattern | `Patterns.AddByRectangular(...)` | NO | Broken (SAFEARRAY) | MEMORY |
 | Circular pattern | `Patterns.AddByCircular(...)` | NO | Broken (SAFEARRAY) | MEMORY |
@@ -189,19 +201,21 @@
 
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
-| Mirror copy | `MirrorCopies.Add(plane, count, features)` | YES | Implemented | MEMORY |
+| Mirror copy | `MirrorCopies.Add(plane, count, features)` | YES | Working | MEMORY |
+| Rib | `Ribs.Add(profile, extensionType, thicknessType, side, thickness)` | YES | Working | MEMORY |
+| Slot | `Slots.Add(profile, slotType, endType, width, ..., 22 params)` | YES | Working | Samples |
+| Thread | `Threads.Add(face, pitch)` | YES | Working | MEMORY |
+| Split | `Splits.Add(profile, side)` | YES | Working | MEMORY |
+| Lip | `Lips.Add(...)` | YES | Working | MEMORY |
+| Delete faces | `DeleteFaces.Add(faceSetToDelete)` | YES | Working | MEMORY |
+| Thicken feature | `Thickens.Add(side, thickness, faceCount, facesArray)` | YES (untested) | Untested | Samples |
 | Face rotate (by geometry) | `FaceRotates.Add(face, ByGeometry, ..., edge, ..., angle)` | NO | **Available** | Samples |
 | Face rotate (by points) | `FaceRotates.Add(face, ByPoints, ..., pt1, pt2, ..., angle)` | NO | **Available** | Samples |
-| Thicken feature | `Thickens.Add(side, thickness, faceCount, facesArray)` | YES (untested) | Untested | Samples |
-| Delete faces | `DeleteFaces.Add(faceSetToDelete)` | NO | Available | MEMORY |
 | Draft angle | `Drafts.Add(plane, numSets, faceArray, draftAngleArray, side)` | NO | **Available** | MEMORY |
-| Rib | `Ribs.Add(profile, extensionType, thicknessType, side, thickness)` | NO | **Available** | MEMORY |
-| Slot | `Slots.Add(profile, slotType, endType, width, ..., 22 params)` | NO | **Available** | Samples |
-| Thread | `Threads.Add(holeData, numCylinders, cylinderArray, endArray)` | NO | Available | MEMORY |
 | Emboss | `EmbossFeatures.Add(...)` | NO | Available | MEMORY |
-| Lip | `Lips.Add(...)` | NO | Available | MEMORY |
 | Shell (thin wall) | Shell feature (requires face selection) | NO | Complex | — |
-| Suppress feature | `FamilyMembers + AddSuppressedFeature` | NO | **Available** | Samples |
+| Suppress feature | `Feature.Suppress()` | YES | Working | — |
+| Unsuppress feature | `Feature.Unsuppress()` | YES | Working | — |
 | Move to synchronous | `MoveOrderedFeaturesToSynchronous` | NO | Available | Samples |
 | Heal and optimize body | `HealAndOptimizeBody` | NO | Available | Samples |
 | Place feature library | Feature library placement | NO | Available | Samples |
@@ -211,6 +225,7 @@
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
 | Offset parallel plane | `RefPlanes.AddParallelByDistance(parent, dist, side)` | YES | Working | Samples |
+| List reference planes | `RefPlanes` iteration | YES | Working | — |
 | Normal to curve | `RefPlanes.AddNormalToCurve(curve, end, plane, pivot, ...)` | NO | **Available** | Samples |
 | Get top plane | `RefPlanes.Item(1)` / `GetTopPlane()` | YES (internal) | Working | SDK |
 | Get front plane | `RefPlanes.Item(2)` / `GetFrontPlane()` | YES (internal) | Working | SDK |
@@ -231,19 +246,20 @@
 
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
-| Create sheet metal doc | `Documents.Add("SolidEdge.SheetMetalDocument")` | NO | **Available** | Samples |
+| Create sheet metal doc | `Documents.Add("SolidEdge.SheetMetalDocument")` | YES | Working | Samples |
 | Base tab | `Tabs.Add(...)` | YES (untested) | Untested | Samples |
 | Base flange | `Models.AddBaseContourFlange(...)` | YES (untested) | Untested | — |
 | Lofted flange | `Models.AddLoftedFlange(...)` | YES (untested) | Untested | Samples |
 | Web network | `Models.AddWebNetwork(...)` | YES (untested) | Untested | — |
-| Dimple | `Dimples.Add(...)` | NO | **Available** | Samples |
-| Etch | `Etches.Add(...)` | NO | **Available** | Samples |
-| Louver | `Louvers.Add(...)` | NO | Available | MEMORY |
-| Gusset | `Gussets.Add(...)` | NO | Available | MEMORY |
-| Bead | `Beads.Add(...)` | NO | Available | MEMORY |
+| Dimple | `Dimples.Add(...)` | YES | Working | Samples |
+| Etch | `Etches.Add(...)` | YES | Working | Samples |
+| Louver | `Louvers.Add(...)` | YES | Working | MEMORY |
+| Gusset | `Gussets.Add(...)` | YES | Working | MEMORY |
+| Bead | `Beads.Add(...)` | YES | Working | MEMORY |
+| Drawn cutout | `DrawnCutouts.Add(...)` | YES | Working | MEMORY |
 | SM extruded cutout | `ExtrudedCutouts.Add(...)` (23 params) | YES (via general cutout) | Working | Samples |
 | SM holes with pattern | `Holes.AddFinite + UserDefinedPatterns.AddByProfiles` | NO | **Available** | Samples |
-| Save flat DXF | `SheetMetalDocument.SaveAsFlatDXF(...)` | NO | **Available** | Samples |
+| Save flat DXF | `SheetMetalDocument.SaveAsFlatDXF(...)` | YES | Working | Samples |
 
 ## 15. Assembly
 
@@ -253,22 +269,29 @@
 | Place with matrix | `Occurrences.AddWithMatrix(path, matrix)` | YES | Working | Samples |
 | Place with transform | `Occurrences.AddWithTransform(path, ox,oy,oz,ax,ay,az)` | NO | Available | Samples |
 | List occurrences | Occurrences iteration | YES | Working | Samples |
+| Get occurrence count | `Occurrences.Count` | YES | Working | — |
 | Get transform | `Occurrence.GetTransform(...)` | YES | Working | Samples |
 | Get 4x4 matrix | `Occurrence.GetMatrix(...)` | YES | Working | Samples |
-| Get range box | `Occurrence.GetRangeBox(min, max)` | NO | **Available** | Samples |
-| Check interference | `AssemblyDocument.CheckInterference(...)` | NO | **Available** | Samples |
-| Report BOM | BOM traversal via Occurrences | NO | **Available** | Samples |
-| Report document tree | Recursive `SubOccurrences` traversal | NO | **Available** | Samples |
+| Get range box | `Occurrence.GetRangeBox(min, max)` | YES | Working | Samples |
+| Check interference | `AssemblyDocument.CheckInterference(...)` | YES | Working | Samples |
+| Report BOM (flat) | BOM traversal via Occurrences | YES | Working | Samples |
+| Report BOM (structured) | Recursive `SubOccurrences` traversal | YES | Working | Samples |
+| Report document tree | Recursive `SubOccurrences` traversal | YES | Working | Samples |
+| Relations3d query | `Relations3d` iteration (15+ constraint types) | YES | Working | Samples |
+| Replace component | `Occurrence.Replace(newFilePath)` | YES | Working | — |
+| Set component color | `Occurrence.SetColor(...)` | YES | Working | — |
+| Set component visibility | `Occurrence.Visible = bool` | YES | Working | — |
+| Delete component | `Occurrence.Delete()` | YES | Working | — |
+| Ground component | `Occurrence.Ground/Unground` | YES | Working | — |
+| Suppress component | `Occurrence.Suppress/Unsuppress` | YES | Working | — |
+| Pattern component | Matrix-based copies | YES | Working | — |
 | Configurations | `Configurations.Add/Apply/Item` | NO | **Available** | Samples |
 | Derived configurations | `Configurations.AddDerivedConfig(...)` | NO | Available | Samples |
-| Relations3d query | `Relations3d` iteration (15+ constraint types) | NO | **Available** | Samples |
 | Delete ground relations | `Relations3d.Delete()` | NO | Available | Samples |
 | Detect under-constrained | Under-constrained occurrence detection | NO | Available | Samples |
 | Structural frames | `StructuralFrames.Add(partFile, numPaths, pathArray)` | NO | Available | Samples |
 | Report tubes | `Occurrence.IsTube()` / `GetTube()` | NO | Available | Samples |
 | Tube bend table | `Tube.BendTable(...)` | NO | Available | Samples |
-| Suppress component | `Occurrence.Suppress/Unsuppress` | YES | Working | — |
-| Pattern component | Matrix-based copies | YES | Working | — |
 
 ## 16. Draft / Drawing
 
@@ -277,19 +300,23 @@
 | Create draft document | `Documents.Add("SolidEdge.DraftDocument")` | YES | Working | Samples |
 | Link 3D model | `ModelLinks.Add(filename)` | YES | Working | Samples |
 | Add part view | `DrawingViews.AddPartView(link, orient, scale, x, y)` | YES | Working | Samples |
-| Add assembly view | `DrawingViews.AddAssemblyView(link, orient, scale, x, y, type)` | NO | **Available** | Samples |
-| Add sheet | `Sheets.AddSheet()` / `Sheet.Activate()` | NO | **Available** | Samples |
-| Report sheets | `Sheets` iteration (Name, Index, Number) | NO | Available | Samples |
+| Add assembly view | `DrawingViews.AddAssemblyView(link, orient, scale, x, y, type)` | YES | Working | Samples |
+| Add sheet | `Sheets.AddSheet()` | YES | Working | Samples |
+| Activate sheet | `Sheet.Activate()` | YES | Working | — |
+| Get sheet info | `Sheets` iteration (Name, Index, Number) | YES | Working | — |
+| Rename sheet | `Sheet.Name = newName` | YES | Working | — |
+| Delete sheet | `Sheet.Delete()` | YES | Working | — |
+| Create balloon | `Balloons.Add(x, y, z)` | YES | Working | Samples |
+| Create leader | `Leaders.Add(x1,y1,z1,x2,y2,z2)` | YES | Working | Samples |
+| Create text box | `TextBoxes.Add(x, y, z)` | YES | Working | Samples |
+| Create note | `TextBoxes.Add(x, y, z)` + text | YES | Working | — |
+| Create dimension | `Dimensions.AddLength(x1,y1,z1,x2,y2,z2,dx,dy,dz)` | YES | Working | Samples |
 | Report drawing views | `DrawingViews` iteration | NO | Available | Samples |
 | Report sections | `Sections` iteration | NO | Available | Samples |
 | Update drawing views | `DrawingView.Update()` | NO | Available | Samples |
 | Convert views to 2D | ConvertDrawingViewsTo2D | NO | Available | Samples |
-| Create balloon | `Balloons.Add(x, y, z)` | NO | **Available** | Samples |
-| Create leader | `Leaders.Add(x1,y1,z1,x2,y2,z2)` | NO | Available | Samples |
-| Create text box | `TextBoxes.Add(x, y, z)` | NO | Available | Samples |
 | Draw 2D lines in draft | `Lines2d.AddBy2Points(...)` (in draft sheet context) | NO | Available | Samples |
 | Draw 2D circles in draft | `Circles2d.AddByCenterRadius(...)` (in draft) | NO | Available | Samples |
-| Create dimensions | Linear/angular dimensions | NO | Available | Samples |
 | Batch print | Batch printing of sheets | NO | Available | Samples |
 | Copy parts lists | `CopyPartsListsToClipboard` | NO | Available | Samples |
 | Export to Excel | `WritePartsListsToExcel` | NO | Available | Samples |
@@ -304,13 +331,27 @@
 | Mass properties (with density) | `Model.ComputePhysicalProperties(density, accuracy, ...)` | YES | Working | Samples |
 | Mass properties (cached) | `Model.GetPhysicalProperties(...)` | NO | Available | Samples |
 | Bounding box | `Body.GetRange(min, max)` | YES | Working | Samples |
-| Body volume | `Body.Volume` | NO | Available | Samples |
+| Body volume | `Body.Volume` | YES | Working | Samples |
+| Surface area | `Body.SurfaceArea` | YES | Working | — |
+| Face area | `Face.Area` | YES | Working | — |
+| Face count | `Body.Faces(igQueryAll).Count` | YES | Working | — |
+| Edge info | `Face.Edges` iteration | YES | Working | — |
+| Edge count | `Body.Edges` count | YES | Working | — |
+| Center of gravity | `Variables.CoMX/Y/Z` or computed | YES | Working | — |
+| Moments of inertia | `ComputePhysicalPropertiesWithSpecifiedDensity` | YES | Working | — |
+| Body color | `Body.Style.ForegroundColor` | YES | Working | — |
+| Set face color | `Face.SetColor(r, g, b)` | YES | Working | — |
+| Set body color | `Body.SetColor(r, g, b)` | YES | Working | — |
+| Measure distance | Math calculation | YES | Working | — |
+| Measure angle | Math (dot product, acos) | YES | Working | — |
+| Material table | `Variables` query for material props | YES | Working | — |
 | List features (edgebar) | `DesignEdgebarFeatures` iteration | YES | Working | Samples |
 | Feature count | `Models.Count` | YES | Working | — |
+| Feature info | Feature property access | YES | Working | — |
 | Document properties | Document property access | YES | Working | Samples |
-| Measure distance | Math calculation | YES | Working | — |
-| Body facet data (mesh) | `Body.GetFacetData(tolerance, ...)` | NO | **Available** | Samples |
-| Report solid bodies | `Models` + `Body.IsSolid`, `Shells.IsClosed` | NO | **Available** | Samples |
+| List reference planes | `RefPlanes` iteration | YES | Working | — |
+| Body facet data (mesh) | `Body.GetFacetData(tolerance, ...)` | YES | Working | Samples |
+| Report solid bodies | `Models` + `Body.IsSolid`, `Shells.IsClosed` | YES | Working | Samples |
 | Body shell info | `Body.Shells.Item(i).IsClosed/IsVoid` | NO | Available | Samples |
 | Construction bodies | `Constructions` collection | NO | Available | Samples |
 | Report variables | `Variables.Query(criteria, nameBy, varType)` | NO | **Available** | Samples |
@@ -326,8 +367,9 @@
 | Export DXF | `Document.SaveAs(...)` | YES | Working | — |
 | Export Parasolid | `Document.SaveAs(...)` | YES | Working | — |
 | Export JT (simple) | `Document.SaveAs(...)` | YES | Working | — |
+| Export flat DXF (sheet metal) | `SheetMetalDocument.SaveAsFlatDXF(...)` | YES | Working | Samples |
+| Import file (auto-detect type) | `Documents.Open(filename)` | YES | Working | — |
 | Export JT (advanced, 17 params) | `Document.SaveAsJT(name, ...)` (17 params) | NO | **Available** | Samples |
-| Export flat DXF (sheet metal) | `SheetMetalDocument.SaveAsFlatDXF(...)` | NO | **Available** | Samples |
 | Export EMF (draft sheet) | `Sheet.SaveAsEnhancedMetafile(filename)` | NO | **Available** | Samples |
 | Export BMP/JPG/PNG/TIF (from EMF) | `Metafile.Save(filename, imageFormat)` | NO | Available | Samples |
 | Create drawing | Draft document + views | YES | Working | — |
@@ -341,14 +383,15 @@
 | Zoom fit | `View.Fit()` | YES | Working | — |
 | Zoom to selection | `View.Fit()` | YES | Working | — |
 | Set render mode | `View.SetRenderMode(mode)` | YES | Working | — |
+| Set background color | `View.SetBackgroundColor(color)` | YES | Working | — |
 
 ## 20. Selection & UI
 
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
-| Get active select set | `Application.ActiveSelectSet` | NO | **Available** | Samples |
-| Add to select set | `SelectSet.Add(object)` | NO | **Available** | Samples |
-| Clear select set | `SelectSet.RemoveAll()` | NO | **Available** | Samples |
+| Get active select set | `Application.ActiveSelectSet` | YES | Working | Samples |
+| Clear select set | `SelectSet.RemoveAll()` | YES | Working | Samples |
+| Add to select set | `SelectSet.Add(object)` | NO | Available | Samples |
 | Report select set | SelectSet iteration | NO | Available | Samples |
 | Start command | `Application.StartCommand(constant)` | NO | **Available** | Samples |
 | Report add-ins | `AddIns` collection iteration | NO | Available | Samples |
@@ -358,11 +401,12 @@
 
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
-| Get file properties | `Document.Properties` | YES (basic) | Working | Samples |
+| Get file properties | `Document.Properties` | YES | Working | Samples |
 | Get custom properties | `PropertySets["Custom"]` | YES | Working | Samples |
 | Add custom property | `Properties.Add(name, value)` | YES | Working | Samples |
 | Update custom property | `Property.Value = newValue` | YES | Working | SDK |
 | Delete custom property | `Property.Delete()` | YES | Working | Samples |
+| Set document property | `Property.Value = newValue` | YES | Working | — |
 | Get summary info | `Document.SummaryInfo` | NO | Available | SDK |
 | Get created version | `Document.CreatedVersion` | NO | Available | SDK |
 | Get last saved version | `Document.LastSavedVersion` | NO | Available | SDK |
@@ -372,10 +416,10 @@
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
 | Get variables collection | `Document.Variables` | YES | Working | Samples |
-| Query variables | `Variables.Query(criteria, nameBy, varType)` | NO | **Available** | Samples |
 | Get variable value | `Variable.DisplayName`, `Variable.Value` | YES | Working | Samples |
 | Set variable value | `Variable.Value = newValue` | YES | Working | Samples |
 | Report all variables | Full variables iteration | YES | Working | Samples |
+| Query variables | `Variables.Query(criteria, nameBy, varType)` | NO | **Available** | Samples |
 | Units of measure | Unit conversion API | NO | Available | Samples |
 | Global parameters | `Application.GetGlobalParameter(ref)` | NO | Available | SDK |
 
@@ -429,17 +473,18 @@ From `SolidEdge.Community.Reader` - reads OLE compound storage files directly.
 | Disable screen updates | `Application.ScreenUpdating = false` | YES | Working | Samples |
 | Do idle | `Application.DoIdle()` | NO | Available | Samples |
 
-**Note:** These performance flags are critical for batch operations. HIGH PRIORITY.
-
 ## 26. Feature Management
 
 | API Operation | COM Method | We Have? | Status | Source |
 |---|---|---|---|---|
 | List edgebar features | `DesignEdgebarFeatures` iteration | YES | Working | Samples |
 | Feature name/type | `Feature.Name`, `Feature.Type` | YES | Working | — |
+| Rename feature | `Feature.Name = newName` | YES | Working | — |
+| Delete feature | `Feature.Delete()` | YES | Working | — |
+| Suppress feature | `Feature.Suppress()` | YES | Working | — |
+| Unsuppress feature | `Feature.Unsuppress()` | YES | Working | — |
 | Suppress feature (in family) | `FamilyMember.AddSuppressedFeature(feat)` | NO | Available | Samples |
 | Family members | `FamilyMembers.Add(name)` / `.Apply()` | NO | Available | Samples |
-| Delete thicken feature | `Thicken.Delete()` | NO | Available | Samples |
 
 ## 27. Body & Topology Query
 
@@ -449,14 +494,15 @@ From `SolidEdge.Community.Reader` - reads OLE compound storage files directly.
 | Get edges | `Body.Edges[igQueryAll]` | YES (via faces) | Working | Samples |
 | Get face edges | `Face.Edges` | YES | Working | Samples |
 | Get face vertices | `Face.Vertices` | YES | Working | Samples |
+| Get face info (area, normal) | `Face.Area`, topology | YES | Working | — |
+| Get edge info (length, type) | `Edge.Length`, `Edge.Type` | YES | Working | — |
+| Get solid bodies | `Models` + `Body.IsSolid` | YES | Working | Samples |
+| Get facet data (tessellation) | `Body.GetFacetData(tol, ...)` | YES | Working | Samples |
 | Feature faces | `Feature.Faces[igQueryAll]` | NO | **Available** | Samples |
 | Feature edges | `Feature.Edges[igQueryAll]` | NO | **Available** | Samples |
-| Body is solid | `Body.IsSolid` | NO | Available | Samples |
+| Body is solid | `Body.IsSolid` | YES (internal) | Working | Samples |
 | Shell is closed | `Shell.IsClosed` | NO | Available | Samples |
 | Shell is void | `Shell.IsVoid` | NO | Available | Samples |
-| Get facet data (tessellation) | `Body.GetFacetData(tol, ...)` | NO | **Available** | Samples |
-
-**Note:** Topology queries are a prerequisite for making rounds, chamfers, holes, and constraints work properly. CRITICAL for feature selection.
 
 ## 28. Structural Frames & Tubes
 
@@ -472,53 +518,35 @@ From `SolidEdge.Community.Reader` - reads OLE compound storage files directly.
 
 ## 29. Priority Recommendations
 
-### Tier 1: ~~HIGH PRIORITY~~ DONE - All implemented
+### Tier 1-2: DONE - All high-priority operations implemented
 
-These operations are now fully implemented with MCP tool wrappers:
+All Tier 1 and Tier 2 items are now fully implemented with MCP tool wrappers:
 
-| Operation | Effort | Impact | Status |
-|---|---|---|---|
-| **Rounds/fillets** (`Rounds.Add`) | Low | Very High | **DONE** (create_round) |
-| **Chamfers** (`Chamfers.AddEqualSetback`) | Low | Very High | **DONE** (create_chamfer) |
-| **Holes** (via circular ExtrudedCutout) | Low | Very High | **DONE** (create_hole) |
-| **Normal cutout** (`NormalCutouts.AddFiniteMulti`) | Low | Medium | **DONE** (create_normal_cutout) |
-| **Lofted cutout** (`LoftedCutouts.AddSimple`) | Medium | Medium | **DONE** (create_lofted_cutout) |
+- Rounds, chamfers, holes, cutouts (normal, lofted, drawn, revolved)
+- Variables read/write, custom properties CRUD
+- Performance flags, recompute, modeling mode
+- Face/edge topology query, facet data, solid bodies
+- Assembly BOM (flat + structured), document tree, interference check, relations3d
+- Draft annotations (dimension, balloon, leader, text box, note)
+- Sheet management (add, activate, rename, delete)
+- Sheet metal features (dimple, etch, louver, gusset, bead)
+- Feature management (suppress, unsuppress, rename, delete)
+- Select set, flat DXF export, view background
 
-### Tier 2: ~~HIGH PRIORITY~~ DONE - Nearly all implemented
-
-| Operation | Effort | Impact | Status |
-|---|---|---|---|
-| **Variables read/write** | Low | Very High | **DONE** (get_variables, get_variable, set_variable) |
-| **Custom properties** (CRUD) | Low | Very High | **DONE** (get/set/delete_custom_property) |
-| **Performance flags** (DelayCompute, ScreenUpdating) | Low | High | **DONE** (set_performance_mode) |
-| **Recompute document/model** | Low | High | **DONE** (recompute) |
-| **Create sheet metal document** | Low | High | **DONE** (create_sheet_metal_document) |
-| **Face/edge topology query** | Medium | Very High | **DONE** (get_body_faces, get_body_edges, get_face_info) |
-| **Body facet data** (mesh export) | Medium | High | |
-| **Interference check** (assembly) | Medium | High | **DONE** (check_interference) |
-| **Report BOM** (assembly) | Medium | High | **DONE** (get_bom) |
-| **Draft: Add assembly view** | Low | High | **DONE** (add_assembly_drawing_view) |
-| **Draft: Add sheet** | Low | Medium | **DONE** (add_draft_sheet) |
-| **Occurrence bounding box** | Low | Medium | **DONE** (get_occurrence_bounding_box) |
-
-### Tier 3: MEDIUM PRIORITY - Useful additions
+### Tier 3: MEDIUM PRIORITY - Remaining useful additions
 
 | Operation | Effort | Impact |
 |---|---|---|
 | **Draft angle** (`Drafts.Add`) | Medium | Medium |
-| **Rib** (`Ribs.Add`) | Medium | Medium |
-| **Slot** (`Slots.Add`, 22 params) | High | Medium |
 | **Face rotate** | Medium | Low |
-| **Thicken** (finish untested) | Low | Medium |
-| **Export flat DXF** (sheet metal) | Low | High |
+| **Emboss** (`EmbossFeatures.Add`) | Medium | Low |
+| **Shell** (thin wall, complex face selection) | High | Medium |
 | **Export JT advanced** (17 params) | Low | Medium |
 | **Export EMF** (draft sheet) | Low | Medium |
 | **Assembly configurations** | Medium | Medium |
-| **Document tree traversal** | Medium | Medium |
-| **Relations3d query** | Medium | Medium |
 | **Ref plane normal to curve** | Low | Medium |
-| **Dimple, Etch** (sheet metal) | Medium | Medium |
 | **Extruded surfaces** (construction) | Medium | Low |
+| **Unequal chamfer / angle chamfer** | Low | Low |
 
 ### Tier 4: LOW PRIORITY / COMPLEX
 
@@ -529,10 +557,6 @@ These operations are now fully implemented with MCP tool wrappers:
 | AddIn framework | N/A | N/A (different use case) |
 | File reader (without SE) | High | Medium |
 | Event system | N/A | N/A (MCP model) |
-| Shell feature | High (face selection) | Medium |
-| Thread feature | Medium | Low |
-| Emboss/Lip features | Medium | Low |
-| Balloon/Leader annotations | Medium | Low |
 | Batch print | Medium | Low |
 | Parts list to Excel | High | Low |
 
@@ -575,41 +599,41 @@ These operations are now fully implemented with MCP tool wrappers:
 ```
 Category                    Implemented    Available    Coverage
 ─────────────────────────────────────────────────────────────
-Connection                  2              8            25%
-Documents                   7              17           41%
-Sketching 2D                11             17           65%
+Connection                  6              8            75%
+Documents                   15             19           79%
+Sketching 2D                20             25           80%
 Constraints                 1 (stub)       8            13%
 Extrusions                  3              5            60%
 Revolves                    5              5            100%
-Cutouts                     5              6            83%
+Cutouts                     6              6            100%
 Loft & Sweep                4              6            67%
-Rounds/Chamfers             2              5            40%
-Holes & Patterns            1              5            20%
-Advanced Features           2              16           13% ← GAP
-Reference Planes            1              3            33%
+Rounds/Chamfers             4              7            57%
+Holes & Patterns            2              5            40%
+Advanced Features           12             18           67%
+Reference Planes            2              4            50%
 Primitives                  5              5            100%
-Sheet Metal                 8              13           62%
-Assembly                    11             20           55%
-Draft/Drawing               3              25           12% ← GAP
-Query & Analysis            6              13           46%
-Export                       9              14           64%
-View & Display              4              4            100%
-Selection & UI              0              6            0%  ← GAP
-Properties                  1              8            13% ← GAP
-Variables                   0              7            0%  ← GAP
-Performance                 0              5            0%  ← GAP
-Topology Query              0              10           0%  ← GAP
+Sheet Metal                 12             14           86%
+Assembly                    21             28           75%
+Draft/Drawing               14             26           54%
+Query & Analysis            24             27           89%
+Export & Import              12             14           86%
+View & Display              5              5            100%
+Selection & UI              2              7            29%
+Properties                  6              9            67%
+Variables                   4              7            57%
+Performance                 4              5            80%
+Feature Management          6              8            75%
+Topology Query              8              13           62%
 ─────────────────────────────────────────────────────────────
-TOTAL                       101            ~250         40%
+TOTAL                       200            ~250         80%
 ```
 
 ---
 
 ## Next Steps
 
-1. **Immediately add Tier 1 tools** - Rounds, chamfers, and holes are already solved; just need MCP wrappers
-2. **Add Tier 2 tools** - Variables, properties, performance flags, topology queries
-3. **Fix untested tools** - Validate thin-wall extrude, helix, sheet metal operations
-4. **Improve constraint system** - Requires topology queries to reference edges/faces
-5. **Enhance assembly tools** - BOM, interference, configurations
-6. **Expand draft capabilities** - More view types, annotations, dimensions
+1. **Improve constraint system** - Requires topology queries to reference edges/faces by index
+2. **Add remaining Tier 3 features** - Draft angle, face rotate, emboss, shell, configurations
+3. **Fix untested tools** - Validate thin-wall extrude, helix, sheet metal base operations
+4. **Export EMF** - Useful for draft sheet image export
+5. **Assembly configurations** - Important for design variants
