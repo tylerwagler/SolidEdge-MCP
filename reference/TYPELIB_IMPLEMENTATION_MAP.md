@@ -1,7 +1,7 @@
 # Solid Edge Type Library Implementation Map
 
 Generated: 2026-02-13 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 287 MCP tools implemented
+Current: 299 MCP tools implemented
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
@@ -10,16 +10,16 @@ against our current MCP tool coverage. It identifies gaps and prioritizes what t
 
 |     Category      | Sections | Complete | Partial | Not Started | Methods (impl/total) |
 |-------------------|----------|----------|---------|-------------|----------------------|
-| **Part Features** |    52    |    15    |    28   |      9      |       71 / 181       |
-| **Assembly**      |    11    |     0    |     3   |      8      |       10 /  60       |
-| **Draft/Drawing** |     5    |     0    |     3   |      2      |       11 /  49       |
+| **Part Features** |    52    |    15    |    28   |      9      |       74 / 181       |
+| **Assembly**      |    11    |     0    |     3   |      8      |       14 /  60       |
+| **Draft/Drawing** |     5    |     0    |     4   |      1      |       16 /  49       |
 | **Framework/App** |     7    |     0    |     6   |      1      |       44 /  53       |
-| **Total**         | **75**   |  **15**  |  **40** |   **20**    | **136 / 343 (40%)**  |
+| **Total**         | **75**   |  **15**  |  **41** |   **19**    | **148 / 343 (43%)**  |
 
-**287 MCP tools** registered (many tools cover multiple methods or provide capabilities
+**299 MCP tools** registered (many tools cover multiple methods or provide capabilities
 beyond what the type library tracks, e.g. primitives, view controls, export formats).
 
-## Tool Count by Category (287 total)
+## Tool Count by Category (299 total)
 
 | Category                  | Count | Tools |
 |:--------------------------|:-----:|:---|
@@ -44,11 +44,11 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 | **Custom Properties**     | 3     | Get all, set/create, delete |
 | **Body Topology**         | 3     | Body faces, body edges, face info |
 | **Performance**           | 1     | Recompute (set_performance_mode moved to Connection/Application) |
-| **Query/Analysis**        | 25    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property |
+| **Query/Analysis**        | 28    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property, feature status, feature profiles, vertex count |
 | **Feature Management**    | 6     | Suppress, unsuppress, face rotate (2), draft angle, convert feature type |
 | **Export**                | 10    | STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, drawing, screenshot |
-| **Assembly**              | 24    | Place, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations, doc tree, replace, delete, visibility, color, transform, count, move, rotate |
-| **Draft/Drawing**         | 11    | Sheets (add, activate, delete, rename), views, annotations (dimension, balloon, note, leader, text box), parts list |
+| **Assembly**              | 28    | Place, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations, doc tree, replace, delete, visibility, color, transform, count, move, rotate, is_subassembly, display_name, occurrence_document, sub_occurrences |
+| **Draft/Drawing**         | 16    | Sheets (add, activate, delete, rename), views (add, count, get/set scale, delete, update), annotations (dimension, balloon, note, leader, text box), parts list |
 | **Part Features**         | 10    | Dimple, etch, rib, lip, drawn cutout, bead, louver, gusset, thread, slot, split |
 | **Diagnostics**           | 2     | API and feature inspection |
 | **Select Set**            | 11    | Get selection, clear selection, add, remove, select all, copy, cut, delete, suspend/resume/refresh display |
@@ -367,14 +367,14 @@ These methods exist on nearly every individual feature object (ExtrudedProtrusio
 RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 
 - [x] `GetDimensions` - via `get_feature_dimensions`
-- [ ] `GetProfiles` / `SetProfiles` - Get/set sketch profiles
+- [x] `GetProfiles` - via `get_feature_profiles`; `SetProfiles` not implemented
 - [ ] `GetDirection1Extent` / `ApplyDirection1Extent` - Edit extent
 - [ ] `GetDirection2Extent` / `ApplyDirection2Extent` - Edit 2nd direction
 - [ ] `GetFromFaceOffsetData` / `SetFromFaceOffsetData` - Edit offsets
 - [ ] `GetThinWallOptions` / `SetThinWallOptions` - Edit thin wall params
 - [ ] `GetBodyArray` / `SetBodyArray` - Multi-body targeting
 - [x] `ConvertToCutout` / `ConvertToProtrusion` - via `convert_feature_type`
-- [ ] `GetStatusEx` - Detailed feature status
+- [x] `GetStatusEx` - via `get_feature_status`
 - [ ] `GetTopologyParents` - Query parent geometry
 
 **Impact**: These would enable parametric editing of existing features, not just creation.
@@ -416,12 +416,12 @@ RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 - [ ] `GetFaceStyle2` - Get appearance
 
 Key Properties NOT exposed:
-- [ ] `Visible` (get/put) - **Show/hide occurrence** (have `set_component_visibility`)
-- [ ] `Subassembly` (get) - Check if subassembly
-- [ ] `SubOccurrences` (get) - Access nested components
+- [x] `Visible` (get/put) - via `set_component_visibility`
+- [x] `Subassembly` (get) - via `is_subassembly`
+- [x] `SubOccurrences` (get) - via `get_sub_occurrences`
 - [ ] `Bodies` (get) - Access body geometry
-- [ ] `OccurrenceDocument` (get) - Open document reference
-- [ ] `DisplayName` (get) - Display name
+- [x] `OccurrenceDocument` (get) - via `get_occurrence_document`
+- [x] `DisplayName` (get) - via `get_component_display_name`
 - [ ] `Style` (get/put) - Face style override
 
 ### 2.3 Assembly Relations (6 relation types)
@@ -494,16 +494,17 @@ Key Properties NOT exposed:
 
 ### 3.2 DrawingView Interface (59 methods, 155 properties)
 
-Key methods NOT implemented:
+Key methods:
 - [ ] `GetSectionCuts` / `AddSectionCut` - **Section/cross-section views**
-- [ ] `Update` - Force view update
+- [x] `Update` - via `update_drawing_view`
 - [ ] `Activate` / `Deactivate` - Activate for editing
-- [ ] `Delete` - Remove view
+- [x] `Delete` - via `delete_drawing_view`
 - [ ] `Move` - Reposition view on sheet
 - [ ] `SetOrientation` - Change orientation
+- [x] `Count` - via `get_drawing_view_count` (on collection)
 
-Key properties NOT exposed:
-- [ ] `Scale` (get/put) - **View scale**
+Key properties:
+- [x] `Scale` (get/put) - via `get_drawing_view_scale` / `set_drawing_view_scale`
 - [ ] `ShowHiddenEdges` (get/put) - Hidden lines
 - [ ] `ShowTangentEdges` (get/put) - Tangent edges
 - [ ] `DisplayMode` (get/put) - Shaded/wireframe

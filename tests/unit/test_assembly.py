@@ -433,3 +433,198 @@ class TestOccurrenceRotate:
 
         result = am.occurrence_rotate(5, 0, 0, 0, 0, 0, 1, 90)
         assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: IS SUBASSEMBLY
+# ============================================================================
+
+class TestIsSubassembly:
+    def test_true(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occ.Subassembly = True
+        occ.Name = "SubAsm_1"
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        result = am.is_subassembly(0)
+        assert result["is_subassembly"] is True
+        assert result["name"] == "SubAsm_1"
+
+    def test_false(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occ.Subassembly = False
+        occ.Name = "Part_1"
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        result = am.is_subassembly(0)
+        assert result["is_subassembly"] is False
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        doc.Occurrences = occurrences
+
+        result = am.is_subassembly(5)
+        assert "error" in result
+
+    def test_not_assembly(self, asm_mgr):
+        am, doc = asm_mgr
+        del doc.Occurrences
+
+        result = am.is_subassembly(0)
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: GET COMPONENT DISPLAY NAME
+# ============================================================================
+
+class TestGetComponentDisplayName:
+    def test_success(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occ.DisplayName = "Bolt M10x30"
+        occ.Name = "Bolt_1"
+        occ.OccurrenceFileName = "C:/parts/bolt.par"
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        result = am.get_component_display_name(0)
+        assert result["display_name"] == "Bolt M10x30"
+        assert result["name"] == "Bolt_1"
+        assert result["file_name"] == "C:/parts/bolt.par"
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        doc.Occurrences = occurrences
+
+        result = am.get_component_display_name(5)
+        assert "error" in result
+
+    def test_not_assembly(self, asm_mgr):
+        am, doc = asm_mgr
+        del doc.Occurrences
+
+        result = am.get_component_display_name(0)
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: GET OCCURRENCE DOCUMENT
+# ============================================================================
+
+class TestGetOccurrenceDocument:
+    def test_success(self, asm_mgr):
+        am, doc = asm_mgr
+        occ_doc = MagicMock()
+        occ_doc.Name = "bolt.par"
+        occ_doc.FullName = "C:/parts/bolt.par"
+        occ_doc.Type = 1
+        occ_doc.ReadOnly = False
+
+        occ = MagicMock()
+        occ.OccurrenceDocument = occ_doc
+        occ.OccurrenceFileName = "C:/parts/bolt.par"
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        result = am.get_occurrence_document(0)
+        assert result["document_name"] == "bolt.par"
+        assert result["full_name"] == "C:/parts/bolt.par"
+        assert result["type"] == 1
+        assert result["read_only"] is False
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        doc.Occurrences = occurrences
+
+        result = am.get_occurrence_document(5)
+        assert "error" in result
+
+    def test_not_assembly(self, asm_mgr):
+        am, doc = asm_mgr
+        del doc.Occurrences
+
+        result = am.get_occurrence_document(0)
+        assert "error" in result
+
+
+# ============================================================================
+# ASSEMBLY: GET SUB-OCCURRENCES
+# ============================================================================
+
+class TestGetSubOccurrences:
+    def test_with_children(self, asm_mgr):
+        am, doc = asm_mgr
+        child1 = MagicMock()
+        child1.Name = "SubPart_1"
+        child1.OccurrenceFileName = "C:/parts/sub1.par"
+
+        child2 = MagicMock()
+        child2.Name = "SubPart_2"
+        child2.OccurrenceFileName = "C:/parts/sub2.par"
+
+        sub_occs = MagicMock()
+        sub_occs.Count = 2
+        sub_occs.Item.side_effect = lambda i: {1: child1, 2: child2}[i]
+
+        occ = MagicMock()
+        occ.SubOccurrences = sub_occs
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        result = am.get_sub_occurrences(0)
+        assert result["count"] == 2
+        assert result["sub_occurrences"][0]["name"] == "SubPart_1"
+        assert result["sub_occurrences"][1]["file"] == "C:/parts/sub2.par"
+
+    def test_no_children(self, asm_mgr):
+        am, doc = asm_mgr
+        sub_occs = MagicMock()
+        sub_occs.Count = 0
+
+        occ = MagicMock()
+        occ.SubOccurrences = sub_occs
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        result = am.get_sub_occurrences(0)
+        assert result["count"] == 0
+        assert result["sub_occurrences"] == []
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        doc.Occurrences = occurrences
+
+        result = am.get_sub_occurrences(5)
+        assert "error" in result
+
+    def test_not_assembly(self, asm_mgr):
+        am, doc = asm_mgr
+        del doc.Occurrences
+
+        result = am.get_sub_occurrences(0)
+        assert "error" in result

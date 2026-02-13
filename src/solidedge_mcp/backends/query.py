@@ -2117,6 +2117,170 @@ class QueryManager:
                 "traceback": traceback.format_exc()
             }
 
+    def get_feature_status(self, feature_name: str) -> Dict[str, Any]:
+        """
+        Get the status of a feature (OK, suppressed, failed, etc.).
+
+        Looks up a feature by name and queries its status properties.
+
+        Args:
+            feature_name: Name of the feature
+
+        Returns:
+            Dict with feature status info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'DesignEdgebarFeatures'):
+                return {"error": "DesignEdgebarFeatures not available"}
+
+            features = doc.DesignEdgebarFeatures
+            for i in range(1, features.Count + 1):
+                try:
+                    feat = features.Item(i)
+                    if hasattr(feat, 'Name') and feat.Name == feature_name:
+                        result = {
+                            "feature_name": feature_name,
+                            "index": i - 1
+                        }
+                        try:
+                            result["status"] = feat.Status
+                        except Exception:
+                            pass
+                        try:
+                            result["is_suppressed"] = feat.IsSuppressed
+                        except Exception:
+                            pass
+                        try:
+                            status_ex = feat.GetStatusEx()
+                            result["status_ex"] = status_ex
+                        except Exception:
+                            pass
+                        try:
+                            result["type"] = feat.Type
+                        except Exception:
+                            pass
+                        return result
+                except Exception:
+                    continue
+
+            return {"error": f"Feature '{feature_name}' not found"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_feature_profiles(self, feature_name: str) -> Dict[str, Any]:
+        """
+        Get the sketch profiles associated with a feature.
+
+        Uses Feature.GetProfiles() to find which sketches drive the feature.
+
+        Args:
+            feature_name: Name of the feature
+
+        Returns:
+            Dict with profile info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'DesignEdgebarFeatures'):
+                return {"error": "DesignEdgebarFeatures not available"}
+
+            features = doc.DesignEdgebarFeatures
+            target = None
+            for i in range(1, features.Count + 1):
+                try:
+                    feat = features.Item(i)
+                    if hasattr(feat, 'Name') and feat.Name == feature_name:
+                        target = feat
+                        break
+                except Exception:
+                    continue
+
+            if target is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            profiles = []
+            try:
+                result = target.GetProfiles()
+                if result is not None:
+                    if isinstance(result, tuple) and len(result) >= 2:
+                        num_profiles = result[0]
+                        profile_array = result[1]
+                    else:
+                        profile_array = result
+                        num_profiles = None
+
+                    if profile_array is not None and hasattr(profile_array, '__iter__'):
+                        for p in profile_array:
+                            p_info = {}
+                            try:
+                                p_info["name"] = p.Name
+                            except Exception:
+                                pass
+                            try:
+                                p_info["status"] = p.Status
+                            except Exception:
+                                pass
+                            profiles.append(p_info)
+            except Exception as e:
+                return {
+                    "feature_name": feature_name,
+                    "profiles": [],
+                    "note": f"GetProfiles not supported: {str(e)}"
+                }
+
+            return {
+                "feature_name": feature_name,
+                "profiles": profiles,
+                "count": len(profiles)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_vertex_count(self) -> Dict[str, Any]:
+        """
+        Get the total vertex count on the model body.
+
+        Enumerates vertices via faces (same approach as edge counting).
+
+        Returns:
+            Dict with vertex count
+        """
+        try:
+            doc, model = self._get_first_model()
+            body = model.Body
+
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            total_vertices = 0
+
+            for fi in range(1, faces.Count + 1):
+                try:
+                    face = faces.Item(fi)
+                    vertices = face.Vertices
+                    if hasattr(vertices, 'Count'):
+                        total_vertices += vertices.Count
+                except Exception:
+                    pass
+
+            return {
+                "total_vertex_references": total_vertices,
+                "face_count": faces.Count,
+                "note": "Shared vertices are counted once per face"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def get_body_color(self) -> Dict[str, Any]:
         """
         Get the current body color.

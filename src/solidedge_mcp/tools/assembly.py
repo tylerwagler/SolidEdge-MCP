@@ -107,6 +107,22 @@ def assembly_get_occurrence_count() -> dict:
     """Get the count of top-level occurrences."""
     return assembly_manager.get_occurrence_count()
 
+def assembly_is_subassembly(component_index: int) -> dict:
+    """Check if a component is a subassembly (vs a part)."""
+    return assembly_manager.is_subassembly(component_index)
+
+def assembly_get_component_display_name(component_index: int) -> dict:
+    """Get the display name of a component (user-visible label in assembly tree)."""
+    return assembly_manager.get_component_display_name(component_index)
+
+def assembly_get_occurrence_document(component_index: int) -> dict:
+    """Get document info for a component's source file."""
+    return assembly_manager.get_occurrence_document(component_index)
+
+def assembly_get_sub_occurrences(component_index: int) -> dict:
+    """Get sub-occurrences (children) of a component."""
+    return assembly_manager.get_sub_occurrences(component_index)
+
 def register(mcp):
     """Register assembly tools with the MCP server."""
     mcp.tool()(assembly_add_component)
@@ -135,3 +151,7 @@ def register(mcp):
     mcp.tool()(assembly_occurrence_move)
     mcp.tool()(assembly_occurrence_rotate)
     mcp.tool()(assembly_get_occurrence_count)
+    mcp.tool()(assembly_is_subassembly)
+    mcp.tool()(assembly_get_component_display_name)
+    mcp.tool()(assembly_get_occurrence_document)
+    mcp.tool()(assembly_get_sub_occurrences)

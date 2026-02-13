@@ -708,6 +708,216 @@ class AssemblyManager:
                 "traceback": traceback.format_exc()
             }
 
+    def is_subassembly(self, component_index: int) -> Dict[str, Any]:
+        """
+        Check if a component is a subassembly (vs a part).
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with is_subassembly boolean
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            result = {"component_index": component_index}
+
+            try:
+                result["is_subassembly"] = occurrence.Subassembly
+            except Exception:
+                # Fallback: check if it has SubOccurrences
+                try:
+                    sub_occs = occurrence.SubOccurrences
+                    result["is_subassembly"] = sub_occs.Count > 0 if hasattr(sub_occs, 'Count') else False
+                except Exception:
+                    result["is_subassembly"] = False
+
+            try:
+                result["name"] = occurrence.Name
+            except Exception:
+                pass
+
+            return result
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_component_display_name(self, component_index: int) -> Dict[str, Any]:
+        """
+        Get the display name of a component.
+
+        The display name is the user-visible label in the assembly tree,
+        which may differ from the internal Name or OccurrenceFileName.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with display_name and other name info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            result = {"component_index": component_index}
+
+            try:
+                result["display_name"] = occurrence.DisplayName
+            except Exception:
+                result["display_name"] = None
+
+            try:
+                result["name"] = occurrence.Name
+            except Exception:
+                pass
+
+            try:
+                result["file_name"] = occurrence.OccurrenceFileName
+            except Exception:
+                pass
+
+            return result
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_occurrence_document(self, component_index: int) -> Dict[str, Any]:
+        """
+        Get document info for a component's source file.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with document name, path, and type
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            result = {"component_index": component_index}
+
+            try:
+                occ_doc = occurrence.OccurrenceDocument
+                try:
+                    result["document_name"] = occ_doc.Name
+                except Exception:
+                    pass
+                try:
+                    result["full_name"] = occ_doc.FullName
+                except Exception:
+                    pass
+                try:
+                    result["type"] = occ_doc.Type
+                except Exception:
+                    pass
+                try:
+                    result["read_only"] = occ_doc.ReadOnly
+                except Exception:
+                    pass
+            except Exception:
+                result["error_note"] = "Could not access OccurrenceDocument"
+
+            try:
+                result["file_name"] = occurrence.OccurrenceFileName
+            except Exception:
+                pass
+
+            return result
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_sub_occurrences(self, component_index: int) -> Dict[str, Any]:
+        """
+        Get sub-occurrences (children) of a component.
+
+        For subassemblies, this returns the list of nested components.
+        For parts, this returns an empty list.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with list of sub-occurrence names and count
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Occurrences'):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {"error": f"Invalid component index: {component_index}. Count: {occurrences.Count}"}
+
+            occurrence = occurrences.Item(component_index + 1)
+
+            children = []
+            try:
+                sub_occs = occurrence.SubOccurrences
+                if sub_occs and hasattr(sub_occs, 'Count'):
+                    for j in range(1, sub_occs.Count + 1):
+                        try:
+                            child = sub_occs.Item(j)
+                            child_info = {"index": j - 1}
+                            try:
+                                child_info["name"] = child.Name
+                            except Exception:
+                                child_info["name"] = f"SubOcc_{j}"
+                            try:
+                                child_info["file"] = child.OccurrenceFileName
+                            except Exception:
+                                pass
+                            children.append(child_info)
+                        except Exception:
+                            children.append({"index": j - 1, "name": f"SubOcc_{j}"})
+            except Exception:
+                pass
+
+            return {
+                "component_index": component_index,
+                "sub_occurrences": children,
+                "count": len(children)
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     def delete_component(self, component_index: int) -> Dict[str, Any]:
         """
         Delete/remove a component from the assembly.

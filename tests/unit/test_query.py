@@ -1914,3 +1914,148 @@ class TestGetVariableNames:
 
         result = qm.get_variable_names("Width")
         assert "error" in result
+
+
+# ============================================================================
+# GET FEATURE STATUS
+# ============================================================================
+
+class TestGetFeatureStatus:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude1"
+        feat.Status = 1
+        feat.IsSuppressed = False
+        feat.Type = 25
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_feature_status("Extrude1")
+        assert result["feature_name"] == "Extrude1"
+        assert result["index"] == 0
+        assert result["status"] == 1
+        assert result["is_suppressed"] is False
+        assert result["type"] == 25
+
+    def test_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_feature_status("NonExistent")
+        assert "error" in result
+        assert "not found" in result["error"]
+
+    def test_no_design_features(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.DesignEdgebarFeatures
+
+        result = qm.get_feature_status("Extrude1")
+        assert "error" in result
+
+
+# ============================================================================
+# GET FEATURE PROFILES
+# ============================================================================
+
+class TestGetFeatureProfiles:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        profile = MagicMock()
+        profile.Name = "Profile1"
+        profile.Status = 0
+
+        feat = MagicMock()
+        feat.Name = "Extrude1"
+        feat.GetProfiles.return_value = [profile]
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_feature_profiles("Extrude1")
+        assert result["feature_name"] == "Extrude1"
+        assert result["count"] == 1
+        assert result["profiles"][0]["name"] == "Profile1"
+
+    def test_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_feature_profiles("NonExistent")
+        assert "error" in result
+
+    def test_no_profiles(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude1"
+        feat.GetProfiles.return_value = None
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_feature_profiles("Extrude1")
+        assert result["count"] == 0
+
+
+# ============================================================================
+# GET VERTEX COUNT
+# ============================================================================
+
+class TestGetVertexCount:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        body = MagicMock()
+
+        face1 = MagicMock()
+        verts1 = MagicMock()
+        verts1.Count = 4
+        face1.Vertices = verts1
+
+        face2 = MagicMock()
+        verts2 = MagicMock()
+        verts2.Count = 3
+        face2.Vertices = verts2
+
+        faces = MagicMock()
+        faces.Count = 2
+        faces.Item.side_effect = lambda i: {1: face1, 2: face2}[i]
+        body.Faces.return_value = faces
+
+        model.Body = body
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        result = qm.get_vertex_count()
+        assert result["total_vertex_references"] == 7
+        assert result["face_count"] == 2
+
+    def test_no_model(self, query_mgr):
+        qm, doc = query_mgr
+        models = MagicMock()
+        models.Count = 0
+        doc.Models = models
+
+        result = qm.get_vertex_count()
+        assert "error" in result

@@ -85,6 +85,29 @@ def add_note(x: float, y: float, text: str, height: float = 0.005) -> dict:
     return export_manager.add_note(x, y, text, height)
 
 
+# === Drawing View Management ===
+
+def get_drawing_view_count() -> dict:
+    """Get the number of drawing views on the active sheet."""
+    return export_manager.get_drawing_view_count()
+
+def get_drawing_view_scale(view_index: int) -> dict:
+    """Get the scale of a drawing view by 0-based index."""
+    return export_manager.get_drawing_view_scale(view_index)
+
+def set_drawing_view_scale(view_index: int, scale: float) -> dict:
+    """Set the scale of a drawing view by 0-based index."""
+    return export_manager.set_drawing_view_scale(view_index, scale)
+
+def delete_drawing_view(view_index: int) -> dict:
+    """Delete a drawing view from the active sheet by 0-based index."""
+    return export_manager.delete_drawing_view(view_index)
+
+def update_drawing_view(view_index: int) -> dict:
+    """Force update a drawing view to reflect 3D model changes."""
+    return export_manager.update_drawing_view(view_index)
+
+
 # === Draft Sheet Management ===
 
 def get_sheet_info() -> dict:
@@ -125,6 +148,35 @@ def set_display_mode(mode: str) -> dict:
 def set_view_background(red: int, green: int, blue: int) -> dict:
     """Set the view background color."""
     return view_manager.set_view_background(red, green, blue)
+
+def rotate_view(angle: float,
+                center_x: float = 0.0, center_y: float = 0.0, center_z: float = 0.0,
+                axis_x: float = 0.0, axis_y: float = 1.0, axis_z: float = 0.0) -> dict:
+    """Rotate the view around an axis through a center point.
+
+    Args:
+        angle: Rotation angle in radians
+        center_x, center_y, center_z: Center of rotation (meters)
+        axis_x, axis_y, axis_z: Rotation axis vector (default: Y-up)
+    """
+    return view_manager.rotate_camera(angle, center_x, center_y, center_z, axis_x, axis_y, axis_z)
+
+def pan_view(dx: int, dy: int) -> dict:
+    """Pan the view by pixel offsets.
+
+    Args:
+        dx: Horizontal pan in pixels (positive = right)
+        dy: Vertical pan in pixels (positive = down)
+    """
+    return view_manager.pan_camera(dx, dy)
+
+def zoom_view(factor: float) -> dict:
+    """Zoom the view by a scale factor (>1 = zoom in, <1 = zoom out)."""
+    return view_manager.zoom_camera(factor)
+
+def refresh_view() -> dict:
+    """Force the active view to refresh/update."""
+    return view_manager.refresh_view()
 
 def get_camera() -> dict:
     """Get the current camera position and orientation."""
@@ -168,6 +220,12 @@ def register(mcp):
     mcp.tool()(add_dimension)
     mcp.tool()(add_balloon)
     mcp.tool()(add_note)
+    # Drawing View Management
+    mcp.tool()(get_drawing_view_count)
+    mcp.tool()(get_drawing_view_scale)
+    mcp.tool()(set_drawing_view_scale)
+    mcp.tool()(delete_drawing_view)
+    mcp.tool()(update_drawing_view)
     # Draft Sheet Management
     mcp.tool()(get_sheet_info)
     mcp.tool()(activate_sheet)
@@ -179,5 +237,9 @@ def register(mcp):
     mcp.tool()(zoom_to_selection)
     mcp.tool()(set_display_mode)
     mcp.tool()(set_view_background)
+    mcp.tool()(rotate_view)
+    mcp.tool()(pan_view)
+    mcp.tool()(zoom_view)
+    mcp.tool()(refresh_view)
     mcp.tool()(get_camera)
     mcp.tool()(set_camera)

@@ -1599,6 +1599,111 @@ class TestSetCamera:
         assert "error" in result
 
 
+class TestRotateCamera:
+    def test_success(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.rotate_camera(0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        assert result["status"] == "camera_rotated"
+        assert result["angle_rad"] == 0.5
+        assert result["center"] == [0.0, 0.0, 0.0]
+        assert result["axis"] == [0.0, 1.0, 0.0]
+        view_obj.RotateCamera.assert_called_once_with(0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+
+    def test_custom_axis(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.rotate_camera(1.57, 0.1, 0.2, 0.3, 1.0, 0.0, 0.0)
+        assert result["status"] == "camera_rotated"
+        assert result["axis"] == [1.0, 0.0, 0.0]
+        view_obj.RotateCamera.assert_called_once_with(1.57, 0.1, 0.2, 0.3, 1.0, 0.0, 0.0)
+
+    def test_defaults(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.rotate_camera(0.3)
+        assert result["status"] == "camera_rotated"
+        # Default center=(0,0,0), axis=(0,1,0)
+        view_obj.RotateCamera.assert_called_once_with(0.3, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+
+    def test_no_window(self):
+        from solidedge_mcp.backends.export import ViewModel
+        dm = MagicMock()
+        doc = MagicMock()
+        doc.Windows.Count = 0
+        dm.get_active_document.return_value = doc
+        vm = ViewModel(dm)
+        result = vm.rotate_camera(0.5)
+        assert "error" in result
+
+
+class TestPanCamera:
+    def test_success(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.pan_camera(100, -50)
+        assert result["status"] == "camera_panned"
+        assert result["dx"] == 100
+        assert result["dy"] == -50
+        view_obj.PanCamera.assert_called_once_with(100, -50)
+
+    def test_zero_pan(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.pan_camera(0, 0)
+        assert result["status"] == "camera_panned"
+        view_obj.PanCamera.assert_called_once_with(0, 0)
+
+    def test_no_window(self):
+        from solidedge_mcp.backends.export import ViewModel
+        dm = MagicMock()
+        doc = MagicMock()
+        doc.Windows.Count = 0
+        dm.get_active_document.return_value = doc
+        vm = ViewModel(dm)
+        result = vm.pan_camera(10, 20)
+        assert "error" in result
+
+
+class TestZoomCamera:
+    def test_zoom_in(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.zoom_camera(2.0)
+        assert result["status"] == "camera_zoomed"
+        assert result["factor"] == 2.0
+        view_obj.ZoomCamera.assert_called_once_with(2.0)
+
+    def test_zoom_out(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.zoom_camera(0.5)
+        assert result["status"] == "camera_zoomed"
+        assert result["factor"] == 0.5
+        view_obj.ZoomCamera.assert_called_once_with(0.5)
+
+    def test_no_window(self):
+        from solidedge_mcp.backends.export import ViewModel
+        dm = MagicMock()
+        doc = MagicMock()
+        doc.Windows.Count = 0
+        dm.get_active_document.return_value = doc
+        vm = ViewModel(dm)
+        result = vm.zoom_camera(1.5)
+        assert "error" in result
+
+
+class TestRefreshView:
+    def test_success(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.refresh_view()
+        assert result["status"] == "view_refreshed"
+        view_obj.Update.assert_called_once()
+
+    def test_no_window(self):
+        from solidedge_mcp.backends.export import ViewModel
+        dm = MagicMock()
+        doc = MagicMock()
+        doc.Windows.Count = 0
+        dm.get_active_document.return_value = doc
+        vm = ViewModel(dm)
+        result = vm.refresh_view()
+        assert "error" in result
+
+
 # ============================================================================
 # TIER 3: CREATE PARTS LIST
 # ============================================================================
@@ -1819,4 +1924,182 @@ class TestStartCommand:
         conn.application.StartCommand.side_effect = Exception("Invalid command ID")
 
         result = conn.start_command(99999)
+        assert "error" in result
+
+
+# ============================================================================
+# DRAWING VIEW: GET COUNT
+# ============================================================================
+
+class TestGetDrawingViewCount:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 3
+        # Make _oleobj_ raise so the late-binding branch is skipped
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_count()
+        assert result["count"] == 3
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.get_drawing_view_count()
+        assert "error" in result
+
+
+# ============================================================================
+# DRAWING VIEW: GET SCALE
+# ============================================================================
+
+class TestGetDrawingViewScale:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        view.ScaleFactor = 2.0
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_scale(0)
+        assert result["view_index"] == 0
+        assert result["scale"] == 2.0
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_scale(5)
+        assert "error" in result
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.get_drawing_view_scale(0)
+        assert "error" in result
+
+
+# ============================================================================
+# DRAWING VIEW: SET SCALE
+# ============================================================================
+
+class TestSetDrawingViewScale:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.set_drawing_view_scale(0, 0.5)
+        assert result["status"] == "set"
+        assert result["scale"] == 0.5
+        assert view.ScaleFactor == 0.5
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.set_drawing_view_scale(5, 1.0)
+        assert "error" in result
+
+
+# ============================================================================
+# DRAWING VIEW: DELETE
+# ============================================================================
+
+class TestDeleteDrawingView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 3
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.delete_drawing_view(1)
+        assert result["status"] == "deleted"
+        assert result["view_index"] == 1
+        view.Delete.assert_called_once()
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.delete_drawing_view(5)
+        assert "error" in result
+
+
+# ============================================================================
+# DRAWING VIEW: UPDATE
+# ============================================================================
+
+class TestUpdateDrawingView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.update_drawing_view(0)
+        assert result["status"] == "updated"
+        assert result["view_index"] == 0
+        view.Update.assert_called_once()
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.update_drawing_view(5)
         assert "error" in result

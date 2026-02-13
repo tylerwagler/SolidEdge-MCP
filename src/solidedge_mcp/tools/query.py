@@ -268,6 +268,21 @@ def select_refresh_display() -> dict:
     return query_manager.select_refresh_display()
 
 
+# === Feature Analysis ===
+
+def get_feature_status(feature_name: str) -> dict:
+    """Get the status of a feature (OK, suppressed, failed, etc.)."""
+    return query_manager.get_feature_status(feature_name)
+
+def get_feature_profiles(feature_name: str) -> dict:
+    """Get the sketch profiles associated with a feature."""
+    return query_manager.get_feature_profiles(feature_name)
+
+def get_vertex_count() -> dict:
+    """Get the total vertex count on the model body."""
+    return query_manager.get_vertex_count()
+
+
 # === Recompute ===
 
 def recompute() -> dict:
@@ -348,5 +363,9 @@ def register(mcp):
     mcp.tool()(select_suspend_display)
     mcp.tool()(select_resume_display)
     mcp.tool()(select_refresh_display)
+    # Feature Analysis
+    mcp.tool()(get_feature_status)
+    mcp.tool()(get_feature_profiles)
+    mcp.tool()(get_vertex_count)
     # Recompute
     mcp.tool()(recompute)

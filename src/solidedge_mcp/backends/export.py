@@ -973,6 +973,156 @@ class ExportManager:
                 "traceback": traceback.format_exc()
             }
 
+    # =================================================================
+    # DRAWING VIEW MANAGEMENT
+    # =================================================================
+
+    def _get_drawing_views(self):
+        """Get the DrawingViews collection from the active sheet."""
+        doc = self.doc_manager.get_active_document()
+        if not hasattr(doc, 'Sheets'):
+            raise Exception("Active document is not a draft document")
+        sheet = doc.ActiveSheet
+        import win32com.client.dynamic
+        dvs = sheet.DrawingViews
+        # Force late binding to avoid Part type library mismatch
+        try:
+            dvs = win32com.client.dynamic.Dispatch(dvs._oleobj_)
+        except Exception:
+            pass
+        return dvs
+
+    def get_drawing_view_count(self) -> Dict[str, Any]:
+        """
+        Get the number of drawing views on the active sheet.
+
+        Returns:
+            Dict with view count
+        """
+        try:
+            dvs = self._get_drawing_views()
+            return {"count": dvs.Count}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_drawing_view_scale(self, view_index: int) -> Dict[str, Any]:
+        """
+        Get the scale of a drawing view.
+
+        Args:
+            view_index: 0-based view index
+
+        Returns:
+            Dict with scale value
+        """
+        try:
+            dvs = self._get_drawing_views()
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+            scale = view.ScaleFactor
+
+            return {
+                "view_index": view_index,
+                "scale": scale
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def set_drawing_view_scale(self, view_index: int, scale: float) -> Dict[str, Any]:
+        """
+        Set the scale of a drawing view.
+
+        Args:
+            view_index: 0-based view index
+            scale: New scale factor (e.g. 1.0, 0.5, 2.0)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+            view.ScaleFactor = scale
+
+            return {
+                "status": "set",
+                "view_index": view_index,
+                "scale": scale
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def delete_drawing_view(self, view_index: int) -> Dict[str, Any]:
+        """
+        Delete a drawing view from the active sheet.
+
+        Args:
+            view_index: 0-based view index
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+            view.Delete()
+
+            return {
+                "status": "deleted",
+                "view_index": view_index,
+                "remaining_views": dvs.Count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def update_drawing_view(self, view_index: int) -> Dict[str, Any]:
+        """
+        Force update a drawing view to reflect 3D model changes.
+
+        Args:
+            view_index: 0-based view index
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+            view.Update()
+
+            return {
+                "status": "updated",
+                "view_index": view_index
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     # Aliases for consistency with MCP tool names
     def export_step(self, file_path: str) -> Dict[str, Any]:
         """Alias for export_to_step"""
@@ -1231,6 +1381,144 @@ class ViewModel:
                 "perspective": bool(result[9]),
                 "scale_or_angle": result[10]
             }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def rotate_camera(self, angle: float,
+                      center_x: float = 0.0, center_y: float = 0.0, center_z: float = 0.0,
+                      axis_x: float = 0.0, axis_y: float = 1.0, axis_z: float = 0.0) -> Dict[str, Any]:
+        """
+        Rotate the camera around a specified axis through a center point.
+
+        Args:
+            angle: Rotation angle in radians
+            center_x, center_y, center_z: Center of rotation (meters)
+            axis_x, axis_y, axis_z: Rotation axis vector (default: Y-up)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Windows') or doc.Windows.Count == 0:
+                return {"error": "No window available"}
+
+            window = doc.Windows.Item(1)
+            view_obj = window.View if hasattr(window, 'View') else None
+
+            if not view_obj:
+                return {"error": "Cannot access view object"}
+
+            view_obj.RotateCamera(angle, center_x, center_y, center_z, axis_x, axis_y, axis_z)
+
+            return {
+                "status": "camera_rotated",
+                "angle_rad": angle,
+                "center": [center_x, center_y, center_z],
+                "axis": [axis_x, axis_y, axis_z]
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def pan_camera(self, dx: int, dy: int) -> Dict[str, Any]:
+        """
+        Pan the camera by pixel offsets.
+
+        Args:
+            dx: Horizontal pan in pixels (positive = right)
+            dy: Vertical pan in pixels (positive = down)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Windows') or doc.Windows.Count == 0:
+                return {"error": "No window available"}
+
+            window = doc.Windows.Item(1)
+            view_obj = window.View if hasattr(window, 'View') else None
+
+            if not view_obj:
+                return {"error": "Cannot access view object"}
+
+            view_obj.PanCamera(dx, dy)
+
+            return {
+                "status": "camera_panned",
+                "dx": dx,
+                "dy": dy
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def zoom_camera(self, factor: float) -> Dict[str, Any]:
+        """
+        Zoom the camera by a scale factor.
+
+        Args:
+            factor: Zoom scale factor (>1 = zoom in, <1 = zoom out)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Windows') or doc.Windows.Count == 0:
+                return {"error": "No window available"}
+
+            window = doc.Windows.Item(1)
+            view_obj = window.View if hasattr(window, 'View') else None
+
+            if not view_obj:
+                return {"error": "Cannot access view object"}
+
+            view_obj.ZoomCamera(factor)
+
+            return {
+                "status": "camera_zoomed",
+                "factor": factor
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def refresh_view(self) -> Dict[str, Any]:
+        """
+        Force the active view to refresh/update.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, 'Windows') or doc.Windows.Count == 0:
+                return {"error": "No window available"}
+
+            window = doc.Windows.Item(1)
+            view_obj = window.View if hasattr(window, 'View') else None
+
+            if not view_obj:
+                return {"error": "Cannot access view object"}
+
+            view_obj.Update()
+
+            return {"status": "view_refreshed"}
         except Exception as e:
             return {
                 "error": str(e),
