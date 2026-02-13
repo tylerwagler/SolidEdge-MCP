@@ -1657,3 +1657,260 @@ class TestGetMaterialProperty:
 
         result = qm.get_material_property("Steel", 99)
         assert "error" in result
+
+
+# ============================================================================
+# SELECT SET: REMOVE
+# ============================================================================
+
+class TestSelectRemove:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 3
+        doc.SelectSet = select_set
+
+        result = qm.select_remove(1)
+        assert result["status"] == "removed"
+        assert result["index"] == 1
+        select_set.Remove.assert_called_once_with(2)  # 0-based -> 1-based
+
+    def test_invalid_index(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 2
+        doc.SelectSet = select_set
+
+        result = qm.select_remove(5)
+        assert "error" in result
+
+
+# ============================================================================
+# SELECT SET: ALL
+# ============================================================================
+
+class TestSelectAll:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 10
+        doc.SelectSet = select_set
+
+        result = qm.select_all()
+        assert result["status"] == "selected_all"
+        assert result["selection_count"] == 10
+        select_set.AddAll.assert_called_once()
+
+
+# ============================================================================
+# SELECT SET: COPY / CUT / DELETE
+# ============================================================================
+
+class TestSelectCopy:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 2
+        doc.SelectSet = select_set
+
+        result = qm.select_copy()
+        assert result["status"] == "copied"
+        assert result["items_copied"] == 2
+        select_set.Copy.assert_called_once()
+
+    def test_empty_selection(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 0
+        doc.SelectSet = select_set
+
+        result = qm.select_copy()
+        assert "error" in result
+
+
+class TestSelectCut:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 3
+        doc.SelectSet = select_set
+
+        result = qm.select_cut()
+        assert result["status"] == "cut"
+        assert result["items_cut"] == 3
+        select_set.Cut.assert_called_once()
+
+    def test_empty_selection(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 0
+        doc.SelectSet = select_set
+
+        result = qm.select_cut()
+        assert "error" in result
+
+
+class TestSelectDelete:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 1
+        doc.SelectSet = select_set
+
+        result = qm.select_delete()
+        assert result["status"] == "deleted"
+        assert result["items_deleted"] == 1
+        select_set.Delete.assert_called_once()
+
+    def test_empty_selection(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        select_set.Count = 0
+        doc.SelectSet = select_set
+
+        result = qm.select_delete()
+        assert "error" in result
+
+
+# ============================================================================
+# SELECT SET: DISPLAY CONTROL
+# ============================================================================
+
+class TestSelectSuspendDisplay:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        doc.SelectSet = select_set
+
+        result = qm.select_suspend_display()
+        assert result["status"] == "display_suspended"
+        select_set.SuspendDisplay.assert_called_once()
+
+
+class TestSelectResumeDisplay:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        doc.SelectSet = select_set
+
+        result = qm.select_resume_display()
+        assert result["status"] == "display_resumed"
+        select_set.ResumeDisplay.assert_called_once()
+
+
+class TestSelectRefreshDisplay:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        select_set = MagicMock()
+        doc.SelectSet = select_set
+
+        result = qm.select_refresh_display()
+        assert result["status"] == "display_refreshed"
+        select_set.RefreshDisplay.assert_called_once()
+
+
+# ============================================================================
+# VARIABLES: GET FORMULA
+# ============================================================================
+
+class TestGetVariableFormula:
+    def test_found(self, query_mgr):
+        qm, doc = query_mgr
+        var = MagicMock()
+        var.DisplayName = "Width"
+        var.Formula = "100 mm"
+        var.Value = 0.1
+
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = var
+        doc.Variables = variables
+
+        result = qm.get_variable_formula("Width")
+        assert result["name"] == "Width"
+        assert result["formula"] == "100 mm"
+        assert result["value"] == 0.1
+
+    def test_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        var = MagicMock()
+        var.DisplayName = "Height"
+
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = var
+        doc.Variables = variables
+
+        result = qm.get_variable_formula("Width")
+        assert "error" in result
+
+
+# ============================================================================
+# VARIABLES: RENAME
+# ============================================================================
+
+class TestRenameVariable:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        var = MagicMock()
+        var.DisplayName = "OldVar"
+
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = var
+        doc.Variables = variables
+
+        result = qm.rename_variable("OldVar", "NewVar")
+        assert result["status"] == "renamed"
+        assert result["old_name"] == "OldVar"
+        assert result["new_name"] == "NewVar"
+        assert var.DisplayName == "NewVar"
+
+    def test_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        var = MagicMock()
+        var.DisplayName = "Width"
+
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = var
+        doc.Variables = variables
+
+        result = qm.rename_variable("Nonexistent", "NewName")
+        assert "error" in result
+
+
+# ============================================================================
+# VARIABLES: GET NAMES (DisplayName + SystemName)
+# ============================================================================
+
+class TestGetVariableNames:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        var = MagicMock()
+        var.DisplayName = "Width"
+        var.Name = "V1"
+        var.Value = 0.1
+
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = var
+        doc.Variables = variables
+
+        result = qm.get_variable_names("Width")
+        assert result["display_name"] == "Width"
+        assert result["system_name"] == "V1"
+        assert result["value"] == 0.1
+
+    def test_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        var = MagicMock()
+        var.DisplayName = "Height"
+
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = var
+        doc.Variables = variables
+
+        result = qm.get_variable_names("Width")
+        assert "error" in result

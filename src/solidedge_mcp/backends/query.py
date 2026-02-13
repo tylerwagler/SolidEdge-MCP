@@ -1279,6 +1279,209 @@ class QueryManager:
                 "traceback": traceback.format_exc()
             }
 
+    def select_remove(self, index: int) -> Dict[str, Any]:
+        """
+        Remove an object from the selection set by index.
+
+        Uses SelectSet.Remove(Index). Index is 1-based in COM.
+
+        Args:
+            index: 0-based index of the item to remove
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            select_set = doc.SelectSet
+
+            com_index = index + 1
+            if com_index < 1 or com_index > select_set.Count:
+                return {"error": f"Invalid index: {index}. Selection has {select_set.Count} items."}
+
+            select_set.Remove(com_index)
+
+            return {
+                "status": "removed",
+                "index": index,
+                "selection_count": select_set.Count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def select_all(self) -> Dict[str, Any]:
+        """
+        Select all objects in the active document.
+
+        Uses SelectSet.AddAll() to add all selectable objects.
+
+        Returns:
+            Dict with status and new selection count
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            select_set = doc.SelectSet
+            select_set.AddAll()
+
+            return {
+                "status": "selected_all",
+                "selection_count": select_set.Count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def select_copy(self) -> Dict[str, Any]:
+        """
+        Copy the current selection to the clipboard.
+
+        Uses SelectSet.Copy().
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            select_set = doc.SelectSet
+
+            if select_set.Count == 0:
+                return {"error": "Nothing selected to copy"}
+
+            select_set.Copy()
+
+            return {
+                "status": "copied",
+                "items_copied": select_set.Count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def select_cut(self) -> Dict[str, Any]:
+        """
+        Cut the current selection to the clipboard.
+
+        Uses SelectSet.Cut().
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            select_set = doc.SelectSet
+
+            if select_set.Count == 0:
+                return {"error": "Nothing selected to cut"}
+
+            count = select_set.Count
+            select_set.Cut()
+
+            return {
+                "status": "cut",
+                "items_cut": count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def select_delete(self) -> Dict[str, Any]:
+        """
+        Delete the currently selected objects.
+
+        Uses SelectSet.Delete().
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            select_set = doc.SelectSet
+
+            if select_set.Count == 0:
+                return {"error": "Nothing selected to delete"}
+
+            count = select_set.Count
+            select_set.Delete()
+
+            return {
+                "status": "deleted",
+                "items_deleted": count
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def select_suspend_display(self) -> Dict[str, Any]:
+        """
+        Suspend display updates for the selection set.
+
+        Uses SelectSet.SuspendDisplay(). Call before batch selection
+        changes to improve performance.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            doc.SelectSet.SuspendDisplay()
+            return {"status": "display_suspended"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def select_resume_display(self) -> Dict[str, Any]:
+        """
+        Resume display updates for the selection set.
+
+        Uses SelectSet.ResumeDisplay(). Call after SuspendDisplay
+        to refresh the visual selection highlights.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            doc.SelectSet.ResumeDisplay()
+            return {"status": "display_resumed"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def select_refresh_display(self) -> Dict[str, Any]:
+        """
+        Refresh the display of the selection set.
+
+        Uses SelectSet.RefreshDisplay(). Forces a visual refresh
+        of selection highlights without suspend/resume cycle.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            doc.SelectSet.RefreshDisplay()
+            return {"status": "display_refreshed"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
     # =================================================================
     # BODY APPEARANCE & MATERIAL
     # =================================================================
@@ -2337,6 +2540,125 @@ class QueryManager:
                 "matches": matches,
                 "count": len(matches)
             }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_variable_formula(self, name: str) -> Dict[str, Any]:
+        """
+        Get the formula of a variable by name.
+
+        Args:
+            name: Variable display name
+
+        Returns:
+            Dict with variable formula string
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            variables = doc.Variables
+
+            for i in range(1, variables.Count + 1):
+                try:
+                    var = variables.Item(i)
+                    display_name = var.DisplayName if hasattr(var, 'DisplayName') else ""
+                    if display_name == name:
+                        result = {"name": name}
+                        try:
+                            result["formula"] = var.Formula
+                        except Exception:
+                            result["formula"] = None
+                        try:
+                            result["value"] = var.Value
+                        except Exception:
+                            pass
+                        return result
+                except Exception:
+                    continue
+
+            return {"error": f"Variable '{name}' not found"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def rename_variable(self, old_name: str, new_name: str) -> Dict[str, Any]:
+        """
+        Rename a variable by changing its DisplayName.
+
+        Finds the variable by its current display name and sets a new one.
+
+        Args:
+            old_name: Current variable display name
+            new_name: New display name
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            variables = doc.Variables
+
+            for i in range(1, variables.Count + 1):
+                try:
+                    var = variables.Item(i)
+                    display_name = var.DisplayName if hasattr(var, 'DisplayName') else ""
+                    if display_name == old_name:
+                        var.DisplayName = new_name
+                        return {
+                            "status": "renamed",
+                            "old_name": old_name,
+                            "new_name": new_name
+                        }
+                except Exception:
+                    continue
+
+            return {"error": f"Variable '{old_name}' not found"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_variable_names(self, name: str) -> Dict[str, Any]:
+        """
+        Get both the DisplayName and SystemName of a variable.
+
+        Useful for understanding how Solid Edge internally identifies
+        variables vs. how they appear in the UI.
+
+        Args:
+            name: Variable display name to look up
+
+        Returns:
+            Dict with display_name and system_name
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            variables = doc.Variables
+
+            for i in range(1, variables.Count + 1):
+                try:
+                    var = variables.Item(i)
+                    display_name = var.DisplayName if hasattr(var, 'DisplayName') else ""
+                    if display_name == name:
+                        result = {"display_name": display_name}
+                        try:
+                            result["system_name"] = var.Name
+                        except Exception:
+                            result["system_name"] = None
+                        try:
+                            result["value"] = var.Value
+                        except Exception:
+                            pass
+                        return result
+                except Exception:
+                    continue
+
+            return {"error": f"Variable '{name}' not found"}
         except Exception as e:
             return {
                 "error": str(e),

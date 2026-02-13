@@ -42,6 +42,34 @@ def do_idle() -> dict:
     """Process pending background operations."""
     return connection.do_idle()
 
+def activate_application() -> dict:
+    """Activate (bring to foreground) the Solid Edge application window."""
+    return connection.activate_application()
+
+def abort_command(abort_all: bool = True) -> dict:
+    """Abort the current Solid Edge command."""
+    return connection.abort_command(abort_all)
+
+def get_active_environment() -> dict:
+    """Get the currently active environment (Part, Assembly, Draft, etc.)."""
+    return connection.get_active_environment()
+
+def get_status_bar() -> dict:
+    """Get the current status bar text."""
+    return connection.get_status_bar()
+
+def set_status_bar(text: str) -> dict:
+    """Set the status bar text."""
+    return connection.set_status_bar(text)
+
+def get_visible() -> dict:
+    """Get the visibility state of the Solid Edge window."""
+    return connection.get_visible()
+
+def set_visible(visible: bool) -> dict:
+    """Set the visibility of the Solid Edge window."""
+    return connection.set_visible(visible)
+
 def register(mcp):
     """Register connection tools with the MCP server."""
     mcp.tool()(connect_to_solidedge)
@@ -54,3 +82,10 @@ def register(mcp):
     mcp.tool()(start_command)
     mcp.tool()(set_performance_mode)
     mcp.tool()(do_idle)
+    mcp.tool()(activate_application)
+    mcp.tool()(abort_command)
+    mcp.tool()(get_active_environment)
+    mcp.tool()(get_status_bar)
+    mcp.tool()(set_status_bar)
+    mcp.tool()(get_visible)
+    mcp.tool()(set_visible)

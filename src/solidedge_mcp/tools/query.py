@@ -148,6 +148,18 @@ def query_variables(pattern: str = "*", case_insensitive: bool = True) -> dict:
     """Query variables matching a pattern."""
     return query_manager.query_variables(pattern, case_insensitive)
 
+def get_variable_formula(name: str) -> dict:
+    """Get the formula of a variable by name."""
+    return query_manager.get_variable_formula(name)
+
+def rename_variable(old_name: str, new_name: str) -> dict:
+    """Rename a variable's display name."""
+    return query_manager.rename_variable(old_name, new_name)
+
+def get_variable_names(name: str) -> dict:
+    """Get both DisplayName and SystemName of a variable."""
+    return query_manager.get_variable_names(name)
+
 
 # === Custom Properties ===
 
@@ -223,6 +235,38 @@ def select_add(object_type: str, index: int) -> dict:
     """Add an object to the selection set."""
     return query_manager.select_add(object_type, index)
 
+def select_remove(index: int) -> dict:
+    """Remove an object from the selection set by 0-based index."""
+    return query_manager.select_remove(index)
+
+def select_all() -> dict:
+    """Select all objects in the active document."""
+    return query_manager.select_all()
+
+def select_copy() -> dict:
+    """Copy the current selection to the clipboard."""
+    return query_manager.select_copy()
+
+def select_cut() -> dict:
+    """Cut the current selection to the clipboard."""
+    return query_manager.select_cut()
+
+def select_delete() -> dict:
+    """Delete the currently selected objects."""
+    return query_manager.select_delete()
+
+def select_suspend_display() -> dict:
+    """Suspend display updates for the selection set (for batch perf)."""
+    return query_manager.select_suspend_display()
+
+def select_resume_display() -> dict:
+    """Resume display updates for the selection set."""
+    return query_manager.select_resume_display()
+
+def select_refresh_display() -> dict:
+    """Refresh the display of the selection set."""
+    return query_manager.select_refresh_display()
+
 
 # === Recompute ===
 
@@ -273,6 +317,9 @@ def register(mcp):
     mcp.tool()(set_variable)
     mcp.tool()(add_variable)
     mcp.tool()(query_variables)
+    mcp.tool()(get_variable_formula)
+    mcp.tool()(rename_variable)
+    mcp.tool()(get_variable_names)
     # Custom Properties
     mcp.tool()(get_custom_properties)
     mcp.tool()(set_custom_property)
@@ -293,5 +340,13 @@ def register(mcp):
     mcp.tool()(get_select_set)
     mcp.tool()(clear_select_set)
     mcp.tool()(select_add)
+    mcp.tool()(select_remove)
+    mcp.tool()(select_all)
+    mcp.tool()(select_copy)
+    mcp.tool()(select_cut)
+    mcp.tool()(select_delete)
+    mcp.tool()(select_suspend_display)
+    mcp.tool()(select_resume_display)
+    mcp.tool()(select_refresh_display)
     # Recompute
     mcp.tool()(recompute)

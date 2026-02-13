@@ -1,7 +1,7 @@
 # Solid Edge Type Library Implementation Map
 
-Generated: 2026-02-12 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 258 MCP tools implemented
+Generated: 2026-02-13 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
+Current: 287 MCP tools implemented
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
@@ -13,17 +13,17 @@ against our current MCP tool coverage. It identifies gaps and prioritizes what t
 | **Part Features** |    52    |    15    |    28   |      9      |       71 / 181       |
 | **Assembly**      |    11    |     0    |     3   |      8      |       10 /  60       |
 | **Draft/Drawing** |     5    |     0    |     3   |      2      |       11 /  49       |
-| **Framework/App** |     7    |     0    |     6   |      1      |       22 /  53       |
-| **Total**         | **75**   |  **15**  |  **40** |   **20**    | **114 / 343 (33%)**  |
+| **Framework/App** |     7    |     0    |     6   |      1      |       44 /  53       |
+| **Total**         | **75**   |  **15**  |  **40** |   **20**    | **136 / 343 (40%)**  |
 
-**258 MCP tools** registered (many tools cover multiple methods or provide capabilities
+**287 MCP tools** registered (many tools cover multiple methods or provide capabilities
 beyond what the type library tracks, e.g. primitives, view controls, export formats).
 
-## Tool Count by Category (258 total)
+## Tool Count by Category (287 total)
 
 | Category                  | Count | Tools |
 |:--------------------------|:-----:|:---|
-| **Connection**            | 7     | Connect, disconnect, app info, quit, is_connected, process_info, start_command |
+| **Connection/Application**| 17    | Connect, disconnect, app info, quit, is_connected, process_info, install_info, start_command, set_performance_mode, do_idle, activate, abort_command, active_environment, status_bar (get/set), visible (get/set) |
 | **Document Management**   | 13    | Create (part, assembly, sheet metal, draft), open, save, close, list, activate, undo, redo |
 | **Sketching**             | 24    | Lines, circles, arcs (multiple), rects, polygons, ellipses, splines, points, constraints (9 types), fillet, chamfer, mirror, construction, hide profile, project_edge, include_edge |
 | **Basic Primitives**      | 10    | Box (3 variants), cylinder, sphere, box cutout (3 variants), cylinder cutout, sphere cutout |
@@ -39,11 +39,11 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 | **Sheet Metal**           | 10    | Base flange/tab, lofted flange, web network, advanced variants, emboss, flange |
 | **Body Operations**       | 11    | Add body, thicken, mesh, tag, construction, delete faces (2), delete holes (2), delete blends |
 | **Simplification**        | 4     | Auto-simplify, enclosure, duplicate |
-| **View/Display**          | 7     | Orientation, zoom, display mode, background color, get/set camera |
-| **Variables**             | 5     | Get all, get by name, set value, add variable, query/search |
+| **View/Display**          | 11    | Orientation, zoom, display mode, background color, get/set camera, rotate, pan, zoom factor, refresh |
+| **Variables**             | 8     | Get all, get by name, set value, add variable, query/search, get formula, rename, get names (display+system) |
 | **Custom Properties**     | 3     | Get all, set/create, delete |
 | **Body Topology**         | 3     | Body faces, body edges, face info |
-| **Performance**           | 2     | Set performance mode, recompute |
+| **Performance**           | 1     | Recompute (set_performance_mode moved to Connection/Application) |
 | **Query/Analysis**        | 25    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property |
 | **Feature Management**    | 6     | Suppress, unsuppress, face rotate (2), draft angle, convert feature type |
 | **Export**                | 10    | STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, drawing, screenshot |
@@ -51,7 +51,7 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 | **Draft/Drawing**         | 11    | Sheets (add, activate, delete, rename), views, annotations (dimension, balloon, note, leader, text box), parts list |
 | **Part Features**         | 10    | Dimple, etch, rib, lip, drawn cutout, bead, louver, gusset, thread, slot, split |
 | **Diagnostics**           | 2     | API and feature inspection |
-| **Select Set**            | 3     | Get selection, clear selection, add to selection |
+| **Select Set**            | 11    | Get selection, clear selection, add, remove, select all, copy, cut, delete, suspend/resume/refresh display |
 
 ## Part 1: Part Feature Collections (Part.tlb)
 
@@ -556,17 +556,17 @@ Key properties NOT exposed:
 - [x] Quit - via `quit_application`
 - [x] `DoIdle` - via `do_idle`
 - [x] `StartCommand` - via `start_command`
-- [ ] `AbortCommand` - Abort running command
+- [x] `AbortCommand` - via `abort_command`
 - [ ] `GetGlobalParameter` / `SetGlobalParameter` - Global settings
 - [ ] `GetModelessTaskEventSource` - Event handling
-- [ ] `Activate` - Bring SE to foreground
+- [x] `Activate` - via `activate_application`
 
 Key Properties:
 - [x] `ActiveDocument` - via document tools
-- [ ] `ActiveEnvironment` - Current environment name
-- [ ] `StatusBar` - Status bar text
+- [x] `ActiveEnvironment` - via `get_active_environment`
+- [x] `StatusBar` (get/put) - via `get_status_bar`, `set_status_bar`
 - [ ] `DisplayAlerts` (get/put) - Alert suppression (have `set_performance_mode`)
-- [ ] `Visible` (get/put) - Show/hide SE window
+- [x] `Visible` (get/put) - via `get_visible`, `set_visible`
 - [ ] `SensorEvents` - Sensor monitoring
 
 ### 4.2 View Interface (60 methods)
@@ -576,11 +576,11 @@ Key Properties:
 - [x] `ApplyNamedView` - via `set_view`
 - [x] `SaveAsImage` - via `capture_screenshot`
 - [x] `GetCamera` / `SetCamera` - via `get_camera`, `set_camera`
-- [ ] `RotateCamera` - Orbit view
-- [ ] `PanCamera` - Pan view
-- [ ] `ZoomCamera` - Zoom by factor
+- [x] `RotateCamera` - via `rotate_view`
+- [x] `PanCamera` - via `pan_view`
+- [x] `ZoomCamera` - via `zoom_view`
 - [ ] `TransformModelToDC` / `TransformDCToModel` - **3D-to-screen coordinate mapping**
-- [ ] `Update` - Force view refresh
+- [x] `Update` - via `refresh_view`
 - [ ] `BeginCameraDynamics` / `EndCameraDynamics` - Smooth camera transitions
 
 ### 4.3 Variables Interface (13 methods)
@@ -589,11 +589,11 @@ Key Properties:
 - [x] `Edit` / value setting - via `set_variable`
 - [x] `Add` - via `add_variable`
 - [ ] `AddFromClipboard` - Variable from clipboard
-- [ ] `PutName` / `GetName` - Rename variable
+- [x] `PutName` / `GetName` - via `rename_variable`
 - [ ] `Translate` - Get variable by system name
 - [x] `Query` - via `query_variables`
-- [ ] `GetFormula` - Get variable formula
-- [ ] `GetDisplayName` / `GetSystemName` - Display vs system names
+- [x] `GetFormula` - via `get_variable_formula`
+- [x] `GetDisplayName` / `GetSystemName` - via `get_variable_names`
 - [ ] `CopyToClipboard` - Copy variable value
 
 ### 4.4 SelectSet Interface (13 methods)
@@ -601,10 +601,10 @@ Key Properties:
 - [x] `RemoveAll` - via `clear_select_set`
 - [x] `Item` / `Count` - via `get_select_set`
 - [x] `Add` - via `select_add`
-- [ ] `Remove` - Remove specific item
-- [ ] `AddAll` - Select everything
-- [ ] `Copy` / `Cut` / `Delete` - Clipboard operations on selection
-- [ ] `SuspendDisplay` / `ResumeDisplay` / `RefreshDisplay` - Selection display control
+- [x] `Remove` - via `select_remove`
+- [x] `AddAll` - via `select_all`
+- [x] `Copy` / `Cut` / `Delete` - via `select_copy`, `select_cut`, `select_delete`
+- [x] `SuspendDisplay` / `ResumeDisplay` / `RefreshDisplay` - via `select_suspend_display`, `select_resume_display`, `select_refresh_display`
 
 ### 4.5 Other Framework Interfaces
 
@@ -664,83 +664,7 @@ Key interfaces for precise geometry queries:
 
 ---
 
-## Part 6: Priority Implementation Roadmap
-
-### Tier 1: HIGH IMPACT, LIKELY FEASIBLE (14 tools) - ✅ 14/14 COMPLETE
-
-These fill critical gaps and use proven API patterns:
-
-| # | Tool | API Method | Status |
-|---|------|-----------|--------|
-| 1 | `create_swept_cutout` | SweptCutouts.Add | ✅ Implemented |
-| 2 | `create_helix_cutout` | HelixCutouts.AddFinite | ✅ Implemented |
-| 3 | `create_variable_round` | Rounds.AddVariable | ✅ Implemented |
-| 4 | `create_blend` | Blends.Add | ✅ Implemented |
-| 5 | `create_emboss` | EmbossFeatures.Add | ✅ Implemented |
-| 6 | `create_ref_plane_by_angle` | RefPlanes.AddAngularByAngle | ✅ Implemented |
-| 7 | `create_ref_plane_by_3_points` | RefPlanes.AddBy3Points | ✅ Implemented |
-| 8 | `create_ref_plane_midplane` | RefPlanes.AddMidPlane | ✅ Implemented |
-| 9 | `create_hole_through_all` | ExtrudedCutouts.AddThroughAllMulti | ✅ Implemented |
-| 10 | `create_flange` | Flanges.Add | ✅ Implemented |
-| 11 | `add_variable` | Variables.Add | ✅ Implemented |
-| 12 | `select_add` | SelectSet.Add | ✅ Implemented |
-| 13 | `create_box_cutout` | BoxFeatures.AddCutoutByTwoPoints | ✅ Implemented |
-| 14 | `create_cylinder_cutout` | CylinderFeatures.AddCutoutByCenterAndRadius | ✅ Implemented |
-
-**Bonus**: `create_sphere_cutout` (SphereFeatures.AddCutoutByCenterAndRadius) also implemented.
-
-### Tier 2: MEDIUM IMPACT, LIKELY FEASIBLE (16 tools) - ✅ 10/16 IMPLEMENTED
-
-| # | Tool | API Method | Status |
-|---|------|-----------|--------|
-| 15 | `create_extruded_cutout_from_to` | ExtrudedCutouts.AddFromToMulti | ⏳ Pending (requires face/plane selection) |
-| 16 | `create_extruded_cutout_through_next` | ExtrudedCutouts.AddThroughNextMulti | ✅ Implemented |
-| 17 | `create_normal_cutout_through_all` | NormalCutouts.AddThroughAllMulti | ✅ Implemented |
-| 18 | `create_delete_hole` | DeleteHoles.Add | ✅ Implemented |
-| 19 | `create_delete_blend` | DeleteBlends.Add | ✅ Implemented |
-| 20 | `create_revolved_surface` | RevolvedSurfaces.AddFinite | ✅ Implemented |
-| 21 | `create_lofted_surface` | LoftedSurfaces.Add | ✅ Implemented |
-| 22 | `create_swept_surface` | SweptSurfaces.Add | ✅ Implemented |
-| 23 | `create_bend` | Bends.Add | ⏳ Pending (14 params, complex SM) |
-| 24 | `create_jog` | (Jog feature) | ⏳ Pending (complex SM) |
-| 25 | `create_hem` | (Hem feature) | ⏳ Pending (complex SM) |
-| 26 | `create_close_corner` | CloseCorners.Add | ⏳ Pending (complex SM) |
-| 27 | `create_folded_view` | DrawingViews.AddByFold | ⏳ Pending (needs parent DrawingView) |
-| 28 | `create_detail_view` | DrawingViews.AddByDetailEnvelope | ⏳ Pending (needs parent DrawingView) |
-| 29 | `get_camera` / `set_camera` | View.GetCamera/SetCamera | ✅ Implemented |
-| 30 | `query_variables` | Variables.Query | ✅ Implemented |
-
-### Tier 3: MEDIUM IMPACT, MORE COMPLEX (12 tools) - ✅ 9/12 IMPLEMENTED (11 tools)
-
-| # | Tool | API Method | Status |
-|---|------|-----------|--------|
-| 31 | `project_edge` | Profile.ProjectEdge | ✅ Implemented |
-| 32 | `include_edge` | Profile.IncludeEdge | ✅ Implemented |
-| 33 | `get_feature_dimensions` | Feature.GetDimensions | ✅ Implemented |
-| 34 | `convert_feature_type` | Feature.ConvertToCutout/Protrusion | ✅ Implemented |
-| 35 | `create_assembly_cutout` | AssemblyFeaturesExtrudedCutout | ⏳ Complex face selection needed |
-| 36 | `create_assembly_hole` | AssemblyFeaturesHole | ⏳ Complex face selection needed |
-| 37 | `create_parts_list` | PartsList (draft) | ✅ Implemented |
-| 38 | `start_command` | Application.StartCommand | ✅ Implemented |
-| 39 | `occurrence_move` | Occurrence.Move | ✅ Implemented |
-| 40 | `occurrence_rotate` | Occurrence.Rotate | ✅ Implemented |
-| 41 | `set_material` | MatTable.ApplyMaterial + GetMaterialList + GetMatPropValue | ✅ 3 tools (set_material, get_material_list, get_material_property) |
-| 42 | `convert_to_sheet_metal` | ConvertPartToSM | ⏳ Complex - needs face selection |
-
-### Tier 4: LOW PRIORITY / EXPERIMENTAL (future)
-
-- Feature patterns (Ex variants - investigate if SAFEARRAY issue is avoided)
-- Assembly feature patterns/mirrors
-- Full relation creation with face selection (AddPlanar, AddAxial, etc.)
-- Wiring/harness features (Cable, Wire, Bundle)
-- Structural frames
-- DraftPrintUtility
-- Advanced surface operations (BlueSurf, SurfaceByBoundary, IntersectSurface)
-- FEA/Simulation interfaces (Study, Load, Constraint, etc.)
-
----
-
-## Part 7: Key Constants Reference
+## Part 6: Key Constants Reference
 
 The `constant.tlb` has 745 enums. Most important for new implementations:
 
@@ -761,101 +685,7 @@ The `constant.tlb` has 745 enums. Most important for new implementations:
 
 ---
 
-## Appendix: Interface Method Signatures for Tier 1 Items
-
-### SweptCutouts.Add
-```
-Add(NumCurves: VT_I4, TraceCurves: VT_VARIANT, TraceCurveTypes: VT_VARIANT,
-    NumSections: VT_I4, CrossSections: VT_VARIANT, CrossSectionTypes: VT_VARIANT,
-    Origins: VT_VARIANT, SegmentMaps: VT_VARIANT, MaterialSide: FeaturePropertyConstants,
-    StartExtentType: FeaturePropertyConstants, StartExtentDistance: VT_R8,
-    StartSurfaceOrRefPlane: VT_DISPATCH, EndExtentType: FeaturePropertyConstants,
-    EndExtentDistance: VT_R8, EndSurfaceOrRefPlane: VT_DISPATCH) -> SweptCutout*
-```
-
-### Rounds.AddVariable
-```
-AddVariable(NumberOfEdgeSets: VT_I4, EdgeSetArray: SAFEARRAY(VT_DISPATCH)*,
-            RadiusArray: SAFEARRAY(VT_R8)*) -> Round*
-```
-
-### Blends.Add
-```
-Add(NumberOfEdgeSets: VT_I4, EdgeSetArray: SAFEARRAY(VT_DISPATCH)*,
-    RadiusArray: SAFEARRAY(VT_R8)*) -> Blend*
-```
-
-### RefPlanes.AddAngularByAngle
-```
-AddAngularByAngle(ParentPlane: VT_DISPATCH, Angle: VT_R8,
-                  NormalSide: FeaturePropertyConstants,
-                  [Edge: VT_VARIANT]) -> RefPlane*
-```
-
-### RefPlanes.AddBy3Points
-```
-AddBy3Points(Point1X: VT_R8, Point1Y: VT_R8, Point1Z: VT_R8,
-             Point2X: VT_R8, Point2Y: VT_R8, Point2Z: VT_R8,
-             Point3X: VT_R8, Point3Y: VT_R8, Point3Z: VT_R8) -> RefPlane*
-```
-
-### RefPlanes.AddMidPlane
-```
-AddMidPlane(Plane1: VT_DISPATCH, Plane2: VT_DISPATCH) -> RefPlane*
-```
-
-### Holes.AddThroughAll
-```
-AddThroughAll(Profile: VT_DISPATCH, ProfilePlaneSide: FeaturePropertyConstants,
-              HoleData: HoleData*) -> Hole*
-```
-
-### Flanges.Add
-```
-Add(Profile: VT_DISPATCH, ThicknessSide: FeaturePropertyConstants,
-    Direction: FeaturePropertyConstants, DepthType: FeaturePropertyConstants,
-    Depth: VT_R8, ...) -> Flange*
-```
-
-### Variables.Add
-```
-Add(pName: VT_BSTR, pFormula: VT_BSTR, [UnitsType: VT_VARIANT]) -> variable*
-```
-
-### SelectSet.Add
-```
-Add(Dispatch: VT_DISPATCH) -> VT_VOID
-```
-
-### BoxFeatures.AddCutoutByTwoPoints
-```
-AddCutoutByTwoPoints(x1: VT_R8, y1: VT_R8, z1: VT_R8,
-                     x2: VT_R8, y2: VT_R8, z2: VT_R8,
-                     dAngle: VT_R8, dDepth: VT_R8,
-                     pPlane: VT_DISPATCH, ExtentSide: FeaturePropertyConstants,
-                     vbKeyPointExtent: VT_BOOL, pKeyPointObj: VT_DISPATCH,
-                     pKeyPointFlags: KeyPointExtentConstants*) -> Model*
-```
-
-### EmbossFeatures.Add
-```
-Add(Profile: VT_DISPATCH, FaceToEmboss: VT_DISPATCH,
-    EmbossType: FeaturePropertyConstants, ...) -> EmbossFeature*
-```
-
----
-
-## Appendix: Future Server Refactoring
-
-### Problem
-`server.py` is a monolith of ~4300 lines containing all 252 `@mcp.tool()` wrappers. This is a significant context sink for LLMs and hard to maintain.
-
-### Proposed Solution
-1. **Modularize** tool definitions into `src/solidedge_mcp/tools/` (connection.py, documents.py, sketching.py, etc.)
-2. **Dynamic registration** via `mcp.add_tool(func)` in `tools/__init__.py`
-3. **Thin entry point**: `server.py` becomes <100 lines (init FastMCP + call `register_tools`)
-
-### Target Structure
+### Structure
 ```
 src/solidedge_mcp/
 ├── server.py              <-- Thin entry point (< 100 lines)
@@ -871,8 +701,3 @@ src/solidedge_mcp/
 │   └── diagnostics.py
 └── backends/              <-- EXISTING: Core logic (unchanged)
 ```
-
-### Notes
-- `mcp.add_tool` method confirmed available on FastMCP
-- Existing unit tests verify `backends` logic and should pass without modification
-- A verification script will confirm all tools register correctly after refactoring

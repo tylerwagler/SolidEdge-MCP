@@ -321,3 +321,150 @@ class SolidEdgeConnection:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    def activate_application(self) -> Dict[str, Any]:
+        """
+        Activate (bring to foreground) the Solid Edge application window.
+
+        Uses Application.Activate().
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.Activate()
+            return {"status": "activated"}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def abort_command(self, abort_all: bool = True) -> Dict[str, Any]:
+        """
+        Abort the current Solid Edge command.
+
+        Uses Application.AbortCommand(AbortAll).
+
+        Args:
+            abort_all: If True, aborts all pending commands. If False,
+                       aborts only the most recent command.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.AbortCommand(abort_all)
+            return {"status": "aborted", "abort_all": abort_all}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_active_environment(self) -> Dict[str, Any]:
+        """
+        Get the currently active environment in Solid Edge.
+
+        The active environment determines which commands and menus
+        are available (e.g., Part, Assembly, Draft).
+
+        Returns:
+            Dict with environment info
+        """
+        try:
+            self.ensure_connected()
+            env = self.application.ActiveEnvironment
+
+            result = {"status": "success"}
+            try:
+                result["name"] = env.Name
+            except Exception:
+                result["name"] = str(env)
+            try:
+                result["caption"] = env.Caption
+            except Exception:
+                pass
+
+            return result
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_status_bar(self) -> Dict[str, Any]:
+        """
+        Get the current status bar text.
+
+        Returns:
+            Dict with status bar text
+        """
+        try:
+            self.ensure_connected()
+            text = self.application.StatusBar
+            return {"status": "success", "text": text}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def set_status_bar(self, text: str) -> Dict[str, Any]:
+        """
+        Set the status bar text.
+
+        Args:
+            text: Text to display in the status bar
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.StatusBar = text
+            return {"status": "set", "text": text}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def get_visible(self) -> Dict[str, Any]:
+        """
+        Get the visibility state of the Solid Edge application window.
+
+        Returns:
+            Dict with visible state
+        """
+        try:
+            self.ensure_connected()
+            visible = self.application.Visible
+            return {"status": "success", "visible": visible}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    def set_visible(self, visible: bool) -> Dict[str, Any]:
+        """
+        Set the visibility of the Solid Edge application window.
+
+        Args:
+            visible: True to show, False to hide
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.Visible = visible
+            return {"status": "set", "visible": visible}
+        except Exception as e:
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
