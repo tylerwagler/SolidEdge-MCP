@@ -433,6 +433,74 @@ def get_feature_parents(feature_name: str) -> dict:
     return query_manager.get_feature_parents(feature_name)
 
 
+# === Feature Editing ===
+
+
+def get_direction1_extent(feature_name: str) -> dict:
+    """Get Direction 1 extent parameters (type, distance) from a feature."""
+    return query_manager.get_direction1_extent(feature_name)
+
+
+def set_direction1_extent(feature_name: str, extent_type: int, distance: float = 0.0) -> dict:
+    """Set Direction 1 extent on a feature (13=Finite, 16=ThroughAll, 44=None)."""
+    return query_manager.set_direction1_extent(feature_name, extent_type, distance)
+
+
+def get_direction2_extent(feature_name: str) -> dict:
+    """Get Direction 2 extent parameters (type, distance) from a feature."""
+    return query_manager.get_direction2_extent(feature_name)
+
+
+def set_direction2_extent(feature_name: str, extent_type: int, distance: float = 0.0) -> dict:
+    """Set Direction 2 extent on a feature (13=Finite, 16=ThroughAll, 44=None)."""
+    return query_manager.set_direction2_extent(feature_name, extent_type, distance)
+
+
+def get_thin_wall_options(feature_name: str) -> dict:
+    """Get thin wall options (type, thicknesses) from a feature."""
+    return query_manager.get_thin_wall_options(feature_name)
+
+
+def set_thin_wall_options(
+    feature_name: str, wall_type: int, thickness1: float, thickness2: float = 0.0
+) -> dict:
+    """Set thin wall options on a feature."""
+    return query_manager.set_thin_wall_options(feature_name, wall_type, thickness1, thickness2)
+
+
+def get_from_face_offset(feature_name: str) -> dict:
+    """Get the 'from face' offset data from a feature."""
+    return query_manager.get_from_face_offset(feature_name)
+
+
+def set_from_face_offset(feature_name: str, offset: float) -> dict:
+    """Set the 'from face' offset distance on a feature."""
+    return query_manager.set_from_face_offset(feature_name, offset)
+
+
+def get_body_array(feature_name: str) -> dict:
+    """Get the body array (multi-body references) from a feature."""
+    return query_manager.get_body_array(feature_name)
+
+
+def set_body_array(feature_name: str, body_indices: list[int]) -> dict:
+    """Set the body array on a feature using 0-based model indices."""
+    return query_manager.set_body_array(feature_name, body_indices)
+
+
+# === Material Library (Batch 10) ===
+
+
+def get_material_library() -> dict:
+    """Get the full material library with names, densities, and properties."""
+    return query_manager.get_material_library()
+
+
+def set_material_by_name(material_name: str) -> dict:
+    """Look up a material by name and apply it to the active document."""
+    return query_manager.set_material_by_name(material_name)
+
+
 # === Registration ===
 
 
@@ -529,3 +597,17 @@ def register(mcp):
     mcp.tool()(delete_layer)
     # Feature Parents
     mcp.tool()(get_feature_parents)
+    # Feature Editing
+    mcp.tool()(get_direction1_extent)
+    mcp.tool()(set_direction1_extent)
+    mcp.tool()(get_direction2_extent)
+    mcp.tool()(set_direction2_extent)
+    mcp.tool()(get_thin_wall_options)
+    mcp.tool()(set_thin_wall_options)
+    mcp.tool()(get_from_face_offset)
+    mcp.tool()(set_from_face_offset)
+    mcp.tool()(get_body_array)
+    mcp.tool()(set_body_array)
+    # Material Library (Batch 10)
+    mcp.tool()(get_material_library)
+    mcp.tool()(set_material_by_name)

@@ -2919,3 +2919,464 @@ class QueryManager:
             return {"status": "set", "reflectivity": reflectivity}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # FEATURE EDITING
+    # =================================================================
+
+    def _find_feature(self, feature_name: str):
+        """Find a feature by name in DesignEdgebarFeatures. Returns (feature, doc) or raises."""
+        doc = self.doc_manager.get_active_document()
+        features = doc.DesignEdgebarFeatures
+        for i in range(1, features.Count + 1):
+            feat = features.Item(i)
+            if hasattr(feat, "Name") and feat.Name == feature_name:
+                return feat, doc
+        return None, doc
+
+    def get_direction1_extent(self, feature_name: str) -> dict[str, Any]:
+        """
+        Get Direction 1 extent data from a named feature.
+
+        Calls feature.GetDirection1Extent() which returns extent type,
+        distance, and optionally a face reference.
+
+        Args:
+            feature_name: Name of the feature in the design tree
+
+        Returns:
+            Dict with extent_type, distance, and feature_name
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            result = {"feature_name": feature_name}
+            try:
+                extent_data = feature.GetDirection1Extent()
+                if isinstance(extent_data, tuple):
+                    result["extent_type"] = extent_data[0] if len(extent_data) > 0 else None
+                    result["distance"] = extent_data[1] if len(extent_data) > 1 else None
+                    has_face = len(extent_data) > 2 and extent_data[2] is not None
+                    result["face_ref"] = str(extent_data[2]) if has_face else None
+                else:
+                    result["extent_type"] = extent_data
+            except Exception as e:
+                result["error_detail"] = f"GetDirection1Extent failed: {e}"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_direction1_extent(
+        self, feature_name: str, extent_type: int, distance: float = 0.0
+    ) -> dict[str, Any]:
+        """
+        Set Direction 1 extent on a named feature.
+
+        Calls feature.ApplyDirection1Extent(extent_type, distance, None).
+        Common extent types: igFinite=13, igThroughAll=16, igNone=44.
+
+        Args:
+            feature_name: Name of the feature in the design tree
+            extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
+            distance: Extent distance in meters (used when extent_type is Finite)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            feature.ApplyDirection1Extent(extent_type, distance, None)
+
+            return {
+                "status": "updated",
+                "feature_name": feature_name,
+                "extent_type": extent_type,
+                "distance": distance,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_direction2_extent(self, feature_name: str) -> dict[str, Any]:
+        """
+        Get Direction 2 extent data from a named feature.
+
+        Calls feature.GetDirection2Extent() which returns extent type,
+        distance, and optionally a face reference.
+
+        Args:
+            feature_name: Name of the feature in the design tree
+
+        Returns:
+            Dict with extent_type, distance, and feature_name
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            result = {"feature_name": feature_name}
+            try:
+                extent_data = feature.GetDirection2Extent()
+                if isinstance(extent_data, tuple):
+                    result["extent_type"] = extent_data[0] if len(extent_data) > 0 else None
+                    result["distance"] = extent_data[1] if len(extent_data) > 1 else None
+                    has_face = len(extent_data) > 2 and extent_data[2] is not None
+                    result["face_ref"] = str(extent_data[2]) if has_face else None
+                else:
+                    result["extent_type"] = extent_data
+            except Exception as e:
+                result["error_detail"] = f"GetDirection2Extent failed: {e}"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_direction2_extent(
+        self, feature_name: str, extent_type: int, distance: float = 0.0
+    ) -> dict[str, Any]:
+        """
+        Set Direction 2 extent on a named feature.
+
+        Calls feature.ApplyDirection2Extent(extent_type, distance, None).
+        Common extent types: igFinite=13, igThroughAll=16, igNone=44.
+
+        Args:
+            feature_name: Name of the feature in the design tree
+            extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
+            distance: Extent distance in meters (used when extent_type is Finite)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            feature.ApplyDirection2Extent(extent_type, distance, None)
+
+            return {
+                "status": "updated",
+                "feature_name": feature_name,
+                "extent_type": extent_type,
+                "distance": distance,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_thin_wall_options(self, feature_name: str) -> dict[str, Any]:
+        """
+        Get thin wall options from a named feature.
+
+        Calls feature.GetThinWallOptions() which returns the wall type
+        and thickness values.
+
+        Args:
+            feature_name: Name of the feature in the design tree
+
+        Returns:
+            Dict with wall_type, thickness1, thickness2
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            result = {"feature_name": feature_name}
+            try:
+                tw_data = feature.GetThinWallOptions()
+                if isinstance(tw_data, tuple):
+                    result["wall_type"] = tw_data[0] if len(tw_data) > 0 else None
+                    result["thickness1"] = tw_data[1] if len(tw_data) > 1 else None
+                    result["thickness2"] = tw_data[2] if len(tw_data) > 2 else None
+                else:
+                    result["wall_type"] = tw_data
+            except Exception as e:
+                result["error_detail"] = f"GetThinWallOptions failed: {e}"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_thin_wall_options(
+        self,
+        feature_name: str,
+        wall_type: int,
+        thickness1: float,
+        thickness2: float = 0.0,
+    ) -> dict[str, Any]:
+        """
+        Set thin wall options on a named feature.
+
+        Calls feature.SetThinWallOptions(wall_type, thickness1, thickness2).
+
+        Args:
+            feature_name: Name of the feature in the design tree
+            wall_type: Thin wall type constant
+            thickness1: First wall thickness in meters
+            thickness2: Second wall thickness in meters (default 0.0)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            feature.SetThinWallOptions(wall_type, thickness1, thickness2)
+
+            return {
+                "status": "updated",
+                "feature_name": feature_name,
+                "wall_type": wall_type,
+                "thickness1": thickness1,
+                "thickness2": thickness2,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_from_face_offset(self, feature_name: str) -> dict[str, Any]:
+        """
+        Get the 'from face' offset data from a named feature.
+
+        Calls feature.GetFromFaceOffsetData() which returns the offset
+        distance and optionally a face reference.
+
+        Args:
+            feature_name: Name of the feature in the design tree
+
+        Returns:
+            Dict with offset distance and face reference info
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            result = {"feature_name": feature_name}
+            try:
+                offset_data = feature.GetFromFaceOffsetData()
+                if isinstance(offset_data, tuple):
+                    result["offset"] = offset_data[0] if len(offset_data) > 0 else None
+                    has_face = len(offset_data) > 1 and offset_data[1] is not None
+                    result["face_ref"] = str(offset_data[1]) if has_face else None
+                else:
+                    result["offset"] = offset_data
+            except Exception as e:
+                result["error_detail"] = f"GetFromFaceOffsetData failed: {e}"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_from_face_offset(self, feature_name: str, offset: float) -> dict[str, Any]:
+        """
+        Set the 'from face' offset on a named feature.
+
+        Calls feature.SetFromFaceOffsetData(offset).
+
+        Args:
+            feature_name: Name of the feature in the design tree
+            offset: Offset distance in meters
+
+        Returns:
+            Dict with status
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            feature.SetFromFaceOffsetData(offset)
+
+            return {
+                "status": "updated",
+                "feature_name": feature_name,
+                "offset": offset,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_body_array(self, feature_name: str) -> dict[str, Any]:
+        """
+        Get the body array from a named feature.
+
+        Calls feature.GetBodyArray() to retrieve the array of body
+        references associated with a multi-body feature.
+
+        Args:
+            feature_name: Name of the feature in the design tree
+
+        Returns:
+            Dict with body count and body info
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            result = {"feature_name": feature_name}
+            try:
+                body_array = feature.GetBodyArray()
+                bodies = []
+                if body_array is not None:
+                    if isinstance(body_array, (list, tuple)):
+                        for idx, body in enumerate(body_array):
+                            body_info = {"index": idx}
+                            with contextlib.suppress(Exception):
+                                body_info["name"] = body.Name
+                            with contextlib.suppress(Exception):
+                                body_info["volume"] = body.Volume
+                            bodies.append(body_info)
+                    else:
+                        bodies.append({"index": 0, "raw": str(body_array)})
+                result["bodies"] = bodies
+                result["count"] = len(bodies)
+            except Exception as e:
+                result["error_detail"] = f"GetBodyArray failed: {e}"
+                result["bodies"] = []
+                result["count"] = 0
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_body_array(self, feature_name: str, body_indices: list[int]) -> dict[str, Any]:
+        """
+        Set the body array on a named feature.
+
+        Resolves body objects from the model by index (0-based) and calls
+        feature.SetBodyArray(body_array).
+
+        Args:
+            feature_name: Name of the feature in the design tree
+            body_indices: List of 0-based body indices from the Models collection
+
+        Returns:
+            Dict with status
+        """
+        try:
+            feature, doc = self._find_feature(feature_name)
+            if feature is None:
+                return {"error": f"Feature '{feature_name}' not found"}
+
+            # Resolve body references from Models collection
+            models = doc.Models
+            body_array = []
+            for idx in body_indices:
+                com_idx = idx + 1  # Convert 0-based to 1-based
+                if com_idx < 1 or com_idx > models.Count:
+                    return {"error": f"Invalid body index: {idx}. Models count: {models.Count}"}
+                model = models.Item(com_idx)
+                body_array.append(model.Body)
+
+            feature.SetBodyArray(body_array)
+
+            return {
+                "status": "updated",
+                "feature_name": feature_name,
+                "body_indices": body_indices,
+                "body_count": len(body_array),
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # MATERIAL LIBRARY (Batch 10)
+    # =================================================================
+
+    def get_material_library(self) -> dict[str, Any]:
+        """
+        Get the full material library from the active document.
+
+        Iterates the material table to list all available materials
+        with their names and density values.
+
+        Returns:
+            Dict with count and list of material info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            mat_table = doc.GetMaterialTable()
+            materials = []
+            for i in range(1, mat_table.Count + 1):
+                mat = mat_table.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["name"] = mat.Name
+                with contextlib.suppress(Exception):
+                    info["density"] = mat.Density
+                with contextlib.suppress(Exception):
+                    info["youngs_modulus"] = mat.YoungsModulus
+                with contextlib.suppress(Exception):
+                    info["poissons_ratio"] = mat.PoissonsRatio
+                materials.append(info)
+            return {"count": len(materials), "materials": materials}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_material_by_name(self, material_name: str) -> dict[str, Any]:
+        """
+        Look up a material by name in the material table and apply it.
+
+        Searches the material table for the given name and applies it
+        to the active document.
+
+        Args:
+            material_name: Name of the material to apply
+
+        Returns:
+            Dict with status and material info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            mat_table = doc.GetMaterialTable()
+
+            # Search for the material by name
+            found_mat = None
+            for i in range(1, mat_table.Count + 1):
+                mat = mat_table.Item(i)
+                try:
+                    if mat.Name == material_name:
+                        found_mat = mat
+                        break
+                except Exception:
+                    continue
+
+            if found_mat is None:
+                # Collect available names for error message
+                available = []
+                for i in range(1, mat_table.Count + 1):
+                    with contextlib.suppress(Exception):
+                        available.append(mat_table.Item(i).Name)
+                return {
+                    "error": f"Material '{material_name}' not found",
+                    "available": available[:20],
+                }
+
+            # Apply the material
+            try:
+                doc.ApplyStyle(found_mat)
+            except Exception:
+                # Alternative: try setting via material name property
+                try:
+                    doc.Material = material_name
+                except Exception:
+                    # Another fallback
+                    found_mat.Apply()
+
+            result: dict[str, Any] = {"status": "applied", "material": material_name}
+            with contextlib.suppress(Exception):
+                result["density"] = found_mat.Density
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}

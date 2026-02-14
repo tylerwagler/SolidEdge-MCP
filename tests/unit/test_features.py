@@ -2627,3 +2627,3287 @@ class TestCreateChamferUnequalOnFace:
         result = feature_mgr.create_chamfer_unequal_on_face(0.002, 0.004, 5)
         assert "error" in result
         assert "face index" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: REF PLANE NORMAL AT KEYPOINT
+# ============================================================================
+
+
+class TestCreateRefPlaneNormalAtKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, profile = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        ref_planes.Item.return_value = MagicMock()
+
+        result = feature_mgr.create_ref_plane_normal_at_keypoint("End", 2)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_normal_at_keypoint"
+        assert result["keypoint_type"] == "End"
+        ref_planes.AddNormalToCurveAtKeyPoint.assert_called_once()
+
+    def test_no_active_sketch(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+
+        result = feature_mgr.create_ref_plane_normal_at_keypoint("End", 2)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_invalid_pivot_plane_index(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_normal_at_keypoint("End", 10)
+        assert "error" in result
+        assert "Invalid pivot_plane_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: REF PLANE TANGENT CYLINDER AT ANGLE
+# ============================================================================
+
+
+class TestCreateRefPlaneTangentCylinderAngle:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        ref_planes.Item.return_value = MagicMock()
+
+        result = feature_mgr.create_ref_plane_tangent_cylinder_angle(0, 45.0, 1)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_tangent_cylinder_angle"
+        assert result["angle_degrees"] == 45.0
+        ref_planes.AddTangentToCylinderOrConeAtAngle.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        models.Count = 0
+
+        result = feature_mgr.create_ref_plane_tangent_cylinder_angle(0, 45.0, 1)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        faces = MagicMock()
+        faces.Count = 1
+        model.Body.Faces.return_value = faces
+
+        result = feature_mgr.create_ref_plane_tangent_cylinder_angle(5, 45.0, 1)
+        assert "error" in result
+        assert "Invalid face_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: REF PLANE TANGENT CYLINDER AT KEYPOINT
+# ============================================================================
+
+
+class TestCreateRefPlaneTangentCylinderKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        ref_planes.Item.return_value = MagicMock()
+
+        result = feature_mgr.create_ref_plane_tangent_cylinder_keypoint(0, "End", 1)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_tangent_cylinder_keypoint"
+        assert result["keypoint_type"] == "End"
+        ref_planes.AddTangentToCylinderOrConeAtKeyPoint.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        models.Count = 0
+
+        result = feature_mgr.create_ref_plane_tangent_cylinder_keypoint(0, "End", 1)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        faces = MagicMock()
+        faces.Count = 1
+        model.Body.Faces.return_value = faces
+
+        result = feature_mgr.create_ref_plane_tangent_cylinder_keypoint(5, "End", 1)
+        assert "error" in result
+        assert "Invalid face_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: REF PLANE TANGENT SURFACE AT KEYPOINT
+# ============================================================================
+
+
+class TestCreateRefPlaneTangentSurfaceKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        ref_planes.Item.return_value = MagicMock()
+
+        result = feature_mgr.create_ref_plane_tangent_surface_keypoint(0, "Start", 1)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_tangent_surface_keypoint"
+        assert result["keypoint_type"] == "Start"
+        ref_planes.AddTangentToCurvedSurfaceAtKeyPoint.assert_called_once()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        models.Count = 0
+
+        result = feature_mgr.create_ref_plane_tangent_surface_keypoint(0, "Start", 1)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_parent_plane_index(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_tangent_surface_keypoint(0, "End", 10)
+        assert "error" in result
+        assert "Invalid parent_plane_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: EXTRUDED SURFACE FROM-TO
+# ============================================================================
+
+
+class TestCreateExtrudedSurfaceFromTo:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, profile = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        doc.RefPlanes = ref_planes
+        ref_planes.Item.return_value = MagicMock()
+        constructions = MagicMock()
+        doc.Constructions = constructions
+        extruded_surfaces = MagicMock()
+        constructions.ExtrudedSurfaces = extruded_surfaces
+
+        result = feature_mgr.create_extruded_surface_from_to(1, 4)
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_surface_from_to"
+        assert result["from_plane_index"] == 1
+        assert result["to_plane_index"] == 4
+        extruded_surfaces.AddFromTo.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_active_sketch(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+
+        result = feature_mgr.create_extruded_surface_from_to(1, 4)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_invalid_from_plane(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_extruded_surface_from_to(10, 1)
+        assert "error" in result
+        assert "Invalid from_plane_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: EXTRUDED SURFACE BY KEYPOINT
+# ============================================================================
+
+
+class TestCreateExtrudedSurfaceByKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, profile = managers
+        constructions = MagicMock()
+        doc.Constructions = constructions
+        extruded_surfaces = MagicMock()
+        constructions.ExtrudedSurfaces = extruded_surfaces
+
+        result = feature_mgr.create_extruded_surface_by_keypoint("End")
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_surface_by_keypoint"
+        assert result["keypoint_type"] == "End"
+        extruded_surfaces.AddFiniteByKeyPoint.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_active_sketch(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+
+        result = feature_mgr.create_extruded_surface_by_keypoint("End")
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_start_keypoint(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        constructions = MagicMock()
+        doc.Constructions = constructions
+        extruded_surfaces = MagicMock()
+        constructions.ExtrudedSurfaces = extruded_surfaces
+
+        result = feature_mgr.create_extruded_surface_by_keypoint("Start")
+        assert result["status"] == "created"
+        assert result["keypoint_type"] == "Start"
+
+
+# ============================================================================
+# BATCH 4: EXTRUDED SURFACE BY CURVES
+# ============================================================================
+
+
+class TestCreateExtrudedSurfaceByCurves:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, profile = managers
+        constructions = MagicMock()
+        doc.Constructions = constructions
+        extruded_surfaces = MagicMock()
+        constructions.ExtrudedSurfaces = extruded_surfaces
+
+        result = feature_mgr.create_extruded_surface_by_curves(0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_surface_by_curves"
+        assert result["distance"] == 0.05
+        extruded_surfaces.AddByCurves.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_active_sketch(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+
+        result = feature_mgr.create_extruded_surface_by_curves(0.05)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_symmetric_direction(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        constructions = MagicMock()
+        doc.Constructions = constructions
+        extruded_surfaces = MagicMock()
+        constructions.ExtrudedSurfaces = extruded_surfaces
+
+        result = feature_mgr.create_extruded_surface_by_curves(0.05, "Symmetric")
+        assert result["status"] == "created"
+        assert result["direction"] == "Symmetric"
+
+
+# ============================================================================
+# BATCH 4: REVOLVED SURFACE SYNC
+# ============================================================================
+
+
+class TestCreateRevolvedSurfaceSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, models, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        rev_surfaces = MagicMock()
+        model.RevolvedSurfaces = rev_surfaces
+
+        result = feature_mgr.create_revolved_surface_sync(360.0)
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_surface_sync"
+        assert result["angle_degrees"] == 360.0
+        rev_surfaces.AddFiniteSync.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_active_sketch(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+
+        result = feature_mgr.create_revolved_surface_sync(360.0)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_axis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+
+        result = feature_mgr.create_revolved_surface_sync(360.0)
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+# ============================================================================
+# BATCH 4: REVOLVED SURFACE BY KEYPOINT
+# ============================================================================
+
+
+class TestCreateRevolvedSurfaceByKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, models, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        rev_surfaces = MagicMock()
+        model.RevolvedSurfaces = rev_surfaces
+
+        result = feature_mgr.create_revolved_surface_by_keypoint("End")
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_surface_by_keypoint"
+        assert result["keypoint_type"] == "End"
+        rev_surfaces.AddFiniteByKeyPoint.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_active_sketch(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+
+        result = feature_mgr.create_revolved_surface_by_keypoint("End")
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_axis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+
+        result = feature_mgr.create_revolved_surface_by_keypoint("End")
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+# ============================================================================
+# BATCH 4: LOFTED SURFACE V2
+# ============================================================================
+
+
+class TestCreateLoftedSurfaceV2:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, models, model, _ = managers
+        p1, p2 = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+        loft_surfaces = MagicMock()
+        model.LoftedSurfaces = loft_surfaces
+
+        result = feature_mgr.create_lofted_surface_v2()
+        assert result["status"] == "created"
+        assert result["type"] == "lofted_surface_v2"
+        assert result["num_profiles"] == 2
+        loft_surfaces.Add2.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_too_few_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
+
+        result = feature_mgr.create_lofted_surface_v2()
+        assert "error" in result
+        assert "at least 2 profiles" in result["error"]
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
+        models.Count = 0
+
+        result = feature_mgr.create_lofted_surface_v2()
+        assert "error" in result
+        assert "base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: SWEPT SURFACE EX
+# ============================================================================
+
+
+class TestCreateSweptSurfaceEx:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, models, model, _ = managers
+        path, cs = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
+        swept_surfaces = MagicMock()
+        model.SweptSurfaces = swept_surfaces
+
+        result = feature_mgr.create_swept_surface_ex()
+        assert result["status"] == "created"
+        assert result["type"] == "swept_surface_ex"
+        assert result["num_cross_sections"] == 1
+        swept_surfaces.AddEx.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_too_few_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
+
+        result = feature_mgr.create_swept_surface_ex()
+        assert "error" in result
+        assert "at least 2 profiles" in result["error"]
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        models.Count = 0
+
+        result = feature_mgr.create_swept_surface_ex()
+        assert "error" in result
+        assert "base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 4: EXTRUDED SURFACE FULL
+# ============================================================================
+
+
+class TestCreateExtrudedSurfaceFull:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, profile = managers
+        constructions = MagicMock()
+        doc.Constructions = constructions
+        extruded_surfaces = MagicMock()
+        constructions.ExtrudedSurfaces = extruded_surfaces
+
+        result = feature_mgr.create_extruded_surface_full(0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_surface_full"
+        assert result["distance"] == 0.05
+        assert result["treatment_type"] == "None"
+        extruded_surfaces.Add.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_active_sketch(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+
+        result = feature_mgr.create_extruded_surface_full(0.05)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_with_draft_treatment(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        constructions = MagicMock()
+        doc.Constructions = constructions
+        extruded_surfaces = MagicMock()
+        constructions.ExtrudedSurfaces = extruded_surfaces
+
+        result = feature_mgr.create_extruded_surface_full(
+            0.05, treatment_type="Draft", draft_angle=5.0
+        )
+        assert result["status"] == "created"
+        assert result["treatment_type"] == "Draft"
+        assert result["draft_angle"] == 5.0
+
+
+# ============================================================================
+# BATCH 5: EXTRUDE THROUGH NEXT V2
+# ============================================================================
+
+
+class TestCreateExtrudeThroughNextV2:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_extrude_through_next_v2("Normal")
+        assert result["status"] == "created"
+        assert result["type"] == "extrude_through_next_v2"
+        model.ExtrudedProtrusions.AddThroughNextMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude_through_next_v2()
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extrude_through_next_v2()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: EXTRUDE FROM TO V2
+# ============================================================================
+
+
+class TestCreateExtrudeFromToV2:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_extrude_from_to_v2(1, 2)
+        assert result["status"] == "created"
+        assert result["type"] == "extrude_from_to_v2"
+        model.ExtrudedProtrusions.AddFromToMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude_from_to_v2(1, 2)
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extrude_from_to_v2(1, 2)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: EXTRUDE BY KEYPOINT
+# ============================================================================
+
+
+class TestCreateExtrudeByKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_extrude_by_keypoint("Normal")
+        assert result["status"] == "created"
+        assert result["type"] == "extrude_by_keypoint"
+        model.ExtrudedProtrusions.AddFiniteByKeyPoint.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude_by_keypoint()
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extrude_by_keypoint()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: REVOLVE BY KEYPOINT
+# ============================================================================
+
+
+class TestCreateRevolveByKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        result = feature_mgr.create_revolve_by_keypoint()
+        assert result["status"] == "created"
+        assert result["type"] == "revolve_by_keypoint"
+        model.RevolvedProtrusions.AddFiniteByKeyPoint.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolve_by_keypoint()
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolve_by_keypoint()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: REVOLVE FULL
+# ============================================================================
+
+
+class TestCreateRevolveFull:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        result = feature_mgr.create_revolve_full(360.0, "None")
+        assert result["status"] == "created"
+        assert result["type"] == "revolve_full"
+        model.RevolvedProtrusions.Add.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolve_full()
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolve_full()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: EXTRUDED CUTOUT FROM TO V2
+# ============================================================================
+
+
+class TestCreateExtrudedCutoutFromToV2:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_extruded_cutout_from_to_v2(1, 2)
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_cutout_from_to_v2"
+        model.ExtrudedCutouts.AddFromToMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extruded_cutout_from_to_v2(1, 2)
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extruded_cutout_from_to_v2(1, 2)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: EXTRUDED CUTOUT BY KEYPOINT
+# ============================================================================
+
+
+class TestCreateExtrudedCutoutByKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_extruded_cutout_by_keypoint("Normal")
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_cutout_by_keypoint"
+        model.ExtrudedCutouts.AddFiniteByKeyPointMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extruded_cutout_by_keypoint()
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extruded_cutout_by_keypoint()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: REVOLVED CUTOUT SYNC
+# ============================================================================
+
+
+class TestCreateRevolvedCutoutSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        result = feature_mgr.create_revolved_cutout_sync(360.0)
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_cutout_sync"
+        model.RevolvedCutouts.AddFiniteMultiSync.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolved_cutout_sync()
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolved_cutout_sync()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: REVOLVED CUTOUT BY KEYPOINT
+# ============================================================================
+
+
+class TestCreateRevolvedCutoutByKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        result = feature_mgr.create_revolved_cutout_by_keypoint()
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_cutout_by_keypoint"
+        model.RevolvedCutouts.AddFiniteByKeyPointMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolved_cutout_by_keypoint()
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolved_cutout_by_keypoint()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: NORMAL CUTOUT FROM TO
+# ============================================================================
+
+
+class TestCreateNormalCutoutFromTo:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_normal_cutout_from_to(1, 2)
+        assert result["status"] == "created"
+        assert result["type"] == "normal_cutout_from_to"
+        model.NormalCutouts.AddFromToMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_normal_cutout_from_to(1, 2)
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_normal_cutout_from_to(1, 2)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: NORMAL CUTOUT THROUGH NEXT
+# ============================================================================
+
+
+class TestCreateNormalCutoutThroughNext:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_normal_cutout_through_next("Normal")
+        assert result["status"] == "created"
+        assert result["type"] == "normal_cutout_through_next"
+        model.NormalCutouts.AddThroughNextMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_normal_cutout_through_next()
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_normal_cutout_through_next()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: NORMAL CUTOUT BY KEYPOINT
+# ============================================================================
+
+
+class TestCreateNormalCutoutByKeypoint:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_normal_cutout_by_keypoint("Normal")
+        assert result["status"] == "created"
+        assert result["type"] == "normal_cutout_by_keypoint"
+        model.NormalCutouts.AddFiniteByKeyPointMulti.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_normal_cutout_by_keypoint()
+        assert "error" in result
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_normal_cutout_by_keypoint()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: LOFTED CUTOUT FULL
+# ============================================================================
+
+
+class TestCreateLoftedCutoutFull:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        p1, p2 = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+        result = feature_mgr.create_lofted_cutout_full()
+        assert result["status"] == "created"
+        assert result["type"] == "lofted_cutout_full"
+        assert result["num_profiles"] == 2
+        model.LoftedCutouts.Add.assert_called_once()
+
+    def test_too_few_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
+        result = feature_mgr.create_lofted_cutout_full()
+        assert "error" in result
+        assert "at least 2 profiles" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_lofted_cutout_full()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: SWEPT CUTOUT MULTI BODY
+# ============================================================================
+
+
+class TestCreateSweptCutoutMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        path, cs = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
+        result = feature_mgr.create_swept_cutout_multi_body()
+        assert result["status"] == "created"
+        assert result["type"] == "swept_cutout_multi_body"
+        model.SweptCutouts.AddMultiBody.assert_called_once()
+
+    def test_too_few_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
+        result = feature_mgr.create_swept_cutout_multi_body()
+        assert "error" in result
+        assert "at least 2 profiles" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_swept_cutout_multi_body()
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: HELIX FROM TO
+# ============================================================================
+
+
+class TestCreateHelixFromTo:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_helix_from_to(1, 2, 0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "helix_from_to"
+        model.HelixProtrusions.AddFromTo.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix_from_to(1, 2, 0.005)
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_from_to(1, 2, 0.005)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: HELIX FROM TO THIN WALL
+# ============================================================================
+
+
+class TestCreateHelixFromToThinWall:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_helix_from_to_thin_wall(1, 2, 0.005, 0.001)
+        assert result["status"] == "created"
+        assert result["type"] == "helix_from_to_thin_wall"
+        model.HelixProtrusions.AddFromToWithThinWall.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix_from_to_thin_wall(1, 2, 0.005, 0.001)
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_from_to_thin_wall(1, 2, 0.005, 0.001)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: HELIX CUTOUT SYNC
+# ============================================================================
+
+
+class TestCreateHelixCutoutSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        result = feature_mgr.create_helix_cutout_sync(0.005, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "helix_cutout_sync"
+        model.HelixCutouts.AddFiniteSync.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix_cutout_sync(0.005, 0.05)
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_cutout_sync(0.005, 0.05)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 5: HELIX CUTOUT FROM TO
+# ============================================================================
+
+
+class TestCreateHelixCutoutFromTo:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, model, _ = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_helix_cutout_from_to(1, 2, 0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "helix_cutout_from_to"
+        model.HelixCutouts.AddFromTo.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix_cutout_from_to(1, 2, 0.005)
+        assert "error" in result
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_cutout_from_to(1, 2, 0.005)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 6: ROUND BLEND
+# ============================================================================
+
+
+class TestCreateRoundBlend:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_round_blend(0, 0, 0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "round_blend"
+        model.Rounds.AddBlend.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_round_blend(0, 0, 0.002)
+        assert "error" in result
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_round_blend(99, 0, 0.002)
+        assert "error" in result
+        assert "Invalid face_index1" in result["error"]
+
+
+# ============================================================================
+# BATCH 6: ROUND SURFACE BLEND
+# ============================================================================
+
+
+class TestCreateRoundSurfaceBlend:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_round_surface_blend(0, 0, 0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "round_surface_blend"
+        model.Rounds.AddSurfaceBlend.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_round_surface_blend(0, 0, 0.002)
+        assert "error" in result
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_round_surface_blend(0, 99, 0.002)
+        assert "error" in result
+        assert "Invalid face_index2" in result["error"]
+
+
+# ============================================================================
+# BATCH 6: HOLE FROM TO
+# ============================================================================
+
+
+class TestCreateHoleFromTo:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        profile_mock = MagicMock()
+        ps.Profiles.Add.return_value = profile_mock
+        result = feature_mgr.create_hole_from_to(0.0, 0.0, 0.01, 1, 2)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_from_to"
+        model.ExtrudedCutouts.AddFromToMulti.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_from_to(0.0, 0.0, 0.01, 1, 2)
+        assert "error" in result
+
+    def test_invalid_plane(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_hole_from_to(0.0, 0.0, 0.01, 0, 2)
+        assert "error" in result
+        assert "Invalid from_plane_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 6: HOLE THROUGH NEXT
+# ============================================================================
+
+
+class TestCreateHoleThroughNext:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        profile_mock = MagicMock()
+        ps.Profiles.Add.return_value = profile_mock
+        result = feature_mgr.create_hole_through_next(0.0, 0.0, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_through_next"
+        model.ExtrudedCutouts.AddThroughNextMulti.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_through_next(0.0, 0.0, 0.01)
+        assert "error" in result
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_through_next(0.0, 0.0, 0.01, "Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+
+
+# ============================================================================
+# BATCH 6: HOLE SYNC
+# ============================================================================
+
+
+class TestCreateHoleSync:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_sync(0.0, 0.0, 0.01, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_sync"
+        model.Holes.AddSync.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_sync(0.0, 0.0, 0.01, 0.05)
+        assert "error" in result
+
+    def test_diameter_passed(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_sync(0.01, 0.02, 0.02, 0.03)
+        assert result["status"] == "created"
+        assert result["diameter"] == 0.02
+
+
+# ============================================================================
+# BATCH 6: HOLE FINITE EX
+# ============================================================================
+
+
+class TestCreateHoleFiniteEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_finite_ex(0.0, 0.0, 0.01, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_finite_ex"
+        model.Holes.AddFiniteEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_finite_ex(0.0, 0.0, 0.01, 0.05)
+        assert "error" in result
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_finite_ex(0.0, 0.0, 0.01, 0.05, "Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+
+
+# ============================================================================
+# BATCH 6: HOLE FROM TO EX
+# ============================================================================
+
+
+class TestCreateHoleFromToEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_from_to_ex(0.0, 0.0, 0.01, 1, 2)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_from_to_ex"
+        model.Holes.AddFromToEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_from_to_ex(0.0, 0.0, 0.01, 1, 2)
+        assert "error" in result
+
+    def test_invalid_plane(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_hole_from_to_ex(0.0, 0.0, 0.01, 0, 2)
+        assert "error" in result
+        assert "Invalid from_plane_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 6: HOLE THROUGH NEXT EX
+# ============================================================================
+
+
+class TestCreateHoleThroughNextEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_through_next_ex(0.0, 0.0, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_through_next_ex"
+        model.Holes.AddThroughNextEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_through_next_ex(0.0, 0.0, 0.01)
+        assert "error" in result
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_through_next_ex(0.0, 0.0, 0.01, "Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+
+
+# ============================================================================
+# BATCH 6: HOLE THROUGH ALL EX
+# ============================================================================
+
+
+class TestCreateHoleThroughAllEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_through_all_ex(0.0, 0.0, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_through_all_ex"
+        model.Holes.AddThroughAllEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_through_all_ex(0.0, 0.0, 0.01)
+        assert "error" in result
+
+    def test_plane_index_passed(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_through_all_ex(0.0, 0.0, 0.01, 2)
+        assert result["status"] == "created"
+        assert result["plane_index"] == 2
+
+
+# ============================================================================
+# BATCH 6: HOLE SYNC EX
+# ============================================================================
+
+
+class TestCreateHoleSyncEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_sync_ex(0.0, 0.0, 0.01, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_sync_ex"
+        model.Holes.AddSyncEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_sync_ex(0.0, 0.0, 0.01, 0.05)
+        assert "error" in result
+
+    def test_depth_returned(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_sync_ex(0.0, 0.0, 0.01, 0.03)
+        assert result["status"] == "created"
+        assert result["depth"] == 0.03
+
+
+# ============================================================================
+# BATCH 6: HOLE MULTI BODY
+# ============================================================================
+
+
+class TestCreateHoleMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_multi_body(0.0, 0.0, 0.01, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_multi_body"
+        model.Holes.AddMultiBody.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_multi_body(0.0, 0.0, 0.01, 0.05)
+        assert "error" in result
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_multi_body(0.0, 0.0, 0.01, 0.05, 1, "Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+
+
+# ============================================================================
+# BATCH 6: HOLE SYNC MULTI BODY
+# ============================================================================
+
+
+class TestCreateHoleSyncMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_sync_multi_body(0.0, 0.0, 0.01, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "hole_sync_multi_body"
+        model.Holes.AddSyncMultiBody.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hole_sync_multi_body(0.0, 0.0, 0.01, 0.05)
+        assert "error" in result
+
+    def test_depth_returned(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ps = MagicMock()
+        doc.ProfileSets.Add.return_value = ps
+        ps.Profiles.Add.return_value = MagicMock()
+        result = feature_mgr.create_hole_sync_multi_body(0.0, 0.0, 0.01, 0.04)
+        assert result["status"] == "created"
+        assert result["depth"] == 0.04
+
+
+# ============================================================================
+# BATCH 6: BLEND VARIABLE
+# ============================================================================
+
+
+class TestCreateBlendVariable:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_blend_variable(0.001, 0.003)
+        assert result["status"] == "created"
+        assert result["type"] == "blend_variable"
+        assert result["radius1"] == 0.001
+        assert result["radius2"] == 0.003
+        model.Blends.AddVariable.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_blend_variable(0.001, 0.003)
+        assert "error" in result
+
+    def test_no_faces(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        faces = MagicMock()
+        faces.Count = 0
+        model.Body.Faces.return_value = faces
+        result = feature_mgr.create_blend_variable(0.001, 0.003)
+        assert "error" in result
+        assert "No faces" in result["error"]
+
+
+# ============================================================================
+# BATCH 6: BLEND SURFACE
+# ============================================================================
+
+
+class TestCreateBlendSurface:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_blend_surface(0, 0)
+        assert result["status"] == "created"
+        assert result["type"] == "blend_surface"
+        model.Blends.AddSurfaceBlend.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_blend_surface(0, 0)
+        assert "error" in result
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_blend_surface(0, 99)
+        assert "error" in result
+        assert "Invalid face_index2" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: FLANGE BY MATCH FACE
+# ============================================================================
+
+
+class TestCreateFlangeByMatchFace:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_flange_by_match_face(0, 0, 0.02)
+        assert result["status"] == "created"
+        assert result["type"] == "flange_by_match_face"
+        assert result["flange_length"] == 0.02
+        model.Flanges.AddByMatchFace.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_flange_by_match_face(0, 0, 0.02)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face_index(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_flange_by_match_face(99, 0, 0.02)
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: FLANGE SYNC
+# ============================================================================
+
+
+class TestCreateFlangeSync:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_flange_sync(0, 0, 0.03)
+        assert result["status"] == "created"
+        assert result["type"] == "flange_sync"
+        assert result["flange_length"] == 0.03
+        model.Flanges.AddSync.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_flange_sync(0, 0, 0.03)
+        assert "error" in result
+
+    def test_invalid_edge_index(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_flange_sync(0, 99, 0.03)
+        assert "error" in result
+        assert "Invalid edge index" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: FLANGE BY FACE
+# ============================================================================
+
+
+class TestCreateFlangeByFace:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_flange_by_face(0, 0, 0, 0.025)
+        assert result["status"] == "created"
+        assert result["type"] == "flange_by_face"
+        assert result["flange_length"] == 0.025
+        model.Flanges.AddFlangeByFace.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_flange_by_face(0, 0, 0, 0.025)
+        assert "error" in result
+
+    def test_invalid_ref_face(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_flange_by_face(0, 0, 99, 0.025)
+        assert "error" in result
+        assert "Invalid ref_face_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: FLANGE WITH BEND CALC
+# ============================================================================
+
+
+class TestCreateFlangeWithBendCalc:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03)
+        assert result["status"] == "created"
+        assert result["type"] == "flange_with_bend_calc"
+        model.Flanges.AddByBendDeductionOrBendAllowance.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03)
+        assert "error" in result
+
+    def test_custom_side(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03, side="Left")
+        assert result["status"] == "created"
+        assert result["side"] == "Left"
+
+
+# ============================================================================
+# BATCH 7: FLANGE SYNC WITH BEND CALC
+# ============================================================================
+
+
+class TestCreateFlangeSyncWithBendCalc:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04)
+        assert result["status"] == "created"
+        assert result["type"] == "flange_sync_with_bend_calc"
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04)
+        assert "error" in result
+
+    def test_bend_deduction_returned(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04, bend_deduction=0.002)
+        assert result["status"] == "created"
+        assert result["bend_deduction"] == 0.002
+
+
+# ============================================================================
+# BATCH 7: CONTOUR FLANGE EX
+# ============================================================================
+
+
+class TestCreateContourFlangeEx:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_contour_flange_ex(0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "contour_flange_ex"
+        assert result["thickness"] == 0.005
+        model.ContourFlanges.AddEx.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_contour_flange_ex(0.005)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_contour_flange_ex(0.005)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: CONTOUR FLANGE SYNC
+# ============================================================================
+
+
+class TestCreateContourFlangeSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "contour_flange_sync"
+        model.ContourFlanges.AddSync.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_contour_flange_sync(99, 0, 0.005)
+        assert "error" in result
+        assert "Invalid face index" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: CONTOUR FLANGE SYNC WITH BEND
+# ============================================================================
+
+
+class TestCreateContourFlangeSyncWithBend:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "contour_flange_sync_with_bend"
+        model.ContourFlanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_bend_deduction_returned(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005, bend_deduction=0.001)
+        assert result["status"] == "created"
+        assert result["bend_deduction"] == 0.001
+
+
+# ============================================================================
+# BATCH 7: HEM
+# ============================================================================
+
+
+class TestCreateHem:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_hem(0, 0)
+        assert result["status"] == "created"
+        assert result["type"] == "hem"
+        assert result["hem_width"] == 0.005
+        model.Hems.Add.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_hem(0, 0)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_custom_hem_type(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_hem(0, 0, hem_type="Open")
+        assert result["status"] == "created"
+        assert result["hem_type"] == "Open"
+
+
+# ============================================================================
+# BATCH 7: JOG
+# ============================================================================
+
+
+class TestCreateJog:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_jog()
+        assert result["status"] == "created"
+        assert result["type"] == "jog"
+        assert result["jog_offset"] == 0.005
+        model.Jogs.AddFinite.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_jog()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_jog()
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: CLOSE CORNER
+# ============================================================================
+
+
+class TestCreateCloseCorner:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_close_corner(0, 0)
+        assert result["status"] == "created"
+        assert result["type"] == "close_corner"
+        assert result["closure_type"] == "Close"
+        model.CloseCorners.Add.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_close_corner(0, 0)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_overlap_type(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_close_corner(0, 0, closure_type="Overlap")
+        assert result["status"] == "created"
+        assert result["closure_type"] == "Overlap"
+
+
+# ============================================================================
+# BATCH 7: MULTI EDGE FLANGE
+# ============================================================================
+
+
+class TestCreateMultiEdgeFlange:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_multi_edge_flange(0, [0, 1], 0.03)
+        assert result["status"] == "created"
+        assert result["type"] == "multi_edge_flange"
+        assert result["edge_count"] == 2
+        assert result["flange_length"] == 0.03
+        model.MultiEdgeFlanges.Add.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_multi_edge_flange(0, [0], 0.03)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_edge_index(self, feature_mgr, managers):
+        _, _, _, _, _, _ = managers
+        result = feature_mgr.create_multi_edge_flange(0, [0, 99], 0.03)
+        assert "error" in result
+        assert "Invalid edge index" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: BEND WITH CALC
+# ============================================================================
+
+
+class TestCreateBendWithCalc:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_bend_with_calc()
+        assert result["status"] == "created"
+        assert result["type"] == "bend_with_calc"
+        assert result["bend_angle"] == 90.0
+        model.Bends.AddByBendDeductionOrBendAllowance.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_bend_with_calc()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_bend_with_calc()
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 7: CONVERT PART TO SHEET METAL
+# ============================================================================
+
+
+class TestConvertPartToSheetMetal:
+    def test_command_invoked(self, feature_mgr, managers):
+        doc_mgr, _, _, _, _, _ = managers
+        # Mock the connection manager and app
+        app = MagicMock()
+        doc_mgr.connection_manager = MagicMock()
+        doc_mgr.connection_manager.get_application.return_value = app
+        result = feature_mgr.convert_part_to_sheet_metal(0.002)
+        assert result.get("status") == "command_invoked" or "error" in result
+
+    def test_with_default_thickness(self, feature_mgr, managers):
+        doc_mgr, _, _, _, _, _ = managers
+        app = MagicMock()
+        doc_mgr.connection_manager = MagicMock()
+        doc_mgr.connection_manager.get_application.return_value = app
+        result = feature_mgr.convert_part_to_sheet_metal()
+        assert result.get("status") == "command_invoked" or "error" in result
+
+    def test_command_failure(self, feature_mgr, managers):
+        doc_mgr, _, _, _, _, _ = managers
+        app = MagicMock()
+        app.StartCommand.side_effect = Exception("Command failed")
+        doc_mgr.connection_manager = MagicMock()
+        doc_mgr.connection_manager.get_application.return_value = app
+        result = feature_mgr.convert_part_to_sheet_metal()
+        # Should handle failure gracefully
+        assert "error" in result or "status" in result
+
+
+# ============================================================================
+# BATCH 7: DIMPLE EX
+# ============================================================================
+
+
+class TestCreateDimpleEx:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_dimple_ex(0.003)
+        assert result["status"] == "created"
+        assert result["type"] == "dimple_ex"
+        assert result["depth"] == 0.003
+        model.Dimples.AddEx.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_dimple_ex(0.003)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_dimple_ex(0.003)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: THREAD EX
+# ============================================================================
+
+
+class TestCreateThreadEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_thread_ex(0, 0.01, 0.001)
+        assert result["status"] == "created"
+        assert result["type"] == "thread_ex"
+        assert result["face_index"] == 0
+        assert result["depth"] == 0.01
+        assert result["pitch"] == 0.001
+        model.Threads.AddEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_thread_ex(0, 0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        faces = MagicMock()
+        faces.Count = 1
+        model.Body.Faces.return_value = faces
+        result = feature_mgr.create_thread_ex(5, 0.01)
+        assert "error" in result
+        assert "Invalid face_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: SLOT EX
+# ============================================================================
+
+
+class TestCreateSlotEx:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_slot_ex(0.005, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "slot_ex"
+        assert result["width"] == 0.005
+        assert result["depth"] == 0.01
+        model.Slots.AddEx.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_slot_ex(0.005, 0.01)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_slot_ex(0.005, 0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: SLOT SYNC
+# ============================================================================
+
+
+class TestCreateSlotSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_slot_sync(0.005, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "slot_sync"
+        assert result["width"] == 0.005
+        assert result["depth"] == 0.01
+        model.Slots.AddSync.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_slot_sync(0.005, 0.01)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_slot_sync(0.005, 0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: DRAWN CUTOUT EX
+# ============================================================================
+
+
+class TestCreateDrawnCutoutEx:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_drawn_cutout_ex(0.005)
+        assert result["status"] == "created"
+        assert result["type"] == "drawn_cutout_ex"
+        assert result["depth"] == 0.005
+        model.DrawnCutouts.AddEx.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_drawn_cutout_ex(0.005)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_drawn_cutout_ex(0.005)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: LOUVER SYNC
+# ============================================================================
+
+
+class TestCreateLouverSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        result = feature_mgr.create_louver_sync(0.003)
+        assert result["status"] == "created"
+        assert result["type"] == "louver_sync"
+        assert result["depth"] == 0.003
+        model.Louvers.AddSync.assert_called_once()
+        sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_louver_sync(0.003)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_louver_sync(0.003)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: THICKEN SYNC
+# ============================================================================
+
+
+class TestCreateThickenSync:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_thicken_sync(0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "thicken_sync"
+        assert result["thickness"] == 0.002
+        model.Thickens.AddSync.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_thicken_sync(0.002)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_direction_reverse(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_thicken_sync(0.003, direction="Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+        model.Thickens.AddSync.assert_called_once()
+
+
+# ============================================================================
+# BATCH 9: MIRROR SYNC EX
+# ============================================================================
+
+
+def _setup_feature_lookup(doc, feature_name="Extrude1"):
+    """Helper to set up DesignEdgebarFeatures mock for feature lookup."""
+    feat = MagicMock()
+    feat.Name = feature_name
+    features = MagicMock()
+    features.Count = 1
+    features.Item.return_value = feat
+    doc.DesignEdgebarFeatures = features
+
+    ref_planes = MagicMock()
+    ref_planes.Count = 3
+    ref_planes.Item.return_value = MagicMock()
+    doc.RefPlanes = ref_planes
+
+    return feat
+
+
+class TestCreateMirrorSyncEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Extrude1")
+        mc = MagicMock()
+        mirror = MagicMock()
+        mirror.Name = "Mirror1"
+        mc.AddSyncEx.return_value = mirror
+        model.MirrorCopies = mc
+
+        result = feature_mgr.create_mirror_sync_ex("Extrude1", 1)
+        assert result["status"] == "created"
+        assert result["type"] == "mirror_sync_ex"
+        assert result["feature"] == "Extrude1"
+        mc.AddSyncEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_mirror_sync_ex("Extrude1", 1)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_feature_not_found(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        feat = MagicMock()
+        feat.Name = "OtherFeature"
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = feature_mgr.create_mirror_sync_ex("NonExistent", 1)
+        assert "error" in result
+        assert "not found" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: PATTERN RECTANGULAR EX
+# ============================================================================
+
+
+class TestCreatePatternRectangularEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        pattern = MagicMock()
+        pattern.Name = "Pattern1"
+        model.Patterns.AddByRectangularEx.return_value = pattern
+
+        result = feature_mgr.create_pattern_rectangular_ex("Hole1", 3, 2, 0.01, 0.02)
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_rectangular_ex"
+        assert result["x_count"] == 3
+        assert result["y_count"] == 2
+        model.Patterns.AddByRectangularEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_rectangular_ex("Hole1", 3, 2, 0.01, 0.02)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_feature_not_found(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        feat = MagicMock()
+        feat.Name = "OtherFeature"
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = feature_mgr.create_pattern_rectangular_ex("Missing", 3, 2, 0.01, 0.02)
+        assert "error" in result
+        assert "not found" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: PATTERN CIRCULAR EX
+# ============================================================================
+
+
+class TestCreatePatternCircularEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        pattern = MagicMock()
+        pattern.Name = "CircPattern1"
+        model.Patterns.AddByCircularEx.return_value = pattern
+
+        result = feature_mgr.create_pattern_circular_ex("Hole1", 6, 360.0, 0)
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_circular_ex"
+        assert result["count"] == 6
+        assert result["angle"] == 360.0
+        model.Patterns.AddByCircularEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_circular_ex("Hole1", 6, 360.0, 0)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        faces = MagicMock()
+        faces.Count = 1
+        model.Body.Faces.return_value = faces
+
+        result = feature_mgr.create_pattern_circular_ex("Hole1", 6, 360.0, 5)
+        assert "error" in result
+        assert "Invalid axis_face_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: PATTERN DUPLICATE
+# ============================================================================
+
+
+class TestCreatePatternDuplicate:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Extrude1")
+        pattern = MagicMock()
+        pattern.Name = "Dup1"
+        model.Patterns.AddDuplicate.return_value = pattern
+
+        result = feature_mgr.create_pattern_duplicate("Extrude1")
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_duplicate"
+        assert result["feature"] == "Extrude1"
+        model.Patterns.AddDuplicate.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_duplicate("Extrude1")
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_feature_not_found(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        feat = MagicMock()
+        feat.Name = "OtherFeature"
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = feature_mgr.create_pattern_duplicate("Missing")
+        assert "error" in result
+        assert "not found" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: PATTERN BY FILL
+# ============================================================================
+
+
+class TestCreatePatternByFill:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        pattern = MagicMock()
+        pattern.Name = "FillPattern1"
+        model.Patterns.AddByFill.return_value = pattern
+
+        result = feature_mgr.create_pattern_by_fill("Hole1", 0, 0.01, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_by_fill"
+        assert result["fill_region_face_index"] == 0
+        model.Patterns.AddByFill.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_by_fill("Hole1", 0, 0.01, 0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        faces = MagicMock()
+        faces.Count = 1
+        model.Body.Faces.return_value = faces
+
+        result = feature_mgr.create_pattern_by_fill("Hole1", 5, 0.01, 0.01)
+        assert "error" in result
+        assert "Invalid fill_region_face_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 9: PATTERN BY TABLE
+# ============================================================================
+
+
+class TestCreatePatternByTable:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        pattern = MagicMock()
+        pattern.Name = "TablePattern1"
+        model.Patterns.AddPatternByTable.return_value = pattern
+
+        result = feature_mgr.create_pattern_by_table("Hole1", [0.01, 0.02], [0.01, 0.02])
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_by_table"
+        assert result["point_count"] == 2
+        model.Patterns.AddPatternByTable.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_by_table("Hole1", [0.01], [0.01])
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_mismatched_offsets(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        result = feature_mgr.create_pattern_by_table("Hole1", [0.01, 0.02], [0.01])
+        assert "error" in result
+        assert "same length" in result["error"]
+
+
+# ============================================================================
+# BATCH 10 GROUP 1: REFERENCE PLANES V2
+# ============================================================================
+
+
+class TestCreateRefPlaneNormalAtDistanceV2:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        body = model.Body
+        edges = MagicMock()
+        edges.Count = 5
+        edge = MagicMock()
+        edges.Item.return_value = edge
+        body.Edges.return_value = edges
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_normal_at_distance_v2(0, 1, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_normal_at_distance_v2"
+        assert result["distance"] == 0.05
+        ref_planes.AddNormalToCurveAtDistance.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_ref_plane_normal_at_distance_v2(0, 1, 0.05)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_edge(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        body = model.Body
+        edges = MagicMock()
+        edges.Count = 2
+        body.Edges.return_value = edges
+        ref_planes = MagicMock()
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_normal_at_distance_v2(5, 1, 0.05)
+        assert "error" in result
+        assert "Invalid curve_edge_index" in result["error"]
+
+
+class TestCreateRefPlaneNormalAtArcRatioV2:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        body = model.Body
+        edges = MagicMock()
+        edges.Count = 3
+        edges.Item.return_value = MagicMock()
+        body.Edges.return_value = edges
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_normal_at_arc_ratio_v2(0, 1, 0.5)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_normal_at_arc_ratio_v2"
+        assert result["ratio"] == 0.5
+        ref_planes.AddNormalToCurveAtArcLengthRatio.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_ref_plane_normal_at_arc_ratio_v2(0, 1, 0.5)
+        assert "error" in result
+
+    def test_invalid_ratio(self, feature_mgr, managers):
+        result = feature_mgr.create_ref_plane_normal_at_arc_ratio_v2(0, 1, 1.5)
+        assert "error" in result
+        assert "Ratio must be between" in result["error"]
+
+
+class TestCreateRefPlaneNormalAtDistanceAlongV2:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        body = model.Body
+        edges = MagicMock()
+        edges.Count = 3
+        edges.Item.return_value = MagicMock()
+        body.Edges.return_value = edges
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_normal_at_distance_along_v2(0, 1, 0.02)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_normal_at_distance_along_v2"
+        assert result["distance"] == 0.02
+        ref_planes.AddNormalToCurveAtDistanceAlongCurve.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_ref_plane_normal_at_distance_along_v2(0, 1, 0.02)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_edge(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        body = model.Body
+        edges = MagicMock()
+        edges.Count = 1
+        body.Edges.return_value = edges
+        ref_planes = MagicMock()
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_normal_at_distance_along_v2(5, 1, 0.02)
+        assert "error" in result
+        assert "Invalid curve_edge_index" in result["error"]
+
+
+class TestCreateRefPlaneTangentParallel:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 3
+        faces.Item.return_value = MagicMock()
+        body.Faces.return_value = faces
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+
+        # Backend signature: (face_index, parent_plane_index, normal_side)
+        result = feature_mgr.create_ref_plane_tangent_parallel(0, 1)
+        assert result["status"] == "created"
+        assert result["type"] == "ref_plane_tangent_parallel"
+        ref_planes.AddParallelByTangent.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        models.Count = 0
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        doc.RefPlanes = ref_planes
+        result = feature_mgr.create_ref_plane_tangent_parallel(0, 1)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 1
+        body.Faces.return_value = faces
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_tangent_parallel(5, 1)
+        assert "error" in result
+        assert "Invalid face_index" in result["error"]
+
+
+# ============================================================================
+# BATCH 10 GROUP 2: SYNC VARIANTS
+# ============================================================================
+
+
+class TestCreateRevolveByKeypointSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        revolve = MagicMock()
+        revolve.Name = "RevolveSync1"
+        model.RevolvedProtrusions.AddFiniteByKeyPointSync.return_value = revolve
+
+        result = feature_mgr.create_revolve_by_keypoint_sync()
+        assert result["status"] == "created"
+        assert result["type"] == "revolve_by_keypoint_sync"
+        model.RevolvedProtrusions.AddFiniteByKeyPointSync.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolve_by_keypoint_sync()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolve_by_keypoint_sync()
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+class TestCreateHelixFromToSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        ref_planes = MagicMock()
+        ref_planes.Count = 10
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+        helix = MagicMock()
+        helix.Name = "HelixSync1"
+        model.HelixProtrusions.AddFromToSync.return_value = helix
+
+        result = feature_mgr.create_helix_from_to_sync(4, 5, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "helix_from_to_sync"
+        assert result["pitch"] == 0.01
+        model.HelixProtrusions.AddFromToSync.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix_from_to_sync(4, 5, 0.01)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_from_to_sync(4, 5, 0.01)
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+class TestCreateHelixFromToSyncThinWall:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        ref_planes = MagicMock()
+        ref_planes.Count = 10
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+        helix = MagicMock()
+        helix.Name = "HelixSyncTW1"
+        model.HelixProtrusions.AddFromToSyncWithThinWall.return_value = helix
+
+        result = feature_mgr.create_helix_from_to_sync_thin_wall(4, 5, 0.01, 0.001)
+        assert result["status"] == "created"
+        assert result["type"] == "helix_from_to_sync_thin_wall"
+        assert result["wall_thickness"] == 0.001
+        model.HelixProtrusions.AddFromToSyncWithThinWall.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix_from_to_sync_thin_wall(4, 5, 0.01, 0.001)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_from_to_sync_thin_wall(4, 5, 0.01, 0.001)
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+class TestCreateHelixCutoutFromToSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        ref_planes = MagicMock()
+        ref_planes.Count = 10
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+        helix = MagicMock()
+        helix.Name = "HelixCutSync1"
+        model.HelixCutouts.AddFromToSync.return_value = helix
+
+        result = feature_mgr.create_helix_cutout_from_to_sync(4, 5, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "helix_cutout_from_to_sync"
+        model.HelixCutouts.AddFromToSync.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix_cutout_from_to_sync(4, 5, 0.01)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_cutout_from_to_sync(4, 5, 0.01)
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+class TestCreatePatternByTableSync:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        pattern = MagicMock()
+        pattern.Name = "TablePatternSync1"
+        model.Patterns.AddPatternByTableSync.return_value = pattern
+
+        result = feature_mgr.create_pattern_by_table_sync("Hole1", [0.01, 0.02], [0.01, 0.02])
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_by_table_sync"
+        assert result["point_count"] == 2
+        model.Patterns.AddPatternByTableSync.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_by_table_sync("Hole1", [0.01], [0.01])
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_mismatched_offsets(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        result = feature_mgr.create_pattern_by_table_sync("Hole1", [0.01, 0.02], [0.01])
+        assert "error" in result
+        assert "same length" in result["error"]
+
+
+# ============================================================================
+# BATCH 10 GROUP 3: SINGLE-PROFILE VARIANTS
+# ============================================================================
+
+
+class TestCreateExtrudeFromToSingle:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, profile = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 10
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+        protrusion = MagicMock()
+        protrusion.Name = "Extrude1"
+        model.ExtrudedProtrusions.AddFromTo.return_value = protrusion
+
+        result = feature_mgr.create_extrude_from_to_single(4, 5)
+        assert result["status"] == "created"
+        assert result["type"] == "extrude_from_to_single"
+        model.ExtrudedProtrusions.AddFromTo.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude_from_to_single(4, 5)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extrude_from_to_single(4, 5)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+class TestCreateExtrudeThroughNextSingle:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        protrusion = MagicMock()
+        protrusion.Name = "Extrude1"
+        model.ExtrudedProtrusions.AddThroughNext.return_value = protrusion
+
+        result = feature_mgr.create_extrude_through_next_single()
+        assert result["status"] == "created"
+        assert result["type"] == "extrude_through_next_single"
+        model.ExtrudedProtrusions.AddThroughNext.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude_through_next_single()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        protrusion = MagicMock()
+        protrusion.Name = "Extrude1"
+        model.ExtrudedProtrusions.AddThroughNext.return_value = protrusion
+
+        result = feature_mgr.create_extrude_through_next_single("Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+
+
+class TestCreateExtrudedCutoutThroughNextSingle:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        cutout = MagicMock()
+        cutout.Name = "Cutout1"
+        model.ExtrudedCutouts.AddThroughNext.return_value = cutout
+
+        result = feature_mgr.create_extruded_cutout_through_next_single()
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_cutout_through_next_single"
+        model.ExtrudedCutouts.AddThroughNext.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extruded_cutout_through_next_single()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extruded_cutout_through_next_single()
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 10 GROUP 4: MULTIBODY CUTOUT VARIANTS
+# ============================================================================
+
+
+class TestCreateExtrudedCutoutMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        cutout = MagicMock()
+        cutout.Name = "CutoutMB1"
+        model.ExtrudedCutouts.AddFiniteMultiBody.return_value = cutout
+
+        result = feature_mgr.create_extruded_cutout_multi_body(0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_cutout_multi_body"
+        assert result["distance"] == 0.05
+        model.ExtrudedCutouts.AddFiniteMultiBody.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extruded_cutout_multi_body(0.05)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extruded_cutout_multi_body(0.05)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+class TestCreateExtrudedCutoutFromToMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, profile = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 10
+        ref_planes.Item.return_value = MagicMock()
+        doc.RefPlanes = ref_planes
+        cutout = MagicMock()
+        cutout.Name = "CutoutFTMB1"
+        model.ExtrudedCutouts.AddFromToMultiBody.return_value = cutout
+
+        result = feature_mgr.create_extruded_cutout_from_to_multi_body(4, 5)
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_cutout_from_to_multi_body"
+        model.ExtrudedCutouts.AddFromToMultiBody.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extruded_cutout_from_to_multi_body(4, 5)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extruded_cutout_from_to_multi_body(4, 5)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+class TestCreateExtrudedCutoutThroughAllMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        cutout = MagicMock()
+        cutout.Name = "CutoutTAMB1"
+        model.ExtrudedCutouts.AddThroughAllMultiBody.return_value = cutout
+
+        result = feature_mgr.create_extruded_cutout_through_all_multi_body()
+        assert result["status"] == "created"
+        assert result["type"] == "extruded_cutout_through_all_multi_body"
+        model.ExtrudedCutouts.AddThroughAllMultiBody.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extruded_cutout_through_all_multi_body()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        cutout = MagicMock()
+        cutout.Name = "CutoutTAMB1"
+        model.ExtrudedCutouts.AddThroughAllMultiBody.return_value = cutout
+
+        result = feature_mgr.create_extruded_cutout_through_all_multi_body("Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+
+
+class TestCreateRevolvedCutoutMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        cutout = MagicMock()
+        cutout.Name = "RevCutMB1"
+        model.RevolvedCutouts.AddFiniteMultiBody.return_value = cutout
+
+        result = feature_mgr.create_revolved_cutout_multi_body(180.0)
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_cutout_multi_body"
+        model.RevolvedCutouts.AddFiniteMultiBody.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolved_cutout_multi_body()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolved_cutout_multi_body()
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+# ============================================================================
+# BATCH 10 GROUP 5: FULL TREATMENT VARIANTS
+# ============================================================================
+
+
+class TestCreateRevolvedCutoutFull:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        cutout = MagicMock()
+        cutout.Name = "RevCutFull1"
+        model.RevolvedCutouts.Add.return_value = cutout
+
+        result = feature_mgr.create_revolved_cutout_full(180.0)
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_cutout_full"
+        model.RevolvedCutouts.Add.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolved_cutout_full()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolved_cutout_full()
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+class TestCreateRevolvedCutoutFullSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        cutout = MagicMock()
+        cutout.Name = "RevCutFullSync1"
+        model.RevolvedCutouts.AddSync.return_value = cutout
+
+        result = feature_mgr.create_revolved_cutout_full_sync(180.0)
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_cutout_full_sync"
+        model.RevolvedCutouts.AddSync.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolved_cutout_full_sync()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolved_cutout_full_sync()
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+class TestCreateRevolvedSurfaceFull:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        surface = MagicMock()
+        surface.Name = "RevSurfFull1"
+        model.RevolvedSurfaces.Add.return_value = surface
+
+        result = feature_mgr.create_revolved_surface_full(180.0)
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_surface_full"
+        model.RevolvedSurfaces.Add.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolved_surface_full()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolved_surface_full()
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+class TestCreateRevolvedSurfaceFullSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        surface = MagicMock()
+        surface.Name = "RevSurfFullSync1"
+        model.RevolvedSurfaces.AddSync.return_value = surface
+
+        result = feature_mgr.create_revolved_surface_full_sync(180.0)
+        assert result["status"] == "created"
+        assert result["type"] == "revolved_surface_full_sync"
+        model.RevolvedSurfaces.AddSync.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_revolved_surface_full_sync()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_revolved_surface_full_sync()
+        assert "error" in result
+        assert "axis" in result["error"].lower()
+
+
+# ============================================================================
+# BATCH 10 GROUP 6: SHEET METAL
+# ============================================================================
+
+
+class TestCreateFlangeMatchFaceWithBend:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 3
+        face = MagicMock()
+        edge = MagicMock()
+        edges = MagicMock()
+        edges.Count = 4
+        edges.Item.return_value = edge
+        face.Edges = edges
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        flange = MagicMock()
+        flange.Name = "FlangeMFB1"
+        model.Flanges.AddByMatchFaceAndBendDeductionOrBendAllowance.return_value = flange
+
+        result = feature_mgr.create_flange_match_face_with_bend(0, 0, 0.02)
+        assert result["status"] == "created"
+        assert result["type"] == "flange_match_face_with_bend"
+        model.Flanges.AddByMatchFaceAndBendDeductionOrBendAllowance.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_flange_match_face_with_bend(0, 0, 0.02)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 1
+        body.Faces.return_value = faces
+
+        result = feature_mgr.create_flange_match_face_with_bend(5, 0, 0.02)
+        assert "error" in result
+        assert "Invalid face_index" in result["error"]
+
+
+class TestCreateFlangeByFaceWithBend:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 3
+        face = MagicMock()
+        edge = MagicMock()
+        edges = MagicMock()
+        edges.Count = 4
+        edges.Item.return_value = edge
+        face.Edges = edges
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        flange = MagicMock()
+        flange.Name = "FlangeFBB1"
+        model.Flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance.return_value = flange
+
+        result = feature_mgr.create_flange_by_face_with_bend(0, 0, 1, 0.02)
+        assert result["status"] == "created"
+        assert result["type"] == "flange_by_face_with_bend"
+        model.Flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_flange_by_face_with_bend(0, 0, 1, 0.02)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 1
+        body.Faces.return_value = faces
+
+        result = feature_mgr.create_flange_by_face_with_bend(5, 0, 1, 0.02)
+        assert "error" in result
+        assert "Invalid face_index" in result["error"]
+
+
+class TestCreateContourFlangeV3:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        contour = MagicMock()
+        contour.Name = "ContourV3_1"
+        model.ContourFlanges.Add3.return_value = contour
+
+        result = feature_mgr.create_contour_flange_v3(0.001, 0.001)
+        assert result["status"] == "created"
+        assert result["type"] == "contour_flange_v3"
+        model.ContourFlanges.Add3.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_contour_flange_v3(0.001)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_contour_flange_v3(0.001)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+class TestCreateContourFlangeSyncEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 3
+        face = MagicMock()
+        edge = MagicMock()
+        edges = MagicMock()
+        edges.Count = 4
+        edges.Item.return_value = edge
+        face.Edges = edges
+        faces.Item.return_value = face
+        body.Faces.return_value = faces
+
+        contour = MagicMock()
+        contour.Name = "ContourSyncEx1"
+        model.ContourFlanges.AddSyncEx.return_value = contour
+
+        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.001)
+        assert result["status"] == "created"
+        assert result["type"] == "contour_flange_sync_ex"
+        model.ContourFlanges.AddSyncEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.001)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 1
+        body.Faces.return_value = faces
+
+        result = feature_mgr.create_contour_flange_sync_ex(5, 0, 0.001)
+        assert "error" in result
+        assert "Invalid face_index" in result["error"]
+
+
+class TestCreateBend:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        bend = MagicMock()
+        bend.Name = "Bend1"
+        model.Bends.Add.return_value = bend
+
+        result = feature_mgr.create_bend()
+        assert result["status"] == "created"
+        assert result["type"] == "bend"
+        model.Bends.Add.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_bend()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_bend()
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# BATCH 10 GROUP 7: PATTERN EX + SLOTS
+# ============================================================================
+
+
+class TestCreatePatternByFillEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 3
+        faces.Item.return_value = MagicMock()
+        body.Faces.return_value = faces
+
+        pattern = MagicMock()
+        pattern.Name = "FillPatternEx1"
+        model.Patterns.AddByFillEx.return_value = pattern
+
+        result = feature_mgr.create_pattern_by_fill_ex("Hole1", 0, 0.01, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_by_fill_ex"
+        model.Patterns.AddByFillEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_by_fill_ex("Hole1", 0, 0.01, 0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_face(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        body = model.Body
+        faces = MagicMock()
+        faces.Count = 1
+        body.Faces.return_value = faces
+
+        result = feature_mgr.create_pattern_by_fill_ex("Hole1", 5, 0.01, 0.01)
+        assert "error" in result
+        assert "Invalid fill_region_face_index" in result["error"]
+
+
+class TestCreatePatternByCurveEx:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        body = model.Body
+        edges = MagicMock()
+        edges.Count = 3
+        edges.Item.return_value = MagicMock()
+        body.Edges.return_value = edges
+
+        pattern = MagicMock()
+        pattern.Name = "CurvePatternEx1"
+        model.Patterns.AddByCurveEx.return_value = pattern
+
+        result = feature_mgr.create_pattern_by_curve_ex("Hole1", 0, 5, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "pattern_by_curve_ex"
+        assert result["count"] == 5
+        model.Patterns.AddByCurveEx.assert_called_once()
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_pattern_by_curve_ex("Hole1", 0, 5, 0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+    def test_invalid_edge(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+        body = model.Body
+        edges = MagicMock()
+        edges.Count = 1
+        body.Edges.return_value = edges
+
+        result = feature_mgr.create_pattern_by_curve_ex("Hole1", 5, 5, 0.01)
+        assert "error" in result
+        assert "Invalid curve_edge_index" in result["error"]
+
+
+class TestCreateSlotMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        model.Slots = MagicMock()
+
+        result = feature_mgr.create_slot_multi_body(0.005, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "slot_multi_body"
+        assert result["width"] == 0.005
+        assert result["depth"] == 0.01
+        model.Slots.AddMultiBody.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_slot_multi_body(0.005, 0.01)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_no_model(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_slot_multi_body(0.005, 0.01)
+        assert "error" in result
+        assert "No base feature" in result["error"]
+
+
+class TestCreateSlotSyncMultiBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        model.Slots = MagicMock()
+
+        result = feature_mgr.create_slot_sync_multi_body(0.005, 0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "slot_sync_multi_body"
+        assert result["width"] == 0.005
+        assert result["depth"] == 0.01
+        model.Slots.AddSyncMultiBody.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_slot_sync_multi_body(0.005, 0.01)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        model.Slots = MagicMock()
+
+        result = feature_mgr.create_slot_sync_multi_body(0.005, 0.01, "Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"

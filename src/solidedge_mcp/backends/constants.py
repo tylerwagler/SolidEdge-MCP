@@ -216,6 +216,28 @@ class KeyPointExtentConstants:
     igTangentNormal = 0
 
 
+class KeyPointTypeConstants:
+    """Keypoint type constants (from constant.tlb > KeyPointType enum)"""
+
+    igKeyPointStart = 1
+    igKeyPointEnd = 2
+
+
+class ReferenceElementConstants:
+    """Reference element constants (from constant.tlb > ReferenceElementConstants enum)"""
+
+    igRefEleInit = 0
+    igReverseNormalSide = 1
+    igNormalSide = 2
+    igPivotStart = 3
+    igPivotEnd = 4
+    igCurveStart = 14
+    igCurveEnd = 15
+    igNormalToCurveAtKeyPoint = 22
+    igTangentToSurfaceAtAngle = 25
+    igTangentToSurfaceAtKeypoint = 26
+
+
 class LoftSweepConstants:
     """Loft and sweep profile type constants (from type library)"""
 

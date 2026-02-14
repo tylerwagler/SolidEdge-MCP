@@ -2598,3 +2598,1479 @@ class TestSetDrawingViewOrientation:
 
         result = em.set_drawing_view_orientation(0, "InvalidView")
         assert "error" in result
+
+
+# ============================================================================
+# ADD ANGULAR DIMENSION
+# ============================================================================
+
+
+class TestAddAngularDimension:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_angular_dimension(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
+        assert result["status"] == "created"
+        assert result["type"] == "angular_dimension"
+        assert result["vertex"] == [0.05, 0.05]
+        dims.AddAngular.assert_called_once()
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_angular_dimension(0, 0, 0.05, 0.05, 0.1, 0)
+        assert "error" in result
+
+    def test_exception(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sheet.Dimensions.AddAngular.side_effect = Exception("COM error")
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_angular_dimension(0, 0, 0, 0, 0, 0)
+        assert "error" in result
+
+
+# ============================================================================
+# ADD RADIAL DIMENSION
+# ============================================================================
+
+
+class TestAddRadialDimension:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_radial_dimension(0.05, 0.05, 0.1, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "radial_dimension"
+        assert result["center"] == [0.05, 0.05]
+        dims.AddRadial.assert_called_once()
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_radial_dimension(0.05, 0.05, 0.1, 0.05)
+        assert "error" in result
+
+    def test_custom_text_position(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_radial_dimension(0.05, 0.05, 0.1, 0.05, dim_x=0.2, dim_y=0.2)
+        assert result["status"] == "created"
+        assert result["text_position"] == [0.2, 0.2]
+
+
+# ============================================================================
+# ADD DIAMETER DIMENSION
+# ============================================================================
+
+
+class TestAddDiameterDimension:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_diameter_dimension(0.05, 0.05, 0.1, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "diameter_dimension"
+        assert result["center"] == [0.05, 0.05]
+        dims.AddDiameter.assert_called_once()
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_diameter_dimension(0.05, 0.05, 0.1, 0.05)
+        assert "error" in result
+
+    def test_exception(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sheet.Dimensions.AddDiameter.side_effect = Exception("COM error")
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_diameter_dimension(0, 0, 0.1, 0)
+        assert "error" in result
+
+
+# ============================================================================
+# ADD ORDINATE DIMENSION
+# ============================================================================
+
+
+class TestAddOrdinateDimension:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_ordinate_dimension(0.0, 0.0, 0.1, 0.0)
+        assert result["status"] == "created"
+        assert result["type"] == "ordinate_dimension"
+        assert result["origin"] == [0.0, 0.0]
+        assert result["point"] == [0.1, 0.0]
+        dims.AddOrdinate.assert_called_once()
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_ordinate_dimension(0, 0, 0.1, 0)
+        assert "error" in result
+
+    def test_custom_text_position(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_ordinate_dimension(0.0, 0.0, 0.1, 0.0, dim_x=0.15, dim_y=0.05)
+        assert result["status"] == "created"
+        assert result["text_position"] == [0.15, 0.05]
+
+
+# ============================================================================
+# ADD CENTER MARK
+# ============================================================================
+
+
+class TestAddCenterMark:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        center_marks = MagicMock()
+        sheet.CenterMarks = center_marks
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_center_mark(0.1, 0.1)
+        assert result["status"] == "added"
+        assert result["type"] == "center_mark"
+        assert result["position"] == [0.1, 0.1]
+        center_marks.Add.assert_called_once_with(0.1, 0.1, 0)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_center_mark(0.1, 0.1)
+        assert "error" in result
+
+    def test_exception(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sheet.CenterMarks.Add.side_effect = Exception("COM error")
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_center_mark(0.1, 0.1)
+        assert "error" in result
+
+
+# ============================================================================
+# ADD CENTERLINE
+# ============================================================================
+
+
+class TestAddCenterline:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        centerlines = MagicMock()
+        sheet.Centerlines = centerlines
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_centerline(0.0, 0.05, 0.1, 0.05)
+        assert result["status"] == "added"
+        assert result["type"] == "centerline"
+        assert result["start"] == [0.0, 0.05]
+        assert result["end"] == [0.1, 0.05]
+        centerlines.Add.assert_called_once_with(0.0, 0.05, 0, 0.1, 0.05, 0)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_centerline(0, 0, 0.1, 0)
+        assert "error" in result
+
+    def test_exception(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sheet.Centerlines.Add.side_effect = Exception("COM error")
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_centerline(0, 0, 0.1, 0)
+        assert "error" in result
+
+
+# ============================================================================
+# ADD SURFACE FINISH SYMBOL
+# ============================================================================
+
+
+class TestAddSurfaceFinishSymbol:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sfs = MagicMock()
+        sheet.SurfaceFinishSymbols = sfs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_surface_finish_symbol(0.1, 0.1, "machined")
+        assert result["status"] == "added"
+        assert result["type"] == "surface_finish_symbol"
+        assert result["symbol_type"] == "machined"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_surface_finish_symbol(0.1, 0.1)
+        assert "error" in result
+
+    def test_invalid_type(self, export_mgr):
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+
+        result = em.add_surface_finish_symbol(0.1, 0.1, "invalid_type")
+        assert "error" in result
+
+
+# ============================================================================
+# ADD WELD SYMBOL
+# ============================================================================
+
+
+class TestAddWeldSymbol:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        ws = MagicMock()
+        sheet.WeldSymbols = ws
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_weld_symbol(0.1, 0.1, "fillet")
+        assert result["status"] == "added"
+        assert result["type"] == "weld_symbol"
+        assert result["weld_type"] == "fillet"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_weld_symbol(0.1, 0.1)
+        assert "error" in result
+
+    def test_invalid_type(self, export_mgr):
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+
+        result = em.add_weld_symbol(0.1, 0.1, "invalid_weld")
+        assert "error" in result
+
+
+# ============================================================================
+# ADD GEOMETRIC TOLERANCE
+# ============================================================================
+
+
+class TestAddGeometricTolerance:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        fcfs = MagicMock()
+        fcf = MagicMock()
+        fcfs.Add.return_value = fcf
+        sheet.FCFs = fcfs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_geometric_tolerance(0.1, 0.1, "0.05 A B")
+        assert result["status"] == "added"
+        assert result["type"] == "geometric_tolerance"
+        assert result["text"] == "0.05 A B"
+        fcfs.Add.assert_called_once_with(0.1, 0.1, 0)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_geometric_tolerance(0.1, 0.1)
+        assert "error" in result
+
+    def test_fallback_to_textbox(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sheet.FCFs.Add.side_effect = Exception("FCFs not available")
+        text_boxes = MagicMock()
+        text_box = MagicMock()
+        text_boxes.Add.return_value = text_box
+        sheet.TextBoxes = text_boxes
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_geometric_tolerance(0.1, 0.1, "0.05 A")
+        assert result["status"] == "added"
+        text_boxes.Add.assert_called_once_with(0.1, 0.1, 0)
+
+
+# ============================================================================
+# ADD DETAIL VIEW
+# ============================================================================
+
+
+class TestAddDetailView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        parent_view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.return_value = parent_view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_detail_view(0, 0.05, 0.05, 0.01, 0.2, 0.1, 2.0)
+        assert result["status"] == "added"
+        assert result["type"] == "detail_view"
+        assert result["parent_view_index"] == 0
+        assert result["scale"] == 2.0
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_detail_view(0, 0.05, 0.05, 0.01, 0.2, 0.1)
+        assert "error" in result
+
+    def test_invalid_parent_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_detail_view(5, 0.05, 0.05, 0.01, 0.2, 0.1)
+        assert "error" in result
+
+
+# ============================================================================
+# ADD AUXILIARY VIEW
+# ============================================================================
+
+
+class TestAddAuxiliaryView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        parent_view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.return_value = parent_view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_auxiliary_view(0, 0.2, 0.3, "Up")
+        assert result["status"] == "added"
+        assert result["type"] == "auxiliary_view"
+        assert result["fold_direction"] == "Up"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_auxiliary_view(0, 0.2, 0.3)
+        assert "error" in result
+
+    def test_invalid_direction(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_auxiliary_view(0, 0.2, 0.3, "Diagonal")
+        assert "error" in result
+
+
+# ============================================================================
+# ADD DRAFT VIEW
+# ============================================================================
+
+
+class TestAddDraftView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_draft_view(0.15, 0.10)
+        assert result["status"] == "added"
+        assert result["type"] == "draft_view"
+        assert result["position"] == [0.15, 0.10]
+        dvs.AddDraftView.assert_called_once_with(0.15, 0.10)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_draft_view(0.15, 0.10)
+        assert "error" in result
+
+    def test_exception(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        del dvs._oleobj_
+        dvs.AddDraftView.side_effect = Exception("COM error")
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_draft_view(0.15, 0.10)
+        assert "error" in result
+
+
+# ============================================================================
+# ALIGN DRAWING VIEWS
+# ============================================================================
+
+
+class TestAlignDrawingViews:
+    def test_align(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view1 = MagicMock()
+        view2 = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.side_effect = lambda i: {1: view1, 2: view2}[i]
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.align_drawing_views(0, 1, True)
+        assert result["status"] == "aligned"
+        view1.AlignToView.assert_called_once_with(view2)
+
+    def test_unalign(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view1 = MagicMock()
+        view2 = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.side_effect = lambda i: {1: view1, 2: view2}[i]
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.align_drawing_views(0, 1, False)
+        assert result["status"] == "unaligned"
+        view1.RemoveAlignment.assert_called_once()
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.align_drawing_views(0, 5, True)
+        assert "error" in result
+
+
+# ============================================================================
+# GET DRAWING VIEW MODEL LINK
+# ============================================================================
+
+
+class TestGetDrawingViewModelLink:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        model_link = MagicMock()
+        model_link.FileName = "C:/parts/test.par"
+        model_link.Name = "test.par"
+        view.ModelLink = model_link
+        view.Name = "View 1"
+        view.ScaleFactor = 1.0
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_model_link(0)
+        assert result["view_index"] == 0
+        assert result["has_model_link"] is True
+        assert result["model_path"] == "C:/parts/test.par"
+
+    def test_no_model_link(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock(spec=[])  # empty spec - no attributes
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_model_link(0)
+        assert result["view_index"] == 0
+        assert result["has_model_link"] is False
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_model_link(5)
+        assert "error" in result
+
+
+# ============================================================================
+# SHOW TANGENT EDGES
+# ============================================================================
+
+
+class TestShowTangentEdges:
+    def test_show(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.show_tangent_edges(0, True)
+        assert result["status"] == "updated"
+        assert result["show_tangent_edges"] is True
+        assert view.ShowTangentEdges is True
+
+    def test_hide(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.show_tangent_edges(0, False)
+        assert result["status"] == "updated"
+        assert result["show_tangent_edges"] is False
+        assert view.ShowTangentEdges is False
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.show_tangent_edges(5, True)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 10: DRAFT SHEET COLLECTIONS
+# ============================================================================
+
+
+class TestGetSheetDimensions:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dim1 = MagicMock()
+        dim1.Type = 1
+        dim1.Value = 0.05
+        dim1.Name = "D1"
+        dim2 = MagicMock()
+        dim2.Type = 2
+        dim2.Value = 0.1
+        dim2.Name = "D2"
+
+        dims = MagicMock()
+        dims.Count = 2
+        dims.Item.side_effect = lambda i: [None, dim1, dim2][i]
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_dimensions()
+        assert result["count"] == 2
+        assert result["dimensions"][0]["value"] == 0.05
+        assert result["dimensions"][1]["name"] == "D2"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_sheet_dimensions()
+        assert "error" in result
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        dims.Count = 0
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_dimensions()
+        assert result["count"] == 0
+        assert result["dimensions"] == []
+
+
+class TestGetSheetBalloons:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        b1 = MagicMock()
+        b1.BalloonText = "1"
+        b1.x = 0.05
+        b1.y = 0.1
+
+        balloons = MagicMock()
+        balloons.Count = 1
+        balloons.Item.return_value = b1
+        sheet.Balloons = balloons
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_balloons()
+        assert result["count"] == 1
+        assert result["balloons"][0]["text"] == "1"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_sheet_balloons()
+        assert "error" in result
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        balloons = MagicMock()
+        balloons.Count = 0
+        sheet.Balloons = balloons
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_balloons()
+        assert result["count"] == 0
+
+
+class TestGetSheetTextBoxes:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        tb = MagicMock()
+        tb.Text = "Hello"
+        tb.x = 0.02
+        tb.y = 0.03
+        tb.Height = 0.005
+
+        text_boxes = MagicMock()
+        text_boxes.Count = 1
+        text_boxes.Item.return_value = tb
+        sheet.TextBoxes = text_boxes
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_text_boxes()
+        assert result["count"] == 1
+        assert result["text_boxes"][0]["text"] == "Hello"
+        assert result["text_boxes"][0]["height"] == 0.005
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_sheet_text_boxes()
+        assert "error" in result
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        text_boxes = MagicMock()
+        text_boxes.Count = 0
+        sheet.TextBoxes = text_boxes
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_text_boxes()
+        assert result["count"] == 0
+
+
+class TestGetSheetDrawingObjects:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        obj1 = MagicMock()
+        obj1.Name = "Obj1"
+
+        drawing_objects = MagicMock()
+        drawing_objects.Count = 1
+        drawing_objects.Item.return_value = obj1
+        sheet.DrawingObjects = drawing_objects
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_drawing_objects()
+        assert result["count"] == 1
+        assert result["drawing_objects"][0]["name"] == "Obj1"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_sheet_drawing_objects()
+        assert "error" in result
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        drawing_objects = MagicMock()
+        drawing_objects.Count = 0
+        sheet.DrawingObjects = drawing_objects
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_drawing_objects()
+        assert result["count"] == 0
+
+
+class TestGetSheetSections:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sec = MagicMock()
+        sec.Label = "A-A"
+        sec.Name = "Section1"
+        sec.Type = 1
+
+        sections = MagicMock()
+        sections.Count = 1
+        sections.Item.return_value = sec
+        sheet.Sections = sections
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_sections()
+        assert result["count"] == 1
+        assert result["sections"][0]["label"] == "A-A"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_sheet_sections()
+        assert "error" in result
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sections = MagicMock()
+        sections.Count = 0
+        sheet.Sections = sections
+        doc.ActiveSheet = sheet
+
+        result = em.get_sheet_sections()
+        assert result["count"] == 0
+
+
+# ============================================================================
+# BATCH 10: PRINTING
+# ============================================================================
+
+
+class TestPrintDrawing:
+    def test_with_draft_print_utility(self, export_mgr):
+        em, doc = export_mgr
+        dpu = MagicMock()
+        doc.DraftPrintUtility = dpu
+
+        result = em.print_drawing(copies=2, all_sheets=False)
+        assert result["status"] == "printed"
+        assert result["copies"] == 2
+        dpu.PrintOut.assert_called_once()
+
+    def test_fallback_printout(self, export_mgr):
+        em, doc = export_mgr
+        del doc.DraftPrintUtility
+
+        result = em.print_drawing()
+        assert result["status"] == "printed"
+
+    def test_no_print_support(self, export_mgr):
+        em, doc = export_mgr
+        del doc.DraftPrintUtility
+        del doc.PrintOut
+
+        result = em.print_drawing()
+        assert "error" in result
+
+
+class TestSetPrinter:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        dpu = MagicMock()
+        doc.DraftPrintUtility = dpu
+
+        result = em.set_printer("HP LaserJet")
+        assert result["status"] == "set"
+        assert result["printer"] == "HP LaserJet"
+        assert dpu.Printer == "HP LaserJet"
+
+    def test_no_dpu(self, export_mgr):
+        em, doc = export_mgr
+        del doc.DraftPrintUtility
+
+        result = em.set_printer("HP LaserJet")
+        assert "error" in result
+
+    def test_different_printer(self, export_mgr):
+        em, doc = export_mgr
+        dpu = MagicMock()
+        doc.DraftPrintUtility = dpu
+
+        result = em.set_printer("PDF Printer")
+        assert result["printer"] == "PDF Printer"
+
+
+class TestGetPrinter:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        dpu = MagicMock()
+        dpu.Printer = "HP LaserJet"
+        doc.DraftPrintUtility = dpu
+
+        result = em.get_printer()
+        assert result["printer"] == "HP LaserJet"
+
+    def test_no_dpu(self, export_mgr):
+        em, doc = export_mgr
+        del doc.DraftPrintUtility
+
+        result = em.get_printer()
+        assert "error" in result
+
+    def test_different_printer(self, export_mgr):
+        em, doc = export_mgr
+        dpu = MagicMock()
+        dpu.Printer = "PDF Printer"
+        doc.DraftPrintUtility = dpu
+
+        result = em.get_printer()
+        assert result["printer"] == "PDF Printer"
+
+
+class TestSetPaperSize:
+    def test_landscape(self, export_mgr):
+        em, doc = export_mgr
+        dpu = MagicMock()
+        doc.DraftPrintUtility = dpu
+
+        result = em.set_paper_size(0.297, 0.210, "Landscape")
+        assert result["status"] == "set"
+        assert result["orientation"] == "Landscape"
+        assert result["width"] == 0.297
+
+    def test_portrait(self, export_mgr):
+        em, doc = export_mgr
+        dpu = MagicMock()
+        doc.DraftPrintUtility = dpu
+
+        result = em.set_paper_size(0.210, 0.297, "Portrait")
+        assert result["status"] == "set"
+        assert result["orientation"] == "Portrait"
+
+    def test_no_dpu(self, export_mgr):
+        em, doc = export_mgr
+        del doc.DraftPrintUtility
+
+        result = em.set_paper_size(0.297, 0.210)
+        assert "error" in result
+
+
+# ============================================================================
+# BATCH 10: DRAWING VIEW TOOLS
+# ============================================================================
+
+
+class TestSetFaceTexture:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        face = MagicMock()
+        faces = MagicMock()
+        faces.Count = 3
+        faces.Item.return_value = face
+
+        body = MagicMock()
+        body.Faces.return_value = faces
+
+        model = MagicMock()
+        model.Body = body
+
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        result = em.set_face_texture(1, "Wood")
+        assert result["status"] == "set"
+        assert result["texture_name"] == "Wood"
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        faces = MagicMock()
+        faces.Count = 2
+
+        body = MagicMock()
+        body.Faces.return_value = faces
+
+        model = MagicMock()
+        model.Body = body
+
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        result = em.set_face_texture(5, "Wood")
+        assert "error" in result
+
+    def test_no_models(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Models
+
+        result = em.set_face_texture(0, "Wood")
+        assert "error" in result
+
+
+class TestAddAssemblyDrawingViewEx:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        model_link = MagicMock()
+        model_links = MagicMock()
+        model_links.Count = 1
+        model_links.Item.return_value = model_link
+        doc.ModelLinks = model_links
+
+        sheet = MagicMock()
+        dvs = MagicMock()
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_assembly_drawing_view_ex(0.15, 0.15, "Front", 1.0)
+        assert result["status"] == "added"
+        assert result["orientation"] == "Front"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_assembly_drawing_view_ex()
+        assert "error" in result
+
+    def test_invalid_orientation(self, export_mgr):
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+        model_links = MagicMock()
+        model_links.Count = 1
+        doc.ModelLinks = model_links
+
+        result = em.add_assembly_drawing_view_ex(orientation="BadView")
+        assert "error" in result
+
+
+class TestAddDrawingViewWithConfig:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        model_link = MagicMock()
+        model_links = MagicMock()
+        model_links.Count = 1
+        model_links.Item.return_value = model_link
+        doc.ModelLinks = model_links
+
+        sheet = MagicMock()
+        dvs = MagicMock()
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_drawing_view_with_config(0.15, 0.15, "Top", 2.0, "Config1")
+        assert result["status"] == "added"
+        assert result["configuration"] == "Config1"
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.add_drawing_view_with_config()
+        assert "error" in result
+
+    def test_invalid_orientation(self, export_mgr):
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+        model_links = MagicMock()
+        model_links.Count = 1
+        doc.ModelLinks = model_links
+
+        result = em.add_drawing_view_with_config(orientation="BadView")
+        assert "error" in result
+
+
+class TestActivateDrawingView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.activate_drawing_view(0)
+        assert result["status"] == "activated"
+        assert result["view_index"] == 0
+        view.Activate.assert_called_once()
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.activate_drawing_view(5)
+        assert "error" in result
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.activate_drawing_view(0)
+        assert "error" in result
+
+
+class TestDeactivateDrawingView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        view = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.deactivate_drawing_view(1)
+        assert result["status"] == "deactivated"
+        assert result["view_index"] == 1
+        view.Deactivate.assert_called_once()
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.deactivate_drawing_view(3)
+        assert "error" in result
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.Sheets
+
+        result = em.deactivate_drawing_view(0)
+        assert "error" in result
+
+
+# ============================================================================
+# ADD BY DRAFT VIEW (Batch 11)
+# ============================================================================
+
+
+class TestAddByDraftView:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 2
+
+        source_view = MagicMock()
+        source_view.ScaleFactor = 1.5
+        new_view = MagicMock()
+        new_view.Name = "View 2"
+        dvs.Item.return_value = source_view
+        dvs.AddByDraftView.return_value = new_view
+
+        # _get_drawing_views requires Sheets, ActiveSheet, DrawingViews
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_by_draft_view(0, 0.20, 0.10)
+        assert result["status"] == "added"
+        assert result["source_view_index"] == 0
+        assert result["position"] == [0.20, 0.10]
+        assert result["scale"] == 1.5
+        dvs.AddByDraftView.assert_called_once_with(source_view, 1.5, 0.20, 0.10)
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_by_draft_view(5, 0.10, 0.10)
+        assert "error" in result
+
+    def test_custom_scale(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        source_view = MagicMock()
+        new_view = MagicMock()
+        dvs.Item.return_value = source_view
+        dvs.AddByDraftView.return_value = new_view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_by_draft_view(0, 0.15, 0.15, scale=2.0)
+        assert result["status"] == "added"
+        assert result["scale"] == 2.0
+        dvs.AddByDraftView.assert_called_once_with(source_view, 2.0, 0.15, 0.15)
+
+
+# ============================================================================
+# GET SECTION CUTS (Batch 11)
+# ============================================================================
+
+
+class TestGetSectionCuts:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        view = MagicMock()
+        cp = MagicMock()
+        cp.Caption = "A"
+        cp.DisplayCaption = True
+        cp.DisplayType = 0
+        cp.StyleName = "Default"
+        cp.TextHeight = 0.005
+        cp.GetFoldLineWithViewDirection.return_value = (0.1, 0.2, 0.3, 0.4, 0.0, 1.0)
+
+        cutting_planes = MagicMock()
+        cutting_planes.Count = 1
+        cutting_planes.Item.return_value = cp
+        view.CuttingPlanes = cutting_planes
+        dvs.Item.return_value = view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_section_cuts(0)
+        assert result["count"] == 1
+        assert result["view_index"] == 0
+        assert result["section_cuts"][0]["caption"] == "A"
+        assert result["section_cuts"][0]["fold_line"]["start"] == [0.1, 0.2]
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_section_cuts(3)
+        assert "error" in result
+
+    def test_no_cutting_planes(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        view = MagicMock(spec=[])  # No CuttingPlanes attribute
+        dvs.Item.return_value = view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_section_cuts(0)
+        assert result["count"] == 0
+        assert result["section_cuts"] == []
+
+
+# ============================================================================
+# ADD SECTION CUT (Batch 11)
+# ============================================================================
+
+
+class TestAddSectionCut:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        view = MagicMock()
+        cutting_plane = MagicMock()
+        cutting_plane.Caption = "A"
+        section_view = MagicMock()
+        section_view.Name = "Section A-A"
+
+        cutting_planes = MagicMock()
+        cutting_planes.Count = 1
+        cutting_planes.Add.return_value = cutting_plane
+        cutting_plane.CreateView.return_value = section_view
+        view.CuttingPlanes = cutting_planes
+        dvs.Item.return_value = view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_section_cut(0, 0.20, 0.10)
+        assert result["status"] == "added"
+        assert result["source_view_index"] == 0
+        assert result["section_type"] == "standard"
+        cutting_planes.Add.assert_called_once()
+        cutting_plane.CreateView.assert_called_once_with(0)
+
+    def test_invalid_section_type(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        view = MagicMock()
+        view.CuttingPlanes = MagicMock()
+        dvs.Item.return_value = view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_section_cut(0, 0.20, 0.10, section_type=5)
+        assert "error" in result
+        assert "section_type" in result["error"]
+
+    def test_revolved_section(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        view = MagicMock()
+        cutting_plane = MagicMock()
+        section_view = MagicMock()
+
+        cutting_planes = MagicMock()
+        cutting_planes.Count = 1
+        cutting_planes.Add.return_value = cutting_plane
+        cutting_plane.CreateView.return_value = section_view
+        view.CuttingPlanes = cutting_planes
+        dvs.Item.return_value = view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_section_cut(0, 0.15, 0.15, section_type=1)
+        assert result["status"] == "added"
+        assert result["section_type"] == "revolved"
+        cutting_plane.CreateView.assert_called_once_with(1)
+
+
+# ============================================================================
+# GET DRAWING VIEW DIMENSIONS (Batch 11)
+# ============================================================================
+
+
+class TestGetDrawingViewDimensions:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        view = MagicMock()
+
+        dim1 = MagicMock()
+        dim1.DimensionType = 1
+        dim1.Value = 0.05
+        dim1.Constraint = False
+        dim1.PrefixString = ""
+        dim1.SuffixString = "mm"
+        dim1.OverrideString = ""
+        dim1.SubfixString = ""
+        dim1.SuperfixString = ""
+
+        dim2 = MagicMock()
+        dim2.DimensionType = 3
+        dim2.Value = 1.5708
+        dim2.Constraint = True
+        dim2.PrefixString = ""
+        dim2.SuffixString = ""
+        dim2.OverrideString = "90"
+        dim2.SubfixString = ""
+        dim2.SuperfixString = ""
+
+        dims = MagicMock()
+        dims.Count = 2
+        dims.Item.side_effect = lambda i: {1: dim1, 2: dim2}[i]
+        view.Dimensions = dims
+        dvs.Item.return_value = view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_dimensions(0)
+        assert result["count"] == 2
+        assert result["view_index"] == 0
+        assert result["dimensions"][0]["dimension_type"] == 1
+        assert result["dimensions"][0]["dimension_type_name"] == "Linear"
+        assert result["dimensions"][0]["value"] == 0.05
+        assert result["dimensions"][1]["dimension_type"] == 3
+        assert result["dimensions"][1]["dimension_type_name"] == "Angular"
+        assert result["dimensions"][1]["override"] == "90"
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_dimensions(5)
+        assert "error" in result
+
+    def test_no_dimensions(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+
+        view = MagicMock(spec=[])  # No Dimensions attribute
+        dvs.Item.return_value = view
+
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.get_drawing_view_dimensions(0)
+        assert result["count"] == 0
+        assert result["dimensions"] == []

@@ -296,3 +296,253 @@ class TestCleanSketchGeometry:
         )
         assert result["status"] == "cleaned"
         profile.CleanGeometry2d.assert_called_once_with(0, False, False, True, True, None, 0.001)
+
+
+# ============================================================================
+# PROJECT SILHOUETTE EDGES
+# ============================================================================
+
+
+class TestProjectSilhouetteEdges:
+    def test_success(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+
+        result = sm.project_silhouette_edges()
+        assert result["status"] == "projected"
+        assert result["type"] == "silhouette_edges"
+        profile.ProjectSilhouetteEdges.assert_called_once()
+
+    def test_no_active_sketch(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        sm.active_profile = None
+
+        result = sm.project_silhouette_edges()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_com_error(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+        profile.ProjectSilhouetteEdges.side_effect = Exception("COM error")
+
+        result = sm.project_silhouette_edges()
+        assert "error" in result
+        assert "traceback" in result
+
+
+# ============================================================================
+# INCLUDE REGION FACES
+# ============================================================================
+
+
+class TestIncludeRegionFaces:
+    def test_success(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+
+        body = MagicMock()
+        model = MagicMock()
+        model.Body = body
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        face1 = MagicMock()
+        face2 = MagicMock()
+        faces = MagicMock()
+        faces.Count = 3
+        faces.Item.side_effect = lambda i: {1: face1, 2: face2, 3: MagicMock()}[i]
+        body.Faces.return_value = faces
+
+        result = sm.include_region_faces([0, 1])
+        assert result["status"] == "included"
+        assert result["face_count"] == 2
+        profile.IncludeRegionFaces.assert_called_once()
+
+    def test_no_active_sketch(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        sm.active_profile = None
+
+        result = sm.include_region_faces([0])
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_empty_face_indices(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+
+        result = sm.include_region_faces([])
+        assert "error" in result
+        assert "No face indices" in result["error"]
+
+
+# ============================================================================
+# CHAIN LOCATE
+# ============================================================================
+
+
+class TestChainLocate:
+    def test_success(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+        profile.ChainLocate.return_value = MagicMock()
+
+        result = sm.chain_locate(0.05, 0.05)
+        assert result["status"] == "located"
+        assert result["type"] == "chain"
+        assert result["x"] == 0.05
+        assert result["y"] == 0.05
+        profile.ChainLocate.assert_called_once_with(0.05, 0.05, 0.001)
+
+    def test_no_active_sketch(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        sm.active_profile = None
+
+        result = sm.chain_locate(0.0, 0.0)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_custom_tolerance(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+        profile.ChainLocate.return_value = MagicMock()
+
+        result = sm.chain_locate(0.1, 0.2, tolerance=0.005)
+        assert result["status"] == "located"
+        assert result["tolerance"] == 0.005
+        profile.ChainLocate.assert_called_once_with(0.1, 0.2, 0.005)
+
+
+# ============================================================================
+# CONVERT TO CURVE
+# ============================================================================
+
+
+class TestConvertToCurve:
+    def test_success(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+        profile.ConvertToCurve.return_value = MagicMock()
+
+        result = sm.convert_to_curve()
+        assert result["status"] == "converted"
+        assert result["type"] == "curve"
+        profile.ConvertToCurve.assert_called_once()
+
+    def test_no_active_sketch(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        sm.active_profile = None
+
+        result = sm.convert_to_curve()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_com_error(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+        profile.ConvertToCurve.side_effect = Exception("COM error")
+
+        result = sm.convert_to_curve()
+        assert "error" in result
+        assert "traceback" in result
+
+
+# ============================================================================
+# SKETCH PASTE
+# ============================================================================
+
+
+class TestSketchPaste:
+    def test_success(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+
+        result = sm.sketch_paste()
+        assert result["status"] == "pasted"
+        assert result["type"] == "sketch_paste"
+        profile.Paste.assert_called_once()
+
+    def test_no_active_sketch(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        sm.active_profile = None
+
+        result = sm.sketch_paste()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_com_error(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+        profile.Paste.side_effect = Exception("Clipboard empty")
+
+        result = sm.sketch_paste()
+        assert "error" in result
+        assert "traceback" in result
+
+
+# ============================================================================
+# GET ORDERED GEOMETRY
+# ============================================================================
+
+
+class TestGetOrderedGeometry:
+    def test_success(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+
+        elem1 = MagicMock()
+        elem1.StartPoint.X = 0.0
+        elem1.StartPoint.Y = 0.0
+        elem1.EndPoint.X = 0.1
+        elem1.EndPoint.Y = 0.0
+        elem1.Length = 0.1
+        type(elem1).__name__ = "Line2d"
+
+        elem2 = MagicMock()
+        elem2.CenterPoint.X = 0.05
+        elem2.CenterPoint.Y = 0.05
+        elem2.Radius = 0.02
+        type(elem2).__name__ = "Circle2d"
+
+        profile.OrderedGeometry.return_value = (2, [elem1, elem2])
+
+        result = sm.get_ordered_geometry()
+        assert result["status"] == "ok"
+        assert result["num_elements"] == 2
+        assert len(result["elements"]) == 2
+        assert result["elements"][0]["start_x"] == 0.0
+        assert result["elements"][0]["end_x"] == 0.1
+        assert result["elements"][1]["center_x"] == 0.05
+        assert result["elements"][1]["radius"] == 0.02
+
+    def test_no_active_sketch(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        sm.active_profile = None
+
+        result = sm.get_ordered_geometry()
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+
+    def test_empty_geometry(self, sketch_mgr):
+        sm, doc = sketch_mgr
+        profile = MagicMock()
+        sm.active_profile = profile
+        profile.OrderedGeometry.return_value = (0, [])
+
+        result = sm.get_ordered_geometry()
+        assert result["status"] == "ok"
+        assert result["num_elements"] == 0
+        assert result["elements"] == []

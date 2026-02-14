@@ -203,6 +203,36 @@ def get_sketch_constraints() -> dict:
     return sketch_manager.get_sketch_constraints()
 
 
+def project_silhouette_edges() -> dict:
+    """Project silhouette edges of the body onto the active sketch."""
+    return sketch_manager.project_silhouette_edges()
+
+
+def include_region_faces(face_indices: list[int]) -> dict:
+    """Include faces as regions in the active sketch."""
+    return sketch_manager.include_region_faces(face_indices)
+
+
+def chain_locate(x: float, y: float, tolerance: float = 0.001) -> dict:
+    """Find a chain of connected sketch elements at a location."""
+    return sketch_manager.chain_locate(x, y, tolerance)
+
+
+def convert_to_curve() -> dict:
+    """Convert sketch geometry to a curve."""
+    return sketch_manager.convert_to_curve()
+
+
+def sketch_paste() -> dict:
+    """Paste clipboard content into the active sketch."""
+    return sketch_manager.sketch_paste()
+
+
+def get_ordered_geometry() -> dict:
+    """Get the ordered geometry elements from the active sketch."""
+    return sketch_manager.get_ordered_geometry()
+
+
 def register(mcp):
     """Register sketching tools with the MCP server."""
     mcp.tool()(create_sketch)
@@ -239,3 +269,11 @@ def register(mcp):
     mcp.tool()(get_sketch_constraints)
     mcp.tool()(get_sketch_matrix)
     mcp.tool()(clean_sketch_geometry)
+    # Batch 9: Sketch Extensions
+    mcp.tool()(project_silhouette_edges)
+    mcp.tool()(include_region_faces)
+    mcp.tool()(chain_locate)
+    mcp.tool()(convert_to_curve)
+    # Batch 10: Sketch Paste & Ordered Geometry
+    mcp.tool()(sketch_paste)
+    mcp.tool()(get_ordered_geometry)

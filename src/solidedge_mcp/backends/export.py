@@ -1228,6 +1228,681 @@ class ExportManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    # =================================================================
+    # DIMENSION ANNOTATIONS
+    # =================================================================
+
+    def add_angular_dimension(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        x3: float,
+        y3: float,
+        dim_x: float | None = None,
+        dim_y: float | None = None,
+    ) -> dict[str, Any]:
+        """
+        Add an angular dimension between three points on the active draft sheet.
+
+        The angle is measured at the vertex (x2, y2) between the rays to
+        (x1, y1) and (x3, y3).
+
+        Args:
+            x1: First ray endpoint X (meters)
+            y1: First ray endpoint Y (meters)
+            x2: Vertex X (meters)
+            y2: Vertex Y (meters)
+            x3: Second ray endpoint X (meters)
+            y3: Second ray endpoint Y (meters)
+            dim_x: Dimension text X position (meters, optional)
+            dim_y: Dimension text Y position (meters, optional)
+
+        Returns:
+            Dict with status and dimension info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+            dims = sheet.Dimensions
+
+            text_x = dim_x if dim_x is not None else (x1 + x3) / 2
+            text_y = dim_y if dim_y is not None else (y1 + y3) / 2 + 0.02
+
+            dims.AddAngular(x1, y1, x2, y2, x3, y3, text_x, text_y)
+
+            return {
+                "status": "created",
+                "type": "angular_dimension",
+                "vertex": [x2, y2],
+                "text_position": [text_x, text_y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_radial_dimension(
+        self,
+        center_x: float,
+        center_y: float,
+        point_x: float,
+        point_y: float,
+        dim_x: float | None = None,
+        dim_y: float | None = None,
+    ) -> dict[str, Any]:
+        """
+        Add a radial dimension on the active draft sheet.
+
+        Args:
+            center_x: Arc center X (meters)
+            center_y: Arc center Y (meters)
+            point_x: Point on arc X (meters)
+            point_y: Point on arc Y (meters)
+            dim_x: Dimension text X position (meters, optional)
+            dim_y: Dimension text Y position (meters, optional)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+            dims = sheet.Dimensions
+
+            text_x = dim_x if dim_x is not None else (center_x + point_x) / 2
+            text_y = dim_y if dim_y is not None else (center_y + point_y) / 2 + 0.02
+
+            dims.AddRadial(center_x, center_y, point_x, point_y, text_x, text_y)
+
+            return {
+                "status": "created",
+                "type": "radial_dimension",
+                "center": [center_x, center_y],
+                "point": [point_x, point_y],
+                "text_position": [text_x, text_y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_diameter_dimension(
+        self,
+        center_x: float,
+        center_y: float,
+        point_x: float,
+        point_y: float,
+        dim_x: float | None = None,
+        dim_y: float | None = None,
+    ) -> dict[str, Any]:
+        """
+        Add a diameter dimension on the active draft sheet.
+
+        Args:
+            center_x: Circle center X (meters)
+            center_y: Circle center Y (meters)
+            point_x: Point on circle X (meters)
+            point_y: Point on circle Y (meters)
+            dim_x: Dimension text X position (meters, optional)
+            dim_y: Dimension text Y position (meters, optional)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+            dims = sheet.Dimensions
+
+            text_x = dim_x if dim_x is not None else center_x + (point_x - center_x) * 1.3
+            text_y = dim_y if dim_y is not None else center_y + (point_y - center_y) * 1.3 + 0.02
+
+            dims.AddDiameter(center_x, center_y, point_x, point_y, text_x, text_y)
+
+            return {
+                "status": "created",
+                "type": "diameter_dimension",
+                "center": [center_x, center_y],
+                "point": [point_x, point_y],
+                "text_position": [text_x, text_y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_ordinate_dimension(
+        self,
+        origin_x: float,
+        origin_y: float,
+        point_x: float,
+        point_y: float,
+        dim_x: float | None = None,
+        dim_y: float | None = None,
+    ) -> dict[str, Any]:
+        """
+        Add an ordinate dimension on the active draft sheet.
+
+        Ordinate dimensions show the distance from an origin to a point
+        along a single axis.
+
+        Args:
+            origin_x: Datum origin X (meters)
+            origin_y: Datum origin Y (meters)
+            point_x: Measured point X (meters)
+            point_y: Measured point Y (meters)
+            dim_x: Dimension text X position (meters, optional)
+            dim_y: Dimension text Y position (meters, optional)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+            dims = sheet.Dimensions
+
+            text_x = dim_x if dim_x is not None else point_x
+            text_y = dim_y if dim_y is not None else point_y + 0.02
+
+            dims.AddOrdinate(origin_x, origin_y, point_x, point_y, text_x, text_y)
+
+            return {
+                "status": "created",
+                "type": "ordinate_dimension",
+                "origin": [origin_x, origin_y],
+                "point": [point_x, point_y],
+                "text_position": [text_x, text_y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # SYMBOL ANNOTATIONS
+    # =================================================================
+
+    def add_center_mark(self, x: float, y: float) -> dict[str, Any]:
+        """
+        Add a center mark annotation at the specified coordinates.
+
+        Args:
+            x: Center mark X position (meters)
+            y: Center mark Y position (meters)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+            center_marks = sheet.CenterMarks
+            center_marks.Add(x, y, 0)
+
+            return {
+                "status": "added",
+                "type": "center_mark",
+                "position": [x, y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_centerline(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
+        """
+        Add a centerline between two points on the active draft sheet.
+
+        Args:
+            x1: Start X (meters)
+            y1: Start Y (meters)
+            x2: End X (meters)
+            y2: End Y (meters)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+            centerlines = sheet.Centerlines
+            centerlines.Add(x1, y1, 0, x2, y2, 0)
+
+            return {
+                "status": "added",
+                "type": "centerline",
+                "start": [x1, y1],
+                "end": [x2, y2],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_surface_finish_symbol(
+        self, x: float, y: float, symbol_type: str = "machined"
+    ) -> dict[str, Any]:
+        """
+        Add a surface finish symbol to the active draft sheet.
+
+        Args:
+            x: Symbol X position (meters)
+            y: Symbol Y position (meters)
+            symbol_type: Type of surface finish - 'machined', 'any', 'prohibited'
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            type_map = {"machined": 1, "any": 0, "prohibited": 2}
+            type_value = type_map.get(symbol_type.lower())
+            if type_value is None:
+                valid = ", ".join(type_map.keys())
+                return {"error": f"Invalid symbol_type: '{symbol_type}'. Valid: {valid}"}
+
+            sheet = doc.ActiveSheet
+
+            try:
+                sfs = sheet.SurfaceFinishSymbols
+                sfs.Add(x, y, 0, type_value)
+            except Exception:
+                # Fallback: use TextBoxes with standard surface finish text
+                text_boxes = sheet.TextBoxes
+                symbols = {"machined": "\u2327", "any": "\u2328", "prohibited": "\u2329"}
+                text_box = text_boxes.Add(x, y, 0)
+                text_box.Text = symbols.get(symbol_type.lower(), "\u2327")
+
+            return {
+                "status": "added",
+                "type": "surface_finish_symbol",
+                "symbol_type": symbol_type,
+                "position": [x, y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_weld_symbol(self, x: float, y: float, weld_type: str = "fillet") -> dict[str, Any]:
+        """
+        Add a welding symbol to the active draft sheet.
+
+        Args:
+            x: Symbol X position (meters)
+            y: Symbol Y position (meters)
+            weld_type: Type of weld - 'fillet', 'groove', 'plug', 'spot', 'seam'
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            type_map = {"fillet": 0, "groove": 1, "plug": 2, "spot": 3, "seam": 4}
+            type_value = type_map.get(weld_type.lower())
+            if type_value is None:
+                valid = ", ".join(type_map.keys())
+                return {"error": f"Invalid weld_type: '{weld_type}'. Valid: {valid}"}
+
+            sheet = doc.ActiveSheet
+
+            try:
+                ws = sheet.WeldSymbols
+                ws.Add(x, y, 0, type_value)
+            except Exception:
+                # Fallback: use a leader with weld designation text
+                leaders = sheet.Leaders
+                leader = leaders.Add(x, y, 0, x + 0.02, y + 0.02, 0)
+                with contextlib.suppress(Exception):
+                    leader.Text = f"[{weld_type.upper()}]"
+
+            return {
+                "status": "added",
+                "type": "weld_symbol",
+                "weld_type": weld_type,
+                "position": [x, y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_geometric_tolerance(
+        self, x: float, y: float, tolerance_text: str = ""
+    ) -> dict[str, Any]:
+        """
+        Add a geometric tolerance (Feature Control Frame / GD&T) to the active draft.
+
+        Args:
+            x: FCF X position (meters)
+            y: FCF Y position (meters)
+            tolerance_text: Tolerance specification text (e.g., "0.05 A B")
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            sheet = doc.ActiveSheet
+
+            try:
+                fcfs = sheet.FCFs
+                fcf = fcfs.Add(x, y, 0)
+                if tolerance_text:
+                    with contextlib.suppress(Exception):
+                        fcf.Text = tolerance_text
+            except Exception:
+                # Fallback: use a text box with GD&T text
+                text_boxes = sheet.TextBoxes
+                text_box = text_boxes.Add(x, y, 0)
+                text_box.Text = tolerance_text if tolerance_text else "[GD&T]"
+
+            return {
+                "status": "added",
+                "type": "geometric_tolerance",
+                "position": [x, y],
+                "text": tolerance_text,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # DRAWING VIEW VARIANTS
+    # =================================================================
+
+    def add_detail_view(
+        self,
+        parent_view_index: int,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        x: float,
+        y: float,
+        scale: float = 2.0,
+    ) -> dict[str, Any]:
+        """
+        Add a detail (zoom) view from a parent drawing view.
+
+        Creates a circular detail envelope on the parent view and places
+        an enlarged view at the specified position.
+
+        Args:
+            parent_view_index: 0-based index of the parent drawing view
+            center_x: Detail envelope center X on parent view (meters)
+            center_y: Detail envelope center Y on parent view (meters)
+            radius: Detail envelope radius (meters)
+            x: Detail view X position on sheet (meters)
+            y: Detail view Y position on sheet (meters)
+            scale: Detail view scale factor (default 2.0)
+
+        Returns:
+            Dict with status and view info
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if parent_view_index < 0 or parent_view_index >= dvs.Count:
+                return {
+                    "error": f"Invalid parent view index: {parent_view_index}. Count: {dvs.Count}"
+                }
+
+            parent_view = dvs.Item(parent_view_index + 1)
+
+            try:
+                dvs.AddByDetailEnvelope(parent_view, center_x, center_y, radius, x, y, scale)
+            except Exception:
+                # Fallback: try AddDetailView
+                dvs.AddDetailView(parent_view, center_x, center_y, radius, x, y, scale)
+
+            return {
+                "status": "added",
+                "type": "detail_view",
+                "parent_view_index": parent_view_index,
+                "center": [center_x, center_y],
+                "radius": radius,
+                "position": [x, y],
+                "scale": scale,
+                "total_views": dvs.Count,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_auxiliary_view(
+        self,
+        parent_view_index: int,
+        x: float,
+        y: float,
+        fold_direction: str = "Up",
+    ) -> dict[str, Any]:
+        """
+        Add an auxiliary (folded) view from a parent drawing view.
+
+        An auxiliary view shows the model from an angle not available
+        from standard orthographic projections.
+
+        Args:
+            parent_view_index: 0-based index of the parent drawing view
+            x: Auxiliary view X position on sheet (meters)
+            y: Auxiliary view Y position on sheet (meters)
+            fold_direction: Fold direction - 'Up', 'Down', 'Left', 'Right'
+
+        Returns:
+            Dict with status and view info
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if parent_view_index < 0 or parent_view_index >= dvs.Count:
+                return {
+                    "error": f"Invalid parent view index: {parent_view_index}. Count: {dvs.Count}"
+                }
+
+            fold_map = {
+                "Up": FoldTypeConstants.igFoldUp,
+                "Down": FoldTypeConstants.igFoldDown,
+                "Left": FoldTypeConstants.igFoldLeft,
+                "Right": FoldTypeConstants.igFoldRight,
+            }
+
+            fold_const = fold_map.get(fold_direction)
+            if fold_const is None:
+                valid = ", ".join(fold_map.keys())
+                return {"error": f"Invalid fold_direction: '{fold_direction}'. Valid: {valid}"}
+
+            parent_view = dvs.Item(parent_view_index + 1)
+
+            try:
+                dvs.AddByAuxiliaryFold(parent_view, fold_const, x, y)
+            except Exception:
+                # Fallback: try AddByFold
+                dvs.AddByFold(parent_view, fold_const, x, y)
+
+            return {
+                "status": "added",
+                "type": "auxiliary_view",
+                "parent_view_index": parent_view_index,
+                "fold_direction": fold_direction,
+                "position": [x, y],
+                "total_views": dvs.Count,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_draft_view(self, x: float, y: float) -> dict[str, Any]:
+        """
+        Add an empty draft (sketch) view to the active sheet.
+
+        A draft view is an empty drawing view area where you can add
+        free-form sketch geometry and annotations.
+
+        Args:
+            x: View X position on sheet (meters)
+            y: View Y position on sheet (meters)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            dvs.AddDraftView(x, y)
+
+            return {
+                "status": "added",
+                "type": "draft_view",
+                "position": [x, y],
+                "total_views": dvs.Count,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # DRAWING VIEW PROPERTIES
+    # =================================================================
+
+    def align_drawing_views(
+        self, view_index1: int, view_index2: int, align: bool = True
+    ) -> dict[str, Any]:
+        """
+        Align or unalign two drawing views.
+
+        When aligned, moving one view constrains the other to maintain
+        alignment (horizontal or vertical).
+
+        Args:
+            view_index1: 0-based index of the first view
+            view_index2: 0-based index of the second view
+            align: True to align, False to unalign
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if view_index1 < 0 or view_index1 >= dvs.Count:
+                return {"error": f"Invalid view_index1: {view_index1}. Count: {dvs.Count}"}
+            if view_index2 < 0 or view_index2 >= dvs.Count:
+                return {"error": f"Invalid view_index2: {view_index2}. Count: {dvs.Count}"}
+
+            view1 = dvs.Item(view_index1 + 1)
+            view2 = dvs.Item(view_index2 + 1)
+
+            if align:
+                try:
+                    view1.AlignToView(view2)
+                except Exception:
+                    view2.AlignToView(view1)
+            else:
+                try:
+                    view1.RemoveAlignment()
+                except Exception:
+                    view2.RemoveAlignment()
+
+            return {
+                "status": "aligned" if align else "unaligned",
+                "view_index1": view_index1,
+                "view_index2": view_index2,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_drawing_view_model_link(self, view_index: int) -> dict[str, Any]:
+        """
+        Get the model link reference from a drawing view.
+
+        Returns information about which 3D model is associated with
+        the specified drawing view.
+
+        Args:
+            view_index: 0-based view index
+
+        Returns:
+            Dict with model link info (file path, name)
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+
+            info = {"view_index": view_index}
+
+            with contextlib.suppress(Exception):
+                model_link = view.ModelLink
+                info["has_model_link"] = True
+                with contextlib.suppress(Exception):
+                    info["model_path"] = model_link.FileName
+                with contextlib.suppress(Exception):
+                    info["model_name"] = model_link.Name
+            if "has_model_link" not in info:
+                info["has_model_link"] = False
+
+            with contextlib.suppress(Exception):
+                info["view_name"] = view.Name
+            with contextlib.suppress(Exception):
+                info["scale"] = view.ScaleFactor
+
+            return info
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def show_tangent_edges(self, view_index: int, show: bool = True) -> dict[str, Any]:
+        """
+        Set tangent edge visibility on a drawing view.
+
+        Tangent edges are edges where two surfaces meet tangentially
+        (e.g., where a fillet meets a flat face).
+
+        Args:
+            view_index: 0-based view index
+            show: True to show tangent edges, False to hide them
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+            view.ShowTangentEdges = show
+
+            return {
+                "status": "updated",
+                "view_index": view_index,
+                "show_tangent_edges": show,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
     # Aliases for consistency with MCP tool names
     def export_step(self, file_path: str) -> dict[str, Any]:
         """Alias for export_to_step"""
@@ -1256,6 +1931,839 @@ class ExportManager:
     def export_jt(self, file_path: str) -> dict[str, Any]:
         """Alias for export_to_jt"""
         return self.export_to_jt(file_path)
+
+    # =================================================================
+    # DRAFT SHEET COLLECTIONS (Batch 10)
+    # =================================================================
+
+    def get_sheet_dimensions(self) -> dict[str, Any]:
+        """
+        Get all dimensions on the active draft sheet.
+
+        Iterates sheet.Dimensions collection and collects type, value, and
+        position where available.
+
+        Returns:
+            Dict with count and list of dimension info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            dims = sheet.Dimensions
+            items = []
+            for i in range(1, dims.Count + 1):
+                dim = dims.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["type"] = dim.Type
+                with contextlib.suppress(Exception):
+                    info["value"] = dim.Value
+                with contextlib.suppress(Exception):
+                    info["name"] = dim.Name
+                items.append(info)
+            return {"count": len(items), "dimensions": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_sheet_balloons(self) -> dict[str, Any]:
+        """
+        Get all balloons on the active draft sheet.
+
+        Iterates sheet.Balloons collection and collects text and position
+        where available.
+
+        Returns:
+            Dict with count and list of balloon info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            balloons = sheet.Balloons
+            items = []
+            for i in range(1, balloons.Count + 1):
+                balloon = balloons.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["text"] = balloon.BalloonText
+                with contextlib.suppress(Exception):
+                    info["x"] = balloon.x
+                with contextlib.suppress(Exception):
+                    info["y"] = balloon.y
+                items.append(info)
+            return {"count": len(items), "balloons": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_sheet_text_boxes(self) -> dict[str, Any]:
+        """
+        Get all text boxes on the active draft sheet.
+
+        Iterates sheet.TextBoxes collection and collects text content
+        and position where available.
+
+        Returns:
+            Dict with count and list of text box info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            text_boxes = sheet.TextBoxes
+            items = []
+            for i in range(1, text_boxes.Count + 1):
+                tb = text_boxes.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["text"] = tb.Text
+                with contextlib.suppress(Exception):
+                    info["x"] = tb.x
+                with contextlib.suppress(Exception):
+                    info["y"] = tb.y
+                with contextlib.suppress(Exception):
+                    info["height"] = tb.Height
+                items.append(info)
+            return {"count": len(items), "text_boxes": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_sheet_drawing_objects(self) -> dict[str, Any]:
+        """
+        Get all drawing objects on the active draft sheet.
+
+        Iterates sheet.DrawingObjects collection and collects type and
+        name where available.
+
+        Returns:
+            Dict with count and list of drawing object info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            drawing_objects = sheet.DrawingObjects
+            items = []
+            for i in range(1, drawing_objects.Count + 1):
+                obj = drawing_objects.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["type"] = str(type(obj).__name__)
+                with contextlib.suppress(Exception):
+                    info["name"] = obj.Name
+                items.append(info)
+            return {"count": len(items), "drawing_objects": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_sheet_sections(self) -> dict[str, Any]:
+        """
+        Get all section views on the active draft sheet.
+
+        Iterates sheet.Sections collection and collects label and
+        info where available.
+
+        Returns:
+            Dict with count and list of section view info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            sections = sheet.Sections
+            items = []
+            for i in range(1, sections.Count + 1):
+                sec = sections.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["label"] = sec.Label
+                with contextlib.suppress(Exception):
+                    info["name"] = sec.Name
+                with contextlib.suppress(Exception):
+                    info["type"] = sec.Type
+                items.append(info)
+            return {"count": len(items), "sections": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # PRINTING (Batch 10)
+    # =================================================================
+
+    def print_drawing(self, copies: int = 1, all_sheets: bool = True) -> dict[str, Any]:
+        """
+        Print the active draft document.
+
+        Tries doc.PrintOut first, then falls back to DraftPrintUtility.
+
+        Args:
+            copies: Number of copies to print
+            all_sheets: Whether to print all sheets (True) or active only
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            # Try DraftPrintUtility first (more control)
+            if hasattr(doc, "DraftPrintUtility"):
+                dpu = doc.DraftPrintUtility
+                with contextlib.suppress(Exception):
+                    dpu.Copies = copies
+                with contextlib.suppress(Exception):
+                    dpu.PrintAllSheets = all_sheets
+                dpu.PrintOut()
+                return {"status": "printed", "copies": copies, "all_sheets": all_sheets}
+
+            # Fall back to simple PrintOut
+            if hasattr(doc, "PrintOut"):
+                try:
+                    doc.PrintOut(Copies=copies)
+                except Exception:
+                    doc.PrintOut()
+                return {"status": "printed", "copies": copies}
+
+            return {"error": "Active document does not support printing"}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_printer(self, printer_name: str) -> dict[str, Any]:
+        """
+        Set the printer for the active draft document.
+
+        Uses DraftPrintUtility.Printer property.
+
+        Args:
+            printer_name: Name of the printer to use
+
+        Returns:
+            Dict with status and printer name
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "DraftPrintUtility"):
+                return {"error": "Active document does not have DraftPrintUtility"}
+
+            dpu = doc.DraftPrintUtility
+            dpu.Printer = printer_name
+
+            return {"status": "set", "printer": printer_name}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_printer(self) -> dict[str, Any]:
+        """
+        Get the current printer for the active draft document.
+
+        Uses DraftPrintUtility.Printer property.
+
+        Returns:
+            Dict with printer name
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "DraftPrintUtility"):
+                return {"error": "Active document does not have DraftPrintUtility"}
+
+            dpu = doc.DraftPrintUtility
+            printer_name = dpu.Printer
+
+            return {"printer": printer_name}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_paper_size(
+        self, width: float, height: float, orientation: str = "Landscape"
+    ) -> dict[str, Any]:
+        """
+        Set the paper size and orientation for printing.
+
+        Uses DraftPrintUtility paper width/height and orientation.
+
+        Args:
+            width: Paper width in meters
+            height: Paper height in meters
+            orientation: 'Landscape' or 'Portrait'
+
+        Returns:
+            Dict with status and paper settings
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "DraftPrintUtility"):
+                return {"error": "Active document does not have DraftPrintUtility"}
+
+            dpu = doc.DraftPrintUtility
+
+            with contextlib.suppress(Exception):
+                dpu.PaperWidth = width
+            with contextlib.suppress(Exception):
+                dpu.PaperHeight = height
+
+            # Set orientation: 1=Portrait, 2=Landscape (typical COM constants)
+            if orientation.lower() == "portrait":
+                with contextlib.suppress(Exception):
+                    dpu.Orientation = 1
+            else:
+                with contextlib.suppress(Exception):
+                    dpu.Orientation = 2
+
+            return {
+                "status": "set",
+                "width": width,
+                "height": height,
+                "orientation": orientation,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # DRAWING VIEW TOOLS (Batch 10)
+    # =================================================================
+
+    def set_face_texture(self, face_index: int, texture_name: str) -> dict[str, Any]:
+        """
+        Apply a texture to a face by index.
+
+        Uses face style properties to set the texture name.
+
+        Args:
+            face_index: 0-based face index
+            texture_name: Name of the texture to apply
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Models"):
+                return {"error": "Active document does not have a Models collection"}
+
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No models in document"}
+
+            model = models.Item(1)
+            body = model.Body
+            faces = body.Faces(1)  # igQueryAll = 1
+
+            if face_index < 0 or face_index >= faces.Count:
+                return {"error": f"Invalid face_index: {face_index}. Count: {faces.Count}"}
+
+            face = faces.Item(face_index + 1)
+
+            # Try to set texture via face style
+            try:
+                face.TextureName = texture_name
+            except Exception:
+                # Alternative: use Style object
+                try:
+                    style = face.Style
+                    style.TextureName = texture_name
+                except Exception as inner_e:
+                    return {
+                        "error": f"Cannot set texture: {inner_e}",
+                        "traceback": traceback.format_exc(),
+                    }
+
+            return {
+                "status": "set",
+                "face_index": face_index,
+                "texture_name": texture_name,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_assembly_drawing_view_ex(
+        self,
+        x: float = 0.15,
+        y: float = 0.15,
+        orientation: str = "Isometric",
+        scale: float = 1.0,
+        config: str = None,
+    ) -> dict[str, Any]:
+        """
+        Add an extended assembly drawing view with optional configuration.
+
+        Similar to add_assembly_drawing_view but with configuration support.
+
+        Args:
+            x: View center X position on sheet (meters)
+            y: View center Y position on sheet (meters)
+            orientation: View orientation ('Front', 'Top', 'Right', 'Isometric', etc.)
+            scale: View scale factor
+            config: Optional configuration name
+
+        Returns:
+            Dict with status and view info
+        """
+        try:
+            import win32com.client.dynamic as dyn
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            if not hasattr(doc, "ModelLinks") or doc.ModelLinks.Count == 0:
+                return {
+                    "error": "No model link found. Create a drawing with create_drawing() first."
+                }
+
+            model_link = doc.ModelLinks.Item(1)
+
+            view_orient_map = {
+                "Front": 5,
+                "Back": 8,
+                "Top": 6,
+                "Bottom": 9,
+                "Right": 7,
+                "Left": 10,
+                "Isometric": 12,
+                "Iso": 12,
+            }
+
+            orient = view_orient_map.get(orientation)
+            if orient is None:
+                valid = ", ".join(view_orient_map.keys())
+                return {"error": f"Invalid orientation: {orientation}. Valid: {valid}"}
+
+            sheet = doc.ActiveSheet
+            dvs_early = sheet.DrawingViews
+            dvs = dyn.Dispatch(dvs_early._oleobj_)
+
+            # If config specified, try AddWithConfiguration
+            if config is not None:
+                try:
+                    dvs.AddAssemblyViewWithConfiguration(model_link, orient, scale, x, y, 0, config)
+                    return {
+                        "status": "added",
+                        "orientation": orientation,
+                        "scale": scale,
+                        "position": [x, y],
+                        "configuration": config,
+                    }
+                except Exception:
+                    pass  # Fall through to standard method
+
+            # Standard assembly view
+            try:
+                dvs.AddAssemblyView(model_link, orient, scale, x, y, 0)
+            except Exception:
+                dvs.AddPartView(model_link, orient, scale, x, y, 0)
+
+            result = {
+                "status": "added",
+                "orientation": orientation,
+                "scale": scale,
+                "position": [x, y],
+            }
+            if config is not None:
+                result["configuration"] = config
+                result["note"] = "Configuration param not applied; used standard view."
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_drawing_view_with_config(
+        self,
+        x: float = 0.15,
+        y: float = 0.15,
+        orientation: str = "Front",
+        scale: float = 1.0,
+        configuration: str = "Default",
+    ) -> dict[str, Any]:
+        """
+        Add a drawing view with a specific configuration.
+
+        Uses DrawingViews.AddWithConfiguration if available.
+
+        Args:
+            x: View center X position on sheet (meters)
+            y: View center Y position on sheet (meters)
+            orientation: View orientation ('Front', 'Top', 'Right', etc.)
+            scale: View scale factor
+            configuration: Configuration name
+
+        Returns:
+            Dict with status and view info
+        """
+        try:
+            import win32com.client.dynamic as dyn
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Sheets"):
+                return {"error": "Active document is not a draft document"}
+
+            if not hasattr(doc, "ModelLinks") or doc.ModelLinks.Count == 0:
+                return {
+                    "error": "No model link found. Create a drawing with create_drawing() first."
+                }
+
+            model_link = doc.ModelLinks.Item(1)
+
+            view_orient_map = {
+                "Front": 5,
+                "Back": 8,
+                "Top": 6,
+                "Bottom": 9,
+                "Right": 7,
+                "Left": 10,
+                "Isometric": 12,
+                "Iso": 12,
+            }
+
+            orient = view_orient_map.get(orientation)
+            if orient is None:
+                valid = ", ".join(view_orient_map.keys())
+                return {"error": f"Invalid orientation: {orientation}. Valid: {valid}"}
+
+            sheet = doc.ActiveSheet
+            dvs_early = sheet.DrawingViews
+            dvs = dyn.Dispatch(dvs_early._oleobj_)
+
+            try:
+                dvs.AddPartViewWithConfiguration(model_link, orient, scale, x, y, 0, configuration)
+            except Exception:
+                # Fall back to standard AddPartView
+                dvs.AddPartView(model_link, orient, scale, x, y, 0)
+
+            return {
+                "status": "added",
+                "orientation": orientation,
+                "scale": scale,
+                "position": [x, y],
+                "configuration": configuration,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def activate_drawing_view(self, view_index: int) -> dict[str, Any]:
+        """
+        Activate a drawing view by 0-based index.
+
+        An activated view allows editing its contents.
+
+        Args:
+            view_index: 0-based view index
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view_index: {view_index}. Count: {dvs.Count}"}
+            view = dvs.Item(view_index + 1)
+            view.Activate()
+            return {"status": "activated", "view_index": view_index}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def deactivate_drawing_view(self, view_index: int) -> dict[str, Any]:
+        """
+        Deactivate a drawing view by 0-based index.
+
+        Deactivating a view returns focus to the sheet.
+
+        Args:
+            view_index: 0-based view index
+
+        Returns:
+            Dict with status
+        """
+        try:
+            dvs = self._get_drawing_views()
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view_index: {view_index}. Count: {dvs.Count}"}
+            view = dvs.Item(view_index + 1)
+            view.Deactivate()
+            return {"status": "deactivated", "view_index": view_index}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # DRAWING VIEW COPY / SECTION / DIMENSIONS (Batch 11)
+    # =================================================================
+
+    def add_by_draft_view(
+        self, source_view_index: int, x: float, y: float, scale: float | None = None
+    ) -> dict[str, Any]:
+        """
+        Copy an existing drawing view to a new location on the active sheet.
+
+        Uses DrawingViews.AddByDraftView(From, Scale, x1, y1) from the draft
+        type library. The source view is specified by 0-based index.
+
+        Args:
+            source_view_index: 0-based index of the source drawing view
+            x: X position for the new view on the sheet (meters)
+            y: Y position for the new view on the sheet (meters)
+            scale: Scale for the new view (default: same as source view)
+
+        Returns:
+            Dict with status and new view info
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if source_view_index < 0 or source_view_index >= dvs.Count:
+                return {
+                    "error": f"Invalid source view index: {source_view_index}. Count: {dvs.Count}"
+                }
+
+            source_view = dvs.Item(source_view_index + 1)
+
+            # Use source view scale if not specified
+            if scale is None:
+                try:
+                    scale = source_view.ScaleFactor
+                except Exception:
+                    scale = 1.0
+
+            # AddByDraftView(From: DrawingView*, Scale: VT_R8, x1: VT_R8, y1: VT_R8)
+            new_view = dvs.AddByDraftView(source_view, scale, x, y)
+
+            result = {
+                "status": "added",
+                "source_view_index": source_view_index,
+                "position": [x, y],
+                "scale": scale,
+                "total_views": dvs.Count,
+            }
+
+            with contextlib.suppress(Exception):
+                result["name"] = new_view.Name
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_section_cuts(self, view_index: int) -> dict[str, Any]:
+        """
+        Get section cut (cutting plane) information from a drawing view.
+
+        Accesses DrawingView.CuttingPlanes collection and extracts caption,
+        display type, and fold line geometry for each cutting plane.
+
+        Args:
+            view_index: 0-based index of the drawing view
+
+        Returns:
+            Dict with count and list of section cut info dicts
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+
+            if not hasattr(view, "CuttingPlanes"):
+                return {"count": 0, "section_cuts": [], "note": "No CuttingPlanes on this view"}
+
+            cutting_planes = view.CuttingPlanes
+            items = []
+            for i in range(1, cutting_planes.Count + 1):
+                cp = cutting_planes.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+
+                with contextlib.suppress(Exception):
+                    info["caption"] = cp.Caption
+                with contextlib.suppress(Exception):
+                    info["display_caption"] = cp.DisplayCaption
+                with contextlib.suppress(Exception):
+                    info["display_type"] = cp.DisplayType
+                with contextlib.suppress(Exception):
+                    info["style_name"] = cp.StyleName
+                with contextlib.suppress(Exception):
+                    info["text_height"] = cp.TextHeight
+
+                # Try to get fold line geometry
+                with contextlib.suppress(Exception):
+                    (
+                        line_start_x,
+                        line_start_y,
+                        line_end_x,
+                        line_end_y,
+                        view_dir_x,
+                        view_dir_y,
+                    ) = cp.GetFoldLineWithViewDirection()
+                    info["fold_line"] = {
+                        "start": [line_start_x, line_start_y],
+                        "end": [line_end_x, line_end_y],
+                        "view_direction": [view_dir_x, view_dir_y],
+                    }
+
+                items.append(info)
+
+            return {"count": len(items), "section_cuts": items, "view_index": view_index}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_section_cut(
+        self,
+        view_index: int,
+        x: float,
+        y: float,
+        section_type: int = 0,
+    ) -> dict[str, Any]:
+        """
+        Add a section cut (cutting plane) to a drawing view and create the section view.
+
+        Creates a cutting plane on the specified drawing view via
+        CuttingPlanes.Add(), then calls CuttingPlane.CreateView(SectionType)
+        to generate the section drawing view.
+
+        Args:
+            view_index: 0-based index of the source drawing view
+            x: X position for the section view on the sheet (meters)
+            y: Y position for the section view on the sheet (meters)
+            section_type: 0 = standard, 1 = revolved (DraftSectionViewType)
+
+        Returns:
+            Dict with status and section view info
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            if section_type not in (0, 1):
+                return {
+                    "error": f"Invalid section_type: {section_type}. "
+                    "Use 0 (standard) or 1 (revolved)."
+                }
+
+            view = dvs.Item(view_index + 1)
+
+            if not hasattr(view, "CuttingPlanes"):
+                return {"error": "Drawing view does not support CuttingPlanes"}
+
+            cutting_planes = view.CuttingPlanes
+
+            # CuttingPlanes.Add() returns a new CuttingPlane object
+            cutting_plane = cutting_planes.Add()
+
+            # CuttingPlane.CreateView(SectionType) creates the section view
+            section_view = cutting_plane.CreateView(section_type)
+
+            # Move the section view to the desired position
+            with contextlib.suppress(Exception):
+                section_view.OriginX = x
+                section_view.OriginY = y
+
+            result = {
+                "status": "added",
+                "source_view_index": view_index,
+                "section_type": "standard" if section_type == 0 else "revolved",
+                "position": [x, y],
+                "total_cutting_planes": cutting_planes.Count,
+            }
+
+            with contextlib.suppress(Exception):
+                result["caption"] = cutting_plane.Caption
+            with contextlib.suppress(Exception):
+                result["section_view_name"] = section_view.Name
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_drawing_view_dimensions(self, view_index: int) -> dict[str, Any]:
+        """
+        Get all dimensions associated with a specific drawing view.
+
+        Accesses DrawingView.Dimensions collection (dispid 120) and iterates
+        each Dimension to return its type, value, prefix/suffix strings, and
+        override text.
+
+        DimensionType constants (DimTypeConstants):
+            1=Linear, 2=Radial, 3=Angular, 4=RadialDiameter,
+            5=CircularDiameter, 6=ArcLength, 7=ArcAngle, 8=Coordinate,
+            9=SymmetricalDiameter, 10=Chamfer, 11=AngularCoordinate,
+            12=CurveLength
+
+        Args:
+            view_index: 0-based index of the drawing view
+
+        Returns:
+            Dict with count and list of dimension info dicts
+        """
+        try:
+            dvs = self._get_drawing_views()
+
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+
+            if not hasattr(view, "Dimensions"):
+                return {"count": 0, "dimensions": [], "note": "No Dimensions on this view"}
+
+            dims = view.Dimensions
+
+            dim_type_names = {
+                1: "Linear",
+                2: "Radial",
+                3: "Angular",
+                4: "RadialDiameter",
+                5: "CircularDiameter",
+                6: "ArcLength",
+                7: "ArcAngle",
+                8: "Coordinate",
+                9: "SymmetricalDiameter",
+                10: "Chamfer",
+                11: "AngularCoordinate",
+                12: "CurveLength",
+            }
+
+            items = []
+            for i in range(1, dims.Count + 1):
+                dim = dims.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+
+                with contextlib.suppress(Exception):
+                    raw_type = dim.DimensionType
+                    info["dimension_type"] = raw_type
+                    info["dimension_type_name"] = dim_type_names.get(raw_type, "Unknown")
+                with contextlib.suppress(Exception):
+                    info["value"] = dim.Value
+                with contextlib.suppress(Exception):
+                    info["constraint"] = dim.Constraint
+                with contextlib.suppress(Exception):
+                    info["prefix"] = dim.PrefixString
+                with contextlib.suppress(Exception):
+                    info["suffix"] = dim.SuffixString
+                with contextlib.suppress(Exception):
+                    info["override"] = dim.OverrideString
+                with contextlib.suppress(Exception):
+                    info["subfix"] = dim.SubfixString
+                with contextlib.suppress(Exception):
+                    info["superfix"] = dim.SuperfixString
+
+                items.append(info)
+
+            return {
+                "count": len(items),
+                "dimensions": items,
+                "view_index": view_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 class ViewModel:

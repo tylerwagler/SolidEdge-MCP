@@ -1669,3 +1669,1290 @@ class AssemblyManager:
             return {"count": doc.Occurrences.Count}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # ========================================================================
+    # ASSEMBLY RELATION TOOLS (Batch 1)
+    # ========================================================================
+
+    def _validate_occurrences(
+        self, doc, occurrence1_index: int, occurrence2_index: int
+    ) -> tuple[Any, Any, dict[str, Any] | None]:
+        """Validate two occurrence indices and return occurrence objects.
+
+        Returns (occ1, occ2, error_dict). If error_dict is not None, caller should return it.
+        """
+        if not hasattr(doc, "Relations3d"):
+            return None, None, {"error": "Active document is not an assembly"}
+
+        occurrences = doc.Occurrences
+
+        if occurrence1_index < 0 or occurrence1_index >= occurrences.Count:
+            return (
+                None,
+                None,
+                {
+                    "error": f"Invalid occurrence1 index: "
+                    f"{occurrence1_index}. Count: {occurrences.Count}"
+                },
+            )
+        if occurrence2_index < 0 or occurrence2_index >= occurrences.Count:
+            return (
+                None,
+                None,
+                {
+                    "error": f"Invalid occurrence2 index: "
+                    f"{occurrence2_index}. Count: {occurrences.Count}"
+                },
+            )
+
+        occ1 = occurrences.Item(occurrence1_index + 1)
+        occ2 = occurrences.Item(occurrence2_index + 1)
+        return occ1, occ2, None
+
+    def _validate_relation_index(
+        self, doc, relation_index: int
+    ) -> tuple[Any, dict[str, Any] | None]:
+        """Validate a relation index and return the relation object.
+
+        Returns (relation, error_dict). If error_dict is not None, caller should return it.
+        """
+        if not hasattr(doc, "Relations3d"):
+            return None, {"error": "Active document is not an assembly"}
+
+        relations = doc.Relations3d
+
+        if relation_index < 0 or relation_index >= relations.Count:
+            return None, {
+                "error": f"Invalid relation index: {relation_index}. Count: {relations.Count}"
+            }
+
+        return relations.Item(relation_index + 1), None
+
+    def add_planar_relation(
+        self,
+        occurrence1_index: int,
+        occurrence2_index: int,
+        offset: float = 0.0,
+        orientation: str = "Align",
+    ) -> dict[str, Any]:
+        """
+        Add a planar relation between two assembly components.
+
+        Uses Relations3d.AddPlanar(Occurrence1, Occurrence2, Offset, OrientationType).
+
+        Args:
+            occurrence1_index: 0-based index of first component
+            occurrence2_index: 0-based index of second component
+            offset: Offset distance in meters (default 0.0)
+            orientation: "Align" (1), "Antialign" (2), or "NotSpecified" (0)
+
+        Returns:
+            Dict with status and relation info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
+            if err:
+                return err
+
+            orient_map = {"Align": 1, "Antialign": 2, "NotSpecified": 0}
+            orient_val = orient_map.get(orientation, 0)
+
+            relations = doc.Relations3d
+            relations.AddPlanar(occ1, occ2, offset, orient_val)
+
+            return {
+                "status": "created",
+                "relation_type": "Planar",
+                "occurrence1_index": occurrence1_index,
+                "occurrence2_index": occurrence2_index,
+                "offset": offset,
+                "orientation": orientation,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_axial_relation(
+        self,
+        occurrence1_index: int,
+        occurrence2_index: int,
+        orientation: str = "Align",
+    ) -> dict[str, Any]:
+        """
+        Add an axial relation between two assembly components.
+
+        Uses Relations3d.AddAxial(Occurrence1, Occurrence2, OrientationType).
+
+        Args:
+            occurrence1_index: 0-based index of first component
+            occurrence2_index: 0-based index of second component
+            orientation: "Align" (1), "Antialign" (2), or "NotSpecified" (0)
+
+        Returns:
+            Dict with status and relation info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
+            if err:
+                return err
+
+            orient_map = {"Align": 1, "Antialign": 2, "NotSpecified": 0}
+            orient_val = orient_map.get(orientation, 0)
+
+            relations = doc.Relations3d
+            relations.AddAxial(occ1, occ2, orient_val)
+
+            return {
+                "status": "created",
+                "relation_type": "Axial",
+                "occurrence1_index": occurrence1_index,
+                "occurrence2_index": occurrence2_index,
+                "orientation": orientation,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_angular_relation(
+        self,
+        occurrence1_index: int,
+        occurrence2_index: int,
+        angle: float = 0.0,
+    ) -> dict[str, Any]:
+        """
+        Add an angular relation between two assembly components.
+
+        Uses Relations3d.AddAngular(Occurrence1, Occurrence2, AngleInRadians).
+
+        Args:
+            occurrence1_index: 0-based index of first component
+            occurrence2_index: 0-based index of second component
+            angle: Angle in degrees (converted to radians for COM)
+
+        Returns:
+            Dict with status and relation info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
+            if err:
+                return err
+
+            angle_rad = math.radians(angle)
+
+            relations = doc.Relations3d
+            relations.AddAngular(occ1, occ2, angle_rad)
+
+            return {
+                "status": "created",
+                "relation_type": "Angular",
+                "occurrence1_index": occurrence1_index,
+                "occurrence2_index": occurrence2_index,
+                "angle_degrees": angle,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_point_relation(
+        self,
+        occurrence1_index: int,
+        occurrence2_index: int,
+    ) -> dict[str, Any]:
+        """
+        Add a point (connect) relation between two assembly components.
+
+        Uses Relations3d.AddPoint(Occurrence1, Occurrence2).
+
+        Args:
+            occurrence1_index: 0-based index of first component
+            occurrence2_index: 0-based index of second component
+
+        Returns:
+            Dict with status and relation info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
+            if err:
+                return err
+
+            relations = doc.Relations3d
+            relations.AddPoint(occ1, occ2)
+
+            return {
+                "status": "created",
+                "relation_type": "Point",
+                "occurrence1_index": occurrence1_index,
+                "occurrence2_index": occurrence2_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_tangent_relation(
+        self,
+        occurrence1_index: int,
+        occurrence2_index: int,
+    ) -> dict[str, Any]:
+        """
+        Add a tangent relation between two assembly components.
+
+        Uses Relations3d.AddTangent(Occurrence1, Occurrence2).
+
+        Args:
+            occurrence1_index: 0-based index of first component
+            occurrence2_index: 0-based index of second component
+
+        Returns:
+            Dict with status and relation info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
+            if err:
+                return err
+
+            relations = doc.Relations3d
+            relations.AddTangent(occ1, occ2)
+
+            return {
+                "status": "created",
+                "relation_type": "Tangent",
+                "occurrence1_index": occurrence1_index,
+                "occurrence2_index": occurrence2_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_gear_relation(
+        self,
+        occurrence1_index: int,
+        occurrence2_index: int,
+        ratio1: float = 1.0,
+        ratio2: float = 1.0,
+    ) -> dict[str, Any]:
+        """
+        Add a gear relation between two assembly components.
+
+        Uses Relations3d.AddGear(Occurrence1, Occurrence2, Ratio1, Ratio2).
+
+        Args:
+            occurrence1_index: 0-based index of first component
+            occurrence2_index: 0-based index of second component
+            ratio1: Gear ratio value for first component (default 1.0)
+            ratio2: Gear ratio value for second component (default 1.0)
+
+        Returns:
+            Dict with status and relation info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
+            if err:
+                return err
+
+            relations = doc.Relations3d
+            relations.AddGear(occ1, occ2, ratio1, ratio2)
+
+            return {
+                "status": "created",
+                "relation_type": "Gear",
+                "occurrence1_index": occurrence1_index,
+                "occurrence2_index": occurrence2_index,
+                "ratio1": ratio1,
+                "ratio2": ratio2,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_relation_offset(self, relation_index: int) -> dict[str, Any]:
+        """
+        Get the offset value from a planar relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+
+        Returns:
+            Dict with offset value (meters)
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            offset = rel.Offset
+
+            return {
+                "relation_index": relation_index,
+                "offset": offset,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_relation_offset(self, relation_index: int, offset: float) -> dict[str, Any]:
+        """
+        Set the offset value on a planar relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+            offset: New offset value in meters
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            rel.Offset = offset
+
+            return {
+                "status": "updated",
+                "relation_index": relation_index,
+                "offset": offset,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_relation_angle(self, relation_index: int) -> dict[str, Any]:
+        """
+        Get the angle value from an angular relation.
+
+        The COM API stores angles in radians; this returns degrees.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+
+        Returns:
+            Dict with angle in degrees
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            angle_rad = rel.Angle
+            angle_deg = math.degrees(angle_rad)
+
+            return {
+                "relation_index": relation_index,
+                "angle_degrees": angle_deg,
+                "angle_radians": angle_rad,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_relation_angle(self, relation_index: int, angle: float) -> dict[str, Any]:
+        """
+        Set the angle value on an angular relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+            angle: New angle in degrees (converted to radians for COM)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            angle_rad = math.radians(angle)
+            rel.Angle = angle_rad
+
+            return {
+                "status": "updated",
+                "relation_index": relation_index,
+                "angle_degrees": angle,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_normals_aligned(self, relation_index: int) -> dict[str, Any]:
+        """
+        Get the NormalsAligned property from a relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+
+        Returns:
+            Dict with normals_aligned boolean
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            aligned = rel.NormalsAligned
+
+            return {
+                "relation_index": relation_index,
+                "normals_aligned": aligned,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_normals_aligned(self, relation_index: int, aligned: bool) -> dict[str, Any]:
+        """
+        Set the NormalsAligned property on a relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+            aligned: True to align normals, False otherwise
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            rel.NormalsAligned = aligned
+
+            return {
+                "status": "updated",
+                "relation_index": relation_index,
+                "normals_aligned": aligned,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def suppress_relation(self, relation_index: int) -> dict[str, Any]:
+        """
+        Suppress an assembly relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            rel.Suppressed = True
+
+            return {
+                "status": "suppressed",
+                "relation_index": relation_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def unsuppress_relation(self, relation_index: int) -> dict[str, Any]:
+        """
+        Unsuppress an assembly relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            rel.Suppressed = False
+
+            return {
+                "status": "unsuppressed",
+                "relation_index": relation_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_relation_geometry(self, relation_index: int) -> dict[str, Any]:
+        """
+        Get geometry info from a relation (connected occurrence references).
+
+        Attempts to read OccurrencePart1, OccurrencePart2, and other geometry
+        properties from the relation. Not all properties are available on all
+        relation types.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+
+        Returns:
+            Dict with available geometry/occurrence info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            info: dict[str, Any] = {"relation_index": relation_index}
+
+            with contextlib.suppress(Exception):
+                info["type"] = rel.Type
+
+            with contextlib.suppress(Exception):
+                info["name"] = rel.Name
+
+            with contextlib.suppress(Exception):
+                occ1 = rel.OccurrencePart1
+                info["occurrence1_name"] = occ1.Name if hasattr(occ1, "Name") else str(occ1)
+
+            with contextlib.suppress(Exception):
+                occ2 = rel.OccurrencePart2
+                info["occurrence2_name"] = occ2.Name if hasattr(occ2, "Name") else str(occ2)
+
+            with contextlib.suppress(Exception):
+                info["offset"] = rel.Offset
+
+            with contextlib.suppress(Exception):
+                info["normals_aligned"] = rel.NormalsAligned
+
+            with contextlib.suppress(Exception):
+                info["suppressed"] = rel.Suppressed
+
+            return info
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_gear_ratio(self, relation_index: int) -> dict[str, Any]:
+        """
+        Get gear ratio values from a gear relation.
+
+        Reads RatioValue1 and RatioValue2 from the relation.
+
+        Args:
+            relation_index: 0-based index into Relations3d collection
+
+        Returns:
+            Dict with ratio1 and ratio2 values
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            rel, err = self._validate_relation_index(doc, relation_index)
+            if err:
+                return err
+
+            info: dict[str, Any] = {"relation_index": relation_index}
+
+            try:
+                info["ratio1"] = rel.RatioValue1
+            except Exception:
+                info["ratio1"] = None
+                info["ratio1_error"] = "RatioValue1 not available on this relation"
+
+            try:
+                info["ratio2"] = rel.RatioValue2
+            except Exception:
+                info["ratio2"] = None
+                info["ratio2_error"] = "RatioValue2 not available on this relation"
+
+            return info
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # ========================================================================
+    # BATCH 8: ASSEMBLY OCCURRENCES & PROPERTIES
+    # ========================================================================
+
+    def _validate_occurrence_index(
+        self, doc, component_index: int
+    ) -> tuple[Any, Any, dict[str, Any] | None]:
+        """Validate a single occurrence index and return (occurrences, occurrence, error_dict).
+
+        If error_dict is not None, caller should return it.
+        """
+        if not hasattr(doc, "Occurrences"):
+            return None, None, {"error": "Active document is not an assembly"}
+
+        occurrences = doc.Occurrences
+
+        if component_index < 0 or component_index >= occurrences.Count:
+            return (
+                None,
+                None,
+                {
+                    "error": f"Invalid component index: "
+                    f"{component_index}. Count: {occurrences.Count}"
+                },
+            )
+
+        occurrence = occurrences.Item(component_index + 1)
+        return occurrences, occurrence, None
+
+    def add_family_member(
+        self,
+        file_path: str,
+        family_member_name: str,
+        x: float = 0,
+        y: float = 0,
+        z: float = 0,
+    ) -> dict[str, Any]:
+        """
+        Add a Family of Parts member to the assembly.
+
+        Uses Occurrences.AddFamilyByFilename to place a specific family member.
+
+        Args:
+            file_path: Path to the Family of Parts file (.par)
+            family_member_name: Name of the family member to place
+            x: X position in meters (unused, placement is at origin)
+            y: Y position in meters (unused, placement is at origin)
+            z: Z position in meters (unused, placement is at origin)
+
+        Returns:
+            Dict with status and component info
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"error": f"File not found: {file_path}"}
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Occurrences"):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            occ = occurrences.AddFamilyByFilename(file_path, family_member_name)
+
+            return {
+                "status": "added",
+                "file_path": file_path,
+                "family_member": family_member_name,
+                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "index": occurrences.Count - 1,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_family_with_transform(
+        self,
+        file_path: str,
+        family_member_name: str,
+        origin_x: float = 0,
+        origin_y: float = 0,
+        origin_z: float = 0,
+        angle_x: float = 0,
+        angle_y: float = 0,
+        angle_z: float = 0,
+    ) -> dict[str, Any]:
+        """
+        Add a Family of Parts member with position and rotation.
+
+        Places the family member, then applies a transform via PutTransform.
+        Angles are in degrees (converted to radians internally).
+
+        Args:
+            file_path: Path to the Family of Parts file (.par)
+            family_member_name: Name of the family member to place
+            origin_x, origin_y, origin_z: Position in meters
+            angle_x, angle_y, angle_z: Rotation angles in degrees
+
+        Returns:
+            Dict with status and component info
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"error": f"File not found: {file_path}"}
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Occurrences"):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            occ = occurrences.AddFamilyByFilename(file_path, family_member_name)
+
+            # Apply transform
+            ax_rad = math.radians(angle_x)
+            ay_rad = math.radians(angle_y)
+            az_rad = math.radians(angle_z)
+            occ.PutTransform(origin_x, origin_y, origin_z, ax_rad, ay_rad, az_rad)
+
+            return {
+                "status": "added",
+                "file_path": file_path,
+                "family_member": family_member_name,
+                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "origin": [origin_x, origin_y, origin_z],
+                "angles_degrees": [angle_x, angle_y, angle_z],
+                "index": occurrences.Count - 1,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_by_template(
+        self,
+        file_path: str,
+        template_name: str,
+    ) -> dict[str, Any]:
+        """
+        Add a component to the assembly using a template.
+
+        Uses Occurrences.AddByTemplate(filename, templateName).
+
+        Args:
+            file_path: Path to the part or assembly file
+            template_name: Name of the template to use
+
+        Returns:
+            Dict with status and component info
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"error": f"File not found: {file_path}"}
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Occurrences"):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            occ = occurrences.AddByTemplate(file_path, template_name)
+
+            return {
+                "status": "added",
+                "file_path": file_path,
+                "template_name": template_name,
+                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "index": occurrences.Count - 1,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_adjustable_part(
+        self,
+        file_path: str,
+        x: float = 0,
+        y: float = 0,
+        z: float = 0,
+    ) -> dict[str, Any]:
+        """
+        Add a part as an adjustable part to the assembly.
+
+        Uses Occurrences.AddAsAdjustablePart(filename).
+
+        Args:
+            file_path: Path to the part file (.par)
+            x: X position in meters (unused, placement is at origin)
+            y: Y position in meters (unused, placement is at origin)
+            z: Z position in meters (unused, placement is at origin)
+
+        Returns:
+            Dict with status and component info
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"error": f"File not found: {file_path}"}
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Occurrences"):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            occ = occurrences.AddAsAdjustablePart(file_path)
+
+            return {
+                "status": "added",
+                "file_path": file_path,
+                "adjustable": True,
+                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "index": occurrences.Count - 1,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def reorder_occurrence(
+        self,
+        component_index: int,
+        target_index: int,
+    ) -> dict[str, Any]:
+        """
+        Reorder an occurrence in the assembly tree.
+
+        Uses Occurrences.ReorderOccurrence(occurrence, targetIndex).
+        Both indices are 0-based (converted to 1-based for COM).
+
+        Args:
+            component_index: 0-based index of the component to move
+            target_index: 0-based target position
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Occurrences"):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+
+            if component_index < 0 or component_index >= occurrences.Count:
+                return {
+                    "error": f"Invalid component index: "
+                    f"{component_index}. Count: {occurrences.Count}"
+                }
+
+            if target_index < 0 or target_index >= occurrences.Count:
+                return {
+                    "error": f"Invalid target index: {target_index}. Count: {occurrences.Count}"
+                }
+
+            occurrence = occurrences.Item(component_index + 1)
+            occurrences.ReorderOccurrence(occurrence, target_index + 1)
+
+            return {
+                "status": "reordered",
+                "component_index": component_index,
+                "target_index": target_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def put_transform_euler(
+        self,
+        component_index: int,
+        x: float,
+        y: float,
+        z: float,
+        rx: float,
+        ry: float,
+        rz: float,
+    ) -> dict[str, Any]:
+        """
+        Set a component's transform using Euler angles.
+
+        Uses occurrence.PutTransform(x, y, z, rx_rad, ry_rad, rz_rad).
+        Angles are in degrees (converted to radians internally).
+
+        Args:
+            component_index: 0-based index of the component
+            x: X position in meters
+            y: Y position in meters
+            z: Z position in meters
+            rx: Rotation around X axis in degrees
+            ry: Rotation around Y axis in degrees
+            rz: Rotation around Z axis in degrees
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            rx_rad = math.radians(rx)
+            ry_rad = math.radians(ry)
+            rz_rad = math.radians(rz)
+            occurrence.PutTransform(x, y, z, rx_rad, ry_rad, rz_rad)
+
+            return {
+                "status": "updated",
+                "component_index": component_index,
+                "position": [x, y, z],
+                "angles_degrees": [rx, ry, rz],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def put_origin(
+        self,
+        component_index: int,
+        x: float,
+        y: float,
+        z: float,
+    ) -> dict[str, Any]:
+        """
+        Set a component's origin (position only, no rotation change).
+
+        Uses occurrence.PutOrigin(x, y, z).
+
+        Args:
+            component_index: 0-based index of the component
+            x: X position in meters
+            y: Y position in meters
+            z: Z position in meters
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            occurrence.PutOrigin(x, y, z)
+
+            return {
+                "status": "updated",
+                "component_index": component_index,
+                "origin": [x, y, z],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def make_writable(self, component_index: int) -> dict[str, Any]:
+        """
+        Make a component writable (editable) in the assembly.
+
+        Uses occurrence.MakeWritable() to allow editing of the component.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            occurrence.MakeWritable()
+
+            return {
+                "status": "writable",
+                "component_index": component_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def swap_family_member(
+        self,
+        component_index: int,
+        new_member_name: str,
+    ) -> dict[str, Any]:
+        """
+        Swap a Family of Parts occurrence for a different family member.
+
+        Uses occurrence.SwapFamilyMember(newMemberName).
+
+        Args:
+            component_index: 0-based index of the component
+            new_member_name: Name of the new family member
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            occurrence.SwapFamilyMember(new_member_name)
+
+            return {
+                "status": "swapped",
+                "component_index": component_index,
+                "new_member_name": new_member_name,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_occurrence_bodies(self, component_index: int) -> dict[str, Any]:
+        """
+        Get body information from a specific component occurrence.
+
+        Reads occurrence.Bodies property to enumerate solid bodies.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with body count and body info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            bodies_info = []
+            try:
+                bodies = occurrence.Bodies
+                body_count = bodies.Count if hasattr(bodies, "Count") else 0
+
+                for i in range(1, body_count + 1):
+                    body = bodies.Item(i)
+                    body_info: dict[str, Any] = {"index": i - 1}
+
+                    with contextlib.suppress(Exception):
+                        body_info["name"] = body.Name
+
+                    with contextlib.suppress(Exception):
+                        body_info["volume"] = body.Volume
+
+                    bodies_info.append(body_info)
+            except Exception:
+                body_count = 0
+
+            return {
+                "component_index": component_index,
+                "body_count": len(bodies_info),
+                "bodies": bodies_info,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_occurrence_style(self, component_index: int) -> dict[str, Any]:
+        """
+        Get the style (appearance) of a component occurrence.
+
+        Reads occurrence.Style property.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with style info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            result: dict[str, Any] = {"component_index": component_index}
+
+            try:
+                style = occurrence.Style
+                result["style"] = str(style) if style is not None else None
+            except Exception:
+                result["style"] = None
+                result["style_note"] = "Style property not available on this occurrence"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def is_tube(self, component_index: int) -> dict[str, Any]:
+        """
+        Check if a component occurrence is a tube.
+
+        Reads occurrence.IsTube property.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with is_tube boolean
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            result: dict[str, Any] = {"component_index": component_index}
+
+            try:
+                result["is_tube"] = bool(occurrence.IsTube)
+            except Exception:
+                result["is_tube"] = False
+                result["is_tube_note"] = "IsTube property not available on this occurrence"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_adjustable_part(self, component_index: int) -> dict[str, Any]:
+        """
+        Get adjustable part info from a component occurrence.
+
+        Reads occurrence.GetAdjustablePart() to check if the component
+        is adjustable and retrieve its adjustable part object info.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with adjustable part info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            result: dict[str, Any] = {"component_index": component_index}
+
+            try:
+                adj_part = occurrence.GetAdjustablePart()
+                result["is_adjustable"] = adj_part is not None
+                if adj_part is not None:
+                    with contextlib.suppress(Exception):
+                        result["adjustable_name"] = adj_part.Name
+            except Exception:
+                result["is_adjustable"] = False
+                result["adjustable_note"] = "GetAdjustablePart not available on this occurrence"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_face_style(self, component_index: int) -> dict[str, Any]:
+        """
+        Get the face style of a component occurrence.
+
+        Reads occurrence.GetFaceStyle2() for face style information.
+
+        Args:
+            component_index: 0-based index of the component
+
+        Returns:
+            Dict with face style info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
+            if err:
+                return err
+
+            result: dict[str, Any] = {"component_index": component_index}
+
+            try:
+                face_style = occurrence.GetFaceStyle2()
+                result["face_style"] = str(face_style) if face_style is not None else None
+            except Exception:
+                result["face_style"] = None
+                result["face_style_note"] = "GetFaceStyle2 not available on this occurrence"
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_family_with_matrix(
+        self,
+        family_file_path: str,
+        member_name: str,
+        matrix: list[float],
+    ) -> dict[str, Any]:
+        """
+        Add a Family of Parts member with a 4x4 transformation matrix.
+
+        Uses Occurrences.AddFamilyWithMatrix(OccurrenceFileName, Matrix, MemberName)
+        to place a specific family member at the position/orientation defined by the matrix.
+
+        Args:
+            family_file_path: Path to the Family of Parts file (.par)
+            member_name: Name of the family member to place
+            matrix: 16-element list of floats representing a 4x4 transformation matrix
+
+        Returns:
+            Dict with status and component info
+        """
+        try:
+            if not os.path.exists(family_file_path):
+                return {"error": f"File not found: {family_file_path}"}
+
+            if len(matrix) != 16:
+                return {"error": f"Matrix must have exactly 16 elements, got {len(matrix)}"}
+
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Occurrences"):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            occ = occurrences.AddFamilyWithMatrix(family_file_path, matrix, member_name)
+
+            # Extract position from transform
+            position = [matrix[12], matrix[13], matrix[14]]
+
+            return {
+                "status": "added",
+                "file_path": family_file_path,
+                "family_member": member_name,
+                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "position": position,
+                "matrix": matrix,
+                "index": occurrences.Count - 1,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_occurrence(self, internal_id: int) -> dict[str, Any]:
+        """
+        Get an occurrence by its internal ID.
+
+        Uses Occurrences.GetOccurrence(ID) to retrieve a specific occurrence
+        by its internal ID (not by index). This is useful when you know the
+        internal identifier assigned by Solid Edge.
+
+        Args:
+            internal_id: Internal ID of the occurrence (integer)
+
+        Returns:
+            Dict with occurrence info (name, file path, transform, etc.)
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "Occurrences"):
+                return {"error": "Active document is not an assembly"}
+
+            occurrences = doc.Occurrences
+            occurrence = occurrences.GetOccurrence(internal_id)
+
+            if occurrence is None:
+                return {"error": f"No occurrence found with ID: {internal_id}"}
+
+            info: dict[str, Any] = {"internal_id": internal_id}
+
+            # Name
+            try:
+                info["name"] = occurrence.Name
+            except Exception:
+                info["name"] = "Unknown"
+
+            # File path
+            try:
+                info["file_path"] = occurrence.OccurrenceFileName
+            except Exception:
+                info["file_path"] = "Unknown"
+
+            # Transform (position + rotation)
+            try:
+                transform = occurrence.GetTransform()
+                info["position"] = [transform[0], transform[1], transform[2]]
+                info["rotation_rad"] = [transform[3], transform[4], transform[5]]
+            except Exception:
+                pass
+
+            # Full 4x4 matrix
+            try:
+                mat = occurrence.GetMatrix()
+                info["matrix"] = list(mat)
+            except Exception:
+                pass
+
+            # Visibility
+            with contextlib.suppress(Exception):
+                info["visible"] = occurrence.Visible
+
+            # Occurrence document info
+            try:
+                occ_doc = occurrence.OccurrenceDocument
+                info["document_name"] = occ_doc.Name
+            except Exception:
+                pass
+
+            return info
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}

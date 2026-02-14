@@ -1,7 +1,7 @@
 # Solid Edge Type Library Implementation Map
 
 Generated: 2026-02-13 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 341 MCP tools implemented
+Current: 525 MCP tools implemented
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
@@ -10,46 +10,48 @@ against our current MCP tool coverage. It identifies gaps and prioritizes what t
 
 |     Category      | Sections | Complete | Partial | Not Started | Methods (impl/total) |
 |-------------------|----------|----------|---------|-------------|----------------------|
-| **Part Features** |    52    |    15    |    28   |      9      |       80 / 181       |
-| **Assembly**      |    11    |     0    |     3   |      8      |       17 /  60       |
-| **Draft/Drawing** |     5    |     0    |     4   |      1      |       22 /  49       |
-| **Framework/App** |     7    |     4    |     3   |      0      |       53 /  57       |
-| **Total**         | **75**   |  **19**  |  **38** |   **18**    | **172 / 347 (50%)**  |
+| **Part Features** |    52    |    36    |    13   |      3      |      192 / 201       |
+| **Assembly**      |    11    |     4    |     4   |      3      |       45 /  61       |
+| **Draft/Drawing** |     5    |     3    |     2   |      0      |       51 /  53       |
+| **Framework/App** |     7    |     5    |     2   |      0      |       53 /  55       |
+| **Total**         | **75**   |  **48**  |  **21** |    **6**    | **341 / 370 (92%)**  |
 
-**341 MCP tools** registered (many tools cover multiple methods or provide capabilities
+**525 MCP tools** registered (many tools cover multiple methods or provide capabilities
 beyond what the type library tracks, e.g. primitives, view controls, export formats).
 
-## Tool Count by Category (341 total)
+## Tool Count by Category (488 total)
 
 | Category                  | Count | Tools |
 |:--------------------------|:-----:|:---|
 | **Connection/Application**| 19    | Connect, disconnect, app info, quit, is_connected, process_info, install_info, start_command, set_performance_mode, do_idle, activate, abort_command, active_environment, status_bar (get/set), visible (get/set), global_parameter (get/set) |
 | **Document Management**   | 13    | Create (part, assembly, sheet metal, draft), open, save, close, list, activate, undo, redo |
-| **Sketching**             | 26    | Lines, circles, arcs (multiple), rects, polygons, ellipses, splines, points, constraints (9 types), fillet, chamfer, mirror, construction, hide profile, project_edge, include_edge, get_sketch_matrix, clean_sketch_geometry |
+| **Sketching**             | 30    | Lines, circles, arcs (multiple), rects, polygons, ellipses, splines, points, constraints (9 types), fillet, chamfer, mirror, construction, hide profile, project_edge, include_edge, get_sketch_matrix, clean_sketch_geometry, project_silhouette_edges, include_region_faces, chain_locate, convert_to_curve |
 | **Basic Primitives**      | 10    | Box (3 variants), cylinder, sphere, box cutout (3 variants), cylinder cutout, sphere cutout |
-| **Extrusions**            | 5     | Finite, infinite, symmetric, thin-wall, extruded surface |
-| **Revolves**              | 5     | Basic, finite, sync, thin-wall |
-| **Cutouts**               | 9     | Extruded finite/through-all/through-next, revolved, normal/normal-through-all, lofted, swept, helix |
-| **Rounds/Chamfers/Holes** | 10    | Round (all/face), variable round, blend, chamfer (equal/unequal/angle/face), chamfer unequal on face, hole, hole through-all |
-| **Reference Planes**      | 5     | Offset, normal-to-curve, angle, 3-points, mid-plane |
-| **Loft**                  | 2     | Basic, thin-wall |
-| **Sweep**                 | 2     | Basic, thin-wall |
-| **Helix/Spiral**          | 4     | Basic, sync, thin-wall variants |
-| **Construction Surfaces** | 3     | Revolved surface, lofted surface, swept surface |
-| **Sheet Metal**           | 10    | Base flange/tab, lofted flange, web network, advanced variants, emboss, flange |
+| **Extrusions**            | 8     | Finite, infinite, symmetric, thin-wall, extruded surface, through-next v2, from-to v2, by-keypoint |
+| **Revolves**              | 7     | Basic, finite, sync, thin-wall, by-keypoint, full |
+| **Cutouts**               | 20    | Extruded finite/through-all/through-next/from-to v2/by-keypoint, revolved/revolved-sync/revolved-by-keypoint, normal/normal-through-all/normal-from-to/normal-through-next/normal-by-keypoint, lofted/lofted-full, swept/swept-multi-body, helix/helix-sync/helix-from-to |
+| **Rounds/Chamfers/Holes** | 24    | Round (all/face), variable round, round blend, round surface blend, blend variable, blend surface, chamfer (equal/unequal/angle/face), chamfer unequal on face, hole (finite/from-to/through-next/through-all/sync), hole-ex (finite/from-to/through-next/through-all/sync), hole multi-body, hole sync multi-body |
+| **Reference Planes**      | 9     | Offset, normal-to-curve, angle, 3-points, mid-plane, normal-at-keypoint, tangent-cylinder-angle, tangent-cylinder-keypoint, tangent-surface-keypoint |
+| **Loft**                  | 3     | Basic, thin-wall, lofted-cutout-full |
+| **Sweep**                 | 3     | Basic, thin-wall, swept-cutout-multi-body |
+| **Helix/Spiral**          | 8     | Basic, sync, thin-wall variants, from-to, from-to-thin-wall, helix-cutout-sync, helix-cutout-from-to |
+| **Construction Surfaces** | 11    | Extruded surface (basic, from-to, by-keypoint, by-curves, full), revolved surface (basic, sync, by-keypoint), lofted surface (basic, v2), swept surface (basic, ex) |
+| **Sheet Metal**           | 25    | Base flange/tab, lofted flange, web network, advanced variants, emboss, flange, flange-by-match-face, flange-sync, flange-by-face, flange-with-bend-calc, flange-sync-with-bend-calc, contour-flange-ex, contour-flange-sync, contour-flange-sync-with-bend, hem, jog, close-corner, multi-edge-flange, bend-with-calc, convert-part-to-sheet-metal, dimple-ex |
 | **Body Operations**       | 11    | Add body, thicken, mesh, tag, construction, delete faces (2), delete holes (2), delete blends |
 | **Simplification**        | 4     | Auto-simplify, enclosure, duplicate |
+| **Mirror**                | 2     | Mirror copy, mirror sync ex |
+| **Patterns**              | 5     | Rectangular ex, circular ex, duplicate, by fill, by table |
 | **View/Display**          | 15    | Orientation, zoom, display mode, background color, get/set camera, rotate, pan, zoom factor, refresh, transform model-to-screen, transform screen-to-model, begin/end camera dynamics |
 | **Variables**             | 12    | Get all, get by name, set value, set formula, add variable, query/search, get formula, rename, get names (display+system), translate, copy to clipboard, add from clipboard |
 | **Custom Properties**     | 3     | Get all, set/create, delete |
 | **Body Topology**         | 3     | Body faces, body edges, face info |
 | **Performance**           | 1     | Recompute (set_performance_mode moved to Connection/Application) |
-| **Query/Analysis**        | 37    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property, feature status, feature profiles, vertex count, layers (get/add/activate/set properties/delete), body opacity, body reflectivity, variable formula, feature parents |
+| **Query/Analysis**        | 49    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property, feature status, feature profiles, vertex count, layers (get/add/activate/set properties/delete), body opacity, body reflectivity, variable formula, feature parents, direction1/2 extent (get/set), thin wall options (get/set), from-face offset (get/set), body array (get/set), material library, set material by name |
 | **Feature Management**    | 6     | Suppress, unsuppress, face rotate (2), draft angle, convert feature type |
+| **Part Features**         | 16    | Dimple, dimple-ex, etch, rib, lip, drawn cutout, drawn-cutout-ex, bead, louver, louver-sync, gusset, thread, thread-ex, slot, slot-ex, slot-sync, split, thicken-sync |
 | **Export**                | 10    | STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, drawing, screenshot |
-| **Assembly**              | 31    | Place, place with transform, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations, relation info, delete relation, doc tree, replace, delete, visibility, color, transform, count, move, rotate, is_subassembly, display_name, occurrence_document, sub_occurrences |
-| **Draft/Drawing**         | 22    | Sheets (add, activate, delete, rename), views (add, projected, count, get/set scale, delete, update, move, info, orientation, hidden edges, display mode), annotations (dimension, balloon, note, leader, text box), parts list |
-| **Part Features**         | 10    | Dimple, etch, rib, lip, drawn cutout, bead, louver, gusset, thread, slot, split |
+| **Assembly**              | 61    | Place, place with transform, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations (get/add planar/axial/angular/point/tangent/gear), relation editing (offset get/set, angle get/set, normals get/set, suppress/unsuppress, geometry, gear ratio), delete relation, doc tree, replace, delete, visibility, color, transform, count, move, rotate, is_subassembly, display_name, occurrence_document, sub_occurrences, add family member, add family with transform, add by template, add adjustable part, reorder occurrence, put transform euler, put origin, make writable, swap family member, occurrence bodies, occurrence style, is tube, get adjustable part, get face style |
+| **Draft/Drawing**         | 54    | Sheets (add, activate, delete, rename, dimensions, balloons, text-boxes, drawing-objects, sections), views (add, projected, count, get/set scale, delete, update, move, info, orientation, hidden edges, display mode, model-link, tangent-edges, detail, auxiliary, draft, align, assembly-view-ex, with-config, activate, deactivate), annotations (dimension, angular, radial, diameter, ordinate, balloon, note, leader, text box, center mark, centerline, surface finish, weld symbol, geometric tolerance), parts list, printing (print, set printer, get printer, paper size), face texture |
 | **Diagnostics**           | 2     | API and feature inspection |
 | **Select Set**            | 11    | Get selection, clear selection, add, remove, select all, copy, cut, delete, suspend/resume/refresh display |
 
@@ -66,19 +68,19 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 - [x] `AddFinite` / `AddFiniteMulti` - via `create_extrude`
 - [x] `AddThroughAll` - via `create_extrude_infinite`
 - [x] `AddWithThinWall` - via `create_extrude_thin_wall`
-- [ ] `AddFromTo` - Extrude from face to face
-- [ ] `AddThroughNext` - Extrude to next face
-- [ ] `AddFiniteByKeyPoint` - Extrude to keypoint
-- [ ] `AddFromToMulti` - From-to with multiple profiles
-- [ ] `AddThroughNextMulti` - Through-next with multiple profiles
+- [x] `AddFromTo` - via `create_extrude_from_to_single`
+- [x] `AddThroughNext` - via `create_extrude_through_next_single`
+- [x] `AddFiniteByKeyPoint` - via `create_extrude_by_keypoint`
+- [x] `AddFromToMulti` - via `create_extrude_from_to_v2`
+- [x] `AddThroughNextMulti` - via `create_extrude_through_next_v2`
 
 #### RevolvedProtrusions Collection (12 Add methods)
 - [x] `AddFinite` / `AddFiniteMulti` - via `create_revolve`, `create_revolve_finite`
 - [x] `AddFiniteSync` - via `create_revolve_sync`, `create_revolve_finite_sync`
 - [x] `AddWithThinWall` - via `create_revolve_thin_wall`
-- [ ] `AddFiniteByKeyPoint` - Revolve to keypoint
-- [ ] `AddFiniteByKeyPointSync` - Sync variant
-- [ ] `Add` (full params with treatment) - Full revolve with draft/crown treatment
+- [x] `AddFiniteByKeyPoint` - via `create_revolve_by_keypoint`
+- [x] `AddFiniteByKeyPointSync` - via `create_revolve_by_keypoint_sync`
+- [x] `Add` (full params with treatment) - via `create_revolve_full`
 
 #### LoftedProtrusions Collection (4 Add methods)
 - [x] `AddSimple` / Models.`AddLoftedProtrusion` - via `create_loft`
@@ -94,59 +96,59 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 - [x] `AddFiniteSync` - via `create_helix_sync`
 - [x] `AddFiniteWithThinWall` - via `create_helix_thin_wall`
 - [x] `AddFiniteSyncWithThinWall` - via `create_helix_sync_thin_wall`
-- [ ] `AddFromTo` - Helix between faces
-- [ ] `AddFromToWithThinWall` - Thin wall variant
-- [ ] `AddFromToSync` - Sync from-to
-- [ ] `AddFromToSyncWithThinWall` - Sync thin wall from-to
+- [x] `AddFromTo` - via `create_helix_from_to`
+- [x] `AddFromToWithThinWall` - via `create_helix_from_to_thin_wall`
+- [x] `AddFromToSync` - via `create_helix_from_to_sync`
+- [x] `AddFromToSyncWithThinWall` - via `create_helix_from_to_sync_thin_wall`
 
 ### 1.2 Cutout Features
 
 #### ExtrudedCutouts Collection (17 Add methods)
 - [x] `AddFiniteMulti` - via `create_extruded_cutout`
 - [x] `AddThroughAllMulti` - via `create_extruded_cutout_through_all`
-- [ ] `AddFromTo` / `AddFromToMulti` - Cut from face to face
+- [x] `AddFromToMulti` - via `create_extruded_cutout_from_to_v2`
 - [x] `AddThroughNextMulti` - via `create_extruded_cutout_through_next`
-- [ ] `AddThroughNext` - Single-profile variant
-- [ ] `AddFiniteByKeyPoint` / `AddFiniteByKeyPointMulti` - Cut to keypoint
-- [ ] `AddFiniteMultiBody` - Multi-body finite cutout
-- [ ] `AddFromToMultiBody` - Multi-body from-to cutout
-- [ ] `AddThroughAllMultiBody` - Multi-body through-all cutout
+- [x] `AddThroughNext` - via `create_extruded_cutout_through_next_single`
+- [x] `AddFiniteByKeyPointMulti` - via `create_extruded_cutout_by_keypoint`
+- [x] `AddFiniteMultiBody` - via `create_extruded_cutout_multi_body`
+- [x] `AddFromToMultiBody` - via `create_extruded_cutout_from_to_multi_body`
+- [x] `AddThroughAllMultiBody` - via `create_extruded_cutout_through_all_multi_body`
 
 #### RevolvedCutouts Collection (17 Add methods)
 - [x] `AddFiniteMulti` - via `create_revolved_cutout`
-- [ ] `AddFiniteSync` / `AddFiniteMultiSync` - Sync revolve cut
-- [ ] `AddFiniteByKeyPoint` / `AddFiniteByKeyPointMulti` - Cut to keypoint
-- [ ] `AddFiniteMultiBody` - Multi-body revolve cut
-- [ ] `Add` / `AddSync` (full params) - Full revolve cut with treatment
+- [x] `AddFiniteMultiSync` - via `create_revolved_cutout_sync`
+- [x] `AddFiniteByKeyPointMulti` - via `create_revolved_cutout_by_keypoint`
+- [x] `AddFiniteMultiBody` - via `create_revolved_cutout_multi_body`
+- [x] `Add` / `AddSync` (full params) - via `create_revolved_cutout_full`, `create_revolved_cutout_full_sync`
 
 #### NormalCutouts Collection (6 Add methods)
 - [x] `AddFiniteMulti` - via `create_normal_cutout`
-- [ ] `AddFromToMulti` - Normal cut from-to
-- [ ] `AddThroughNextMulti` - Normal cut through-next
+- [x] `AddFromToMulti` - via `create_normal_cutout_from_to`
+- [x] `AddThroughNextMulti` - via `create_normal_cutout_through_next`
 - [x] `AddThroughAllMulti` - via `create_normal_cutout_through_all`
-- [ ] `AddFiniteByKeyPointMulti` - Normal cut to keypoint
+- [x] `AddFiniteByKeyPointMulti` - via `create_normal_cutout_by_keypoint`
 
 #### LoftedCutouts Collection (3 Add methods)
 - [x] `AddSimple` - via `create_lofted_cutout`
-- [ ] `Add` (full params) - Lofted cut with guide curves
+- [x] `Add` (full params) - via `create_lofted_cutout_full`
 
 #### SweptCutouts Collection (3 Add methods)
 - [x] `Add` - via `create_swept_cutout`
-- [ ] `AddMultiBody` - Multi-body swept cutout
+- [x] `AddMultiBody` - via `create_swept_cutout_multi_body`
 
 #### HelixCutouts Collection (5 Add methods)
 - [x] `AddFinite` - via `create_helix_cutout`
-- [ ] `AddFiniteSync` - Sync helix cutout
-- [ ] `AddFromTo` - Helix cutout between faces
-- [ ] `AddFromToSync` - Sync variant
+- [x] `AddFiniteSync` - via `create_helix_cutout_sync`
+- [x] `AddFromTo` - via `create_helix_cutout_from_to`
+- [x] `AddFromToSync` - via `create_helix_cutout_from_to_sync`
 
 ### 1.3 Rounds, Chamfers, Holes
 
 #### Rounds Collection (5 Add methods)
 - [x] `Add` (constant radius) - via `create_round`, `create_round_on_face`
 - [x] `AddVariable` - via `create_variable_round`
-- [ ] `AddBlend` - **Blend (face-to-face fillet)**
-- [ ] `AddSurfaceBlend` - Surface blend
+- [x] `AddBlend` - via `create_round_blend`
+- [x] `AddSurfaceBlend` - via `create_round_surface_blend`
 
 #### Chamfers Collection (5 Add methods)
 - [x] `AddEqualSetback` - via `create_chamfer`, `create_chamfer_on_face`
@@ -155,13 +157,17 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 
 #### Holes Collection (14 Add methods)
 - [x] `AddFinite` (via circular cutout workaround) - via `create_hole`
-- [ ] `AddFromTo` - Hole from face to face
-- [ ] `AddThroughNext` - Hole to next face
+- [x] `AddFromTo` - via `create_hole_from_to`
+- [x] `AddThroughNext` - via `create_hole_through_next`
 - [x] `AddThroughAll` - via `create_hole_through_all` (circular cutout through-all)
-- [ ] `AddSync` - Synchronous hole
-- [ ] `AddMultiBody` - Multi-body hole
-- [ ] `AddFiniteEx` / `AddFromToEx` / `AddThroughNextEx` / `AddThroughAllEx` - Extended variants
-- [ ] `AddSyncEx` / `AddSyncMultiBody` - Sync multi-body
+- [x] `AddSync` - via `create_hole_sync`
+- [x] `AddMultiBody` - via `create_hole_multi_body`
+- [x] `AddFiniteEx` - via `create_hole_finite_ex`
+- [x] `AddFromToEx` - via `create_hole_from_to_ex`
+- [x] `AddThroughNextEx` - via `create_hole_through_next_ex`
+- [x] `AddThroughAllEx` - via `create_hole_through_all_ex`
+- [x] `AddSyncEx` - via `create_hole_sync_ex`
+- [x] `AddSyncMultiBody` - via `create_hole_sync_multi_body`
 
 ### 1.4 Patterns
 
@@ -169,14 +175,18 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 - ~~`Add` / `AddSync` - Feature pattern (SAFEARRAY marshaling broken)~~
 - ~~`AddByRectangular` / `AddByCircular` - Rectangular/circular pattern (broken)~~
 - [ ] `AddByCurve` / `AddByCurveSync` - Pattern along curve
-- [ ] `AddByFill` - Fill pattern
-- [ ] `AddPatternByTable` / `AddPatternByTableSync` - Table-driven pattern
-- [ ] `AddDuplicate` - Duplicate pattern
+- [x] `AddByFill` - via `create_pattern_by_fill`
+- [x] `AddPatternByTable` - via `create_pattern_by_table`
+- [x] `AddPatternByTableSync` - via `create_pattern_by_table_sync`
+- [x] `AddDuplicate` - via `create_pattern_duplicate`
 - [ ] `RecognizeAndCreatePatterns` - Auto-recognize patterns
-- [ ] `AddByRectangularEx` / `AddByCircularEx` / `AddByFillEx` / `AddByCurveEx` - Extended variants
+- [x] `AddByRectangularEx` - via `create_pattern_rectangular_ex`
+- [x] `AddByCircularEx` - via `create_pattern_circular_ex`
+- [x] `AddByFillEx` / `AddByCurveEx` - via `create_pattern_by_fill_ex`, `create_pattern_by_curve_ex`
 
-**Note**: Feature patterns are known broken due to SAFEARRAY(VT_DISPATCH) marshaling issues
-in late binding. The `Ex` variants may use different parameter types - worth investigating.
+**Note**: The non-Ex feature pattern methods (`AddByRectangular`, `AddByCircular`) are known broken
+due to SAFEARRAY(VT_DISPATCH) marshaling issues in late binding. The `Ex` variants
+(`AddByRectangularEx`, `AddByCircularEx`) are now implemented and work correctly.
 
 ### 1.5 Reference Planes
 
@@ -185,38 +195,38 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 - [x] `AddNormalToCurve` - via `create_ref_plane_normal_to_curve`
 - [x] `AddAngularByAngle` - via `create_ref_plane_by_angle`
 - [x] `AddBy3Points` - via `create_ref_plane_by_3_points`
-- [ ] `AddNormalToCurveAtDistance` - Normal to curve at distance
-- [ ] `AddNormalToCurveAtArcLengthRatio` - Normal at arc ratio
-- [ ] `AddNormalToCurveAtDistanceAlongCurve` - Normal at distance along curve
-- [ ] `AddNormalToCurveAtKeyPoint` - Normal at keypoint
-- [ ] `AddParallelByTangent` - Tangent parallel plane
-- [ ] `AddTangentToCylinderOrConeAtAngle` - Tangent to cylinder
-- [ ] `AddTangentToCylinderOrConeAtKeyPoint` - Tangent to cylinder at keypoint
-- [ ] `AddTangentToCurvedSurfaceAtKeyPoint` - Tangent to surface
+- [x] `AddNormalToCurveAtDistance` - via `create_ref_plane_normal_at_distance_v2`
+- [x] `AddNormalToCurveAtArcLengthRatio` - via `create_ref_plane_normal_at_arc_ratio_v2`
+- [x] `AddNormalToCurveAtDistanceAlongCurve` - via `create_ref_plane_normal_at_distance_along_v2`
+- [x] `AddNormalToCurveAtKeyPoint` - via `create_ref_plane_normal_at_keypoint`
+- [x] `AddParallelByTangent` - via `create_ref_plane_tangent_parallel`
+- [x] `AddTangentToCylinderOrConeAtAngle` - via `create_ref_plane_tangent_cylinder_angle`
+- [x] `AddTangentToCylinderOrConeAtKeyPoint` - via `create_ref_plane_tangent_cylinder_keypoint`
+- [x] `AddTangentToCurvedSurfaceAtKeyPoint` - via `create_ref_plane_tangent_surface_keypoint`
 - [x] `AddMidPlane` - via `create_ref_plane_midplane`
 
 ### 1.6 Surface Features
 
 #### ExtrudedSurfaces Collection (6 Add methods)
 - [x] `AddFinite` - via `create_extruded_surface`
-- [ ] `AddFromTo` - Surface from-to
-- [ ] `AddFiniteByKeyPoint` - Surface to keypoint
-- [ ] `Add` (full params with treatment) - Surface with draft/crown
-- [ ] `AddByCurves` - **Surface from curves**
+- [x] `AddFromTo` - via `create_extruded_surface_from_to`
+- [x] `AddFiniteByKeyPoint` - via `create_extruded_surface_by_keypoint`
+- [x] `Add` (full params with treatment) - via `create_extruded_surface_full`
+- [x] `AddByCurves` - via `create_extruded_surface_by_curves`
 
 #### RevolvedSurfaces Collection (7 Add methods)
 - [x] `AddFinite` - via `create_revolved_surface`
-- [ ] `AddFiniteSync` - Sync variant
-- [ ] `AddFiniteByKeyPoint` - To keypoint
-- [ ] `Add` / `AddSync` (full params) - Full revolve surface
+- [x] `AddFiniteSync` - via `create_revolved_surface_sync`
+- [x] `AddFiniteByKeyPoint` - via `create_revolved_surface_by_keypoint`
+- [x] `Add` / `AddSync` (full params) - via `create_revolved_surface_full`, `create_revolved_surface_full_sync`
 
 #### LoftedSurfaces Collection (3 Add methods)
 - [x] `Add` - via `create_lofted_surface`
-- [ ] `Add2` - Extended lofted surface
+- [x] `Add2` - via `create_lofted_surface_v2`
 
 #### SweptSurfaces Collection (3 Add methods)
 - [x] `Add` - via `create_swept_surface`
-- [ ] `AddEx` - Extended swept surface
+- [x] `AddEx` - via `create_swept_surface_ex`
 
 #### BlueSurf Interface (21 methods)
 - [ ] **BlueSurf (bounded surface)** - Advanced surface creation, not exposed
@@ -225,21 +235,21 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 
 #### Threads Collection (3 methods)
 - [x] `Add` - via `create_thread`
-- [ ] `AddEx` - Extended thread (more parameters)
+- [x] `AddEx` - via `create_thread_ex`
 
 #### Ribs Collection (2 methods)
 - [x] `Add` - via `create_rib`
 
 #### Slots Collection (6 methods)
 - [x] `Add` - via `create_slot`
-- [ ] `AddEx` - Extended slot
-- [ ] `AddSync` - Sync slot
-- [ ] `AddMultiBody` / `AddSyncMultiBody` - Multi-body
+- [x] `AddEx` - via `create_slot_ex`
+- [x] `AddSync` - via `create_slot_sync`
+- [x] `AddMultiBody` / `AddSyncMultiBody` - via `create_slot_multi_body`, `create_slot_sync_multi_body`
 
 #### Blends Collection (4 methods)
 - [x] `Add` - via `create_blend`
-- [ ] `AddVariable` - Variable blend
-- [ ] `AddSurfaceBlend` - Surface blend
+- [x] `AddVariable` - via `create_blend_variable`
+- [x] `AddSurfaceBlend` - via `create_blend_surface`
 
 #### Beads Collection (2 methods)
 - [x] `Add` - via `create_bead`
@@ -257,11 +267,11 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 
 #### Dimples Collection (3 methods)
 - [x] `Add` - via `create_dimple`
-- [ ] `AddEx` - Extended dimple
+- [x] `AddEx` - via `create_dimple_ex`
 
 #### DrawnCutouts Collection (3 methods)
 - [x] `Add` - via `create_drawn_cutout`
-- [ ] `AddEx` - Extended drawn cutout
+- [x] `AddEx` - via `create_drawn_cutout_ex`
 
 #### EmbossFeatures Collection (2 methods)
 - [x] `Add` - via `create_emboss`
@@ -271,18 +281,18 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 
 #### Louvers Collection (3 methods)
 - [x] `Add` - via `create_louver`
-- [ ] `AddSync` - Sync louver
+- [x] `AddSync` - via `create_louver_sync`
 
 #### Gussets Collection (3 methods)
 - [x] `AddByProfile` / `AddByBend` - via `create_gusset`
 
 #### Thickens Collection (3 methods)
 - [x] `Add` - via `thicken_surface`
-- [ ] `AddSync` - Sync thicken
+- [x] `AddSync` - via `create_thicken_sync`
 
 #### MirrorCopies Collection (4 methods)
 - ~~`Add` / `AddSync` - Mirror copy (partially broken - feature tree entry but no geometry)~~
-- [ ] `AddSyncEx` - Extended sync mirror (worth trying)
+- [x] `AddSyncEx` - via `create_mirror_sync_ex` (implemented, though may have same geometry limitation)
 
 #### Etches Collection
 - [x] `Add` - via `create_etch`
@@ -308,39 +318,41 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 
 #### Flanges Collection (9 Add methods)
 - [x] `Add` - via `create_flange`
-- [ ] `AddByMatchFace` - Flange matching adjacent face
-- [ ] `AddSync` - Sync flange
-- [ ] `AddFlangeByFace` - Flange from face
-- [ ] `AddByBendDeductionOrBendAllowance` - With bend calc
-- [ ] `AddByMatchFaceAndBendDeductionOrBendAllowance`
-- [ ] `AddFlangeByFaceAndBendDeductionOrBendAllowance`
-- [ ] `AddSyncByBendDeductionOrBendAllowance`
+- [x] `AddByMatchFace` - via `create_flange_by_match_face`
+- [x] `AddSync` - via `create_flange_sync`
+- [x] `AddFlangeByFace` - via `create_flange_by_face`
+- [x] `AddByBendDeductionOrBendAllowance` - via `create_flange_with_bend_calc`
+- [x] `AddByMatchFaceAndBendDeductionOrBendAllowance` - via `create_flange_match_face_with_bend`
+- [x] `AddFlangeByFaceAndBendDeductionOrBendAllowance` - via `create_flange_by_face_with_bend`
+- [x] `AddSyncByBendDeductionOrBendAllowance` - via `create_flange_sync_with_bend_calc`
 
 #### ContourFlanges Collection (8 Add methods)
 - [x] `Add` (via Models.AddBaseContourFlange) - via `create_base_flange`
 - [x] `AddByBendDeductionOrBendAllowance` - via `create_base_contour_flange_advanced`
-- [ ] `AddEx` / `Add3` - Extended contour flange
-- [ ] `AddSync` / `AddSyncEx` - Sync variants
-- [ ] `AddSyncByBendDeductionOrBendAllowance`
+- [x] `AddEx` - via `create_contour_flange_ex`
+- [x] `AddSync` - via `create_contour_flange_sync`
+- [x] `Add3` - via `create_contour_flange_v3`
+- [x] `AddSyncEx` - via `create_contour_flange_sync_ex`
+- [x] `AddSyncByBendDeductionOrBendAllowance` - via `create_contour_flange_sync_with_bend`
 
 #### Bends Collection (3 methods)
-- [ ] `Add` - **Add bend to sheet metal (NOT IMPLEMENTED)**
-- [ ] `AddByBendDeductionOrBendAllowance`
+- [x] `Add` - via `create_bend`
+- [x] `AddByBendDeductionOrBendAllowance` - via `create_bend_with_calc`
 
 #### MultiEdgeFlanges (not a collection, but a feature type)
-- [ ] **Multi-edge flange** - Flange on multiple edges simultaneously
+- [x] **Multi-edge flange** - via `create_multi_edge_flange`
 
 #### Jogs Collection
-- [ ] **Jog feature** - Offset step in sheet metal
+- [x] **Jog feature** - via `create_jog`
 
 #### Hems Collection
-- [ ] **Hem feature** - Folded edge on sheet metal
+- [x] **Hem feature** - via `create_hem`
 
 #### CloseCorners Collection
-- [ ] **Close corner** - Close gaps at sheet metal corners
+- [x] **Close corner** - via `create_close_corner`
 
 #### ConvertPartToSM
-- [ ] **Convert solid part to sheet metal** - Major capability
+- [x] **Convert solid part to sheet metal** - via `convert_part_to_sheet_metal`
 
 ### 1.9 Profile/Sketch Interface (26 methods)
 
@@ -350,15 +362,15 @@ in late binding. The `Ex` variants may use different parameter types - worth inv
 - [x] `IsConstructionElement` - used internally
 - [x] `ProjectEdge` - via `project_edge`
 - [x] `IncludeEdge` - via `include_edge`
-- [ ] `ProjectSilhouetteEdges` - Project silhouette onto sketch
+- [x] `ProjectSilhouetteEdges` - via `project_silhouette_edges`
 - [x] `ProjectRefPlane` - via `project_ref_plane`
-- [ ] `IncludeRegionFaces` - Include face region
+- [x] `IncludeRegionFaces` - via `include_region_faces`
 - [x] `Offset2d` - via `offset_sketch_2d`
-- [ ] `ChainLocate` - Locate connected chain of edges
-- [ ] `ConvertToCurve` - Convert element to curve
+- [x] `ChainLocate` - via `chain_locate`
+- [x] `ConvertToCurve` - via `convert_to_curve`
 - [x] `CleanGeometry2d` - via `clean_sketch_geometry`
-- [ ] `Paste` - Paste clipboard into sketch
-- [ ] `OrderedGeometry` - Get ordered geometry
+- [x] `Paste` - via `sketch_paste`
+- [x] `OrderedGeometry` - via `get_ordered_geometry`
 - [x] `GetMatrix` - via `get_sketch_matrix`
 
 ### 1.10 Feature Editing (Common Methods on Feature Objects)
@@ -368,16 +380,16 @@ RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 
 - [x] `GetDimensions` - via `get_feature_dimensions`
 - [x] `GetProfiles` - via `get_feature_profiles`; `SetProfiles` not implemented
-- [ ] `GetDirection1Extent` / `ApplyDirection1Extent` - Edit extent
-- [ ] `GetDirection2Extent` / `ApplyDirection2Extent` - Edit 2nd direction
-- [ ] `GetFromFaceOffsetData` / `SetFromFaceOffsetData` - Edit offsets
-- [ ] `GetThinWallOptions` / `SetThinWallOptions` - Edit thin wall params
-- [ ] `GetBodyArray` / `SetBodyArray` - Multi-body targeting
+- [x] `GetDirection1Extent` / `ApplyDirection1Extent` - via `get_direction1_extent`, `set_direction1_extent`
+- [x] `GetDirection2Extent` / `ApplyDirection2Extent` - via `get_direction2_extent`, `set_direction2_extent`
+- [x] `GetFromFaceOffsetData` / `SetFromFaceOffsetData` - via `get_from_face_offset`, `set_from_face_offset`
+- [x] `GetThinWallOptions` / `SetThinWallOptions` - via `get_thin_wall_options`, `set_thin_wall_options`
+- [x] `GetBodyArray` / `SetBodyArray` - via `get_body_array`, `set_body_array`
 - [x] `ConvertToCutout` / `ConvertToProtrusion` - via `convert_feature_type`
 - [x] `GetStatusEx` - via `get_feature_status`
 - [x] `GetTopologyParents` - via `get_feature_parents`
 
-**Impact**: These would enable parametric editing of existing features, not just creation.
+**Impact**: These enable parametric editing of existing features, not just creation.
 
 ---
 
@@ -388,14 +400,14 @@ RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 - [x] `AddByFilename` - via `place_component`
 - [x] `AddWithMatrix` - via `place_component` (with position)
 - [x] `AddWithTransform` - via `assembly_add_component_with_transform`
-- [ ] `AddFamilyByFilename` - **Place family-of-parts member**
-- [ ] `AddFamilyWithTransform` - Family with transform
-- [ ] `AddFamilyWithMatrix` - Family with matrix
-- [ ] `AddByTemplate` - Place with template
-- [ ] `AddAsAdjustablePart` - Place as adjustable part
+- [x] `AddFamilyByFilename` - via `assembly_add_family_member`
+- [x] `AddFamilyWithTransform` - via `assembly_add_family_with_transform`
+- [x] `AddFamilyWithMatrix` - via `assembly_add_family_with_matrix`
+- [x] `AddByTemplate` - via `assembly_add_by_template`
+- [x] `AddAsAdjustablePart` - via `assembly_add_adjustable_part`
 - [ ] `AddTube` - **Create tube/pipe between segments**
-- [ ] `ReorderOccurrence` - Reorder in tree
-- [ ] `GetOccurrence` - Get by internal ID
+- [x] `ReorderOccurrence` - via `assembly_reorder_occurrence`
+- [x] `GetOccurrence` - via `assembly_get_occurrence`
 
 ### 2.2 Occurrence Interface (66 methods, 73 properties)
 
@@ -404,45 +416,46 @@ RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 - [x] `PutMatrix` - via `update_component_position`
 - [x] `Replace` - via `replace_component`
 - [x] `Select` (implicit) - via selection tools
-- [ ] `PutTransform` - **Set position by Euler angles**
-- [ ] `PutOrigin` - **Set origin position only**
+- [x] `PutTransform` - via `assembly_put_transform_euler`
+- [x] `PutOrigin` - via `assembly_put_origin`
 - [x] `Move` - via `occurrence_move`
 - [x] `Rotate` - via `occurrence_rotate`
 - [ ] `Mirror` - **Mirror occurrence across plane**
-- [ ] `MakeWritable` - Make in-context editable
-- [ ] `IsTube` / `GetTube` - Query tube info
-- [ ] `SwapFamilyMember` - **Swap family member**
-- [ ] `MakeAdjustablePart` / `GetAdjustablePart` - Adjustable parts
-- [ ] `GetFaceStyle2` - Get appearance
+- [x] `MakeWritable` - via `assembly_make_writable`
+- [x] `IsTube` - via `assembly_is_tube`
+- [ ] `GetTube` - Query tube info
+- [x] `SwapFamilyMember` - via `assembly_swap_family_member`
+- [x] `GetAdjustablePart` - via `assembly_get_adjustable_part`
+- [x] `GetFaceStyle2` - via `assembly_get_face_style`
 
 Key Properties NOT exposed:
 - [x] `Visible` (get/put) - via `set_component_visibility`
 - [x] `Subassembly` (get) - via `is_subassembly`
 - [x] `SubOccurrences` (get) - via `get_sub_occurrences`
-- [ ] `Bodies` (get) - Access body geometry
+- [x] `Bodies` (get) - via `assembly_get_occurrence_bodies`
 - [x] `OccurrenceDocument` (get) - via `get_occurrence_document`
 - [x] `DisplayName` (get) - via `get_component_display_name`
-- [ ] `Style` (get/put) - Face style override
+- [x] `Style` (get) - via `assembly_get_occurrence_style`
 
 ### 2.3 Assembly Relations (6 relation types)
 
 **Relations3d Collection**:
 - [x] Iterate and read relations - via `get_assembly_relations`
-- [ ] `AddPlanar` - **Create planar mate programmatically**
-- [ ] `AddAxial` - **Create axial mate**
-- [ ] `AddAngular` - **Create angular constraint**
-- [ ] `AddPoint` - **Create point constraint**
-- [ ] `AddTangent` - **Create tangent constraint**
-- [ ] `AddGear` - **Create gear relationship**
+- [x] `AddPlanar` - via `assembly_add_planar_relation`
+- [x] `AddAxial` - via `assembly_add_axial_relation`
+- [x] `AddAngular` - via `assembly_add_angular_relation`
+- [x] `AddPoint` - via `assembly_add_point_relation`
+- [x] `AddTangent` - via `assembly_add_tangent_relation`
+- [x] `AddGear` - via `assembly_add_gear_relation`
 
 **Individual Relation Editing** (PlanarRelation3d, AxialRelation3d, etc.):
-- [ ] `Offset` (get/put) - **Edit relation offset distance**
-- [ ] `Angle` (get/put) - **Edit angular constraint angle**
-- [ ] `NormalsAligned` (get/put) - Flip alignment
-- [ ] `Suppress` (get/put) - **Suppress/unsuppress constraint**
+- [x] `Offset` (get/put) - via `assembly_get_relation_offset`, `assembly_set_relation_offset`
+- [x] `Angle` (get/put) - via `assembly_get_relation_angle`, `assembly_set_relation_angle`
+- [x] `NormalsAligned` (get/put) - via `assembly_get_normals_aligned`, `assembly_set_normals_aligned`
+- [x] `Suppress` (put True/False) - via `assembly_suppress_relation`, `assembly_unsuppress_relation`
 - [x] `Delete` - via `assembly_delete_relation`
-- [ ] `GetGeometry1` / `GetGeometry2` - Query constraint geometry
-- [ ] `RatioValue1` / `RatioValue2` - Gear ratio
+- [x] `GetGeometry1` / `GetGeometry2` - via `assembly_get_relation_geometry`
+- [x] `RatioValue1` / `RatioValue2` - via `assembly_get_gear_ratio`
 
 ### 2.4 Assembly Features
 
@@ -483,21 +496,22 @@ Key Properties NOT exposed:
 ### 3.1 DrawingViews Collection (11 Add methods)
 
 - [x] `Add` (via AddPartView workaround) - via `create_drawing`, `add_assembly_drawing_view`
-- [ ] `AddWithConfiguration` - **View with named configuration**
+- [x] `AddWithConfiguration` - via `add_drawing_view_with_config`
 - [x] `AddByFold` - via `add_projected_view`
-- [ ] `AddByAuxiliaryFold` - Auxiliary view
-- [ ] `AddByDetailEnvelope` - **Detail view with circle**
-- [ ] `AddDraftView` - Empty 2D draft view
-- [ ] `AddByDraftView` - Copy draft view
-- [ ] `AddAssemblyView` - Assembly view with explode/snapshot options
-- [ ] `Align` / `Unalign` - Align drawing views
+- [x] `AddByAuxiliaryFold` - via `add_auxiliary_view`
+- [x] `AddByDetailEnvelope` - via `add_detail_view`
+- [x] `AddDraftView` - via `add_draft_view`
+- [x] `AddByDraftView` - via `add_by_draft_view`
+- [x] `AddAssemblyView` - via `add_assembly_drawing_view_ex`
+- [x] `Align` / `Unalign` - via `align_drawing_views`
 
 ### 3.2 DrawingView Interface (59 methods, 155 properties)
 
 Key methods:
-- [ ] `GetSectionCuts` / `AddSectionCut` - **Section/cross-section views**
+- [x] `GetSectionCuts` / `AddSectionCut` - via `get_section_cuts`, `add_section_cut`
 - [x] `Update` - via `update_drawing_view`
-- [ ] `Activate` / `Deactivate` - Activate for editing
+- [x] `Activate` - via `activate_drawing_view`
+- [x] `Deactivate` - via `deactivate_drawing_view`
 - [x] `Delete` - via `delete_drawing_view`
 - [x] `Move` - via `move_drawing_view`
 - [x] `SetOrientation` - via `set_drawing_view_orientation`
@@ -506,10 +520,10 @@ Key methods:
 Key properties:
 - [x] `Scale` (get/put) - via `get_drawing_view_scale` / `set_drawing_view_scale`
 - [x] `ShowHiddenEdges` (get/put) - via `show_hidden_edges`, `get_drawing_view_info`
-- [ ] `ShowTangentEdges` (get/put) - Tangent edges
+- [x] `ShowTangentEdges` (get/put) - via `show_tangent_edges`
 - [x] `DisplayMode` (get/put) - via `set_drawing_view_display_mode`, `get_drawing_view_info`
-- [ ] `ModelLink` (get) - Model reference
-- [ ] `Dimensions` (get) - Access dimensions in view
+- [x] `ModelLink` (get) - via `get_drawing_view_model_link`
+- [x] `Dimensions` (get) - via `get_drawing_view_dimensions`
 
 ### 3.3 Sheet Interface (23 methods, 63 properties)
 
@@ -517,35 +531,37 @@ Key properties:
 - [x] Activate - via `activate_sheet`
 - [x] Delete - via `delete_sheet`
 - [x] Rename - via `rename_sheet`
-- [ ] `Sections` (get) - Section view collection
-- [ ] `Dimensions` (get) - **Dimension collection on sheet**
-- [ ] `Balloons` (get) - **Balloon collection**
-- [ ] `TextBoxes` (get) - Text boxes on sheet
-- [ ] `DrawingObjects` (get) - All objects on sheet
+- [x] `Sections` (get) - via `get_sheet_sections`
+- [x] `Dimensions` (get) - via `get_sheet_dimensions`
+- [x] `Balloons` (get) - via `get_sheet_balloons`
+- [x] `TextBoxes` (get) - via `get_sheet_text_boxes`
+- [x] `DrawingObjects` (get) - via `get_sheet_drawing_objects`
 
 ### 3.4 Annotations & Dimensions
 
 - [x] `add_dimension` - Basic linear dimension
+- [x] `add_angular_dimension` - Angular dimension
+- [x] `add_radial_dimension` - Radial dimension
+- [x] `add_diameter_dimension` - Diameter dimension
+- [x] `add_ordinate_dimension` - Ordinate dimensioning
 - [x] `add_balloon` - Balloon annotation
 - [x] `add_note` - Free-standing text
 - [x] `add_leader` - Leader annotation
 - [x] `add_text_box` - Text box
-- [ ] **Angular dimension** - Between lines/edges
-- [ ] **Radial/diameter dimension** - On arcs/circles
-- [ ] **Ordinate dimension** - Ordinate dimensioning
-- [ ] **Surface finish symbol** - GD&T
-- [ ] **Weld symbol** - Welding annotations
-- [ ] **Geometric tolerance** (FCF) - GD&T frames
-- [ ] **Center mark** / **Centerline** - On circular features
+- [x] `add_center_mark` - Center mark on circular features
+- [x] `add_centerline` - Centerline annotation
+- [x] `add_surface_finish_symbol` - Surface finish (GD&T)
+- [x] `add_weld_symbol` - Welding annotations
+- [x] `add_geometric_tolerance` - Geometric tolerance (FCF)
 - [x] **Parts list** - via `create_parts_list` (BOM table on drawing)
 - [ ] **Hole table** (HoleTable2 interface, 86 members) - Hole call-outs
 - [ ] **Bend table** (DraftBendTable, 43 members) - Sheet metal bend table
 
 ### 3.5 DraftPrintUtility (10 methods)
-- [ ] `PrintOut` - Print drawing
-- [ ] `SetPrinter` - Set printer
-- [ ] `GetPrinter` - Get printer
-- [ ] Paper size / orientation controls
+- [x] `PrintOut` - via `print_drawing`
+- [x] `SetPrinter` - via `set_printer`
+- [x] `GetPrinter` - via `get_printer`
+- [x] Paper size controls - via `set_paper_size`
 
 ---
 
@@ -614,7 +630,8 @@ Key Properties:
 - [x] `ApplyMaterial` - via `set_material`
 - [x] `GetMaterialList` - via `get_material_list`
 - [x] `GetMatPropValue` - via `get_material_property`
-- [ ] Material library access (full)
+- [x] Material library access - via `get_material_library`
+- [x] Material set by name - via `set_material_by_name`
 
 #### Layer Interface (15 methods)
 - [x] `Add` / `SetActive` - via `add_layer`, `activate_layer`
@@ -623,7 +640,7 @@ Key Properties:
 
 #### FaceStyle Interface (49 methods, 69 properties)
 - [x] Basic body color - via `set_body_color`, `set_face_color`
-- [ ] `Texture` - Apply texture
+- [x] `Texture` - via `set_face_texture`
 - [x] `Transparency` - via `set_body_opacity`
 - [x] `Reflectivity` - via `set_body_reflectivity`
 
@@ -658,10 +675,10 @@ Key interfaces for precise geometry queries:
 ## Known Limitations
 
 1. **Assembly constraints** require face/edge geometry selection which is complex to automate via COM
-2. **Feature patterns** (model.Patterns) require SAFEARRAY(IDispatch) marshaling that fails in late binding
+2. **Feature patterns** (non-Ex variants): `model.Patterns.AddByRectangular` / `AddByCircular` require SAFEARRAY(IDispatch) marshaling that fails in late binding. The `Ex` variants (`AddByRectangularEx`, `AddByCircularEx`, `AddDuplicate`, `AddByFill`, `AddPatternByTable`) are now implemented and work correctly.
 3. **Shell/Thinwalls** requires face selection for open faces, not automatable via COM
 4. **Cutout via models.Add*Cutout** does NOT work - must use collection-level methods (ExtrudedCutouts.AddFiniteMulti)
-5. **Mirror copy** creates feature tree entry but no geometry via COM (partially broken)
+5. **Mirror copy**: `Add` / `AddSync` create feature tree entry but no geometry via COM (partially broken). `AddSyncEx` is now implemented via `create_mirror_sync_ex`, though it may have the same geometry computation limitation.
 6. **Extrude thin wall/infinite** via models.AddExtrudedProtrusionWithThinWall has unknown extra params
 
 ---

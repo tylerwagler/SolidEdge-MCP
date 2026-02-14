@@ -1542,3 +1542,216 @@ class SketchManager:
             return {"constraints": constraints, "count": len(constraints)}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def project_silhouette_edges(self) -> dict[str, Any]:
+        """
+        Project silhouette edges of the body onto the active sketch.
+
+        Projects the visible outline (silhouette) of the 3D body onto the
+        active sketch plane. Useful for creating profiles that follow the
+        outer contour of existing geometry.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            profile = self.active_profile
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            profile.ProjectSilhouetteEdges()
+
+            return {"status": "projected", "type": "silhouette_edges"}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def include_region_faces(self, face_indices: list[int]) -> dict[str, Any]:
+        """
+        Include faces as regions in the active sketch.
+
+        Uses Profile.IncludeRegionFaces to include the specified faces as
+        sketch regions, allowing them to be used for feature operations.
+
+        Args:
+            face_indices: List of 0-based face indices to include
+
+        Returns:
+            Dict with status and count of included faces
+        """
+        try:
+            profile = self.active_profile
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            if not face_indices:
+                return {"error": "No face indices provided"}
+
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No model exists"}
+
+            model = models.Item(1)
+            body = model.Body
+            faces = body.Faces(FaceQueryConstants.igQueryAll)
+
+            face_list = []
+            for fi in face_indices:
+                if fi < 0 or fi >= faces.Count:
+                    return {"error": f"Invalid face index: {fi}. Count: {faces.Count}"}
+                face_list.append(faces.Item(fi + 1))
+
+            profile.IncludeRegionFaces(face_list)
+
+            return {
+                "status": "included",
+                "type": "region_faces",
+                "face_count": len(face_list),
+                "face_indices": face_indices,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def sketch_paste(self) -> dict[str, Any]:
+        """
+        Paste clipboard content into the active sketch.
+
+        Uses Profile.Paste() to paste geometry from the clipboard into the
+        active sketch profile. The clipboard must contain valid sketch
+        geometry (e.g., from a previous Copy operation).
+
+        Returns:
+            Dict with status
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            self.active_profile.Paste()
+
+            return {"status": "pasted", "type": "sketch_paste"}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_ordered_geometry(self) -> dict[str, Any]:
+        """
+        Get the ordered geometry elements from the active sketch.
+
+        Uses Profile.OrderedGeometry() to retrieve geometry elements in
+        their ordered sequence. Returns information about each element
+        including type and available coordinate data.
+
+        Returns:
+            Dict with status, element count, and element details
+        """
+        try:
+            if not self.active_profile:
+                return {"error": "No active sketch. Call create_sketch() first"}
+
+            result = self.active_profile.OrderedGeometry()
+
+            # OrderedGeometry returns (NumElements, Elements) as out params
+            if isinstance(result, tuple) and len(result) == 2:
+                num_elements = result[0]
+                elements = result[1]
+            else:
+                # Fallback: single return value might be the collection
+                num_elements = 0
+                elements = result if result else []
+
+            element_list = []
+            if elements:
+                items = elements if isinstance(elements, (list, tuple)) else [elements]
+                for i, elem in enumerate(items):
+                    info: dict[str, Any] = {"index": i}
+
+                    with contextlib.suppress(Exception):
+                        info["type"] = str(type(elem).__name__)
+
+                    with contextlib.suppress(Exception):
+                        info["start_x"] = elem.StartPoint.X
+                        info["start_y"] = elem.StartPoint.Y
+
+                    with contextlib.suppress(Exception):
+                        info["end_x"] = elem.EndPoint.X
+                        info["end_y"] = elem.EndPoint.Y
+
+                    with contextlib.suppress(Exception):
+                        info["center_x"] = elem.CenterPoint.X
+                        info["center_y"] = elem.CenterPoint.Y
+
+                    with contextlib.suppress(Exception):
+                        info["radius"] = elem.Radius
+
+                    with contextlib.suppress(Exception):
+                        info["length"] = elem.Length
+
+                    element_list.append(info)
+
+            count = num_elements if isinstance(num_elements, int) else len(element_list)
+            return {
+                "status": "ok",
+                "num_elements": count,
+                "elements": element_list,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def chain_locate(self, x: float, y: float, tolerance: float = 0.001) -> dict[str, Any]:
+        """
+        Find a chain of connected sketch elements at a location.
+
+        Uses Profile.ChainLocate to find connected geometry elements
+        starting from the specified point within the given tolerance.
+
+        Args:
+            x: X coordinate to search near (meters)
+            y: Y coordinate to search near (meters)
+            tolerance: Search tolerance in meters (default 1mm)
+
+        Returns:
+            Dict with status and chain info
+        """
+        try:
+            profile = self.active_profile
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            result = profile.ChainLocate(x, y, tolerance)
+
+            return {
+                "status": "located",
+                "type": "chain",
+                "x": x,
+                "y": y,
+                "tolerance": tolerance,
+                "chain_result": str(type(result).__name__) if result else "none",
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def convert_to_curve(self) -> dict[str, Any]:
+        """
+        Convert sketch geometry to a curve.
+
+        Uses Profile.ConvertToCurve to convert the active sketch geometry
+        into a single curve representation. Useful for creating path curves
+        for sweep operations.
+
+        Returns:
+            Dict with status
+        """
+        try:
+            profile = self.active_profile
+            if not profile:
+                return {"error": "No active sketch profile"}
+
+            result = profile.ConvertToCurve()
+
+            return {
+                "status": "converted",
+                "type": "curve",
+                "curve_result": str(type(result).__name__) if result else "none",
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}

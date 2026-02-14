@@ -2635,3 +2635,540 @@ class TestGetFeatureParents:
 
         result = qm.get_feature_parents("Round1")
         assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: GET DIRECTION 1 EXTENT
+# ============================================================================
+
+
+class TestGetDirection1Extent:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+        feat.GetDirection1Extent.return_value = (13, 0.05, None)
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_direction1_extent("Extrude 1")
+        assert result["feature_name"] == "Extrude 1"
+        assert result["extent_type"] == 13
+        assert result["distance"] == 0.05
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_direction1_extent("NonExistent")
+        assert "error" in result
+        assert "not found" in result["error"]
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.get_direction1_extent("test")
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: SET DIRECTION 1 EXTENT
+# ============================================================================
+
+
+class TestSetDirection1Extent:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_direction1_extent("Extrude 1", 13, 0.05)
+        assert result["status"] == "updated"
+        assert result["extent_type"] == 13
+        assert result["distance"] == 0.05
+        feat.ApplyDirection1Extent.assert_called_once_with(13, 0.05, None)
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_direction1_extent("NonExistent", 13, 0.05)
+        assert "error" in result
+        assert "not found" in result["error"]
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.set_direction1_extent("test", 13, 0.05)
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: GET DIRECTION 2 EXTENT
+# ============================================================================
+
+
+class TestGetDirection2Extent:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+        feat.GetDirection2Extent.return_value = (16, 0.0, None)
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_direction2_extent("Extrude 1")
+        assert result["feature_name"] == "Extrude 1"
+        assert result["extent_type"] == 16
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_direction2_extent("NonExistent")
+        assert "error" in result
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.get_direction2_extent("test")
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: SET DIRECTION 2 EXTENT
+# ============================================================================
+
+
+class TestSetDirection2Extent:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_direction2_extent("Extrude 1", 16, 0.0)
+        assert result["status"] == "updated"
+        assert result["extent_type"] == 16
+        feat.ApplyDirection2Extent.assert_called_once_with(16, 0.0, None)
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_direction2_extent("NonExistent", 16, 0.0)
+        assert "error" in result
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.set_direction2_extent("test", 16, 0.0)
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: GET THIN WALL OPTIONS
+# ============================================================================
+
+
+class TestGetThinWallOptions:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+        feat.GetThinWallOptions.return_value = (1, 0.002, 0.003)
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_thin_wall_options("Extrude 1")
+        assert result["feature_name"] == "Extrude 1"
+        assert result["wall_type"] == 1
+        assert result["thickness1"] == 0.002
+        assert result["thickness2"] == 0.003
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_thin_wall_options("NonExistent")
+        assert "error" in result
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.get_thin_wall_options("test")
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: SET THIN WALL OPTIONS
+# ============================================================================
+
+
+class TestSetThinWallOptions:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_thin_wall_options("Extrude 1", 1, 0.002, 0.003)
+        assert result["status"] == "updated"
+        assert result["wall_type"] == 1
+        assert result["thickness1"] == 0.002
+        assert result["thickness2"] == 0.003
+        feat.SetThinWallOptions.assert_called_once_with(1, 0.002, 0.003)
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_thin_wall_options("NonExistent", 1, 0.002)
+        assert "error" in result
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.set_thin_wall_options("test", 1, 0.002)
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: GET FROM FACE OFFSET
+# ============================================================================
+
+
+class TestGetFromFaceOffset:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+        feat.GetFromFaceOffsetData.return_value = (0.01, None)
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_from_face_offset("Extrude 1")
+        assert result["feature_name"] == "Extrude 1"
+        assert result["offset"] == 0.01
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_from_face_offset("NonExistent")
+        assert "error" in result
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.get_from_face_offset("test")
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: SET FROM FACE OFFSET
+# ============================================================================
+
+
+class TestSetFromFaceOffset:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_from_face_offset("Extrude 1", 0.01)
+        assert result["status"] == "updated"
+        assert result["offset"] == 0.01
+        feat.SetFromFaceOffsetData.assert_called_once_with(0.01)
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_from_face_offset("NonExistent", 0.01)
+        assert "error" in result
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.set_from_face_offset("test", 0.01)
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: GET BODY ARRAY
+# ============================================================================
+
+
+class TestGetBodyArray:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        body1 = MagicMock()
+        body1.Name = "Body_1"
+        body1.Volume = 0.001
+
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+        feat.GetBodyArray.return_value = [body1]
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_body_array("Extrude 1")
+        assert result["feature_name"] == "Extrude 1"
+        assert result["count"] == 1
+        assert result["bodies"][0]["name"] == "Body_1"
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_body_array("NonExistent")
+        assert "error" in result
+
+    def test_exception(self, query_mgr):
+        qm, doc = query_mgr
+        doc.DesignEdgebarFeatures = None
+
+        result = qm.get_body_array("test")
+        assert "error" in result
+
+
+# ============================================================================
+# FEATURE EDITING: SET BODY ARRAY
+# ============================================================================
+
+
+class TestSetBodyArray:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 2
+        models.Item.return_value = model
+        doc.Models = models
+
+        result = qm.set_body_array("Extrude 1", [0, 1])
+        assert result["status"] == "updated"
+        assert result["body_count"] == 2
+        feat.SetBodyArray.assert_called_once()
+
+    def test_feature_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Other"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.set_body_array("NonExistent", [0])
+        assert "error" in result
+
+    def test_invalid_body_index(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        models = MagicMock()
+        models.Count = 1
+        doc.Models = models
+
+        result = qm.set_body_array("Extrude 1", [5])
+        assert "error" in result
+        assert "Invalid body index" in result["error"]
+
+
+# ============================================================================
+# BATCH 10: MATERIAL LIBRARY
+# ============================================================================
+
+
+class TestGetMaterialLibrary:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        mat1 = MagicMock()
+        mat1.Name = "Steel"
+        mat1.Density = 7850.0
+        mat1.YoungsModulus = 2.1e11
+        mat1.PoissonsRatio = 0.3
+
+        mat2 = MagicMock()
+        mat2.Name = "Aluminum"
+        mat2.Density = 2700.0
+        mat2.YoungsModulus = 7.0e10
+        mat2.PoissonsRatio = 0.33
+
+        mat_table = MagicMock()
+        mat_table.Count = 2
+        mat_table.Item.side_effect = lambda i: [None, mat1, mat2][i]
+        doc.GetMaterialTable.return_value = mat_table
+
+        result = qm.get_material_library()
+        assert result["count"] == 2
+        assert result["materials"][0]["name"] == "Steel"
+        assert result["materials"][0]["density"] == 7850.0
+        assert result["materials"][1]["name"] == "Aluminum"
+
+    def test_empty(self, query_mgr):
+        qm, doc = query_mgr
+        mat_table = MagicMock()
+        mat_table.Count = 0
+        doc.GetMaterialTable.return_value = mat_table
+
+        result = qm.get_material_library()
+        assert result["count"] == 0
+        assert result["materials"] == []
+
+    def test_error(self, query_mgr):
+        qm, doc = query_mgr
+        doc.GetMaterialTable.side_effect = Exception("No material table")
+
+        result = qm.get_material_library()
+        assert "error" in result
+
+
+class TestSetMaterialByName:
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        mat = MagicMock()
+        mat.Name = "Steel"
+        mat.Density = 7850.0
+
+        mat_table = MagicMock()
+        mat_table.Count = 1
+        mat_table.Item.return_value = mat
+        doc.GetMaterialTable.return_value = mat_table
+
+        result = qm.set_material_by_name("Steel")
+        assert result["status"] == "applied"
+        assert result["material"] == "Steel"
+
+    def test_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        mat = MagicMock()
+        mat.Name = "Steel"
+
+        mat_table = MagicMock()
+        mat_table.Count = 1
+        mat_table.Item.return_value = mat
+        doc.GetMaterialTable.return_value = mat_table
+
+        result = qm.set_material_by_name("Titanium")
+        assert "error" in result
+        assert "Titanium" in result["error"]
+
+    def test_error(self, query_mgr):
+        qm, doc = query_mgr
+        doc.GetMaterialTable.side_effect = Exception("COM error")
+
+        result = qm.set_material_by_name("Steel")
+        assert "error" in result
