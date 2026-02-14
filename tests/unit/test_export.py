@@ -4074,3 +4074,578 @@ class TestGetDrawingViewDimensions:
         result = em.get_drawing_view_dimensions(0)
         assert result["count"] == 0
         assert result["dimensions"] == []
+
+
+# ============================================================================
+# 2D GEOMETRY COLLECTION ACCESS
+# ============================================================================
+
+
+class TestGetLines2d:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        line1 = MagicMock()
+        line1.StartX = 0.0
+        line1.StartY = 0.0
+        line1.EndX = 0.1
+        line1.EndY = 0.05
+
+        line2 = MagicMock()
+        line2.StartX = 0.1
+        line2.StartY = 0.05
+        line2.EndX = 0.2
+        line2.EndY = 0.0
+
+        lines2d = MagicMock()
+        lines2d.Count = 2
+        lines2d.Item.side_effect = lambda i: {1: line1, 2: line2}[i]
+        sheet.Lines2d = lines2d
+        doc.ActiveSheet = sheet
+
+        result = em.get_lines2d()
+        assert result["count"] == 2
+        assert result["lines"][0]["start"] == [0.0, 0.0]
+        assert result["lines"][0]["end"] == [0.1, 0.05]
+        assert result["lines"][1]["index"] == 1
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        lines2d = MagicMock()
+        lines2d.Count = 0
+        sheet.Lines2d = lines2d
+        doc.ActiveSheet = sheet
+
+        result = em.get_lines2d()
+        assert result["count"] == 0
+        assert result["lines"] == []
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_lines2d()
+        assert "error" in result
+
+
+class TestGetCircles2d:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        circle1 = MagicMock()
+        circle1.CenterX = 0.05
+        circle1.CenterY = 0.05
+        circle1.Radius = 0.02
+
+        circles2d = MagicMock()
+        circles2d.Count = 1
+        circles2d.Item.return_value = circle1
+        sheet.Circles2d = circles2d
+        doc.ActiveSheet = sheet
+
+        result = em.get_circles2d()
+        assert result["count"] == 1
+        assert result["circles"][0]["center"] == [0.05, 0.05]
+        assert result["circles"][0]["radius"] == 0.02
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        circles2d = MagicMock()
+        circles2d.Count = 0
+        sheet.Circles2d = circles2d
+        doc.ActiveSheet = sheet
+
+        result = em.get_circles2d()
+        assert result["count"] == 0
+        assert result["circles"] == []
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_circles2d()
+        assert "error" in result
+
+
+class TestGetArcs2d:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        arc1 = MagicMock()
+        arc1.CenterX = 0.1
+        arc1.CenterY = 0.1
+        arc1.Radius = 0.03
+        arc1.StartAngle = 0.0
+        arc1.EndAngle = 3.14159
+
+        arcs2d = MagicMock()
+        arcs2d.Count = 1
+        arcs2d.Item.return_value = arc1
+        sheet.Arcs2d = arcs2d
+        doc.ActiveSheet = sheet
+
+        result = em.get_arcs2d()
+        assert result["count"] == 1
+        assert result["arcs"][0]["center"] == [0.1, 0.1]
+        assert result["arcs"][0]["radius"] == 0.03
+        assert result["arcs"][0]["start_angle"] == 0.0
+        assert result["arcs"][0]["end_angle"] == 3.14159
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        arcs2d = MagicMock()
+        arcs2d.Count = 0
+        sheet.Arcs2d = arcs2d
+        doc.ActiveSheet = sheet
+
+        result = em.get_arcs2d()
+        assert result["count"] == 0
+        assert result["arcs"] == []
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_arcs2d()
+        assert "error" in result
+
+
+# ============================================================================
+# DIMENSION MANAGEMENT
+# ============================================================================
+
+
+class TestAddDistanceDimension:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.add_distance_dimension(0.0, 0.0, 0.1, 0.05)
+        assert result["status"] == "added"
+        assert result["dimension_type"] == "distance"
+        assert result["point1"] == [0.0, 0.0]
+        assert result["point2"] == [0.1, 0.05]
+        dims.AddDistanceBetweenPoints.assert_called_once()
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.add_distance_dimension(0.0, 0.0, 0.1, 0.05)
+        assert "error" in result
+
+    def test_com_error(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        dims.AddDistanceBetweenPoints.side_effect = Exception("COM error")
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.add_distance_dimension(0.0, 0.0, 0.1, 0.05)
+        assert "error" in result
+
+
+class TestAddLengthDimension:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        line = MagicMock()
+        line.StartX = 0.0
+        line.StartY = 0.0
+        line.EndX = 0.1
+        line.EndY = 0.0
+
+        lines2d = MagicMock()
+        lines2d.Count = 2
+        lines2d.Item.return_value = line
+        sheet.Lines2d = lines2d
+
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.add_length_dimension(0)
+        assert result["status"] == "added"
+        assert result["dimension_type"] == "length"
+        assert result["object_index"] == 0
+        dims.AddLength.assert_called_once()
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        lines2d = MagicMock()
+        lines2d.Count = 1
+        sheet.Lines2d = lines2d
+        doc.ActiveSheet = sheet
+
+        result = em.add_length_dimension(5)
+        assert "error" in result
+        assert "Invalid line index" in result["error"]
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.add_length_dimension(0)
+        assert "error" in result
+
+
+class TestAddRadiusDimension2d:
+    def test_success_circle(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        circle = MagicMock()
+        circle.CenterX = 0.05
+        circle.CenterY = 0.05
+        circle.Radius = 0.02
+
+        circles2d = MagicMock()
+        circles2d.Count = 1
+        circles2d.Item.return_value = circle
+        sheet.Circles2d = circles2d
+
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.add_radius_dimension_2d(0, "circle")
+        assert result["status"] == "added"
+        assert result["dimension_type"] == "radius"
+        assert result["object_type"] == "circle"
+        dims.AddRadialDimension.assert_called_once()
+
+    def test_success_arc(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        arc = MagicMock()
+        arc.CenterX = 0.1
+        arc.CenterY = 0.1
+        arc.Radius = 0.03
+
+        arcs2d = MagicMock()
+        arcs2d.Count = 1
+        arcs2d.Item.return_value = arc
+        sheet.Arcs2d = arcs2d
+
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.add_radius_dimension_2d(0, "arc")
+        assert result["status"] == "added"
+        assert result["dimension_type"] == "radius"
+        assert result["object_type"] == "arc"
+
+    def test_invalid_object_type(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        doc.ActiveSheet = sheet
+
+        result = em.add_radius_dimension_2d(0, "polygon")
+        assert "error" in result
+        assert "Invalid object_type" in result["error"]
+
+
+class TestAddAngleDimension2d:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.add_angle_dimension_2d(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
+        assert result["status"] == "added"
+        assert result["dimension_type"] == "angle"
+        assert result["vertex"] == [0.05, 0.05]
+        dims.AddAngle.assert_called_once()
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.add_angle_dimension_2d(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
+        assert "error" in result
+
+    def test_com_error(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dims = MagicMock()
+        dims.AddAngle.side_effect = Exception("COM error")
+        sheet.Dimensions = dims
+        doc.ActiveSheet = sheet
+
+        result = em.add_angle_dimension_2d(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
+        assert "error" in result
+
+
+# ============================================================================
+# SMART FRAMES
+# ============================================================================
+
+
+class TestAddSmartFrame:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        smart_frames = MagicMock()
+        sheet.SmartFrames2d = smart_frames
+        doc.ActiveSheet = sheet
+
+        result = em.add_smart_frame("A4", 0.0, 0.0, 0.297, 0.21)
+        assert result["status"] == "added"
+        assert result["style"] == "A4"
+        assert result["corner1"] == [0.0, 0.0]
+        assert result["corner2"] == [0.297, 0.21]
+        smart_frames.AddBy2Points.assert_called_once_with("A4", 0.0, 0.0, 0.297, 0.21)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.add_smart_frame("A4", 0.0, 0.0, 0.297, 0.21)
+        assert "error" in result
+
+    def test_com_error(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        smart_frames = MagicMock()
+        smart_frames.AddBy2Points.side_effect = Exception("Style not found")
+        sheet.SmartFrames2d = smart_frames
+        doc.ActiveSheet = sheet
+
+        result = em.add_smart_frame("InvalidStyle", 0.0, 0.0, 0.297, 0.21)
+        assert "error" in result
+
+
+class TestAddSmartFrameByOrigin:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        smart_frames = MagicMock()
+        sheet.SmartFrames2d = smart_frames
+        doc.ActiveSheet = sheet
+
+        result = em.add_smart_frame_by_origin("A3", 0.01, 0.01, 0.28, 0.01, 0.01, 0.40)
+        assert result["status"] == "added"
+        assert result["style"] == "A3"
+        assert result["origin"] == [0.01, 0.01]
+        smart_frames.AddByOrigin.assert_called_once_with("A3", 0.01, 0.01, 0.28, 0.01, 0.01, 0.40)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.add_smart_frame_by_origin("A3", 0.01, 0.01, 0.28, 0.01, 0.01, 0.40)
+        assert "error" in result
+
+    def test_com_error(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        smart_frames = MagicMock()
+        smart_frames.AddByOrigin.side_effect = Exception("COM error")
+        sheet.SmartFrames2d = smart_frames
+        doc.ActiveSheet = sheet
+
+        result = em.add_smart_frame_by_origin("A3", 0.01, 0.01, 0.28, 0.01, 0.01, 0.40)
+        assert "error" in result
+
+
+# ============================================================================
+# SYMBOLS
+# ============================================================================
+
+
+class TestAddSymbol:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        symbols = MagicMock()
+        sheet.Symbols = symbols
+        doc.ActiveSheet = sheet
+
+        result = em.add_symbol("C:/symbols/arrow.sym", 0.1, 0.1, 0)
+        assert result["status"] == "placed"
+        assert result["file"] == "C:/symbols/arrow.sym"
+        assert result["position"] == [0.1, 0.1]
+        symbols.Add.assert_called_once_with(0, "C:/symbols/arrow.sym", 0.1, 0.1)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.add_symbol("C:/symbols/arrow.sym", 0.1, 0.1)
+        assert "error" in result
+
+    def test_com_error(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        symbols = MagicMock()
+        symbols.Add.side_effect = Exception("File not found")
+        sheet.Symbols = symbols
+        doc.ActiveSheet = sheet
+
+        result = em.add_symbol("C:/symbols/nonexistent.sym", 0.1, 0.1)
+        assert "error" in result
+
+
+class TestGetSymbols:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sym1 = MagicMock()
+        sym1.Name = "Arrow"
+        sym1.OriginX = 0.1
+        sym1.OriginY = 0.1
+
+        sym2 = MagicMock()
+        sym2.Name = "Star"
+        sym2.OriginX = 0.2
+        sym2.OriginY = 0.2
+
+        symbols = MagicMock()
+        symbols.Count = 2
+        symbols.Item.side_effect = lambda i: {1: sym1, 2: sym2}[i]
+        sheet.Symbols = symbols
+        doc.ActiveSheet = sheet
+
+        result = em.get_symbols()
+        assert result["count"] == 2
+        assert result["symbols"][0]["name"] == "Arrow"
+        assert result["symbols"][0]["x"] == 0.1
+        assert result["symbols"][1]["name"] == "Star"
+        assert result["symbols"][1]["index"] == 1
+
+    def test_empty(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        symbols = MagicMock()
+        symbols.Count = 0
+        sheet.Symbols = symbols
+        doc.ActiveSheet = sheet
+
+        result = em.get_symbols()
+        assert result["count"] == 0
+        assert result["symbols"] == []
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        del doc.ActiveSheet
+
+        result = em.get_symbols()
+        assert "error" in result
+
+
+# ============================================================================
+# PMI (Product Manufacturing Information)
+# ============================================================================
+
+
+class TestGetPmiInfo:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        pmi = MagicMock()
+
+        pmi_dims = MagicMock()
+        pmi_dims.Count = 5
+        pmi.Dimensions = pmi_dims
+
+        pmi_balloons = MagicMock()
+        pmi_balloons.Count = 3
+        pmi.Balloons = pmi_balloons
+
+        pmi_datum = MagicMock()
+        pmi_datum.Count = 2
+        pmi.DatumFrames = pmi_datum
+
+        pmi_fcf = MagicMock()
+        pmi_fcf.Count = 1
+        pmi.FeatureControlFrames = pmi_fcf
+
+        pmi_sf = MagicMock()
+        pmi_sf.Count = 0
+        pmi.SurfaceFinishSymbols = pmi_sf
+
+        pmi_ws = MagicMock()
+        pmi_ws.Count = 0
+        pmi.WeldSymbols = pmi_ws
+
+        pmi_cm = MagicMock()
+        pmi_cm.Count = 4
+        pmi.CenterMarks = pmi_cm
+
+        pmi_cl = MagicMock()
+        pmi_cl.Count = 2
+        pmi.CenterLines = pmi_cl
+
+        pmi_tb = MagicMock()
+        pmi_tb.Count = 1
+        pmi.TextBoxes = pmi_tb
+
+        doc.PMI = pmi
+
+        result = em.get_pmi_info()
+        assert result["has_pmi"] is True
+        assert result["dimensions"] == 5
+        assert result["balloons"] == 3
+        assert result["datum_frames"] == 2
+        assert result["feature_control_frames"] == 1
+        assert result["center_marks"] == 4
+        assert result["text_boxes"] == 1
+
+    def test_no_pmi(self, export_mgr):
+        em, doc = export_mgr
+        del doc.PMI
+
+        result = em.get_pmi_info()
+        assert result["has_pmi"] is False
+
+    def test_partial_collections(self, export_mgr):
+        em, doc = export_mgr
+        pmi = MagicMock(spec=["Dimensions"])
+        pmi_dims = MagicMock()
+        pmi_dims.Count = 3
+        pmi.Dimensions = pmi_dims
+        doc.PMI = pmi
+
+        result = em.get_pmi_info()
+        assert result["has_pmi"] is True
+        assert result["dimensions"] == 3
+
+
+class TestSetPmiVisibility:
+    def test_success(self, export_mgr):
+        em, doc = export_mgr
+        pmi = MagicMock()
+        doc.PMI = pmi
+
+        result = em.set_pmi_visibility(True, False, True)
+        assert result["status"] == "updated"
+        assert result["show"] is True
+        assert result["show_dimensions"] is False
+        assert result["show_annotations"] is True
+
+    def test_no_pmi(self, export_mgr):
+        em, doc = export_mgr
+        del doc.PMI
+
+        result = em.set_pmi_visibility()
+        assert "error" in result
+
+    def test_defaults(self, export_mgr):
+        em, doc = export_mgr
+        pmi = MagicMock()
+        doc.PMI = pmi
+
+        result = em.set_pmi_visibility()
+        assert result["status"] == "updated"
+        assert result["show"] is True
+        assert result["show_dimensions"] is True
+        assert result["show_annotations"] is True

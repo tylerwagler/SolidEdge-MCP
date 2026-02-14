@@ -501,6 +501,108 @@ def set_material_by_name(material_name: str) -> dict:
     return query_manager.set_material_by_name(material_name)
 
 
+# === B-Rep Topology Queries ===
+
+
+def get_edge_endpoints(face_index: int, edge_index: int) -> dict:
+    """Get start/end XYZ coordinates of an edge on a face."""
+    return query_manager.get_edge_endpoints(face_index, edge_index)
+
+
+def get_edge_length(face_index: int, edge_index: int) -> dict:
+    """Get the total length of an edge on a face."""
+    return query_manager.get_edge_length(face_index, edge_index)
+
+
+def get_edge_tangent(face_index: int, edge_index: int, param: float = 0.5) -> dict:
+    """Get tangent vector at a parameter on an edge."""
+    return query_manager.get_edge_tangent(face_index, edge_index, param)
+
+
+def get_edge_geometry(face_index: int, edge_index: int) -> dict:
+    """Get underlying geometry type and data of an edge (Line/Circle/Ellipse/BSpline)."""
+    return query_manager.get_edge_geometry(face_index, edge_index)
+
+
+def get_face_normal(face_index: int, u: float = 0.5, v: float = 0.5) -> dict:
+    """Get normal vector at a parametric point on a face."""
+    return query_manager.get_face_normal(face_index, u, v)
+
+
+def get_face_geometry(face_index: int) -> dict:
+    """Get geometry type and data of a face (Plane/Cylinder/Cone/etc)."""
+    return query_manager.get_face_geometry(face_index)
+
+
+def get_face_loops(face_index: int) -> dict:
+    """Get loop info for a face (outer boundary vs holes)."""
+    return query_manager.get_face_loops(face_index)
+
+
+def get_face_curvature(face_index: int, u: float = 0.5, v: float = 0.5) -> dict:
+    """Get principal curvatures at a parametric point on a face."""
+    return query_manager.get_face_curvature(face_index, u, v)
+
+
+def get_vertex_point(face_index: int, edge_index: int, which: str = "start") -> dict:
+    """Get XYZ coordinates of a vertex (start or end) on an edge."""
+    return query_manager.get_vertex_point(face_index, edge_index, which)
+
+
+def get_body_extreme_point(direction_x: float, direction_y: float, direction_z: float) -> dict:
+    """Get extreme point of body in a direction vector."""
+    return query_manager.get_body_extreme_point(direction_x, direction_y, direction_z)
+
+
+def get_faces_by_ray(
+    origin_x: float,
+    origin_y: float,
+    origin_z: float,
+    direction_x: float,
+    direction_y: float,
+    direction_z: float,
+) -> dict:
+    """Ray-cast query to find faces hit by a ray."""
+    return query_manager.get_faces_by_ray(
+        origin_x, origin_y, origin_z, direction_x, direction_y, direction_z
+    )
+
+
+def get_shell_info(shell_index: int = 0) -> dict:
+    """Get shell topology info (is_closed, volume, face/edge counts)."""
+    return query_manager.get_shell_info(shell_index)
+
+
+def is_point_inside_body(x: float, y: float, z: float) -> dict:
+    """Test if a 3D point is inside the solid body."""
+    return query_manager.is_point_inside_body(x, y, z)
+
+
+def get_body_shells() -> dict:
+    """List all shells in the body with is_closed and volume."""
+    return query_manager.get_body_shells()
+
+
+def get_body_vertices() -> dict:
+    """Get all vertices of the body with XYZ coordinates."""
+    return query_manager.get_body_vertices()
+
+
+def get_bspline_curve_info(face_index: int, edge_index: int) -> dict:
+    """Get NURBS curve metadata (order, poles, knots, flags) from an edge."""
+    return query_manager.get_bspline_curve_info(face_index, edge_index)
+
+
+def get_bspline_surface_info(face_index: int) -> dict:
+    """Get NURBS surface metadata (order, poles, knots, flags) from a face."""
+    return query_manager.get_bspline_surface_info(face_index)
+
+
+def get_edge_curvature(face_index: int, edge_index: int, param: float = 0.5) -> dict:
+    """Get curvature at a parameter on an edge."""
+    return query_manager.get_edge_curvature(face_index, edge_index, param)
+
+
 # === Registration ===
 
 
@@ -611,3 +713,22 @@ def register(mcp):
     # Material Library (Batch 10)
     mcp.tool()(get_material_library)
     mcp.tool()(set_material_by_name)
+    # B-Rep Topology Queries
+    mcp.tool()(get_edge_endpoints)
+    mcp.tool()(get_edge_length)
+    mcp.tool()(get_edge_tangent)
+    mcp.tool()(get_edge_geometry)
+    mcp.tool()(get_face_normal)
+    mcp.tool()(get_face_geometry)
+    mcp.tool()(get_face_loops)
+    mcp.tool()(get_face_curvature)
+    mcp.tool()(get_vertex_point)
+    mcp.tool()(get_body_extreme_point)
+    mcp.tool()(get_faces_by_ray)
+    mcp.tool()(get_shell_info)
+    mcp.tool()(is_point_inside_body)
+    mcp.tool()(get_body_shells)
+    mcp.tool()(get_body_vertices)
+    mcp.tool()(get_bspline_curve_info)
+    mcp.tool()(get_bspline_surface_info)
+    mcp.tool()(get_edge_curvature)

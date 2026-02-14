@@ -1,25 +1,26 @@
 # Solid Edge Type Library Implementation Map
 
 Generated: 2026-02-13 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 525 MCP tools implemented
+Current: 556 MCP tools implemented
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
 
 ## Coverage Summary
 
-|     Category      | Sections | Complete | Partial | Not Started | Methods (impl/total) |
-|-------------------|----------|----------|---------|-------------|----------------------|
-| **Part Features** |    52    |    36    |    13   |      3      |      192 / 201       |
-| **Assembly**      |    11    |     4    |     4   |      3      |       45 /  61       |
-| **Draft/Drawing** |     5    |     3    |     2   |      0      |       51 /  53       |
-| **Framework/App** |     7    |     5    |     2   |      0      |       53 /  55       |
-| **Total**         | **75**   |  **48**  |  **21** |    **6**    | **341 / 370 (92%)**  |
+|     Category          | Sections | Complete | Partial | Not Started | Methods (impl/total) |
+|-----------------------|----------|----------|---------|-------------|----------------------|
+| **Part Features**     |    52    |    36    |    13   |      3      |      192 / 201       |
+| **Assembly**          |    11    |     4    |     4   |      3      |       45 /  61       |
+| **Draft/Drawing**     |     5    |     3    |     2   |      0      |       51 /  53       |
+| **Framework/App**     |     7    |     5    |     2   |      0      |       53 /  55       |
+| **Geometry/Topology** |     2    |     0    |     2   |      0      |       15 /  19       |
+| **Total**             | **77**   |  **48**  |  **23** |    **6**    | **356 / 389 (92%)**  |
 
-**525 MCP tools** registered (many tools cover multiple methods or provide capabilities
+**556 MCP tools** registered (many tools cover multiple methods or provide capabilities
 beyond what the type library tracks, e.g. primitives, view controls, export formats).
 
-## Tool Count by Category (488 total)
+## Tool Count by Category (556 total)
 
 | Category                  | Count | Tools |
 |:--------------------------|:-----:|:---|
@@ -46,12 +47,12 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 | **Custom Properties**     | 3     | Get all, set/create, delete |
 | **Body Topology**         | 3     | Body faces, body edges, face info |
 | **Performance**           | 1     | Recompute (set_performance_mode moved to Connection/Application) |
-| **Query/Analysis**        | 49    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property, feature status, feature profiles, vertex count, layers (get/add/activate/set properties/delete), body opacity, body reflectivity, variable formula, feature parents, direction1/2 extent (get/set), thin wall options (get/set), from-face offset (get/set), body array (get/set), material library, set material by name |
+| **Query/Analysis**        | 67    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property, feature status, feature profiles, vertex count, layers (get/add/activate/set properties/delete), body opacity, body reflectivity, variable formula, feature parents, direction1/2 extent (get/set), thin wall options (get/set), from-face offset (get/set), body array (get/set), material library, set material by name, **edge endpoints/length/tangent/geometry/curvature, face normal/geometry/loops/curvature, vertex point, body extreme point/shells/vertices, faces by ray, shell info, point inside body, bspline curve/surface info** |
 | **Feature Management**    | 6     | Suppress, unsuppress, face rotate (2), draft angle, convert feature type |
 | **Part Features**         | 16    | Dimple, dimple-ex, etch, rib, lip, drawn cutout, drawn-cutout-ex, bead, louver, louver-sync, gusset, thread, thread-ex, slot, slot-ex, slot-sync, split, thicken-sync |
 | **Export**                | 10    | STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, drawing, screenshot |
 | **Assembly**              | 61    | Place, place with transform, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations (get/add planar/axial/angular/point/tangent/gear), relation editing (offset get/set, angle get/set, normals get/set, suppress/unsuppress, geometry, gear ratio), delete relation, doc tree, replace, delete, visibility, color, transform, count, move, rotate, is_subassembly, display_name, occurrence_document, sub_occurrences, add family member, add family with transform, add by template, add adjustable part, reorder occurrence, put transform euler, put origin, make writable, swap family member, occurrence bodies, occurrence style, is tube, get adjustable part, get face style |
-| **Draft/Drawing**         | 54    | Sheets (add, activate, delete, rename, dimensions, balloons, text-boxes, drawing-objects, sections), views (add, projected, count, get/set scale, delete, update, move, info, orientation, hidden edges, display mode, model-link, tangent-edges, detail, auxiliary, draft, align, assembly-view-ex, with-config, activate, deactivate), annotations (dimension, angular, radial, diameter, ordinate, balloon, note, leader, text box, center mark, centerline, surface finish, weld symbol, geometric tolerance), parts list, printing (print, set printer, get printer, paper size), face texture |
+| **Draft/Drawing**         | 67    | Sheets (add, activate, delete, rename, dimensions, balloons, text-boxes, drawing-objects, sections), views (add, projected, count, get/set scale, delete, update, move, info, orientation, hidden edges, display mode, model-link, tangent-edges, detail, auxiliary, draft, align, assembly-view-ex, with-config, activate, deactivate), annotations (dimension, angular, radial, diameter, ordinate, balloon, note, leader, text box, center mark, centerline, surface finish, weld symbol, geometric tolerance), parts list, printing (print, set printer, get printer, paper size), face texture, **2D geometry (lines2d, circles2d, arcs2d), dimensions (distance, length, radius, angle), smart frames (2-point, by-origin), symbols (add, list), PMI (info, visibility)** |
 | **Diagnostics**           | 2     | API and feature inspection |
 | **Select Set**            | 11    | Get selection, clear selection, add, remove, select all, copy, cut, delete, suspend/resume/refresh display |
 
@@ -651,24 +652,24 @@ Key Properties:
 ### 5.1 Geometry Type Library (geometry.tlb) - 68 interfaces
 
 Key interfaces for precise geometry queries:
-- [ ] `Body` - Full body geometry access
-- [ ] `Face` - Face geometry (normal, area, loops)
-- [ ] `Edge` - Edge geometry (length, curvature, endpoints)
-- [ ] `Vertex` - Vertex coordinates
-- [ ] `Curve2d` / `Curve3d` - Parametric curve access
-- [ ] `BSplineCurve` / `BSplineSurface` - NURBS data
-- [ ] `Loop` - Face boundary loops
-- [ ] `Shell` - Shell topology
+- [x] `Body` - via `get_body_extreme_point`, `get_body_shells`, `get_body_vertices`, `get_faces_by_ray`, `is_point_inside_body`
+- [x] `Face` - via `get_face_normal`, `get_face_geometry`, `get_face_loops`, `get_face_curvature`
+- [x] `Edge` - via `get_edge_endpoints`, `get_edge_length`, `get_edge_tangent`, `get_edge_geometry`, `get_edge_curvature`
+- [x] `Vertex` - via `get_vertex_point`
+- [ ] `Curve2d` / `Curve3d` - Parametric curve access (low-level, covered by edge/face geometry tools)
+- [x] `BSplineCurve` / `BSplineSurface` - via `get_bspline_curve_info`, `get_bspline_surface_info`
+- [x] `Loop` - via `get_face_loops`
+- [x] `Shell` - via `get_shell_info`, `get_body_shells`, `is_point_inside_body`
 
 ### 5.2 FrameworkSupport (fwksupp.tlb) - 228 interfaces
 
 2D geometry and annotation primitives:
-- [ ] `Lines2d` / `Circles2d` / `Arcs2d` - 2D geometry collections
-- [ ] `Dimensions` - Dimension management
-- [ ] `SmartFrames2d` - Smart frame annotations
-- [ ] `Symbols` - Symbol placement
-- [ ] `BalloonTypes` / `BalloonNotes` - Balloon annotations
-- [ ] `PMI` - Product Manufacturing Information
+- [x] `Lines2d` / `Circles2d` / `Arcs2d` - via `get_lines2d`, `get_circles2d`, `get_arcs2d`
+- [x] `Dimensions` - via `add_distance_dimension`, `add_length_dimension`, `add_radius_dimension_2d`, `add_angle_dimension_2d`
+- [x] `SmartFrames2d` - via `add_smart_frame`, `add_smart_frame_by_origin`
+- [x] `Symbols` - via `add_symbol`, `get_symbols`
+- [ ] `BalloonTypes` / `BalloonNotes` - Balloon annotations (not standalone collections; balloons already covered via `add_balloon`)
+- [x] `PMI` - via `get_pmi_info`, `set_pmi_visibility`
 
 ---
 

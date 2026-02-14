@@ -585,6 +585,92 @@ def get_drawing_view_dimensions(view_index: int) -> dict:
     return export_manager.get_drawing_view_dimensions(view_index)
 
 
+# === 2D Geometry Collection Access ===
+
+
+def get_lines2d() -> dict:
+    """List all 2D lines on the active draft sheet with start/end coordinates."""
+    return export_manager.get_lines2d()
+
+
+def get_circles2d() -> dict:
+    """List all 2D circles on the active draft sheet with center and radius."""
+    return export_manager.get_circles2d()
+
+
+def get_arcs2d() -> dict:
+    """List all 2D arcs on the active draft sheet with center, radius, and angles."""
+    return export_manager.get_arcs2d()
+
+
+# === Dimension Management ===
+
+
+def add_distance_dimension(x1: float, y1: float, x2: float, y2: float) -> dict:
+    """Add a distance dimension between two points on the active draft sheet."""
+    return export_manager.add_distance_dimension(x1, y1, x2, y2)
+
+
+def add_length_dimension(object_index: int) -> dict:
+    """Add a length dimension to a 2D line by 0-based index into Lines2d."""
+    return export_manager.add_length_dimension(object_index)
+
+
+def add_radius_dimension_2d(object_index: int, object_type: str = "circle") -> dict:
+    """Add a radius dimension to a circle or arc. object_type: 'circle' or 'arc'."""
+    return export_manager.add_radius_dimension_2d(object_index, object_type)
+
+
+def add_angle_dimension_2d(
+    x1: float, y1: float, x2: float, y2: float, x3: float, y3: float
+) -> dict:
+    """Add an angle dimension between three points. Vertex is (x2, y2)."""
+    return export_manager.add_angle_dimension_2d(x1, y1, x2, y2, x3, y3)
+
+
+# === Smart Frames ===
+
+
+def add_smart_frame(style_name: str, x1: float, y1: float, x2: float, y2: float) -> dict:
+    """Add a smart frame (title block / border) to the active drawing sheet."""
+    return export_manager.add_smart_frame(style_name, x1, y1, x2, y2)
+
+
+def add_smart_frame_by_origin(
+    style_name: str, x: float, y: float, top: float, bottom: float, left: float, right: float
+) -> dict:
+    """Add a smart frame by origin point and margin extents."""
+    return export_manager.add_smart_frame_by_origin(style_name, x, y, top, bottom, left, right)
+
+
+# === Symbols ===
+
+
+def add_symbol(file_path: str, x: float, y: float, insertion_type: int = 0) -> dict:
+    """Place a symbol from a symbol file onto the active drawing sheet."""
+    return export_manager.add_symbol(file_path, x, y, insertion_type)
+
+
+def get_symbols() -> dict:
+    """List all symbols on the active draft sheet."""
+    return export_manager.get_symbols()
+
+
+# === PMI (Product Manufacturing Information) ===
+
+
+def get_pmi_info() -> dict:
+    """Get PMI annotations summary for the active part document."""
+    return export_manager.get_pmi_info()
+
+
+def set_pmi_visibility(
+    show: bool = True, show_dimensions: bool = True, show_annotations: bool = True
+) -> dict:
+    """Show or hide PMI annotations on the active part document."""
+    return export_manager.set_pmi_visibility(show, show_dimensions, show_annotations)
+
+
 # === Registration ===
 
 
@@ -685,3 +771,21 @@ def register(mcp):
     mcp.tool()(get_section_cuts)
     mcp.tool()(add_section_cut)
     mcp.tool()(get_drawing_view_dimensions)
+    # 2D Geometry Collection Access
+    mcp.tool()(get_lines2d)
+    mcp.tool()(get_circles2d)
+    mcp.tool()(get_arcs2d)
+    # Dimension Management
+    mcp.tool()(add_distance_dimension)
+    mcp.tool()(add_length_dimension)
+    mcp.tool()(add_radius_dimension_2d)
+    mcp.tool()(add_angle_dimension_2d)
+    # Smart Frames
+    mcp.tool()(add_smart_frame)
+    mcp.tool()(add_smart_frame_by_origin)
+    # Symbols
+    mcp.tool()(add_symbol)
+    mcp.tool()(get_symbols)
+    # PMI
+    mcp.tool()(get_pmi_info)
+    mcp.tool()(set_pmi_visibility)

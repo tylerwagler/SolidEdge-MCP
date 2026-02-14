@@ -2765,6 +2765,557 @@ class ExportManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    # =================================================================
+    # 2D GEOMETRY COLLECTION ACCESS (Draft Sheets)
+    # =================================================================
+
+    def get_lines2d(self) -> dict[str, Any]:
+        """
+        List all 2D lines on the active draft sheet.
+
+        Accesses the sheet.Lines2d collection and iterates to extract
+        start/end vertex coordinates for each line.
+
+        Returns:
+            Dict with count and list of line info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            lines2d = sheet.Lines2d
+            items = []
+            for i in range(1, lines2d.Count + 1):
+                line = lines2d.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["start"] = [line.StartX, line.StartY]
+                with contextlib.suppress(Exception):
+                    info["end"] = [line.EndX, line.EndY]
+                items.append(info)
+            return {"count": len(items), "lines": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_circles2d(self) -> dict[str, Any]:
+        """
+        List all 2D circles on the active draft sheet.
+
+        Accesses the sheet.Circles2d collection and iterates to extract
+        center coordinates and radius for each circle.
+
+        Returns:
+            Dict with count and list of circle info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            circles2d = sheet.Circles2d
+            items = []
+            for i in range(1, circles2d.Count + 1):
+                circle = circles2d.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["center"] = [circle.CenterX, circle.CenterY]
+                with contextlib.suppress(Exception):
+                    info["radius"] = circle.Radius
+                items.append(info)
+            return {"count": len(items), "circles": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_arcs2d(self) -> dict[str, Any]:
+        """
+        List all 2D arcs on the active draft sheet.
+
+        Accesses the sheet.Arcs2d collection and iterates to extract
+        center coordinates, radius, and start/end angles for each arc.
+
+        Returns:
+            Dict with count and list of arc info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            arcs2d = sheet.Arcs2d
+            items = []
+            for i in range(1, arcs2d.Count + 1):
+                arc = arcs2d.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["center"] = [arc.CenterX, arc.CenterY]
+                with contextlib.suppress(Exception):
+                    info["radius"] = arc.Radius
+                with contextlib.suppress(Exception):
+                    info["start_angle"] = arc.StartAngle
+                with contextlib.suppress(Exception):
+                    info["end_angle"] = arc.EndAngle
+                items.append(info)
+            return {"count": len(items), "arcs": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # DIMENSION MANAGEMENT (Draft Sheets)
+    # =================================================================
+
+    def add_distance_dimension(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
+        """
+        Add a distance dimension between two points on the active draft sheet.
+
+        Uses sheet.Dimensions.AddDistanceBetweenPoints to measure the distance
+        between two coordinate pairs. The dimension text is placed at the
+        midpoint offset above.
+
+        Args:
+            x1: First point X (meters)
+            y1: First point Y (meters)
+            x2: Second point X (meters)
+            y2: Second point Y (meters)
+
+        Returns:
+            Dict with status and dimension type
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            dims = sheet.Dimensions
+
+            # Place dimension text at midpoint, offset above
+            dim_x = (x1 + x2) / 2
+            dim_y = max(y1, y2) + 0.02
+
+            # AddDistanceBetweenPoints(x1, y1, z1, x2, y2, z2, dimX, dimY, dimZ)
+            dims.AddDistanceBetweenPoints(x1, y1, 0.0, x2, y2, 0.0, dim_x, dim_y, 0.0)
+
+            return {
+                "status": "added",
+                "dimension_type": "distance",
+                "point1": [x1, y1],
+                "point2": [x2, y2],
+                "text_position": [dim_x, dim_y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_length_dimension(self, object_index: int) -> dict[str, Any]:
+        """
+        Add a length dimension to a 2D line object on the active draft sheet.
+
+        Gets the line from Lines2d collection by index and adds a length
+        dimension via sheet.Dimensions.AddLength.
+
+        Args:
+            object_index: 0-based index into the Lines2d collection
+
+        Returns:
+            Dict with status and dimension type
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            lines2d = sheet.Lines2d
+
+            if object_index < 0 or object_index >= lines2d.Count:
+                return {"error": (f"Invalid line index: {object_index}. Count: {lines2d.Count}")}
+
+            line = lines2d.Item(object_index + 1)  # COM is 1-indexed
+            dims = sheet.Dimensions
+
+            # Get line endpoints for dimension text placement
+            x1, y1, x2, y2 = 0.0, 0.0, 0.0, 0.0
+            with contextlib.suppress(Exception):
+                x1, y1, x2, y2 = line.StartX, line.StartY, line.EndX, line.EndY
+            dim_x = (x1 + x2) / 2
+            dim_y = max(y1, y2) + 0.02
+
+            dims.AddLength(x1, y1, 0.0, x2, y2, 0.0, dim_x, dim_y, 0.0)
+
+            return {
+                "status": "added",
+                "dimension_type": "length",
+                "object_index": object_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_radius_dimension_2d(
+        self, object_index: int, object_type: str = "circle"
+    ) -> dict[str, Any]:
+        """
+        Add a radius dimension to a circle or arc on the active draft sheet.
+
+        Gets the object from Circles2d or Arcs2d by index and adds a radius
+        dimension via sheet.Dimensions.AddRadialDimension.
+
+        Args:
+            object_index: 0-based index into Circles2d or Arcs2d collection
+            object_type: 'circle' or 'arc'
+
+        Returns:
+            Dict with status and dimension type
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+
+            if object_type == "circle":
+                collection = sheet.Circles2d
+            elif object_type == "arc":
+                collection = sheet.Arcs2d
+            else:
+                return {"error": (f"Invalid object_type: {object_type}. Use 'circle' or 'arc'.")}
+
+            if object_index < 0 or object_index >= collection.Count:
+                return {"error": (f"Invalid index: {object_index}. Count: {collection.Count}")}
+
+            obj = collection.Item(object_index + 1)  # COM 1-indexed
+            dims = sheet.Dimensions
+
+            # Get center and radius for dimension placement
+            cx, cy, radius = 0.0, 0.0, 0.0
+            with contextlib.suppress(Exception):
+                cx = obj.CenterX
+                cy = obj.CenterY
+                radius = obj.Radius
+
+            # Place dimension text slightly outside the circle/arc
+            dim_x = cx + radius + 0.01
+            dim_y = cy + 0.01
+
+            dims.AddRadialDimension(obj, dim_x, dim_y, 0.0)
+
+            return {
+                "status": "added",
+                "dimension_type": "radius",
+                "object_type": object_type,
+                "object_index": object_index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_angle_dimension_2d(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        x3: float,
+        y3: float,
+    ) -> dict[str, Any]:
+        """
+        Add an angle dimension between three points on the active draft sheet.
+
+        Uses sheet.Dimensions.AddAngle to measure the angle at the vertex
+        (x2, y2).
+
+        Args:
+            x1: First point X (meters) - start of first ray
+            y1: First point Y (meters)
+            x2: Vertex point X (meters) - the corner
+            y2: Vertex point Y (meters)
+            x3: Third point X (meters) - end of second ray
+            y3: Third point Y (meters)
+
+        Returns:
+            Dict with status and dimension type
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+            dims = sheet.Dimensions
+
+            # Place dimension text at the vertex with offset
+            dim_x = x2 + 0.02
+            dim_y = y2 + 0.02
+
+            dims.AddAngle(x1, y1, 0.0, x2, y2, 0.0, x3, y3, 0.0, dim_x, dim_y, 0.0)
+
+            return {
+                "status": "added",
+                "dimension_type": "angle",
+                "vertex": [x2, y2],
+                "text_position": [dim_x, dim_y],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # SMART FRAMES (Draft Sheets)
+    # =================================================================
+
+    def add_smart_frame(
+        self, style_name: str, x1: float, y1: float, x2: float, y2: float
+    ) -> dict[str, Any]:
+        """
+        Add a smart frame (title block / border) to the active drawing sheet.
+
+        Uses sheet.SmartFrames2d.AddBy2Points to place a bordered frame
+        defined by two corner points.
+
+        Args:
+            style_name: Name of the smart frame style (e.g. 'A4', 'A3')
+            x1: Lower-left corner X (meters)
+            y1: Lower-left corner Y (meters)
+            x2: Upper-right corner X (meters)
+            y2: Upper-right corner Y (meters)
+
+        Returns:
+            Dict with status and style info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+
+            smart_frames = sheet.SmartFrames2d
+            smart_frames.AddBy2Points(style_name, x1, y1, x2, y2)
+
+            return {
+                "status": "added",
+                "type": "smart_frame",
+                "style": style_name,
+                "corner1": [x1, y1],
+                "corner2": [x2, y2],
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def add_smart_frame_by_origin(
+        self,
+        style_name: str,
+        x: float,
+        y: float,
+        top: float,
+        bottom: float,
+        left: float,
+        right: float,
+    ) -> dict[str, Any]:
+        """
+        Add a smart frame by origin point and margin extents.
+
+        Uses sheet.SmartFrames2d.AddByOrigin to place a bordered frame
+        defined by an origin and directional margins.
+
+        Args:
+            style_name: Name of the smart frame style
+            x: Origin X (meters)
+            y: Origin Y (meters)
+            top: Top margin extent (meters)
+            bottom: Bottom margin extent (meters)
+            left: Left margin extent (meters)
+            right: Right margin extent (meters)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+
+            smart_frames = sheet.SmartFrames2d
+            smart_frames.AddByOrigin(style_name, x, y, top, bottom, left, right)
+
+            return {
+                "status": "added",
+                "type": "smart_frame",
+                "style": style_name,
+                "origin": [x, y],
+                "margins": {
+                    "top": top,
+                    "bottom": bottom,
+                    "left": left,
+                    "right": right,
+                },
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # SYMBOLS (Draft Sheets)
+    # =================================================================
+
+    def add_symbol(
+        self, file_path: str, x: float, y: float, insertion_type: int = 0
+    ) -> dict[str, Any]:
+        """
+        Place a symbol from a symbol file onto the active drawing sheet.
+
+        Uses sheet.Symbols.Add to insert a pre-defined symbol at the
+        given coordinates.
+
+        Args:
+            file_path: Path to the symbol file (.sym)
+            x: Placement X coordinate (meters)
+            y: Placement Y coordinate (meters)
+            insertion_type: Symbol insertion type constant (default 0)
+
+        Returns:
+            Dict with status and placement info
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+
+            symbols = sheet.Symbols
+            symbols.Add(insertion_type, file_path, x, y)
+
+            return {
+                "status": "placed",
+                "type": "symbol",
+                "file": file_path,
+                "position": [x, y],
+                "insertion_type": insertion_type,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_symbols(self) -> dict[str, Any]:
+        """
+        List all symbols on the active draft sheet.
+
+        Iterates sheet.Symbols collection and collects name and position
+        information for each symbol.
+
+        Returns:
+            Dict with count and list of symbol info dicts
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            if not hasattr(doc, "ActiveSheet"):
+                return {"error": "Active document is not a draft"}
+            sheet = doc.ActiveSheet
+
+            symbols = sheet.Symbols
+            items = []
+            for i in range(1, symbols.Count + 1):
+                sym = symbols.Item(i)
+                info: dict[str, Any] = {"index": i - 1}
+                with contextlib.suppress(Exception):
+                    info["name"] = sym.Name
+                with contextlib.suppress(Exception):
+                    info["x"] = sym.OriginX
+                with contextlib.suppress(Exception):
+                    info["y"] = sym.OriginY
+                items.append(info)
+            return {"count": len(items), "symbols": items}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    # =================================================================
+    # PMI (Product Manufacturing Information)
+    # =================================================================
+
+    def get_pmi_info(self) -> dict[str, Any]:
+        """
+        Get PMI annotations summary for the active part document.
+
+        Accesses doc.PMI and enumerates sub-collections to provide counts
+        of each annotation type (dimensions, balloons, datum frames, etc.).
+
+        Returns:
+            Dict with has_pmi flag and counts per annotation type
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "PMI"):
+                return {
+                    "has_pmi": False,
+                    "error": "PMI not available on this document",
+                }
+
+            pmi = doc.PMI
+
+            result: dict[str, Any] = {"has_pmi": True}
+
+            # Enumerate known PMI sub-collections
+            pmi_collections = {
+                "dimensions": "Dimensions",
+                "balloons": "Balloons",
+                "datum_frames": "DatumFrames",
+                "feature_control_frames": "FeatureControlFrames",
+                "surface_finish_symbols": "SurfaceFinishSymbols",
+                "weld_symbols": "WeldSymbols",
+                "center_marks": "CenterMarks",
+                "center_lines": "CenterLines",
+                "text_boxes": "TextBoxes",
+            }
+
+            for key, attr_name in pmi_collections.items():
+                with contextlib.suppress(Exception):
+                    coll = getattr(pmi, attr_name, None)
+                    if coll is not None:
+                        result[key] = coll.Count
+                    else:
+                        result[key] = 0
+
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_pmi_visibility(
+        self,
+        show: bool = True,
+        show_dimensions: bool = True,
+        show_annotations: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Show or hide PMI annotations on the active part document.
+
+        Controls the overall visibility of PMI data as well as sub-categories
+        for dimensions and annotations.
+
+        Args:
+            show: Master PMI visibility toggle
+            show_dimensions: Show/hide dimension PMI annotations
+            show_annotations: Show/hide non-dimension PMI annotations
+
+        Returns:
+            Dict with updated visibility settings
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+
+            if not hasattr(doc, "PMI"):
+                return {"error": "PMI not available on this document"}
+
+            pmi = doc.PMI
+
+            with contextlib.suppress(Exception):
+                pmi.Show = show
+            with contextlib.suppress(Exception):
+                pmi.ShowDimensions = show_dimensions
+            with contextlib.suppress(Exception):
+                pmi.ShowAnnotations = show_annotations
+
+            return {
+                "status": "updated",
+                "show": show,
+                "show_dimensions": show_dimensions,
+                "show_annotations": show_annotations,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
 
 class ViewModel:
     """Manages view manipulation"""
