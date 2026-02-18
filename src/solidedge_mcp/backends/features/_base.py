@@ -3,6 +3,7 @@ Base class for FeatureManager providing constructor and shared helpers.
 """
 
 import contextlib
+import traceback
 from typing import Any
 
 import pythoncom
@@ -22,7 +23,7 @@ class FeatureManagerBase:
         self.sketch_manager = sketch_manager
 
     def _get_ref_plane(self, doc, plane_index: int = 1):
-        """Get a reference plane from the document (1=Top/XZ, 2=Front/XY, 3=Right/YZ)"""
+        """Get a reference plane from the document (1=Top/XY, 2=Right/YZ, 3=Front/XZ)"""
         return doc.RefPlanes.Item(plane_index)
 
     def _make_loft_variant_arrays(self, profiles):
@@ -126,3 +127,118 @@ class FeatureManagerBase:
             }
 
         return target, None
+
+    def _get_feature_by_index(self, index: int):
+        """Get a feature from DesignEdgebarFeatures by 0-based index.
+
+        Returns:
+            Tuple of (feature_object, error_dict).
+        """
+        doc = self.doc_manager.get_active_document()
+        features = doc.DesignEdgebarFeatures
+        com_index = index + 1  # Convert to 1-based
+
+        if com_index < 1 or com_index > features.Count:
+            return None, {
+                "error": f"Invalid feature index: {index}. "
+                f"Feature count: {features.Count}",
+            }
+
+        feat = features.Item(com_index)
+        return feat, None
+
+    def delete_feature(self, index: int) -> dict[str, Any]:
+        """Delete a feature by 0-based index."""
+        try:
+            feat, err = self._get_feature_by_index(index)
+            if err:
+                return err
+            name = getattr(feat, "Name", f"Feature_{index}")
+            feat.Delete()
+            return {"status": "deleted", "feature_name": name, "index": index}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def feature_suppress(self, index: int) -> dict[str, Any]:
+        """Suppress a feature by 0-based index."""
+        try:
+            feat, err = self._get_feature_by_index(index)
+            if err:
+                return err
+            name = getattr(feat, "Name", f"Feature_{index}")
+            feat.Suppress()
+            return {"status": "suppressed", "feature_name": name, "index": index}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def feature_unsuppress(self, index: int) -> dict[str, Any]:
+        """Unsuppress a feature by 0-based index."""
+        try:
+            feat, err = self._get_feature_by_index(index)
+            if err:
+                return err
+            name = getattr(feat, "Name", f"Feature_{index}")
+            feat.Unsuppress()
+            return {"status": "unsuppressed", "feature_name": name, "index": index}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def feature_reorder(
+        self, index: int, target_index: int, after: bool = True
+    ) -> dict[str, Any]:
+        """Reorder a feature by moving it relative to another feature."""
+        try:
+            feat, err = self._get_feature_by_index(index)
+            if err:
+                return err
+            target, err = self._get_feature_by_index(target_index)
+            if err:
+                return err
+            name = getattr(feat, "Name", f"Feature_{index}")
+            if after:
+                feat.MoveAfter(target)
+            else:
+                feat.MoveBefore(target)
+            return {
+                "status": "reordered",
+                "feature_name": name,
+                "index": index,
+                "target_index": target_index,
+                "after": after,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def feature_rename(self, index: int, new_name: str) -> dict[str, Any]:
+        """Rename a feature by 0-based index."""
+        try:
+            feat, err = self._get_feature_by_index(index)
+            if err:
+                return err
+            old_name = getattr(feat, "Name", f"Feature_{index}")
+            feat.Name = new_name
+            return {
+                "status": "renamed",
+                "old_name": old_name,
+                "new_name": new_name,
+                "index": index,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def convert_feature_type(
+        self, feature_name: str, target_type: str
+    ) -> dict[str, Any]:
+        """Convert a feature to a different type."""
+        try:
+            feat, err = self._find_feature_by_name(feature_name)
+            if err:
+                return err
+            feat.ConvertToType(target_type)
+            return {
+                "status": "converted",
+                "feature_name": feature_name,
+                "target_type": target_type,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}

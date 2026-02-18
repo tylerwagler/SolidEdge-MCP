@@ -40,12 +40,12 @@ class SketchManager:
 
             # Map plane names to indices
             plane_map = {
-                "Top": 1,  # XZ plane (top view)
-                "Front": 2,  # XY plane (front view)
-                "Right": 3,  # YZ plane (right view)
-                "XZ": 1,
-                "XY": 2,
-                "YZ": 3,
+                "Top": 1,  # XY plane (top view)
+                "Right": 2,  # YZ plane (right view)
+                "Front": 3,  # XZ plane (front view)
+                "XY": 1,
+                "YZ": 2,
+                "XZ": 3,
             }
 
             plane_index = plane_map.get(plane)

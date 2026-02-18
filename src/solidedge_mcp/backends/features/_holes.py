@@ -33,7 +33,7 @@ class HolesMixin:
             diameter: Hole diameter in meters
             depth: Hole depth in meters
             hole_type: 'Simple' (only type currently supported)
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
             direction: 'Normal' or 'Reverse'
 
         Returns:
@@ -88,7 +88,7 @@ class HolesMixin:
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
             direction: 'Normal' or 'Reverse'
 
         Returns:
@@ -251,7 +251,7 @@ class HolesMixin:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
             direction: 'Normal' or 'Reverse'
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and hole info
@@ -308,7 +308,7 @@ class HolesMixin:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
             depth: Hole depth in meters
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and hole info
@@ -361,7 +361,7 @@ class HolesMixin:
             diameter: Hole diameter in meters
             depth: Hole depth in meters
             direction: 'Normal' or 'Reverse'
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and hole info
@@ -483,7 +483,7 @@ class HolesMixin:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
             direction: 'Normal' or 'Reverse'
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and hole info
@@ -536,7 +536,7 @@ class HolesMixin:
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and hole info
@@ -587,7 +587,7 @@ class HolesMixin:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
             depth: Hole depth in meters
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and hole info
@@ -639,7 +639,7 @@ class HolesMixin:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
             depth: Hole depth in meters
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
             direction: 'Normal' or 'Reverse'
 
         Returns:
@@ -696,7 +696,7 @@ class HolesMixin:
             x, y: Hole center coordinates on the sketch plane (meters)
             diameter: Hole diameter in meters
             depth: Hole depth in meters
-            plane_index: Reference plane index (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane index (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and hole info

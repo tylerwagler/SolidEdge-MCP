@@ -27,7 +27,7 @@ class PrimitiveMixin:
             length: Length in meters (X direction)
             width: Width in meters (Y direction)
             height: Height in meters (Z direction)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and box info
@@ -73,7 +73,7 @@ class PrimitiveMixin:
         Args:
             x1, y1, z1: First corner coordinates (meters)
             x2, y2, z2: Opposite corner coordinates (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and box info
@@ -134,7 +134,7 @@ class PrimitiveMixin:
             x1, y1, z1: First corner point (meters)
             x2, y2, z2: Second point defining width (meters)
             x3, y3, z3: Third point defining height (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and box info
@@ -200,7 +200,7 @@ class PrimitiveMixin:
             base_center_x, base_center_y, base_center_z: Base circle center (meters)
             radius: Cylinder radius (meters)
             height: Cylinder height (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and cylinder info
@@ -245,7 +245,7 @@ class PrimitiveMixin:
         Args:
             center_x, center_y, center_z: Sphere center coordinates (meters)
             radius: Sphere radius (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and sphere info
@@ -294,7 +294,7 @@ class PrimitiveMixin:
         Args:
             x1, y1, z1: First corner coordinates (meters)
             x2, y2, z2: Opposite corner coordinates (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and cutout info
@@ -366,7 +366,7 @@ class PrimitiveMixin:
             length: Length in meters (X direction)
             width: Width in meters (Y direction)
             height: Height in meters (Z direction)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and cutout info
@@ -436,7 +436,7 @@ class PrimitiveMixin:
             x1, y1, z1: First corner point (meters)
             x2, y2, z2: Second point defining width (meters)
             x3, y3, z3: Third point defining height (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and cutout info
@@ -516,7 +516,7 @@ class PrimitiveMixin:
             center_x, center_y, center_z: Center coordinates (meters)
             radius: Cylinder radius (meters)
             height: Cylinder/cut depth (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and cutout info
@@ -580,7 +580,7 @@ class PrimitiveMixin:
         Args:
             center_x, center_y, center_z: Sphere center coordinates (meters)
             radius: Sphere radius (meters)
-            plane_index: Reference plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane_index: Reference plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
 
         Returns:
             Dict with status and cutout info

@@ -167,7 +167,7 @@ class DocumentQueryMixin:
         """
         List all reference planes in the active document.
 
-        Default planes: 1=Top/XZ, 2=Front/XY, 3=Right/YZ.
+        Default planes: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
         Additional planes are created with create_ref_plane_by_offset.
 
         Returns:

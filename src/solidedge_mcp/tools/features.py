@@ -668,7 +668,7 @@ def create_primitive(
         length,width,height: Dimensions (box_center).
         radius: Radius (cylinder, sphere).
         depth: Cylinder height (cylinder).
-        plane_index: 1=Top/XZ, 2=Front/XY, 3=Right/YZ.
+        plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
     """
     match shape:
         case "box_two_points":
@@ -730,7 +730,7 @@ def create_primitive_cutout(
         x1,y1,z1: Center coords (cylinder, sphere).
         radius: Radius (cylinder, sphere).
         height: Cylinder height (cylinder).
-        plane_index: 1=Top/XZ, 2=Front/XY, 3=Right/YZ.
+        plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
     """
     match shape:
         case "box":
@@ -1474,25 +1474,32 @@ def create_slot(
 def create_thread(
     method: str = "basic",
     face_index: int = 0,
-    depth: float = 0.0,
-    pitch: float = 0.001,
+    thread_diameter: float = 0.0,
+    thread_depth: float = 0.0,
 ) -> dict:
     """Create a thread on a cylindrical face.
 
-    method: 'basic' | 'ex'
+    method: 'basic' (cosmetic thread) | 'physical' (modeled thread geometry)
 
     Parameters:
-        face_index: Cylindrical face index.
-        depth: Thread depth.
-        pitch: Thread pitch (ex).
+        face_index: 0-based cylindrical face index.
+        thread_diameter: Thread diameter in meters (0 = auto-detect from face).
+        thread_depth: Thread depth in meters (0 = full depth).
     """
+    diameter = thread_diameter if thread_diameter > 0 else None
+    depth = thread_depth if thread_depth > 0 else None
+
     match method:
         case "basic":
-            return feature_manager.create_thread(face_index, depth)
-        case "ex":
-            return feature_manager.create_thread_ex(face_index, depth, pitch)
+            return feature_manager.create_thread(
+                face_index, thread_diameter=diameter, thread_depth=depth
+            )
+        case "physical":
+            return feature_manager.create_thread_ex(
+                face_index, thread_diameter=diameter, thread_depth=depth
+            )
         case _:
-            return {"error": f"Unknown method: {method}"}
+            return {"error": f"Unknown method: {method}. Use 'basic' or 'physical'."}
 
 
 # =====================================================================

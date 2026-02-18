@@ -9,9 +9,9 @@ All values verified against the Solid Edge type library
 class RefPlaneConstants:
     """Reference plane index constants (1-based collection indices)"""
 
-    seRefPlaneTop = 1  # Top/XZ plane
-    seRefPlaneFront = 2  # Front/XY plane
-    seRefPlaneRight = 3  # Right/YZ plane
+    seRefPlaneTop = 1  # Top/XY plane
+    seRefPlaneRight = 2  # Right/YZ plane
+    seRefPlaneFront = 3  # Front/XZ plane
 
 
 class DocumentTypeConstants:

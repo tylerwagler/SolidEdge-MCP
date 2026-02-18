@@ -693,18 +693,70 @@ class SheetMetalMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    def _find_cylinder_end_face(self, body, cyl_face):
+        """Find a face adjacent to a cylindrical face by shared edge topology.
+
+        For holes, the cylindrical face shares circular edges with the planar
+        faces at each end. Returns the first such adjacent face found.
+
+        Args:
+            body: The model body COM object
+            cyl_face: The cylindrical face COM object
+
+        Returns:
+            The adjacent face COM object, or None if not found
+        """
+        cyl_edges = cyl_face.Edges
+        if not hasattr(cyl_edges, "Count") or cyl_edges.Count == 0:
+            return None
+
+        all_faces = body.Faces(FaceQueryConstants.igQueryAll)
+
+        for fi in range(1, all_faces.Count + 1):
+            candidate = all_faces.Item(fi)
+            try:
+                if candidate == cyl_face:
+                    continue
+            except Exception:
+                pass
+
+            try:
+                cand_edges = candidate.Edges
+                if not hasattr(cand_edges, "Count") or cand_edges.Count == 0:
+                    continue
+                for ej in range(1, cand_edges.Count + 1):
+                    cand_edge = cand_edges.Item(ej)
+                    for ci in range(1, cyl_edges.Count + 1):
+                        cyl_edge = cyl_edges.Item(ci)
+                        try:
+                            if cand_edge == cyl_edge:
+                                return candidate
+                        except Exception:
+                            pass
+            except Exception:
+                continue
+
+        return None
+
     def create_thread(
-        self, face_index: int, pitch: float = 0.001, thread_type: str = "External"
+        self,
+        face_index: int,
+        thread_diameter: float = None,
+        thread_depth: float = None,
+        physical: bool = False,
     ) -> dict[str, Any]:
         """
         Create a thread feature on a cylindrical face.
 
-        Adds cosmetic or modeled threads to a cylindrical face (hole or shaft).
+        Uses HoleData + Threads.Add/AddEx for proper thread creation.
+        Automatically detects hole diameter from face geometry if not specified.
 
         Args:
-            face_index: 0-based index of the cylindrical face
-            pitch: Thread pitch in meters (default 1mm)
-            thread_type: 'External' (on shaft) or 'Internal' (in hole)
+            face_index: 0-based index of the cylindrical face to thread
+            thread_diameter: Thread nominal diameter in meters (auto-detected if None)
+            thread_depth: Thread depth in meters (full depth if None)
+            physical: If True, creates modeled thread geometry via AddEx.
+                      If False (default), creates a cosmetic thread via Add.
 
         Returns:
             Dict with status and thread info
@@ -722,19 +774,62 @@ class SheetMetalMixin:
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
 
-            face = faces.Item(face_index + 1)
+            cyl_face = faces.Item(face_index + 1)
+
+            # Auto-detect diameter from cylindrical face geometry
+            if thread_diameter is None:
+                try:
+                    geom = cyl_face.Geometry
+                    thread_diameter = geom.Radius * 2
+                except Exception:
+                    return {
+                        "error": "Could not determine diameter from face geometry. "
+                        "Provide thread_diameter explicitly, or ensure face_index "
+                        "points to a cylindrical face."
+                    }
+
+            # Find the end face adjacent to the cylinder
+            end_face = self._find_cylinder_end_face(body, cyl_face)
+            if end_face is None:
+                return {
+                    "error": "Could not find an end face adjacent to the "
+                    "cylindrical face. The Threads API requires both a "
+                    "cylinder face and its end cap face."
+                }
+
+            # Create HoleData for a tapped hole (igTappedHole = 37)
+            if not hasattr(doc, "HoleDataCollection"):
+                return {"error": "HoleDataCollection not available on this document type."}
+
+            hole_data = doc.HoleDataCollection.Add(
+                HoleType=37,
+                HoleDiameter=thread_diameter,
+            )
+
+            if thread_depth is not None:
+                hole_data.ThreadDepth = thread_depth
+
+            # Build VARIANT arrays for the COM call
+            cyl_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [cyl_face])
+            end_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [end_face])
 
             threads = model.Threads
-            threads.Add(face, pitch)
+            if physical:
+                threads.AddEx(hole_data, 1, cyl_arr, end_arr, True)
+            else:
+                threads.Add(hole_data, 1, cyl_arr, end_arr)
 
-            return {
+            result = {
                 "status": "created",
-                "type": "thread",
+                "type": "physical_thread" if physical else "cosmetic_thread",
                 "face_index": face_index,
-                "pitch": pitch,
-                "pitch_mm": pitch * 1000,
-                "thread_type": thread_type,
+                "diameter": thread_diameter,
+                "diameter_mm": thread_diameter * 1000,
             }
+            if thread_depth is not None:
+                result["thread_depth"] = thread_depth
+
+            return result
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
@@ -1674,48 +1769,31 @@ class SheetMetalMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_thread_ex(
-        self, face_index: int, depth: float, pitch: float = 0.001
+        self,
+        face_index: int,
+        thread_diameter: float = None,
+        thread_depth: float = None,
     ) -> dict[str, Any]:
         """
-        Create an extended thread on a cylindrical face.
+        Create a physical (modeled) thread on a cylindrical face.
 
-        Uses Threads.AddEx which provides additional control over thread
-        depth and pitch compared to the basic Add method.
+        Wrapper around create_thread with physical=True.
+        Physical threads modify the actual body geometry unlike cosmetic threads.
 
         Args:
             face_index: 0-based index of the cylindrical face
-            depth: Thread depth in meters
-            pitch: Thread pitch in meters (default 1mm)
+            thread_diameter: Thread diameter in meters (auto-detected if None)
+            thread_depth: Thread depth in meters (full depth if None)
 
         Returns:
             Dict with status and thread info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face_index: {face_index}. Count: {faces.Count}"}
-
-            face = faces.Item(face_index + 1)
-            threads = model.Threads
-            threads.AddEx(face, depth, pitch)
-
-            return {
-                "status": "created",
-                "type": "thread_ex",
-                "face_index": face_index,
-                "depth": depth,
-                "pitch": pitch,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        return self.create_thread(
+            face_index=face_index,
+            thread_diameter=thread_diameter,
+            thread_depth=thread_depth,
+            physical=True,
+        )
 
     def create_slot_ex(
         self, width: float, depth: float, direction: str = "Normal"

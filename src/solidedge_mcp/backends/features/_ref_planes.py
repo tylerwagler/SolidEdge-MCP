@@ -24,7 +24,7 @@ class RefPlaneMixin:
         Useful for creating sketches at different heights/positions.
 
         Args:
-            parent_plane_index: Index of parent plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ,
+            parent_plane_index: Index of parent plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ,
                                 or higher for user-created planes)
             distance: Offset distance in meters
             normal_side: 'Normal' (igRight=2) or 'Reverse' (igLeft=1)
@@ -321,7 +321,7 @@ class RefPlaneMixin:
         NormalSide: FeaturePropertyConstants, [Edge: VT_VARIANT]).
 
         Args:
-            parent_plane_index: Index of parent plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            parent_plane_index: Index of parent plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
             angle: Angle in degrees from the parent plane
             normal_side: 'Normal' (igRight=2) or 'Reverse' (igLeft=1)
 
@@ -416,7 +416,7 @@ class RefPlaneMixin:
         Useful for symmetry operations.
 
         Args:
-            plane1_index: Index of first plane (1=Top/XZ, 2=Front/XY, 3=Right/YZ)
+            plane1_index: Index of first plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
             plane2_index: Index of second plane
 
         Returns:

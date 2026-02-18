@@ -222,7 +222,7 @@ class MiscFeaturesMixin:
         Args:
             feature_name: Name of the feature to mirror (from list_features)
             mirror_plane_index: 1-based index of the mirror plane
-                (1=Top/XZ, 2=Front/XY, 3=Right/YZ, or higher for user planes)
+                (1=Top/XY, 2=Right/YZ, 3=Front/XZ, or higher for user planes)
 
         Returns:
             Dict with status and mirror info

@@ -57,12 +57,15 @@ class RoundsChamfersMixin:
             if not edge_list:
                 return {"error": "No edges found on body"}
 
-            # Group all edges as one edge set with one radius
+            # Each edge as its own edge set, all with the same radius
             edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [radius])
+            radius_arr = VARIANT(
+                pythoncom.VT_ARRAY | pythoncom.VT_R8,
+                [radius] * len(edge_list),
+            )
 
             rounds = model.Rounds
-            rounds.Add(1, edge_arr, radius_arr)
+            rounds.Add(len(edge_list), edge_arr, radius_arr)
 
             return {
                 "status": "created",
@@ -114,10 +117,13 @@ class RoundsChamfersMixin:
                 edge_list.append(face_edges.Item(ei))
 
             edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [radius])
+            radius_arr = VARIANT(
+                pythoncom.VT_ARRAY | pythoncom.VT_R8,
+                [radius] * len(edge_list),
+            )
 
             rounds = model.Rounds
-            rounds.Add(1, edge_arr, radius_arr)
+            rounds.Add(len(edge_list), edge_arr, radius_arr)
 
             return {
                 "status": "created",
