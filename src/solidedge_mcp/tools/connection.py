@@ -2,134 +2,156 @@
 
 from solidedge_mcp.managers import connection
 
+# === Composite: manage_connection ===
 
-def connect_to_solidedge(start_if_needed: bool = True) -> dict:
-    """Connect to Solid Edge application.
 
-    Starts the application if not running and
-    `start_if_needed` is True.
+def manage_connection(
+    action: str = "connect",
+    start_if_needed: bool = True,
+) -> dict:
+    """Manage the Solid Edge application connection.
+
+    action: 'connect' | 'disconnect' | 'quit' | 'activate'
+
+    - connect: Connect (start if needed when start_if_needed=True)
+    - disconnect: Disconnect without closing Solid Edge
+    - quit: Quit the Solid Edge application
+    - activate: Bring the Solid Edge window to foreground
     """
-    return connection.connect(start_if_needed)
+    match action:
+        case "connect":
+            return connection.connect(start_if_needed)
+        case "disconnect":
+            return connection.disconnect()
+        case "quit":
+            return connection.quit_application()
+        case "activate":
+            return connection.activate_application()
+        case _:
+            return {"error": f"Unknown action: {action}"}
 
 
-def quit_application() -> dict:
-    """Quit the Solid Edge application.
+# === Composite: app_command ===
 
-    Closes all documents and shuts down Solid Edge.
+
+def app_command(
+    action: str,
+    command_id: int = 0,
+    abort_all: bool = True,
+) -> dict:
+    """Execute an application command.
+
+    action: 'start' | 'abort' | 'idle'
+
+    - start: Execute a command by its ID
+    - abort: Abort the current command
+    - idle: Process pending background operations
     """
-    return connection.quit_application()
+    match action:
+        case "start":
+            return connection.start_command(command_id)
+        case "abort":
+            return connection.abort_command(abort_all)
+        case "idle":
+            return connection.do_idle()
+        case _:
+            return {"error": f"Unknown action: {action}"}
 
 
-def get_application_info() -> dict:
-    """Get Solid Edge application information (version, path, document count)."""
-    return connection.get_info()
+# === Composite: app_config ===
 
 
-def disconnect_from_solidedge() -> dict:
-    """Disconnect from the Solid Edge application without closing it."""
-    return connection.disconnect()
-
-
-def is_connected() -> dict:
-    """Check if currently connected to Solid Edge."""
-    return {"connected": connection.is_connected()}
-
-
-def get_process_info() -> dict:
-    """Get Solid Edge process information (PID, window handle)."""
-    return connection.get_process_info()
-
-
-def get_install_info() -> dict:
-    """Get Solid Edge installation information (path, language, version)."""
-    return connection.get_install_info()
-
-
-def start_command(command_id: int) -> dict:
-    """Execute a Solid Edge command by its ID."""
-    return connection.start_command(command_id)
-
-
-def set_performance_mode(
+def app_config(
+    property: str,
     delay_compute: bool = None,
     screen_updating: bool = None,
     interactive: bool = None,
     display_alerts: bool = None,
+    text: str = "",
+    visible: bool = True,
+    parameter: int = 0,
+    value: float = 0.0,
+    doc_type: int = 1,
+    template_path: str = "",
 ) -> dict:
-    """Set application performance flags for batch operations."""
-    return connection.set_performance_mode(
-        delay_compute, screen_updating, interactive, display_alerts
-    )
+    """Get or set application configuration properties.
+
+    property: 'set_performance' | 'get_environment'
+      | 'get_status_bar' | 'set_status_bar'
+      | 'get_visible' | 'set_visible'
+      | 'get_global' | 'set_global'
+      | 'get_template' | 'set_template'
+
+    - get_template/set_template: doc_type 1=Part, 2=Draft,
+      3=Assembly, 4=SheetMetal
+    """
+    match property:
+        case "set_performance":
+            return connection.set_performance_mode(
+                delay_compute, screen_updating,
+                interactive, display_alerts,
+            )
+        case "get_environment":
+            return connection.get_active_environment()
+        case "get_status_bar":
+            return connection.get_status_bar()
+        case "set_status_bar":
+            return connection.set_status_bar(text)
+        case "get_visible":
+            return connection.get_visible()
+        case "set_visible":
+            return connection.set_visible(visible)
+        case "get_global":
+            return connection.get_global_parameter(parameter)
+        case "set_global":
+            return connection.set_global_parameter(parameter, value)
+        case "get_template":
+            return connection.get_default_template_path(doc_type)
+        case "set_template":
+            return connection.set_default_template_path(
+                doc_type, template_path
+            )
+        case _:
+            return {"error": f"Unknown property: {property}"}
 
 
-def do_idle() -> dict:
-    """Process pending background operations."""
-    return connection.do_idle()
+# === Standalone tools ===
 
 
-def activate_application() -> dict:
-    """Activate (bring to foreground) the Solid Edge application window."""
-    return connection.activate_application()
+def convert_by_file_path(input_path: str, output_path: str) -> dict:
+    """Batch-convert CAD files between formats."""
+    return connection.convert_by_file_path(input_path, output_path)
 
 
-def abort_command(abort_all: bool = True) -> dict:
-    """Abort the current Solid Edge command."""
-    return connection.abort_command(abort_all)
+def arrange_windows(style: int = 1) -> dict:
+    """Arrange document windows.
+
+    style: 1=Tiled, 2=Horizontal, 4=Vertical, 8=Cascade
+    """
+    return connection.arrange_windows(style)
 
 
-def get_active_environment() -> dict:
-    """Get the currently active environment (Part, Assembly, Draft, etc.)."""
-    return connection.get_active_environment()
+def get_active_command() -> dict:
+    """Get the currently active Solid Edge command."""
+    return connection.get_active_command()
 
 
-def get_status_bar() -> dict:
-    """Get the current status bar text."""
-    return connection.get_status_bar()
+def run_macro(filename: str) -> dict:
+    """Run a VBA macro file in Solid Edge."""
+    return connection.run_macro(filename)
 
 
-def set_status_bar(text: str) -> dict:
-    """Set the status bar text."""
-    return connection.set_status_bar(text)
-
-
-def get_visible() -> dict:
-    """Get the visibility state of the Solid Edge window."""
-    return connection.get_visible()
-
-
-def set_visible(visible: bool) -> dict:
-    """Set the visibility of the Solid Edge window."""
-    return connection.set_visible(visible)
-
-
-def get_global_parameter(parameter: int) -> dict:
-    """Get an application-level global parameter by ID (from AssemblyGlobalConstants 1-21)."""
-    return connection.get_global_parameter(parameter)
-
-
-def set_global_parameter(parameter: int, value: float) -> dict:
-    """Set an application-level global parameter by ID (from AssemblyGlobalConstants 1-21)."""
-    return connection.set_global_parameter(parameter, value)
+# === Registration ===
 
 
 def register(mcp):
     """Register connection tools with the MCP server."""
-    mcp.tool()(connect_to_solidedge)
-    mcp.tool()(quit_application)
-    mcp.tool()(get_application_info)
-    mcp.tool()(disconnect_from_solidedge)
-    mcp.tool()(is_connected)
-    mcp.tool()(get_process_info)
-    mcp.tool()(get_install_info)
-    mcp.tool()(start_command)
-    mcp.tool()(set_performance_mode)
-    mcp.tool()(do_idle)
-    mcp.tool()(activate_application)
-    mcp.tool()(abort_command)
-    mcp.tool()(get_active_environment)
-    mcp.tool()(get_status_bar)
-    mcp.tool()(set_status_bar)
-    mcp.tool()(get_visible)
-    mcp.tool()(set_visible)
-    mcp.tool()(get_global_parameter)
-    mcp.tool()(set_global_parameter)
+    # Composite tools
+    mcp.tool()(manage_connection)
+    mcp.tool()(app_command)
+    mcp.tool()(app_config)
+    # Standalone tools
+    mcp.tool()(convert_by_file_path)
+    mcp.tool()(arrange_windows)
+    mcp.tool()(get_active_command)
+    mcp.tool()(run_macro)

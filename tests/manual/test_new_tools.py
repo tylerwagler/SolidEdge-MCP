@@ -2,6 +2,7 @@
 Test new tools: extruded cutout, through-all cutout, offset reference plane,
 create_sketch_on_plane_index.
 """
+
 import sys
 
 sys.path.insert(0, "src")
@@ -32,10 +33,7 @@ print("TEST 1: EXTRUDED CUTOUT")
 print("=" * 60)
 
 # Create a 100mm x 100mm x 50mm box
-result = feat_mgr.create_box_by_two_points(
-    -0.05, -0.05, 0,
-    0.05, 0.05, 0.05
-)
+result = feat_mgr.create_box_by_two_points(-0.05, -0.05, 0, 0.05, 0.05, 0.05)
 print(f"Create box: {result.get('status', result.get('error'))}")
 
 # Create a sketch on the top plane with a circle for the cutout

@@ -1,7 +1,7 @@
 # Solid Edge Type Library Implementation Map
 
-Generated: 2026-02-13 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 556 MCP tools implemented
+Generated: 2026-02-18 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
+Current: 110 composite MCP tools + 52 MCP resources = 162 endpoints
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
@@ -10,51 +10,29 @@ against our current MCP tool coverage. It identifies gaps and prioritizes what t
 
 |     Category          | Sections | Complete | Partial | Not Started | Methods (impl/total) |
 |-----------------------|----------|----------|---------|-------------|----------------------|
-| **Part Features**     |    52    |    36    |    13   |      3      |      192 / 201       |
-| **Assembly**          |    11    |     4    |     4   |      3      |       45 /  61       |
-| **Draft/Drawing**     |     5    |     3    |     2   |      0      |       51 /  53       |
-| **Framework/App**     |     7    |     5    |     2   |      0      |       53 /  55       |
+| **Part Features**     |    52    |    38    |    11   |      3      |      197 / 201       |
+| **Assembly**          |    11    |     9    |     1   |      1      |       66 /  73       |
+| **Draft/Drawing**     |     5    |     3    |     2   |      0      |       57 /  58       |
+| **Framework/App**     |     7    |     7    |     0   |      0      |       62 /  62       |
 | **Geometry/Topology** |     2    |     0    |     2   |      0      |       15 /  19       |
-| **Total**             | **77**   |  **48**  |  **23** |    **6**    | **356 / 389 (92%)**  |
+| **Total**             | **77**   |  **57**  |  **16** |    **4**    | **397 / 413 (96%)**  |
 
-**556 MCP tools** registered (many tools cover multiple methods or provide capabilities
-beyond what the type library tracks, e.g. primitives, view controls, export formats).
+**110 composite MCP tools + 52 MCP resources** registered. Tools use match/case dispatch
+to consolidate related methods into single composites (e.g. `create_extrude(method=...)` covers
+11 extrusion methods). 52 read-only endpoints use MCP Resources with `solidedge://` URIs.
 
-## Tool Count by Category (556 total)
+## Tool Count by Category (107 tools + 52 resources)
 
-| Category                  | Count | Tools |
+| Category                  | Tools | Description |
 |:--------------------------|:-----:|:---|
-| **Connection/Application**| 19    | Connect, disconnect, app info, quit, is_connected, process_info, install_info, start_command, set_performance_mode, do_idle, activate, abort_command, active_environment, status_bar (get/set), visible (get/set), global_parameter (get/set) |
-| **Document Management**   | 13    | Create (part, assembly, sheet metal, draft), open, save, close, list, activate, undo, redo |
-| **Sketching**             | 30    | Lines, circles, arcs (multiple), rects, polygons, ellipses, splines, points, constraints (9 types), fillet, chamfer, mirror, construction, hide profile, project_edge, include_edge, get_sketch_matrix, clean_sketch_geometry, project_silhouette_edges, include_region_faces, chain_locate, convert_to_curve |
-| **Basic Primitives**      | 10    | Box (3 variants), cylinder, sphere, box cutout (3 variants), cylinder cutout, sphere cutout |
-| **Extrusions**            | 8     | Finite, infinite, symmetric, thin-wall, extruded surface, through-next v2, from-to v2, by-keypoint |
-| **Revolves**              | 7     | Basic, finite, sync, thin-wall, by-keypoint, full |
-| **Cutouts**               | 20    | Extruded finite/through-all/through-next/from-to v2/by-keypoint, revolved/revolved-sync/revolved-by-keypoint, normal/normal-through-all/normal-from-to/normal-through-next/normal-by-keypoint, lofted/lofted-full, swept/swept-multi-body, helix/helix-sync/helix-from-to |
-| **Rounds/Chamfers/Holes** | 24    | Round (all/face), variable round, round blend, round surface blend, blend variable, blend surface, chamfer (equal/unequal/angle/face), chamfer unequal on face, hole (finite/from-to/through-next/through-all/sync), hole-ex (finite/from-to/through-next/through-all/sync), hole multi-body, hole sync multi-body |
-| **Reference Planes**      | 9     | Offset, normal-to-curve, angle, 3-points, mid-plane, normal-at-keypoint, tangent-cylinder-angle, tangent-cylinder-keypoint, tangent-surface-keypoint |
-| **Loft**                  | 3     | Basic, thin-wall, lofted-cutout-full |
-| **Sweep**                 | 3     | Basic, thin-wall, swept-cutout-multi-body |
-| **Helix/Spiral**          | 8     | Basic, sync, thin-wall variants, from-to, from-to-thin-wall, helix-cutout-sync, helix-cutout-from-to |
-| **Construction Surfaces** | 11    | Extruded surface (basic, from-to, by-keypoint, by-curves, full), revolved surface (basic, sync, by-keypoint), lofted surface (basic, v2), swept surface (basic, ex) |
-| **Sheet Metal**           | 25    | Base flange/tab, lofted flange, web network, advanced variants, emboss, flange, flange-by-match-face, flange-sync, flange-by-face, flange-with-bend-calc, flange-sync-with-bend-calc, contour-flange-ex, contour-flange-sync, contour-flange-sync-with-bend, hem, jog, close-corner, multi-edge-flange, bend-with-calc, convert-part-to-sheet-metal, dimple-ex |
-| **Body Operations**       | 11    | Add body, thicken, mesh, tag, construction, delete faces (2), delete holes (2), delete blends |
-| **Simplification**        | 4     | Auto-simplify, enclosure, duplicate |
-| **Mirror**                | 2     | Mirror copy, mirror sync ex |
-| **Patterns**              | 5     | Rectangular ex, circular ex, duplicate, by fill, by table |
-| **View/Display**          | 15    | Orientation, zoom, display mode, background color, get/set camera, rotate, pan, zoom factor, refresh, transform model-to-screen, transform screen-to-model, begin/end camera dynamics |
-| **Variables**             | 12    | Get all, get by name, set value, set formula, add variable, query/search, get formula, rename, get names (display+system), translate, copy to clipboard, add from clipboard |
-| **Custom Properties**     | 3     | Get all, set/create, delete |
-| **Body Topology**         | 3     | Body faces, body edges, face info |
-| **Performance**           | 1     | Recompute (set_performance_mode moved to Connection/Application) |
-| **Query/Analysis**        | 67    | Mass properties, bounding box, features, measurements, facet data, solid bodies, modeling mode, face/edge info, colors, angles, volume, delete feature, material table, feature dimensions, material list/set/property, feature status, feature profiles, vertex count, layers (get/add/activate/set properties/delete), body opacity, body reflectivity, variable formula, feature parents, direction1/2 extent (get/set), thin wall options (get/set), from-face offset (get/set), body array (get/set), material library, set material by name, **edge endpoints/length/tangent/geometry/curvature, face normal/geometry/loops/curvature, vertex point, body extreme point/shells/vertices, faces by ray, shell info, point inside body, bspline curve/surface info** |
-| **Feature Management**    | 6     | Suppress, unsuppress, face rotate (2), draft angle, convert feature type |
-| **Part Features**         | 16    | Dimple, dimple-ex, etch, rib, lip, drawn cutout, drawn-cutout-ex, bead, louver, louver-sync, gusset, thread, thread-ex, slot, slot-ex, slot-sync, split, thicken-sync |
-| **Export**                | 10    | STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, drawing, screenshot |
-| **Assembly**              | 61    | Place, place with transform, list, constraints, patterns, suppress, BOM, structured BOM, interference, bbox, relations (get/add planar/axial/angular/point/tangent/gear), relation editing (offset get/set, angle get/set, normals get/set, suppress/unsuppress, geometry, gear ratio), delete relation, doc tree, replace, delete, visibility, color, transform, count, move, rotate, is_subassembly, display_name, occurrence_document, sub_occurrences, add family member, add family with transform, add by template, add adjustable part, reorder occurrence, put transform euler, put origin, make writable, swap family member, occurrence bodies, occurrence style, is tube, get adjustable part, get face style |
-| **Draft/Drawing**         | 67    | Sheets (add, activate, delete, rename, dimensions, balloons, text-boxes, drawing-objects, sections), views (add, projected, count, get/set scale, delete, update, move, info, orientation, hidden edges, display mode, model-link, tangent-edges, detail, auxiliary, draft, align, assembly-view-ex, with-config, activate, deactivate), annotations (dimension, angular, radial, diameter, ordinate, balloon, note, leader, text box, center mark, centerline, surface finish, weld symbol, geometric tolerance), parts list, printing (print, set printer, get printer, paper size), face texture, **2D geometry (lines2d, circles2d, arcs2d), dimensions (distance, length, radius, angle), smart frames (2-point, by-origin), symbols (add, list), PMI (info, visibility)** |
-| **Diagnostics**           | 2     | API and feature inspection |
-| **Select Set**            | 11    | Get selection, clear selection, add, remove, select all, copy, cut, delete, suspend/resume/refresh display |
+| **Connection/App**        | 7     | manage_connection, app_command, app_config, convert_by_file_path, arrange_windows, get_active_command, run_macro |
+| **Documents**             | 7     | create_document, open_document, close_document, save_document, undo_redo, activate_document, import_file |
+| **Sketching**             | 5     | manage_sketch, draw, sketch_modify, sketch_constraint, sketch_project |
+| **Features (Part)**       | 49    | 45 composites (extrude, revolve, cutouts, loft, sweep, helix, rounds, chamfers, holes, ref planes, patterns, mirror, surfaces, sheet metal, body ops, simplify, manage) + 4 standalone |
+| **Query/Analysis**        | 14    | measure, manage_variable/property/material, set_appearance, manage_layer, select_set, edit_feature_extent, manage_feature_tree, query_edge/face/body/bspline, recompute |
+| **Export/Drawing**        | 14    | export_file, add_drawing_view, manage_drawing_view, add_annotation, add_2d_dimension, camera_control, display_control, manage_sheet, print_control, query_sheet, manage_annotation_data, add_smart_frame, draft_config, create_table |
+| **Assembly**              | 12    | add_assembly_component, manage_component, query_component, set_component_appearance, transform_component, add_assembly_constraint, add_assembly_relation, manage_relation, assembly_feature, virtual_component, structural_frame, wiring |
+| **Diagnostics**           | 2     | diagnose_api, diagnose_feature |
 
 ## Part 1: Part Feature Collections (Part.tlb)
 
@@ -86,7 +64,7 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 #### LoftedProtrusions Collection (4 Add methods)
 - [x] `AddSimple` / Models.`AddLoftedProtrusion` - via `create_loft`
 - [x] `AddWithThinWall` - via `create_loft_thin_wall`
-- [ ] `Add` (full params) - Loft with guide curves
+- [x] `Add` (full params with guide curves) - via `create_loft_with_guides`
 
 #### SweptProtrusions Collection (3 Add methods)
 - [x] `Add` / Models.`AddSweptProtrusion` - via `create_sweep`
@@ -175,19 +153,23 @@ beyond what the type library tracks, e.g. primitives, view controls, export form
 #### Patterns Collection (18 Add methods)
 - ~~`Add` / `AddSync` - Feature pattern (SAFEARRAY marshaling broken)~~
 - ~~`AddByRectangular` / `AddByCircular` - Rectangular/circular pattern (broken)~~
-- [ ] `AddByCurve` / `AddByCurveSync` - Pattern along curve
+- ~~`AddByCurve` / `AddByCurveSync` - Pattern along curve (SAFEARRAY(VT_DISPATCH) — same marshaling issue as non-Ex variants)~~
 - [x] `AddByFill` - via `create_pattern_by_fill`
 - [x] `AddPatternByTable` - via `create_pattern_by_table`
 - [x] `AddPatternByTableSync` - via `create_pattern_by_table_sync`
 - [x] `AddDuplicate` - via `create_pattern_duplicate`
-- [ ] `RecognizeAndCreatePatterns` - Auto-recognize patterns
+- ~~`RecognizeAndCreatePatterns` - Auto-recognize patterns (SAFEARRAY(Hole*) + in/out arrays — infeasible in late binding)~~
 - [x] `AddByRectangularEx` - via `create_pattern_rectangular_ex`
 - [x] `AddByCircularEx` - via `create_pattern_circular_ex`
 - [x] `AddByFillEx` / `AddByCurveEx` - via `create_pattern_by_fill_ex`, `create_pattern_by_curve_ex`
 
-**Note**: The non-Ex feature pattern methods (`AddByRectangular`, `AddByCircular`) are known broken
-due to SAFEARRAY(VT_DISPATCH) marshaling issues in late binding. The `Ex` variants
-(`AddByRectangularEx`, `AddByCircularEx`) are now implemented and work correctly.
+#### UserDefinedPatterns Collection
+- [x] `Add` - via `create_user_defined_pattern` (pattern from accumulated profiles)
+
+**Note**: The non-Ex feature pattern methods (`AddByRectangular`, `AddByCircular`, `AddByCurve`)
+are known broken due to SAFEARRAY(VT_DISPATCH) marshaling issues in late binding. The `Ex` variants
+(`AddByRectangularEx`, `AddByCircularEx`, `AddByCurveEx`) work correctly.
+`RecognizeAndCreatePatterns` is infeasible (SAFEARRAY(Hole*) + in/out params).
 
 ### 1.5 Reference Planes
 
@@ -229,8 +211,9 @@ due to SAFEARRAY(VT_DISPATCH) marshaling issues in late binding. The `Ex` varian
 - [x] `Add` - via `create_swept_surface`
 - [x] `AddEx` - via `create_swept_surface_ex`
 
-#### BlueSurf Interface (21 methods)
-- [ ] **BlueSurf (bounded surface)** - Advanced surface creation, not exposed
+#### BlueSurfs Collection (21 methods)
+- [x] `Add` - via `create_bounded_surface` (basic bounded surface with end caps/periodic)
+- [ ] Full BlueSurf editing (21 methods) - SAFEARRAY(VT_DISPATCH) params for guide curves
 
 ### 1.7 Other Part Features
 
@@ -386,11 +369,17 @@ RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 - [x] `GetFromFaceOffsetData` / `SetFromFaceOffsetData` - via `get_from_face_offset`, `set_from_face_offset`
 - [x] `GetThinWallOptions` / `SetThinWallOptions` - via `get_thin_wall_options`, `set_thin_wall_options`
 - [x] `GetBodyArray` / `SetBodyArray` - via `get_body_array`, `set_body_array`
+- [x] `GetToFaceOffsetData` / `SetToFaceOffsetData` - via `get_to_face_offset`, `set_to_face_offset`
+- [x] `GetDirection1Treatment` / `ApplyDirection1Treatment` - via `get_direction1_treatment`, `apply_direction1_treatment`
 - [x] `ConvertToCutout` / `ConvertToProtrusion` - via `convert_feature_type`
 - [x] `GetStatusEx` - via `get_feature_status`
 - [x] `GetTopologyParents` - via `get_feature_parents`
 
-**Impact**: These enable parametric editing of existing features, not just creation.
+### 1.11 Part Document Methods
+- [x] `Recompute` (document-level) - via `recompute(scope="document")`
+- [x] `UserPhysicalProperties` (get) - via `query_body(property="user_physical_properties")`
+
+**Impact**: Feature editing methods enable parametric editing of existing features, not just creation.
 
 ---
 
@@ -406,7 +395,7 @@ RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 - [x] `AddFamilyWithMatrix` - via `assembly_add_family_with_matrix`
 - [x] `AddByTemplate` - via `assembly_add_by_template`
 - [x] `AddAsAdjustablePart` - via `assembly_add_adjustable_part`
-- [ ] `AddTube` - **Create tube/pipe between segments**
+- [x] `AddTube` - via `add_tube`
 - [x] `ReorderOccurrence` - via `assembly_reorder_occurrence`
 - [x] `GetOccurrence` - via `assembly_get_occurrence`
 
@@ -421,10 +410,10 @@ RevolvedCutout, Round, Chamfer, Hole, etc.) and allow editing after creation:
 - [x] `PutOrigin` - via `assembly_put_origin`
 - [x] `Move` - via `occurrence_move`
 - [x] `Rotate` - via `occurrence_rotate`
-- [ ] `Mirror` - **Mirror occurrence across plane**
+- [x] `Mirror` - via `mirror_component`
 - [x] `MakeWritable` - via `assembly_make_writable`
 - [x] `IsTube` - via `assembly_is_tube`
-- [ ] `GetTube` - Query tube info
+- [x] `GetTube` - via `get_tube`
 - [x] `SwapFamilyMember` - via `assembly_swap_family_member`
 - [x] `GetAdjustablePart` - via `assembly_get_adjustable_part`
 - [x] `GetFaceStyle2` - via `assembly_get_face_style`
@@ -461,34 +450,40 @@ Key Properties NOT exposed:
 ### 2.4 Assembly Features
 
 #### AssemblyFeaturesExtrudedCutout (23 methods)
-- [ ] **Assembly-level extruded cutout** - Cut across multiple components
+- [x] `Add` - via `assembly_create_extruded_cutout`
 
 #### AssemblyFeaturesHole (23 methods)
-- [ ] **Assembly-level hole** - Drill through multiple components
+- [x] `Add` - via `assembly_create_hole`
 
 #### AssemblyFeaturesRevolvedCutout (21 methods)
-- [ ] **Assembly-level revolved cutout**
+- [x] `Add` - via `assembly_create_revolved_cutout`
 
 #### AssemblyFeaturesExtrudedProtrusion (21 methods)
-- [ ] **Assembly-level extruded protrusion**
+- [x] `Add` - via `assembly_create_extruded_protrusion`
 
 #### AssemblyFeaturesRevolvedProtrusion (19 methods)
-- [ ] **Assembly-level revolved protrusion**
+- [x] `Add` - via `assembly_create_revolved_protrusion`
 
 #### AssemblyFeaturesMirror (13 methods)
-- [ ] **Assembly-level mirror** - Mirror components across plane
+- [x] `Add` - via `assembly_create_mirror`
 
 #### AssemblyFeaturesPattern (13 methods)
-- [ ] **Assembly-level pattern** - Pattern components
+- [x] `Add` - via `assembly_create_pattern`
+
+#### AssemblyFeaturesSweptProtrusion
+- [x] `Add` - via `assembly_create_swept_protrusion`
+
+#### AssemblyFeatures Recompute
+- [x] `Recompute` - via `assembly_recompute_features`
 
 ### 2.5 Specialized Assembly
 
-- [ ] `StructuralFrame` (35 methods) - Structural frame/weldment
-- [ ] `Cable` / `Wire` / `Bundle` - Wiring/harness features
-- [ ] `Tube` (17 methods) - Tube/pipe routing
-- [ ] `VirtualComponentOccurrence` - Virtual/in-place components
-- [ ] `Splice` - Splice features
-- [ ] `InternalComponent` - Internal component management
+- [x] `StructuralFrames.Add` / `AddByOrientation` - via `structural_frame`
+- [x] `Cables.Add` / `Wires.Add` / `Bundles.Add` - via `wiring` (SAFEARRAY - may need runtime verification)
+- [x] `Occurrences.AddTube` / `Occurrence.GetTube` - via `add_assembly_component(method="tube")`, `query_component(property="tube")`
+- [x] `VirtualComponentOccurrences.Add` / `AddAsPreDefined` / `AddBIDM` - via `virtual_component`
+- [x] `Splices.Add` - via `wiring(type="splice")`
+- [ ] `InternalComponent` - No Add method found in type library
 
 ---
 
@@ -555,14 +550,20 @@ Key properties:
 - [x] `add_weld_symbol` - Welding annotations
 - [x] `add_geometric_tolerance` - Geometric tolerance (FCF)
 - [x] **Parts list** - via `create_parts_list` (BOM table on drawing)
-- [ ] **Hole table** (HoleTable2 interface, 86 members) - Hole call-outs
-- [ ] **Bend table** (DraftBendTable, 43 members) - Sheet metal bend table
+- ~~**Hole table** (HoleTable2 interface, 86 members) - No Add method in collection — not programmable via COM~~
+- [x] **Bend table** - via `create_bend_table` (DraftBendTables.Add)
 
 ### 3.5 DraftPrintUtility (10 methods)
 - [x] `PrintOut` - via `print_drawing`
+- [x] `PrintDocument` (full params) - via `print_control(action="print_full")`
 - [x] `SetPrinter` - via `set_printer`
 - [x] `GetPrinter` - via `get_printer`
 - [x] Paper size controls - via `set_paper_size`
+
+### 3.6 Draft Document Methods
+- [x] `GetGlobalParameter` / `SetGlobalParameter` - via `draft_config(action="get_global"/"set_global")`
+- [x] `UpdateAllViews` - via `manage_drawing_view(action="update_all")`
+- [x] `GetSymbolFileOrigin` / `SetSymbolFileOrigin` - via `draft_config(action="get_origin"/"set_origin")`
 
 ---
 
@@ -576,8 +577,13 @@ Key properties:
 - [x] `StartCommand` - via `start_command`
 - [x] `AbortCommand` - via `abort_command`
 - [x] `GetGlobalParameter` / `SetGlobalParameter` - via `get_global_parameter`, `set_global_parameter`
-- [ ] `GetModelessTaskEventSource` - Event handling (infeasible: requires event sink)
+- ~~`GetModelessTaskEventSource` - Event handling (infeasible: requires event sink)~~
 - [x] `Activate` - via `activate_application`
+- [x] `RunMacro` - via `run_macro`
+- [x] `ConvertByFilePath` - via `convert_by_file_path`
+- [x] `ArrangeWindows` - via `arrange_windows`
+- [x] `ActiveCommand` (get) - via `get_active_command`
+- [x] `GetDefaultTemplatePath` / `SetDefaultTemplatePath` - via `app_config(property="get_template"/"set_template")`
 
 Key Properties:
 - [x] `ActiveDocument` - via document tools
@@ -585,9 +591,16 @@ Key Properties:
 - [x] `StatusBar` (get/put) - via `get_status_bar`, `set_status_bar`
 - [x] `DisplayAlerts` (get/put) - covered via `set_performance_mode(display_alerts=...)`
 - [x] `Visible` (get/put) - via `get_visible`, `set_visible`
-- [ ] `SensorEvents` - Sensor monitoring (infeasible: requires event sink)
+- ~~`SensorEvents` - Sensor monitoring (infeasible: requires event sink)~~
 
-### 4.2 View Interface (60 methods)
+### 4.2 Documents Collection
+- [x] `Add` - via `create_document`
+- [x] `Open` - via `open_document(method="foreground")`
+- [x] `OpenInBackground` - via `open_document(method="background")`
+- [x] `OpenWithTemplate` - via `open_document(method="with_template")`
+- [x] `OpenWithFileOpenDialog` - via `open_document(method="dialog")`
+
+### 4.3 View Interface (60 methods)
 
 - [x] `Fit` - via `zoom_fit`
 - [x] `SetRenderMode` - via `set_display_mode`
@@ -601,7 +614,7 @@ Key Properties:
 - [x] `Update` - via `refresh_view`
 - [x] `BeginCameraDynamics` / `EndCameraDynamics` - via `begin_camera_dynamics`, `end_camera_dynamics`
 
-### 4.3 Variables Interface (13 methods)
+### 4.4 Variables Interface (13 methods)
 
 - [x] `Item` / iteration - via `get_variables`, `get_variable`
 - [x] `Edit` / value setting - via `set_variable`
@@ -614,7 +627,7 @@ Key Properties:
 - [x] `GetDisplayName` / `GetSystemName` - via `get_variable_names`
 - [x] `CopyToClipboard` - via `copy_variable_to_clipboard`
 
-### 4.4 SelectSet Interface (13 methods)
+### 4.5 SelectSet Interface (13 methods)
 
 - [x] `RemoveAll` - via `clear_select_set`
 - [x] `Item` / `Count` - via `get_select_set`
@@ -624,7 +637,7 @@ Key Properties:
 - [x] `Copy` / `Cut` / `Delete` - via `select_copy`, `select_cut`, `select_delete`
 - [x] `SuspendDisplay` / `ResumeDisplay` / `RefreshDisplay` - via `select_suspend_display`, `select_resume_display`, `select_refresh_display`
 
-### 4.5 Other Framework Interfaces
+### 4.6 Other Framework Interfaces
 
 #### MatTable (59 methods)
 - [x] Density setting - via `set_material_density`
@@ -656,7 +669,7 @@ Key interfaces for precise geometry queries:
 - [x] `Face` - via `get_face_normal`, `get_face_geometry`, `get_face_loops`, `get_face_curvature`
 - [x] `Edge` - via `get_edge_endpoints`, `get_edge_length`, `get_edge_tangent`, `get_edge_geometry`, `get_edge_curvature`
 - [x] `Vertex` - via `get_vertex_point`
-- [ ] `Curve2d` / `Curve3d` - Parametric curve access (low-level, covered by edge/face geometry tools)
+- ~~`Curve2d` / `Curve3d` - Parametric curve access (low-level, already covered by edge/face geometry tools)~~
 - [x] `BSplineCurve` / `BSplineSurface` - via `get_bspline_curve_info`, `get_bspline_surface_info`
 - [x] `Loop` - via `get_face_loops`
 - [x] `Shell` - via `get_shell_info`, `get_body_shells`, `is_point_inside_body`
@@ -668,7 +681,7 @@ Key interfaces for precise geometry queries:
 - [x] `Dimensions` - via `add_distance_dimension`, `add_length_dimension`, `add_radius_dimension_2d`, `add_angle_dimension_2d`
 - [x] `SmartFrames2d` - via `add_smart_frame`, `add_smart_frame_by_origin`
 - [x] `Symbols` - via `add_symbol`, `get_symbols`
-- [ ] `BalloonTypes` / `BalloonNotes` - Balloon annotations (not standalone collections; balloons already covered via `add_balloon`)
+- ~~`BalloonTypes` / `BalloonNotes` - Balloon annotations (already covered via `add_balloon`)~~
 - [x] `PMI` - via `get_pmi_info`, `set_pmi_visibility`
 
 ---
@@ -676,11 +689,14 @@ Key interfaces for precise geometry queries:
 ## Known Limitations
 
 1. **Assembly constraints** require face/edge geometry selection which is complex to automate via COM
-2. **Feature patterns** (non-Ex variants): `model.Patterns.AddByRectangular` / `AddByCircular` require SAFEARRAY(IDispatch) marshaling that fails in late binding. The `Ex` variants (`AddByRectangularEx`, `AddByCircularEx`, `AddDuplicate`, `AddByFill`, `AddPatternByTable`) are now implemented and work correctly.
-3. **Shell/Thinwalls** requires face selection for open faces, not automatable via COM
-4. **Cutout via models.Add*Cutout** does NOT work - must use collection-level methods (ExtrudedCutouts.AddFiniteMulti)
-5. **Mirror copy**: `Add` / `AddSync` create feature tree entry but no geometry via COM (partially broken). `AddSyncEx` is now implemented via `create_mirror_sync_ex`, though it may have the same geometry computation limitation.
-6. **Extrude thin wall/infinite** via models.AddExtrudedProtrusionWithThinWall has unknown extra params
+2. **Feature patterns** (non-Ex variants): `AddByRectangular`, `AddByCircular`, `AddByCurve` require SAFEARRAY(IDispatch) that fails in late binding. Use `Ex` variants instead.
+3. **RecognizeAndCreatePatterns**: SAFEARRAY(Hole*) + in/out array params — infeasible in late binding
+4. **Shell/Thinwalls** requires face selection for open faces, not automatable via COM
+5. **Cutout via models.Add*Cutout** does NOT work - must use collection-level methods (ExtrudedCutouts.AddFiniteMulti)
+6. **Mirror copy**: `Add` / `AddSync` create feature tree entry but no geometry via COM (partially broken). `AddSyncEx` is implemented but may have same limitation.
+7. **Extrude thin wall/infinite** via models.AddExtrudedProtrusionWithThinWall has unknown extra params
+8. **Event sinks** (GetModelessTaskEventSource, SensorEvents): require COM event sink setup, not feasible in MCP tool model
+9. **BlueSurf full editing** (21 methods): Multiple SAFEARRAY(VT_DISPATCH) params for guide curves — basic creation works but full editing interface infeasible
 
 ---
 

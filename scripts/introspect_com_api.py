@@ -61,7 +61,7 @@ print("\n" + "=" * 80)
 print("AddBoxByCenter")
 print("=" * 80)
 
-if hasattr(models, 'AddBoxByCenter'):
+if hasattr(models, "AddBoxByCenter"):
     print("\n1. Signature:")
     try:
         sig = inspect.signature(models.AddBoxByCenter)
@@ -85,7 +85,7 @@ else:
     print("Method does not exist!")
     print("\nSearching for 'Box' methods:")
     for attr in dir(models):
-        if 'Box' in attr:
+        if "Box" in attr:
             print(f"  - {attr}")
 
 # ============================================================================
@@ -95,7 +95,7 @@ print("\n" + "=" * 80)
 print("AddCylinderByCenterAndRadius")
 print("=" * 80)
 
-if hasattr(models, 'AddCylinderByCenterAndRadius'):
+if hasattr(models, "AddCylinderByCenterAndRadius"):
     print("\n1. Signature:")
     try:
         sig = inspect.signature(models.AddCylinderByCenterAndRadius)
@@ -119,7 +119,7 @@ else:
     print("Method does not exist!")
     print("\nSearching for 'Cylinder' methods:")
     for attr in dir(models):
-        if 'Cylinder' in attr:
+        if "Cylinder" in attr:
             print(f"  - {attr}")
 
 # ============================================================================
@@ -129,7 +129,7 @@ print("\n" + "=" * 80)
 print("AddSphereByCenterAndRadius")
 print("=" * 80)
 
-if hasattr(models, 'AddSphereByCenterAndRadius'):
+if hasattr(models, "AddSphereByCenterAndRadius"):
     print("\n1. Signature:")
     try:
         sig = inspect.signature(models.AddSphereByCenterAndRadius)
@@ -153,7 +153,7 @@ else:
     print("Method does not exist!")
     print("\nSearching for 'Sphere' methods:")
     for attr in dir(models):
-        if 'Sphere' in attr:
+        if "Sphere" in attr:
             print(f"  - {attr}")
 
 # ============================================================================
@@ -190,7 +190,7 @@ print("\n" + "=" * 80)
 print("ALL 'Add' METHODS ON Models COLLECTION")
 print("=" * 80)
 
-add_methods = [attr for attr in dir(models) if attr.startswith('Add')]
+add_methods = [attr for attr in dir(models) if attr.startswith("Add")]
 print(f"\nFound {len(add_methods)} 'Add' methods:\n")
 
 for method in sorted(add_methods):

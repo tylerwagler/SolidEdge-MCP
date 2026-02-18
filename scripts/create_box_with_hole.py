@@ -64,10 +64,10 @@ if "error" in result:
 else:
     print(f"   Hole created: {result}")
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("COMPLETE!")
-print("="*60)
+print("=" * 60)
 print("Created:")
 print("  - Box: 200mm x 300mm x 50mm")
 print("  - Center hole: 10mm diameter, through")
-print("="*60)
+print("=" * 60)

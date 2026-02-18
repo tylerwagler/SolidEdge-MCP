@@ -15,11 +15,13 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
+
 def test_category(name):
     """Print category header"""
     print("\n" + "=" * 70)
     print(f"  {name}")
     print("=" * 70)
+
 
 def test_step(name, func):
     """Run a test step and report result"""
@@ -36,6 +38,7 @@ def test_step(name, func):
     except Exception as e:
         print(f"[FAIL] {name}: {e}")
         return False
+
 
 def main():
     """Run comprehensive tests"""
@@ -128,8 +131,7 @@ def main():
         failed.append("draw_arc")
 
     if test_step(
-        "Draw polygon (hexagon)",
-        lambda: sketch_manager.draw_polygon(0.4, 0.05, 0.025, 6)
+        "Draw polygon (hexagon)", lambda: sketch_manager.draw_polygon(0.4, 0.05, 0.025, 6)
     ):
         passed.append("draw_polygon")
     else:
@@ -141,10 +143,7 @@ def main():
         failed.append("draw_ellipse")
 
     if test_step(
-        "Draw spline",
-        lambda: sketch_manager.draw_spline(
-            [[0.6, 0], [0.65, 0.05], [0.7, 0.02]]
-        )
+        "Draw spline", lambda: sketch_manager.draw_spline([[0.6, 0], [0.65, 0.05], [0.7, 0.02]])
     ):
         passed.append("draw_spline")
     else:
@@ -161,10 +160,7 @@ def main():
     test_category("3D FEATURES - Primitives")
 
     if test_step(
-        "Create box by center",
-        lambda: feature_manager.create_box_by_center(
-            0, 0, 0, 0.1, 0.1, 0.1
-        )
+        "Create box by center", lambda: feature_manager.create_box_by_center(0, 0, 0, 0.1, 0.1, 0.1)
     ):
         passed.append("box_center")
     else:
@@ -191,10 +187,7 @@ def main():
     sketch_manager.close_sketch()
 
     if test_step(
-        "Create extrude (finite)",
-        lambda: feature_manager.create_extrude(
-            0.03, "Add", "Normal"
-        )
+        "Create extrude (finite)", lambda: feature_manager.create_extrude(0.03, "Add", "Normal")
     ):
         passed.append("extrude")
     else:
@@ -214,8 +207,7 @@ def main():
     sketch_manager.close_sketch()
 
     if test_step(
-        "Create revolve (360 degrees)",
-        lambda: feature_manager.create_revolve(360, "Add")
+        "Create revolve (360 degrees)", lambda: feature_manager.create_revolve(360, "Add")
     ):
         passed.append("revolve")
     else:
@@ -247,10 +239,7 @@ def main():
         failed.append("bounding_box")
 
     if test_step(
-        "Measure distance",
-        lambda: query_manager.measure_distance(
-            0, 0, 0, 0.1, 0.1, 0.1
-        )
+        "Measure distance", lambda: query_manager.measure_distance(0, 0, 0, 0.1, 0.1, 0.1)
     ):
         passed.append("measure_distance")
     else:
@@ -380,6 +369,7 @@ def main():
         print(f"\n{len(failed)} test(s) failed. Review output above for details.")
         return 1
 
+
 if __name__ == "__main__":
     try:
         sys.exit(main())
@@ -389,5 +379,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\nUnexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

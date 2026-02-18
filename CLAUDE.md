@@ -38,7 +38,7 @@ Unlike KiCad (which uses file parsing), Solid Edge automation requires Windows C
 - **Connection layer** (`backends/connection.py`): Manages GetActiveObject/Dispatch, early/late binding
 - **Document layer** (`backends/documents.py`): Create/open/save parts, assemblies, drafts
 - **Sketching layer** (`backends/sketching.py`): 2D profile creation (lines, circles, arcs, rectangles, polygons)
-- **Feature layer** (`backends/features.py`): 3D operations (extrude, revolve, sweep, loft, holes, fillets)
+- **Feature layer** (`backends/features/`): 3D operations (extrude, revolve, sweep, loft, holes, fillets) — mixin-based package
 - **Assembly layer** (`backends/assembly.py`): Component placement, constraints, patterns
 - **Query layer** (`backends/query.py`): Extract geometry, mass properties, feature trees
 - **Export layer** (`backends/export.py`): Convert to STEP, STL, IGES, PDF, DXF
@@ -52,87 +52,84 @@ src/solidedge_mcp/
 │   ├── connection.py      # Application connection (GetActiveObject/Dispatch)
 │   ├── documents.py       # Document create/open/save/close
 │   ├── sketching.py       # 2D sketch profiles
-│   ├── features.py        # 3D feature operations
+│   ├── features/          # 3D feature operations (mixin-based package, 12 sub-modules)
 │   ├── assembly.py        # Assembly operations
 │   ├── query.py           # Model interrogation
 │   ├── export.py          # Export to standard formats
 │   └── constants.py       # Solid Edge API constants
-├── tools/                 # MCP tool wrappers (pending)
-├── resources/             # MCP Resources (read-only state) (pending)
+├── tools/                 # MCP tool wrappers (~150 composite tools)
+├── resources/             # MCP Resources (52 read-only endpoints)
 ├── prompts/               # MCP Prompt templates (pending)
 └── session/               # Session/undo management (pending)
 ```
 
 ### Current State
 
-**✅ FULLY IMPLEMENTED**: All 326 MCP tools are registered and operational!
+**✅ FULLY IMPLEMENTED**: ~150 composite MCP tools + 52 MCP resources = ~200 total endpoints!
 
 - **Backend layer**: Complete COM automation using pywin32 (connection, documents, sketching, features, assembly, query, export, diagnostics)
-- **MCP tools**: All 326 tools registered via `tools/*.py` modules using `@mcp.tool()` decorator
-- **Tool categories**: Connection (6), Documents (13), Sketching (24), Primitives (8), Extrusions (6), Revolves (5), Cutouts (10), Ref Planes (9), Rounds/Chamfers/Holes (9), Mirror (1), Loft (2), Sweep (2), Helix (4), Surfaces (3), Sheet Metal (8), Body Operations (9), Simplification (4), View (7), Variables (5), Custom Properties (3), Body Topology (3), Performance (2), Query/Analysis (20), Feature Management (5), Draft/Drawing (10), Export (10), Assembly (25), Part Features (10), Select Set (3), Diagnostics (2)
-- **Coverage**: 97% of core Solid Edge Part COM API feature collections implemented
-- **Test suite**: 586 unit tests across 6 test files
+- **MCP tools**: ~150 composite tools registered via `tools/*.py` modules using `mcp.tool()` — each tool dispatches via a `method`/`type`/`action` discriminator parameter
+- **MCP resources**: 52 read-only endpoints registered via `tools/resources.py` using `solidedge://` URIs
+- **Coverage**: 96% of Solid Edge COM API methods implemented (394+ methods accessible via composite tools)
+- **Test suite**: 1,380+ unit tests across 6 test files
 
-**Pending**: Resource providers (read-only state), prompt templates, session management/undo
+**Pending**: Prompt templates, session management/undo
 
 ### Three-Pillar MCP Design
 
 Following the MCP spec, the server exposes:
 
-- **Tools** ✅ (326 implemented): Actions that create/modify models (connect, create_sketch, extrude, cutout, round, chamfer, hole, mirror, place_component, export)
-- **Resources** ⏳ (pending): Read-only model data (feature list, component tree, mass properties, document info)
+- **Tools** ✅ (~150 composite): Actions that create/modify models — each composite tool uses `method`/`type`/`action` discriminator to dispatch to the correct backend method
+- **Resources** ✅ (52 implemented): Read-only model data (feature list, component tree, mass properties, document info, app info, sketch info)
 - **Prompts** ⏳ (pending): Conversation templates (design review, manufacturability check, modeling guidance)
 
-### Tool Categories (326 total)
+### Tool Categories (~150 tools + 52 resources)
 
-See `reference/TYPELIB_IMPLEMENTATION_MAP.md` for the complete list. High-level categories:
+| Category | Tools | Resources |
+|---|---|---|
+| **Connection/Application** | 12 | 0 |
+| **Documents** | 9 | 0 |
+| **Sketching** | 9 | 0 |
+| **Features (Part)** | 58 | 0 |
+| **Query/Analysis** | 19 | 52 |
+| **Export/Drawing** | 28 | 0 |
+| **Assembly** | 13 | 0 |
+| **Diagnostics** | 2 | 0 |
 
-1. **Connection (3)**: `connect_to_solidedge`, `get_application_info`, `quit_application`
-2. **Documents (11)**: Create (part, assembly, sheet metal), open, save, close, list, activate, undo, redo
-3. **Sketching (11)**: Lines, circles, arcs, rectangles, polygons, ellipses, splines, constraints, sketch on any plane
-4. **Primitives (5)**: Box (3 variants), cylinder, sphere
-5. **Extrusions (5)**: Finite, infinite, through-next, from-to, thin-wall
-6. **Revolves (5)**: Basic, finite, sync variants, thin-wall
-7. **Cutouts (6)**: Extruded (finite + through-all + from-to), revolved, normal, lofted
-8. **Reference Planes (6)**: Offset, angle, 3-point, midplane, normal-to-curve (3 variants), tangent
-9. **Rounds/Chamfers/Holes (3)**: Round (fillet), chamfer, hole
-10. **Mirror (1)**: Mirror copy across plane
-11. **Loft (2)**: Basic and thin-wall
-12. **Sweep (2)**: Basic and thin-wall
-13. **Helix/Spiral (4)**: Various helix creation methods
-14. **Sheet Metal (8)**: Base flange/tab, lofted flange, web network
-15. **Body Operations (7)**: Add body, thicken, mesh, tag-based, construction
-16. **Simplification (4)**: Auto-simplify, enclosure, duplicate
-17. **View/Display (8)**: Set view orientation, zoom, display mode, rotate/pan/zoom camera, refresh
-18. **Variables (3)**: Get all, get by name, set value
-19. **Custom Properties (3)**: Get all, set/create, delete
-20. **Body Topology (3)**: Body faces, body edges, face info
-21. **Performance (2)**: Set performance mode, recompute
-22. **Query/Analysis (12)**: Mass properties, bounding box, features, measurements, facets, solid bodies, modeling mode, select set
-23. **Feature Management (2)**: Suppress, unsuppress features
-24. **Draft/Drawing (2)**: Add sheet, assembly drawing view
-25. **Export (10)**: STEP, STL, IGES, PDF, DXF, flat DXF, Parasolid, JT, screenshot, drawing
-26. **Assembly (16)**: Place, list, constraints, patterns, suppress, BOM, interference, bbox, relations, doc tree
-27. **Select Set (2)**: Get selection, clear selection
-28. **Diagnostics (2)**: API discovery tools
+### Tool Registration Pattern (Composite Tools)
 
-### Tool Registration Pattern
-
-All backend operations are wrapped as MCP tools using the `@mcp.tool()` decorator. Example:
+Related backend operations are consolidated into **composite tools** that use a `method`/`type`/`action` discriminator parameter with `match/case` dispatch:
 
 ```python
-@mcp.tool()
-def connect_to_solidedge(start_if_needed: bool = True) -> dict:
-    """Connect to Solid Edge application (start if needed)"""
-    return connection_manager.connect(start_if_needed)
+def create_extrude(
+    method: str = "finite",
+    distance: float = 0.0,
+    direction: str = "Normal",
+    wall_thickness: float = 0.0,
+    from_plane_index: int = 0,
+    to_plane_index: int = 0,
+) -> dict:
+    """Create an extruded protrusion.
+
+    method: 'finite' | 'infinite' | 'through_next' | 'from_to'
+        | 'thin_wall' | 'symmetric' | ...
+    """
+    match method:
+        case "finite":
+            return feature_manager.create_extrude(distance, direction)
+        case "infinite":
+            return feature_manager.create_extrude_infinite(direction)
+        # ... etc
+        case _:
+            return {"error": f"Unknown method: {method}"}
 ```
 
 **Key patterns:**
-- Tools call backend manager methods (e.g., `connection_manager`, `feature_manager`, `sketch_manager`)
-- All tools return `Dict[str, Any]` with consistent structure: `{"status": "...", ...}` or `{"error": "...", "traceback": "..."}`
-- Backend managers are initialized globally at module level in `server.py`
-- Type hints on all parameters for better IDE support and validation
-- Docstrings describe purpose, parameters, and return values
+- Each composite tool merges 2-18 related tools into one via discriminator parameter
+- Backend calls remain **exactly the same** — only the tool layer changed
+- Parameters use union of all sub-method params; unused params are ignored
+- All tools return `dict[str, Any]` with `{"status": "..."}` or `{"error": "...", "traceback": "..."}`
+- Backend managers are initialized globally at module level in `managers.py`
 
 ### Manager Pattern
 
@@ -144,7 +141,7 @@ connection_manager = ConnectionManager()
 doc_manager = DocumentManager(connection_manager)
 sketch_manager = SketchManager(doc_manager)
 feature_manager = FeatureManager(doc_manager, sketch_manager)
-assembly_manager = AssemblyManager(doc_manager)
+assembly_manager = AssemblyManager(doc_manager, sketch_manager)
 query_manager = QueryManager(doc_manager)
 export_manager = ExportManager(doc_manager)
 view_manager = ViewModel(doc_manager)

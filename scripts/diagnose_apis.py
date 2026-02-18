@@ -28,7 +28,7 @@ print("=" * 70)
 print("\n1. Models collection methods:")
 models = doc.Models
 for attr in dir(models):
-    if attr.startswith('Add'):
+    if attr.startswith("Add"):
         print(f"  - {attr}")
 
 # Check Profile methods for ellipse and spline
@@ -43,19 +43,19 @@ profile = profiles.Add(ref_plane)
 print("\n3. Profile.Ellipses2d methods:")
 ellipses = profile.Ellipses2d
 for attr in dir(ellipses):
-    if attr.startswith('Add'):
+    if attr.startswith("Add"):
         print(f"  - {attr}")
 
 print("\n4. Profile.BSplineCurves2d methods:")
 splines = profile.BSplineCurves2d
 for attr in dir(splines):
-    if attr.startswith('Add'):
+    if attr.startswith("Add"):
         print(f"  - {attr}")
 
 # Try to get method signatures using Python's help
 print("\n5. Checking AddByCenterRadii signature...")
 try:
-    if hasattr(ellipses, 'AddByCenterRadii'):
+    if hasattr(ellipses, "AddByCenterRadii"):
         # Can't get signature from COM objects easily, but we can try
         print("  Method exists!")
 except Exception as e:
@@ -65,12 +65,7 @@ print("\n6. Testing primitive creation signatures...")
 print("  Testing AddBoxByCenter...")
 try:
     # Try different signatures
-    result = models.AddBoxByCenter(
-        Origin=[0, 0, 0],
-        Length=0.1,
-        Width=0.1,
-        Height=0.1
-    )
+    result = models.AddBoxByCenter(Origin=[0, 0, 0], Length=0.1, Width=0.1, Height=0.1)
     print("  SUCCESS with keyword args!")
 except Exception as e:
     print(f"  Failed with keywords: {e}")
@@ -84,9 +79,10 @@ except Exception as e:
 print("\n7. Checking ViewOrientationConstants...")
 try:
     from solidedge_mcp.backends.constants import ViewOrientationConstants
+
     print("  Constants defined:")
     for attr in dir(ViewOrientationConstants):
-        if not attr.startswith('_'):
+        if not attr.startswith("_"):
             print(f"    - {attr} = {getattr(ViewOrientationConstants, attr)}")
 except Exception as e:
     print(f"  Error: {e}")

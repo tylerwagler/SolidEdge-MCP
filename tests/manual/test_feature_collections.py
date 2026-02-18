@@ -59,12 +59,12 @@ found_collections = {}
 for name in collections_to_check:
     try:
         coll = getattr(model, name)
-        count = coll.Count if hasattr(coll, 'Count') else '?'
+        count = coll.Count if hasattr(coll, "Count") else "?"
 
         # Get all available methods
         methods = []
         for attr in dir(coll):
-            if attr.startswith('Add') or attr.startswith('Create'):
+            if attr.startswith("Add") or attr.startswith("Create"):
                 methods.append(attr)
 
         print(f"\n  {name}: Count={count}")
@@ -73,7 +73,7 @@ for name in collections_to_check:
         else:
             print("    No Add/Create methods found in dir()")
             # Try common method names anyway
-            for m in ['Add', 'AddFinite', 'AddSimple', 'AddByRectangular', 'AddByCircular']:
+            for m in ["Add", "AddFinite", "AddSimple", "AddByRectangular", "AddByCircular"]:
                 try:
                     _ = getattr(coll, m)
                     methods.append(m)
@@ -97,7 +97,7 @@ print("=" * 60)
 try:
     rels = doc.Relations3d
     print(f"  Relations3d: Count={rels.Count}")
-    methods = [m for m in dir(rels) if m.startswith('Add')]
+    methods = [m for m in dir(rels) if m.startswith("Add")]
     print(f"  Add methods: {methods}")
 except Exception as e:
     print(f"  Not available (not assembly): {e}")
@@ -110,7 +110,7 @@ print("=" * 60)
 try:
     rp = doc.RefPlanes
     print(f"  RefPlanes: Count={rp.Count}")
-    methods = [m for m in dir(rp) if m.startswith('Add')]
+    methods = [m for m in dir(rp) if m.startswith("Add")]
     print(f"  Add methods: {methods}")
 except Exception as e:
     print(f"  Error: {e}")
@@ -147,6 +147,7 @@ try:
     # Check if we can get type info
     try:
         import win32com.client as wc
+
         mc_early = wc.gencache.EnsureDispatch(mc)
         # Get type info
         ti = mc_early._oleobj_.GetTypeInfo()
@@ -160,7 +161,7 @@ try:
     except Exception as e2:
         print(f"  TypeInfo error: {e2}")
         # Try raw method access
-        for m in ['Add', 'AddMirror', 'AddMirrorCopy']:
+        for m in ["Add", "AddMirror", "AddMirrorCopy"]:
             try:
                 method = getattr(mc, m)
                 print(f"  mc.{m} accessible!")
@@ -180,6 +181,7 @@ try:
 
     try:
         import win32com.client as wc
+
         dr_early = wc.gencache.EnsureDispatch(drafts)
         ti = dr_early._oleobj_.GetTypeInfo()
         ta = ti.GetTypeAttr()
@@ -188,7 +190,7 @@ try:
         for i in range(ta[6]):
             fd = ti.GetFuncDesc(i)
             names = ti.GetNames(fd[0])
-            params_str = ', '.join(names[1:]) if len(names) > 1 else ''
+            params_str = ", ".join(names[1:]) if len(names) > 1 else ""
             print(f"    [{i}] {names[0]}({params_str}) -> invkind={fd[3]}")
     except Exception as e2:
         print(f"  TypeInfo error: {e2}")

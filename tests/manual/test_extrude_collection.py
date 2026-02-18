@@ -1,6 +1,7 @@
 """
 Test extruded protrusion via collection-level API (model.ExtrudedProtrusions).
 """
+
 import sys
 
 sys.path.insert(0, "src")
@@ -32,8 +33,8 @@ try:
     for i in range(ta[6]):
         fd = ti.GetFuncDesc(i)
         names = ti.GetNames(fd[0])
-        if names[0].startswith(('Add', 'Create')):
-            params_str = ', '.join(names[1:]) if len(names) > 1 else ''
+        if names[0].startswith(("Add", "Create")):
+            params_str = ", ".join(names[1:]) if len(names) > 1 else ""
             print(f"  ** {names[0]}({params_str})")
 except Exception as e:
     print(f"  TypeInfo error: {e}")

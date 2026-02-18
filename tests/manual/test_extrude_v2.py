@@ -1,4 +1,5 @@
 """Test ExtrudedProtrusions.AddFinite with correct 4 params."""
+
 import sys
 
 sys.path.insert(0, "src")

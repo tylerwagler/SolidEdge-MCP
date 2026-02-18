@@ -2,6 +2,7 @@
 Test mirror copy and thread creation.
 Requires Solid Edge running with an open part that has a base feature.
 """
+
 import sys
 
 sys.path.insert(0, "src")
@@ -157,10 +158,7 @@ try:
         "MaterialSide, ThicknessSide, "
         "Thickness, FiniteDepth)"
     )
-    print(
-        "  Requires specific enum values for "
-        "extension type and thickness type"
-    )
+    print("  Requires specific enum values for extension type and thickness type")
 except Exception as e:
     print(f"  Error: {e}")
 

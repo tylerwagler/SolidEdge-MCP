@@ -20,6 +20,7 @@ def print_section(title):
     print(f"  {title}")
     print("=" * 80)
 
+
 def introspect_method(obj, method_name, show_params=True):
     """Introspect a single method and print details"""
     try:
@@ -39,10 +40,7 @@ def introspect_method(obj, method_name, show_params=True):
                 for param_name, param in params:
                     kind = param.kind.name
                     default = type(param.default).__name__
-                    print(
-                        f"  - {param_name}: "
-                        f"kind={kind}, default={default}"
-                    )
+                    print(f"  - {param_name}: kind={kind}, default={default}")
         except Exception as e:
             print(f"Could not get signature: {e}")
 
@@ -55,6 +53,7 @@ def introspect_method(obj, method_name, show_params=True):
 
     except Exception as e:
         print(f"Error introspecting {method_name}: {e}")
+
 
 # Initialize
 connection = SolidEdgeConnection()
@@ -75,7 +74,7 @@ print("\nThis will take a few minutes to examine all available methods...")
 print_section("MODELS COLLECTION - ALL 'Add' METHODS")
 
 models = doc.Models
-add_methods = sorted([m for m in dir(models) if m.startswith('Add')])
+add_methods = sorted([m for m in dir(models) if m.startswith("Add")])
 print(f"\nFound {len(add_methods)} 'Add' methods\n")
 
 for method_name in add_methods:
@@ -86,10 +85,9 @@ for method_name in add_methods:
 # ============================================================================
 print_section("MODELS COLLECTION - OTHER METHODS")
 
-other_methods = sorted([
-    m for m in dir(models)
-    if not m.startswith('_') and not m.startswith('Add')
-])
+other_methods = sorted(
+    [m for m in dir(models) if not m.startswith("_") and not m.startswith("Add")]
+)
 print(f"\nFound {len(other_methods)} other methods/properties\n")
 
 # Just list them for now
@@ -106,16 +104,14 @@ print_section("WINDOW OBJECT - ALL METHODS")
 
 try:
     window = app.ActiveWindow
-    window_methods = sorted([m for m in dir(window) if not m.startswith('_')])
+    window_methods = sorted([m for m in dir(window) if not m.startswith("_")])
     print(f"\nFound {len(window_methods)} methods/properties\n")
 
     # Introspect key methods
     key_window_methods = [
-        m for m in window_methods
-        if any(
-            x in m.lower()
-            for x in ['view', 'orient', 'zoom', 'fit', 'display']
-        )
+        m
+        for m in window_methods
+        if any(x in m.lower() for x in ["view", "orient", "zoom", "fit", "display"])
     ]
     print(f"\nKey view-related methods ({len(key_window_methods)}):")
     for method_name in key_window_methods:
@@ -138,7 +134,7 @@ print_section("VIEW OBJECT - ALL METHODS")
 
 try:
     view = app.ActiveWindow.View
-    view_methods = sorted([m for m in dir(view) if not m.startswith('_')])
+    view_methods = sorted([m for m in dir(view) if not m.startswith("_")])
     print(f"\nFound {len(view_methods)} methods/properties\n")
 
     # Introspect all non-property methods
@@ -166,17 +162,22 @@ except Exception as e:
 # ============================================================================
 print_section("DOCUMENT OBJECT - ALL METHODS")
 
-doc_methods = sorted([m for m in dir(doc) if not m.startswith('_')])
+doc_methods = sorted([m for m in dir(doc) if not m.startswith("_")])
 print(f"\nFound {len(doc_methods)} methods/properties\n")
 
 # Show key methods
 key_doc_methods = [
-    m for m in doc_methods
+    m
+    for m in doc_methods
     if any(
         x in m.lower()
         for x in [
-            'save', 'close', 'export',
-            'property', 'model', 'profile',
+            "save",
+            "close",
+            "export",
+            "property",
+            "model",
+            "profile",
         ]
     )
 ]
@@ -200,7 +201,7 @@ try:
     profiles = profile_set.Profiles
     profile = profiles.Add(ref_plane)
 
-    profile_methods = sorted([m for m in dir(profile) if not m.startswith('_')])
+    profile_methods = sorted([m for m in dir(profile) if not m.startswith("_")])
     print(f"\nFound {len(profile_methods)} methods/properties on Profile\n")
 
     # List all
@@ -212,10 +213,10 @@ try:
 
     # Introspect 2D geometry collections
     print("\n2D GEOMETRY COLLECTIONS:")
-    for geom_type in ['Lines2d', 'Circles2d', 'Arcs2d', 'Ellipses2d', 'Splines2d']:
+    for geom_type in ["Lines2d", "Circles2d", "Arcs2d", "Ellipses2d", "Splines2d"]:
         try:
             collection = getattr(profile, geom_type)
-            methods = sorted([m for m in dir(collection) if m.startswith('Add')])
+            methods = sorted([m for m in dir(collection) if m.startswith("Add")])
             print(f"\n{geom_type}: {methods}")
             for method_name in methods:
                 introspect_method(collection, method_name, show_params=True)
@@ -232,13 +233,14 @@ print_section("CONSTANTS - AVAILABLE ENUMS")
 
 try:
     from win32com.client import constants
-    constant_names = sorted([c for c in dir(constants) if not c.startswith('_')])
+
+    constant_names = sorted([c for c in dir(constants) if not c.startswith("_")])
     print(f"\nFound {len(constant_names)} constants\n")
 
     # Group by prefix
     prefixes = {}
     for name in constant_names:
-        prefix = name.split('_')[0] if '_' in name else name[:2]
+        prefix = name.split("_")[0] if "_" in name else name[:2]
         if prefix not in prefixes:
             prefixes[prefix] = []
         prefixes[prefix].append(name)
@@ -250,7 +252,7 @@ try:
 
     # Show some key constant groups
     print("\n\nKey constant groups:")
-    for keyword in ['ViewOrientation', 'DisplayStyle', 'FeatureOperation', 'ExtentType', 'Extrude']:
+    for keyword in ["ViewOrientation", "DisplayStyle", "FeatureOperation", "ExtentType", "Extrude"]:
         matching = [c for c in constant_names if keyword.lower() in c.lower()]
         if matching:
             print(f"\n{keyword} constants ({len(matching)}):")
@@ -272,19 +274,19 @@ except Exception as e:
 print_section("SPECIFIC FEATURE METHODS - DETAILED")
 
 print("\nAddFiniteRevolvedProtrusion:")
-introspect_method(models, 'AddFiniteRevolvedProtrusion', show_params=True)
+introspect_method(models, "AddFiniteRevolvedProtrusion", show_params=True)
 
 print("\nAddBoxByTwoPoints:")
-introspect_method(models, 'AddBoxByTwoPoints', show_params=True)
+introspect_method(models, "AddBoxByTwoPoints", show_params=True)
 
 print("\nAddRevolvedProtrusionSync:")
-introspect_method(models, 'AddRevolvedProtrusionSync', show_params=True)
+introspect_method(models, "AddRevolvedProtrusionSync", show_params=True)
 
 print("\nAddLoftedProtrusion:")
-introspect_method(models, 'AddLoftedProtrusion', show_params=True)
+introspect_method(models, "AddLoftedProtrusion", show_params=True)
 
 print("\nAddSweptProtrusion:")
-introspect_method(models, 'AddSweptProtrusion', show_params=True)
+introspect_method(models, "AddSweptProtrusion", show_params=True)
 
 # ============================================================================
 # CLEANUP

@@ -1,6 +1,7 @@
 """
 Test mirror with a protrusion that extends outside the box.
 """
+
 import sys
 
 sys.path.insert(0, "src")
@@ -54,10 +55,10 @@ for f in result.get("features", []):
     print(f"  {f['name']}")
 
 # If there's an ExtrudedProtrusion, mirror it
-feature_names = [f['name'] for f in result.get("features", [])]
+feature_names = [f["name"] for f in result.get("features", [])]
 protrusion_name = None
 for name in feature_names:
-    if 'Protrusion' in name or 'Extrude' in name:
+    if "Protrusion" in name or "Extrude" in name:
         protrusion_name = name
         break
 

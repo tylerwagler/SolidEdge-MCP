@@ -1,6 +1,7 @@
 """
 Investigate ExtrudedCutouts, RevolvedCutouts, RefPlanes, and Threads type signatures.
 """
+
 import traceback
 
 import win32com.client as win32
@@ -14,6 +15,7 @@ if models.Count == 0:
     exit(1)
 
 model = models.Item(1)
+
 
 def dump_typeinfo(name, obj):
     """Get TypeInfo for a COM collection."""
@@ -33,23 +35,21 @@ def dump_typeinfo(name, obj):
             param_types = fd[2]
             ret_type = fd[8]  # return type
             invoke_kind = fd[3]  # 1=method, 2=propget, 4=propput
-            params_str = ', '.join(names[1:]) if len(names) > 1 else ''
-            if names[0].startswith(('Add', 'Create')):
+            params_str = ", ".join(names[1:]) if len(names) > 1 else ""
+            if names[0].startswith(("Add", "Create")):
                 # Get detailed param info
                 print(f"  ** [{i}] {names[0]}({params_str})")
                 print(f"       invkind={invoke_kind}, nParams={param_types}, retType={ret_type}")
                 # Try to get param type info from fd
-                if hasattr(fd, '__len__') and len(fd) > 2:
-                    cparams = fd[5] if len(fd) > 5 else '?'
-                print(
-                    f"       Full FuncDesc: "
-                    f"invkind={fd[3]}, cParams={cparams}"
-                )
-            elif not names[0].startswith(('Query', 'AddRef', 'Release', '_')):
+                if hasattr(fd, "__len__") and len(fd) > 2:
+                    cparams = fd[5] if len(fd) > 5 else "?"
+                print(f"       Full FuncDesc: invkind={fd[3]}, cParams={cparams}")
+            elif not names[0].startswith(("Query", "AddRef", "Release", "_")):
                 print(f"  [{i}] {names[0]}({params_str}) invkind={invoke_kind}")
     except Exception as e:
         print(f"  TypeInfo error: {e}")
         traceback.print_exc()
+
 
 # Investigate ExtrudedCutouts
 dump_typeinfo("ExtrudedCutouts", model.ExtrudedCutouts)

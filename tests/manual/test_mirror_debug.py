@@ -1,4 +1,5 @@
 """Debug: understand how features appear in the tree after box + extrude."""
+
 import sys
 
 sys.path.insert(0, "src")
@@ -14,7 +15,7 @@ for i in range(1, models.Count + 1):
     print(f"  Model[{i}]: Name={m.Name if hasattr(m, 'Name') else '?'}")
 
     # Check features within this model
-    if hasattr(m, 'Features'):
+    if hasattr(m, "Features"):
         feats = m.Features
         print(f"    Features.Count = {feats.Count}")
         for j in range(1, min(feats.Count + 1, 20)):
@@ -23,8 +24,12 @@ for i in range(1, models.Count + 1):
 
     # Check specific collections
     for coll_name in [
-        'ExtrudedProtrusions', 'ExtrudedCutouts',
-        'Rounds', 'Chamfers', 'Holes', 'MirrorCopies',
+        "ExtrudedProtrusions",
+        "ExtrudedCutouts",
+        "Rounds",
+        "Chamfers",
+        "Holes",
+        "MirrorCopies",
     ]:
         try:
             coll = getattr(m, coll_name)

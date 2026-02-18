@@ -2,6 +2,7 @@
 End-to-end test of the mirror copy tool through backend classes.
 Creates a box, a cylindrical protrusion off-center, then mirrors it.
 """
+
 import sys
 
 sys.path.insert(0, "src")

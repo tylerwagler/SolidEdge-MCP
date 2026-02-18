@@ -113,6 +113,7 @@ PARAMFLAG_FHASDEFAULT = 32
 # Type resolution
 # ---------------------------------------------------------------------------
 
+
 def resolve_type_desc(type_desc, typeinfo) -> str:
     """Resolve a TYPEDESC to a human-readable type string.
 
@@ -177,6 +178,7 @@ def param_flags_str(flags: int) -> str:
 # ---------------------------------------------------------------------------
 # Extraction functions
 # ---------------------------------------------------------------------------
+
 
 def extract_enum(typeinfo, typeattr) -> dict[str, int]:
     """Extract all members of an enum."""
@@ -381,11 +383,13 @@ def extract_module(typeinfo, typeattr) -> dict:
                 pflags = arg_desc[1] if len(arg_desc) > 1 else PARAMFLAG_FIN
                 pname = param_names[pi] if pi < len(param_names) else f"p{pi}"
                 ptype = resolve_type_desc(type_desc, typeinfo)
-                params.append({
-                    "name": pname,
-                    "type": ptype,
-                    "flags": param_flags_str(pflags),
-                })
+                params.append(
+                    {
+                        "name": pname,
+                        "type": ptype,
+                        "flags": param_flags_str(pflags),
+                    }
+                )
             functions[func_name] = {
                 "returns": ret_type,
                 "params": params,
@@ -404,6 +408,7 @@ def extract_module(typeinfo, typeattr) -> dict:
 # ---------------------------------------------------------------------------
 # Type library scraping
 # ---------------------------------------------------------------------------
+
 
 def find_typelibs(install_dir: str) -> list[Path]:
     """Find all .tlb files under the Solid Edge install directory."""
@@ -502,6 +507,7 @@ def scrape_typelib(tlb_path: Path) -> dict:
 # Summary generation
 # ---------------------------------------------------------------------------
 
+
 def generate_summary(data: dict, output_path: Path) -> None:
     """Generate a human-readable markdown summary."""
     meta = data["metadata"]
@@ -568,11 +574,9 @@ def generate_summary(data: dict, output_path: Path) -> None:
         desc = tlb_data.get("description", tlb_name)
         lines.append("---")
         lines.append(f"## {tlb_name}")
-        guid = tlb_data.get('guid', '?')
-        ver = tlb_data.get('version', '?')
-        lines.append(
-            f"**{desc}** (GUID: `{guid}`, v{ver})"
-        )
+        guid = tlb_data.get("guid", "?")
+        ver = tlb_data.get("version", "?")
+        lines.append(f"**{desc}** (GUID: `{guid}`, v{ver})")
         lines.append("")
 
         # Enums
@@ -587,11 +591,7 @@ def generate_summary(data: dict, output_path: Path) -> None:
                     f"{k}={v}"
                     for k, v in sorted(
                         members.items(),
-                        key=lambda x: (
-                            x[1]
-                            if isinstance(x[1], (int, float))
-                            else 0
-                        ),
+                        key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0,
                     )
                 ]
                 preview = ", ".join(member_strs[:5])
@@ -623,12 +623,9 @@ def generate_summary(data: dict, output_path: Path) -> None:
             for cc_name in sorted(coclasses.keys()):
                 cc = coclasses[cc_name]
                 iface_names = [i["name"] for i in cc.get("interfaces", [])]
-                clsid = cc.get('clsid', '?')
-                ifaces_str = ', '.join(iface_names)
-                lines.append(
-                    f"- **{cc_name}** (`{clsid}`): "
-                    f"{ifaces_str}"
-                )
+                clsid = cc.get("clsid", "?")
+                ifaces_str = ", ".join(iface_names)
+                lines.append(f"- **{cc_name}** (`{clsid}`): {ifaces_str}")
             lines.append("")
 
         # Aliases
@@ -763,8 +760,7 @@ def main():
     print("=" * 50)
     total_enums = sum(len(t.get("enums", {})) for t in typelibs.values())
     total_enum_values = sum(
-        sum(len(v) for v in t.get("enums", {}).values())
-        for t in typelibs.values()
+        sum(len(v) for v in t.get("enums", {}).values()) for t in typelibs.values()
     )
     total_interfaces = sum(len(t.get("interfaces", {})) for t in typelibs.values())
     total_methods = sum(

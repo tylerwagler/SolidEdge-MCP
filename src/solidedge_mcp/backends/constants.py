@@ -330,3 +330,64 @@ class SaveAsConstants:
 
     SaveAs = 0
     SaveCopyAs = 1
+
+
+class AssemblyFeaturePropertyConstants:
+    """Assembly feature property constants (from type library)"""
+
+    # Feature extent side
+    igAssemblyFeatureBothSides = 0
+    igAssemblyFeatureOneSide = 1
+
+    # Feature profile side
+    igAssemblyFeatureProfileLeft = 0
+    igAssemblyFeatureProfileRight = 1
+    igAssemblyFeatureProfileSymmetric = 2
+
+    # Assembly feature types
+    igAssemblyFeatureExtrudedCutout = 1
+    igAssemblyFeatureRevolvedCutout = 2
+    igAssemblyFeatureHole = 3
+    igAssemblyFeatureExtrudedProtrusion = 4
+    igAssemblyFeatureRevolvedProtrusion = 5
+    igAssemblyFeatureMirror = 6
+    igAssemblyFeaturePattern = 7
+
+
+class PatternTypeConstants:
+    """Pattern type constants (from type library)"""
+
+    igRectangularPattern = 1
+    igCircularPattern = 2
+    igCurvePattern = 3
+
+
+class PatternCurveAnchorSideConstants:
+    """Pattern curve anchor side constants (from type library)"""
+
+    igPatternAnchorLeft = 0
+    igPatternAnchorRight = 1
+    igPatternAnchorCenter = 2
+
+
+class PatternOffsetTypeConstants:
+    """Pattern offset type constants (from type library)"""
+
+    igPatternOffsetDistance = 0
+    igPatternOffsetPercentage = 1
+
+
+class PatternTransformTypeConstants:
+    """Pattern transform type constants (from type library)"""
+
+    igPatternTransformNone = 0
+    igPatternTransformScale = 1
+    igPatternTransformMirror = 2
+
+
+class PatternTransformRotateTypeConstants:
+    """Pattern transform rotate type constants (from type library)"""
+
+    igPatternRotateNone = 0
+    igPatternRotateAboutCurve = 1
+    igPatternRotateAboutPoint = 2

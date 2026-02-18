@@ -6,13 +6,17 @@ from . import (
     export,
     features,
     query,
+    resources,
     sheet_metal,
     sketching,
 )
 
 
 def register_tools(mcp):
-    """Register all tools with the MCP server instance."""
+    """Register all tools and resources with the MCP server instance."""
+    # Resources (read-only data endpoints)
+    resources.register(mcp)
+    # Tools (actions that modify state)
     connection.register(mcp)
     documents.register(mcp)
     sketching.register(mcp)

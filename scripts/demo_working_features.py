@@ -69,11 +69,7 @@ sketch_manager.draw_ellipse(0, 0, 0.01, 0.005, 45)
 print("  [OK] Drew decorative ellipse")
 
 # Add some spline curves for detail
-points1 = [
-    [0.02, 0.02],
-    [0.025, 0.025],
-    [0.02, 0.03]
-]
+points1 = [[0.02, 0.02], [0.025, 0.025], [0.02, 0.03]]
 sketch_manager.draw_spline(points1)
 print("  [OK] Drew spline curve")
 
@@ -99,15 +95,15 @@ print(f"  • Feature count: {count_result.get('count', 'unknown')}")
 # Mass properties
 mass_result = query_manager.get_mass_properties()
 if "error" not in mass_result:
-    volume = mass_result.get('volume_m3', 0)
-    area = mass_result.get('surface_area_m2', 0)
+    volume = mass_result.get("volume_m3", 0)
+    area = mass_result.get("surface_area_m2", 0)
     print(f"  • Volume: {volume:.6f} m³")
     print(f"  • Surface area: {area:.6f} m²")
-    com = mass_result.get('center_of_mass', {})
+    com = mass_result.get("center_of_mass", {})
     if com:
-        cx = com.get('x', 0)
-        cy = com.get('y', 0)
-        cz = com.get('z', 0)
+        cx = com.get("x", 0)
+        cy = com.get("y", 0)
+        cz = com.get("z", 0)
         print(f"  • Center of mass: ({cx:.4f}, {cy:.4f}, {cz:.4f})")
 
 # Bounding box

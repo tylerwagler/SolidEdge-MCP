@@ -17,11 +17,13 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
+
 def test_connection():
     """Test connecting to Solid Edge"""
     print("Testing connection to Solid Edge...")
     try:
         from solidedge_mcp.backends.connection import SolidEdgeConnection
+
         connection = SolidEdgeConnection()
         result = connection.connect(start_if_needed=True)
 
@@ -34,8 +36,10 @@ def test_connection():
     except Exception as e:
         print(f"[FAIL] Connection test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_create_simple_part():
     """Test creating a simple extruded part"""
@@ -112,8 +116,10 @@ def test_create_simple_part():
     except Exception as e:
         print(f"[FAIL] Part creation test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_query_operations():
     """Test querying a part"""
@@ -167,8 +173,10 @@ def test_query_operations():
     except Exception as e:
         print(f"[FAIL] Query test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def main():
     """Run all integration tests"""
@@ -212,6 +220,7 @@ def main():
         print("  - COM automation permissions")
         print("  - Missing dependencies")
         return 1
+
 
 if __name__ == "__main__":
     try:

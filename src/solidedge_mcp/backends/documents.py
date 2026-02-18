@@ -459,6 +459,107 @@ class DocumentManager:
                 pass
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    def save_copy_as(self, file_path: str) -> dict[str, Any]:
+        """
+        Save a copy of the active document to a new file without changing the active file.
+
+        Unlike SaveAs, this does not change the active document's filename.
+
+        Args:
+            file_path: Full path for the copy (must include extension, e.g. .par, .asm)
+
+        Returns:
+            Dict with status and file info
+        """
+        try:
+            if not self.active_document:
+                return {"error": "No active document"}
+
+            self.active_document.SaveCopyAs(file_path)
+
+            return {
+                "status": "copy_saved",
+                "path": file_path,
+                "active_document": self.active_document.Name,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def open_with_template(self, file_path: str, template: str) -> dict[str, Any]:
+        """
+        Open a file and map it to a specific template.
+
+        Uses Documents.OpenWithTemplate for more control over how a file
+        is opened, particularly useful for imported files.
+
+        Args:
+            file_path: Path to the file to open
+            template: Path to the template file
+
+        Returns:
+            Dict with open status
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"error": f"File not found: {file_path}"}
+
+            app = self.connection.get_application()
+            doc = app.Documents.OpenWithTemplate(file_path, template)
+            self.active_document = doc
+
+            return {
+                "status": "opened_with_template",
+                "path": file_path,
+                "template": template,
+                "name": doc.Name,
+                "type": self._get_document_type(doc),
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def open_with_file_open_dialog(
+        self, filename: str | None = None, dialog_title: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Open a file using Solid Edge's built-in file open dialog.
+
+        Triggers the native file open dialog. Useful for interactive use cases
+        where the user should select the file.
+
+        Args:
+            filename: Optional initial filename/filter for the dialog
+            dialog_title: Optional custom title for the dialog
+
+        Returns:
+            Dict with status
+        """
+        try:
+            app = self.connection.get_application()
+
+            # Build optional variant args
+            kwargs = {}
+            if filename is not None:
+                kwargs["Filename"] = filename
+            if dialog_title is not None:
+                kwargs["DialogTitle"] = dialog_title
+
+            if kwargs:
+                doc = app.Documents.OpenWithFileOpenDialog(**kwargs)
+            else:
+                doc = app.Documents.OpenWithFileOpenDialog()
+
+            if doc is not None:
+                self.active_document = doc
+                return {
+                    "status": "opened",
+                    "name": doc.Name,
+                    "type": self._get_document_type(doc),
+                }
+            else:
+                return {"status": "cancelled", "message": "User cancelled the dialog"}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
     def _get_document_type(self, doc) -> str:
         """Determine document type"""
         try:

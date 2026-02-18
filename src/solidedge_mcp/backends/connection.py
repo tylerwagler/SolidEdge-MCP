@@ -463,3 +463,132 @@ class SolidEdgeConnection:
             return {"status": "set", "parameter": parameter, "value": value}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def convert_by_file_path(
+        self, input_path: str, output_path: str
+    ) -> dict[str, Any]:
+        """
+        Batch-convert CAD files between formats.
+
+        Uses Application.ConvertByFilePath to convert individual files or
+        entire folders. The format is determined by file extensions.
+
+        Args:
+            input_path: Input file or folder path
+            output_path: Output file or folder path
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.ConvertByFilePath(input_path, output_path)
+            return {
+                "status": "converted",
+                "input": input_path,
+                "output": output_path,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_default_template_path(self, doc_type: int) -> dict[str, Any]:
+        """
+        Get the default template file path for a document type.
+
+        Args:
+            doc_type: Document type constant (1=Part, 2=Draft, 3=Assembly, 4=SheetMetal)
+
+        Returns:
+            Dict with template path
+        """
+        try:
+            self.ensure_connected()
+            path = self.application.GetDefaultTemplatePath(doc_type)
+            return {"status": "success", "doc_type": doc_type, "template_path": path}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def set_default_template_path(self, doc_type: int, template_path: str) -> dict[str, Any]:
+        """
+        Set the default template file path for a document type.
+
+        Args:
+            doc_type: Document type constant (1=Part, 2=Draft, 3=Assembly, 4=SheetMetal)
+            template_path: Path to the template file
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.SetDefaultTemplatePath(doc_type, template_path)
+            return {
+                "status": "set",
+                "doc_type": doc_type,
+                "template_path": template_path,
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def arrange_windows(self, style: int = 1) -> dict[str, Any]:
+        """
+        Arrange document windows in the Solid Edge application.
+
+        Args:
+            style: Window arrangement style
+                   (1=Tiled, 2=Horizontal, 4=Vertical, 8=Cascade)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            style_names = {1: "Tiled", 2: "Horizontal", 4: "Vertical", 8: "Cascade"}
+            self.application.ArrangeWindows(style)
+            return {
+                "status": "arranged",
+                "style": style,
+                "style_name": style_names.get(style, f"Unknown({style})"),
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def get_active_command(self) -> dict[str, Any]:
+        """
+        Get the currently active command in Solid Edge.
+
+        Returns:
+            Dict with active command info
+        """
+        try:
+            self.ensure_connected()
+            cmd = self.application.ActiveCommand
+            result: dict[str, Any] = {"status": "success"}
+            if cmd is not None:
+                result["has_active_command"] = True
+                with contextlib.suppress(Exception):
+                    result["name"] = cmd.Name
+                with contextlib.suppress(Exception):
+                    result["id"] = cmd.ID
+            else:
+                result["has_active_command"] = False
+            return result
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def run_macro(self, filename: str) -> dict[str, Any]:
+        """
+        Run a VBA macro file in Solid Edge.
+
+        Args:
+            filename: Path to the VBA macro file (.bas, .exe, etc.)
+
+        Returns:
+            Dict with status
+        """
+        try:
+            self.ensure_connected()
+            self.application.RunMacro(filename)
+            return {"status": "executed", "filename": filename}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
