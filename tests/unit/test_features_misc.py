@@ -368,21 +368,48 @@ class TestCreateGusset:
 
 class TestCreateThread:
     def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        face = MagicMock()
+        _, _, doc, _, model, _ = managers
+        cyl_face = MagicMock()
+        end_face = MagicMock()
         faces = MagicMock()
         faces.Count = 6
-        faces.Item.return_value = face
+        faces.Item.return_value = cyl_face
         model.Body.Faces.return_value = faces
+
+        # Mock geometry for auto-diameter detection
+        cyl_face.Geometry.Radius = 0.005
+
+        # Mock _find_cylinder_end_face to return end_face
+        cyl_edges = MagicMock()
+        cyl_edges.Count = 1
+        cyl_edge = MagicMock()
+        cyl_edges.Item.return_value = cyl_edge
+        cyl_face.Edges = cyl_edges
+        # The end_face shares an edge with cyl_face
+        end_edges = MagicMock()
+        end_edges.Count = 1
+        end_edges.Item.return_value = cyl_edge  # same edge object
+        end_face.Edges = end_edges
+        # Make faces.Item return end_face for second call (fi=1 candidate)
+        # but cyl_face for the thread target (face_index+1=3)
+        def faces_item_side_effect(idx):
+            if idx == 3:  # face_index=2, 1-based=3
+                return cyl_face
+            return end_face
+        faces.Item.side_effect = faces_item_side_effect
+
+        # Mock HoleDataCollection
+        hole_data = MagicMock()
+        doc.HoleDataCollection.Add.return_value = hole_data
 
         threads = MagicMock()
         model.Threads = threads
 
-        result = feature_mgr.create_thread(2, 0.001)
+        result = feature_mgr.create_thread(2)
         assert result["status"] == "created"
-        assert result["type"] == "thread"
+        assert result["type"] == "cosmetic_thread"
         assert result["face_index"] == 2
-        threads.Add.assert_called_once_with(face, 0.001)
+        threads.Add.assert_called_once()
 
     def test_invalid_face(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
@@ -392,6 +419,7 @@ class TestCreateThread:
 
         result = feature_mgr.create_thread(5)
         assert "error" in result
+        assert "Invalid face index" in result["error"]
 
     def test_no_base_feature(self, feature_mgr, managers):
         _, _, doc, _, _, _ = managers
@@ -931,14 +959,41 @@ class TestCreateDimpleEx:
 
 class TestCreateThreadEx:
     def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
+        _, _, doc, _, model, _ = managers
+        cyl_face = MagicMock()
+        end_face = MagicMock()
+        faces = MagicMock()
+        faces.Count = 2
+        # face_index=0 → 1-based=1 → cyl_face; fi=2 → end_face (candidate)
+        def faces_item_side_effect(idx):
+            if idx == 1:
+                return cyl_face
+            return end_face
+        faces.Item.side_effect = faces_item_side_effect
+        model.Body.Faces.return_value = faces
+
+        cyl_face.Geometry.Radius = 0.005
+        cyl_edges = MagicMock()
+        cyl_edges.Count = 1
+        cyl_edge = MagicMock()
+        cyl_edges.Item.return_value = cyl_edge
+        cyl_face.Edges = cyl_edges
+        end_edges = MagicMock()
+        end_edges.Count = 1
+        end_edges.Item.return_value = cyl_edge
+        end_face.Edges = end_edges
+
+        hole_data = MagicMock()
+        doc.HoleDataCollection.Add.return_value = hole_data
+
+        threads = MagicMock()
+        model.Threads = threads
+
         result = feature_mgr.create_thread_ex(0, 0.01, 0.001)
         assert result["status"] == "created"
-        assert result["type"] == "thread_ex"
+        assert result["type"] == "physical_thread"
         assert result["face_index"] == 0
-        assert result["depth"] == 0.01
-        assert result["pitch"] == 0.001
-        model.Threads.AddEx.assert_called_once()
+        threads.AddEx.assert_called_once()
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -954,7 +1009,7 @@ class TestCreateThreadEx:
         model.Body.Faces.return_value = faces
         result = feature_mgr.create_thread_ex(5, 0.01)
         assert "error" in result
-        assert "Invalid face_index" in result["error"]
+        assert "Invalid face index" in result["error"]
 
 
 # ============================================================================
