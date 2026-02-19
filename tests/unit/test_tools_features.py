@@ -57,10 +57,26 @@ from solidedge_mcp.tools.features import (
 )
 
 
+_FEATURE_SUBMODULES = [
+    "solidedge_mcp.tools.features._extrude",
+    "solidedge_mcp.tools.features._revolve",
+    "solidedge_mcp.tools.features._cutout",
+    "solidedge_mcp.tools.features._loft_sweep",
+    "solidedge_mcp.tools.features._surfaces",
+    "solidedge_mcp.tools.features._primitives",
+    "solidedge_mcp.tools.features._ref_planes",
+    "solidedge_mcp.tools.features._rounds_chamfers",
+    "solidedge_mcp.tools.features._holes",
+    "solidedge_mcp.tools.features._sheet_metal",
+    "solidedge_mcp.tools.features._misc",
+]
+
+
 @pytest.fixture
 def mock_mgr(monkeypatch):
     mgr = MagicMock()
-    monkeypatch.setattr("solidedge_mcp.tools.features.feature_manager", mgr)
+    for mod in _FEATURE_SUBMODULES:
+        monkeypatch.setattr(f"{mod}.feature_manager", mgr)
     return mgr
 
 
