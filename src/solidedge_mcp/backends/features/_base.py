@@ -13,6 +13,9 @@ from ..constants import (
     FaceQueryConstants,
     LoftSweepConstants,
 )
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class FeatureManagerBase:
@@ -155,8 +158,10 @@ class FeatureManagerBase:
                 return err
             name = getattr(feat, "Name", f"Feature_{index}")
             feat.Delete()
+            _logger.info(f"Deleted feature: {name} (index={index})")
             return {"status": "deleted", "feature_name": name, "index": index}
         except Exception as e:
+            _logger.error(f"Delete feature failed: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def feature_suppress(self, index: int) -> dict[str, Any]:

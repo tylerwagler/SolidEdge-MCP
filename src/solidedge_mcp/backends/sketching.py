@@ -10,6 +10,9 @@ import traceback
 from typing import Any
 
 from .constants import FaceQueryConstants, ProfileValidationConstants
+from .logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class SketchManager:
@@ -21,6 +24,16 @@ class SketchManager:
         self.active_profile = None
         self.active_refaxis = None  # Reference axis for revolve operations
         self.accumulated_profiles = []  # For loft/sweep multi-profile operations
+        self._last_document_handle = None  # Track which document we're working with
+
+    def clear_state(self) -> None:
+        """Clear all sketch state. Call this when switching documents."""
+        _logger.debug("Clearing sketch state")
+        self.active_sketch = None
+        self.active_profile = None
+        self.active_refaxis = None
+        self.accumulated_profiles.clear()
+        self._last_document_handle = None
 
     def create_sketch(self, plane: str = "Top") -> dict[str, Any]:
         """
@@ -72,12 +85,14 @@ class SketchManager:
             self.active_profile = profile
             self.active_refaxis = None  # Clear any previous axis
 
+            _logger.info(f"Sketch created on plane: {plane}")
             return {
                 "status": "created",
                 "plane": plane,
                 "sketch_id": profile_set.Name if hasattr(profile_set, "Name") else "sketch",
             }
         except Exception as e:
+            _logger.error(f"Failed to create sketch on plane {plane}: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_sketch_on_plane_index(self, plane_index: int) -> dict[str, Any]:
@@ -798,8 +813,13 @@ class SketchManager:
             # remains valid even after End() is called.
             # Only clear it when a new sketch is created.
 
+            _logger.info(
+                f"Sketch closed (end_flags={end_flags}, "
+                f"accumulated_profiles={len(self.accumulated_profiles)})"
+            )
             return result
         except Exception as e:
+            _logger.error(f"Failed to close sketch: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def get_sketch_info(self) -> dict[str, Any]:

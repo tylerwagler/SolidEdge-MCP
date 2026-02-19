@@ -15,6 +15,9 @@ from ..constants import (
     KeyPointExtentConstants,
     OffsetSideConstants,
 )
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class SheetMetalMixin:

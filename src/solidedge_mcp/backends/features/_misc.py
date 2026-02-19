@@ -12,6 +12,9 @@ from ..constants import (
     DirectionConstants,
     FaceQueryConstants,
 )
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class MiscFeaturesMixin:

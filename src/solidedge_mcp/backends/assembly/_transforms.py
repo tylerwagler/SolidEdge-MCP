@@ -4,6 +4,10 @@ import math
 import traceback
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class TransformsMixin:
     """Mixin providing component transform/move/rotate methods."""
@@ -22,6 +26,7 @@ class TransformsMixin:
             Dict with status
         """
         try:
+            _logger.info(f"Updating component position: index={component_index}, pos=({x},{y},{z})")
             doc = self.doc_manager.get_active_document()
             occurrences = doc.Occurrences
 
@@ -49,6 +54,7 @@ class TransformsMixin:
                     "note": "Position update may not be available for grounded components",
                 }
         except Exception as e:
+            _logger.error(f"Failed to update component position: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def occurrence_move(
@@ -69,6 +75,7 @@ class TransformsMixin:
             Dict with status
         """
         try:
+            _logger.info(f"Moving component: index={component_index}, delta=({dx},{dy},{dz})")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -88,6 +95,7 @@ class TransformsMixin:
 
             return {"status": "moved", "component_index": component_index, "delta": [dx, dy, dz]}
         except Exception as e:
+            _logger.error(f"Failed to move component: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def occurrence_rotate(
@@ -119,6 +127,7 @@ class TransformsMixin:
         try:
             import math
 
+            _logger.info(f"Rotating component: index={component_index}, angle={angle}")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -144,6 +153,7 @@ class TransformsMixin:
                 "angle_degrees": angle,
             }
         except Exception as e:
+            _logger.error(f"Failed to rotate component: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def set_component_transform(
@@ -177,6 +187,7 @@ class TransformsMixin:
         try:
             import math
 
+            _logger.info(f"Setting component transform: index={component_index}")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -204,6 +215,7 @@ class TransformsMixin:
                 "angles_degrees": [angle_x, angle_y, angle_z],
             }
         except Exception as e:
+            _logger.error(f"Failed to set component transform: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def set_component_origin(
@@ -224,6 +236,7 @@ class TransformsMixin:
             Dict with status
         """
         try:
+            _logger.info(f"Setting component origin: index={component_index}, pos=({x},{y},{z})")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -243,6 +256,7 @@ class TransformsMixin:
 
             return {"status": "updated", "component_index": component_index, "origin": [x, y, z]}
         except Exception as e:
+            _logger.error(f"Failed to set component origin: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def mirror_component(self, component_index: int, plane_index: int) -> dict[str, Any]:
@@ -259,6 +273,7 @@ class TransformsMixin:
             Dict with status
         """
         try:
+            _logger.info(f"Mirroring component: index={component_index}, plane={plane_index}")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -287,6 +302,7 @@ class TransformsMixin:
                 "plane_index": plane_index,
             }
         except Exception as e:
+            _logger.error(f"Failed to mirror component: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def put_transform_euler(
@@ -318,6 +334,7 @@ class TransformsMixin:
             Dict with status
         """
         try:
+            _logger.info(f"Setting Euler transform: index={component_index}")
             doc = self.doc_manager.get_active_document()
             occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
             if err:
@@ -335,6 +352,7 @@ class TransformsMixin:
                 "angles_degrees": [rx, ry, rz],
             }
         except Exception as e:
+            _logger.error(f"Failed to set Euler transform: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def put_origin(
@@ -359,6 +377,7 @@ class TransformsMixin:
             Dict with status
         """
         try:
+            _logger.info(f"Setting origin: index={component_index}, pos=({x},{y},{z})")
             doc = self.doc_manager.get_active_document()
             occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
             if err:
@@ -372,4 +391,5 @@ class TransformsMixin:
                 "origin": [x, y, z],
             }
         except Exception as e:
+            _logger.error(f"Failed to set origin: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}

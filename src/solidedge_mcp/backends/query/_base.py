@@ -3,6 +3,9 @@ Base class for QueryManager providing constructor and shared helpers.
 """
 
 from ..constants import FaceQueryConstants
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class QueryManagerBase:

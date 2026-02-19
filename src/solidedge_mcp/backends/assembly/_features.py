@@ -9,6 +9,9 @@ from ..constants import (
     AssemblyFeaturePropertyConstants,
     ExtentTypeConstants,
 )
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class AssemblyFeaturesMixin:
@@ -30,6 +33,10 @@ class AssemblyFeaturesMixin:
             Dict with status
         """
         try:
+            _logger.info(
+                "Creating component pattern: index=%d, count=%d, spacing=%s",
+                component_index, count, spacing,
+            )
             doc = self.doc_manager.get_active_document()
             occurrences = doc.Occurrences
 
@@ -69,6 +76,7 @@ class AssemblyFeaturesMixin:
                 "placed_names": placed,
             }
         except Exception as e:
+            _logger.error(f"Failed to create component pattern: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def _get_assembly_features(self):
@@ -85,10 +93,12 @@ class AssemblyFeaturesMixin:
             options: Recompute options (0 = default)
         """
         try:
+            _logger.info(f"Recomputing assembly features with options={options}")
             _doc, af = self._get_assembly_features()
             af.Recompute(options)
             return {"status": "recomputed", "options": options}
         except Exception as e:
+            _logger.error(f"Failed to recompute assembly features: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def _map_extent_type(self, extent_type: str) -> int:
@@ -139,6 +149,10 @@ class AssemblyFeaturesMixin:
             distance: Cutout depth in meters (for Finite)
         """
         try:
+            _logger.info(
+                "Creating assembly extruded cutout: dist=%s, extent=%s",
+                distance, extent_type,
+            )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if not profiles:
@@ -167,6 +181,7 @@ class AssemblyFeaturesMixin:
                 "distance": distance,
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly extruded cutout: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly_revolved_cutout(
@@ -190,6 +205,7 @@ class AssemblyFeaturesMixin:
             angle: Revolution angle in degrees (for Finite)
         """
         try:
+            _logger.info(f"Creating assembly revolved cutout: angle={angle}, extent={extent_type}")
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if not profiles:
@@ -219,6 +235,7 @@ class AssemblyFeaturesMixin:
                 "angle": angle,
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly revolved cutout: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly_hole(
@@ -240,6 +257,7 @@ class AssemblyFeaturesMixin:
             depth: Hole depth in meters (for Finite)
         """
         try:
+            _logger.info(f"Creating assembly hole: depth={depth}, extent={extent_type}")
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if not profiles:
@@ -268,6 +286,7 @@ class AssemblyFeaturesMixin:
                 "depth": depth,
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly hole: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly_extruded_protrusion(
@@ -289,6 +308,10 @@ class AssemblyFeaturesMixin:
             distance: Extrusion depth in meters (for Finite)
         """
         try:
+            _logger.info(
+                "Creating assembly extruded protrusion: dist=%s, extent=%s",
+                distance, extent_type,
+            )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if not profiles:
@@ -314,6 +337,7 @@ class AssemblyFeaturesMixin:
                 "distance": distance,
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly extruded protrusion: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly_revolved_protrusion(
@@ -335,6 +359,10 @@ class AssemblyFeaturesMixin:
             angle: Revolution angle in degrees (for Finite)
         """
         try:
+            _logger.info(
+                "Creating assembly revolved protrusion: angle=%s, extent=%s",
+                angle, extent_type,
+            )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if not profiles:
@@ -361,6 +389,7 @@ class AssemblyFeaturesMixin:
                 "angle": angle,
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly revolved protrusion: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly_mirror(
@@ -378,6 +407,10 @@ class AssemblyFeaturesMixin:
             mirror_type: Mirror option from FeaturePropertyConstants
         """
         try:
+            _logger.info(
+                "Creating assembly mirror: features=%s, plane=%d",
+                feature_indices, plane_index,
+            )
             doc, af = self._get_assembly_features()
 
             # Get the mirror plane
@@ -414,6 +447,7 @@ class AssemblyFeaturesMixin:
                 "plane_index": plane_index,
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly mirror: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly_pattern(
@@ -429,6 +463,10 @@ class AssemblyFeaturesMixin:
             pattern_type: 'Rectangular' or 'Circular'
         """
         try:
+            _logger.info(
+                "Creating assembly pattern: features=%s, type=%s",
+                feature_indices, pattern_type,
+            )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
 
@@ -469,6 +507,7 @@ class AssemblyFeaturesMixin:
                 "num_features": len(features_to_pattern),
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly pattern: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly_swept_protrusion(
@@ -487,6 +526,10 @@ class AssemblyFeaturesMixin:
             num_cross_sections: Number of cross-section profiles
         """
         try:
+            _logger.info(
+                "Creating assembly swept protrusion: traces=%d, sections=%d",
+                num_trace_curves, num_cross_sections,
+            )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if len(profiles) < num_trace_curves + num_cross_sections:
@@ -521,4 +564,5 @@ class AssemblyFeaturesMixin:
                 "num_cross_sections": num_cross_sections,
             }
         except Exception as e:
+            _logger.error(f"Failed to create assembly swept protrusion: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}

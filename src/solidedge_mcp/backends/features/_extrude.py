@@ -7,6 +7,9 @@ from ..constants import (
     DirectionConstants,
     FeatureOperationConstants,
 )
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class ExtrudeMixin:
@@ -58,6 +61,7 @@ class ExtrudeMixin:
             # Clear accumulated profiles (consumed by this feature)
             self.sketch_manager.clear_accumulated_profiles()
 
+            _logger.info(f"Created extrusion: distance={distance}m, direction={direction}")
             return {
                 "status": "created",
                 "type": "extrude",
@@ -66,6 +70,7 @@ class ExtrudeMixin:
                 "direction": direction,
             }
         except Exception as e:
+            _logger.error(f"Extrude failed: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_extrude_symmetric(self, distance: float) -> dict[str, Any]:

@@ -75,7 +75,9 @@ def draw(
            | 'ellipse' | 'spline' | 'arc_3pt' | 'circle_2pt'
            | 'circle_3pt' | 'point' | 'construction_line'
 
-    Coordinates in meters, angles in degrees.
+    All coordinate parameters (x1, y1, x2, y2, center_x, center_y, etc.)
+    are in meters. All angle parameters (start_angle, end_angle, angle,
+    angle_degrees) are in degrees.
     """
     match shape:
         case "line":
@@ -148,7 +150,9 @@ def sketch_modify(
       | 'mirror' | 'paste' | 'mirror_spline' | 'offset_2d'
       | 'clean'
 
-    - clean: Remove duplicate, small, or invalid geometry
+    All numeric parameters (radius, distance, coordinates, angles,
+    scale_factor, offset_distance, small_tolerance) are in meters
+    except angle_degrees which is in degrees.
     """
     match action:
         case "fillet":

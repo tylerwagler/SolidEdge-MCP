@@ -4,6 +4,9 @@ import traceback
 from typing import Any
 
 from ..constants import RenderModeConstants
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class ViewModel:

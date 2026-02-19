@@ -5,6 +5,10 @@ import os
 import traceback
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class QueryMixin:
     """Mixin providing assembly query/interrogation methods."""

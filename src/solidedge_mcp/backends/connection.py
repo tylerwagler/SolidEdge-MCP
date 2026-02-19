@@ -10,6 +10,10 @@ from typing import Any
 
 import win32com.client
 
+from .logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class SolidEdgeConnection:
     """Manages connection to Solid Edge application"""
@@ -33,7 +37,7 @@ class SolidEdgeConnection:
                 try:
                     # Try to connect to existing instance
                     self.application = win32com.client.GetActiveObject("SolidEdge.Application")
-                    print("Connected to existing Solid Edge instance")
+                    _logger.info("Connected to existing Solid Edge instance")
                 except Exception:
                     if start_if_needed:
                         # Start new instance with early binding if possible
@@ -46,7 +50,7 @@ class SolidEdgeConnection:
                             self.application = win32com.client.Dispatch("SolidEdge.Application")
 
                         self.application.Visible = True
-                        print("Started new Solid Edge instance")
+                        _logger.info("Started new Solid Edge instance")
                     else:
                         raise Exception(
                             "No Solid Edge instance found and start_if_needed=False"
@@ -65,12 +69,14 @@ class SolidEdgeConnection:
             }
         except Exception as e:
             self._is_connected = False
+            _logger.error(f"Connection failed: {e}")
             return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
 
     def disconnect(self) -> dict[str, Any]:
         """Disconnect from Solid Edge (does not close the application)"""
         self.application = None
         self._is_connected = False
+        _logger.info("Disconnected from Solid Edge")
         return {"status": "disconnected"}
 
     def get_info(self) -> dict[str, Any]:
@@ -131,10 +137,12 @@ class SolidEdgeConnection:
             self.application = None
             self._is_connected = False
 
+            _logger.info("Solid Edge application quit")
             return {"status": "quit", "message": "Solid Edge has been closed"}
         except Exception as e:
             self.application = None
             self._is_connected = False
+            _logger.error(f"Failed to quit Solid Edge: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def get_process_info(self) -> dict[str, Any]:

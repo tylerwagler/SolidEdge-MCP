@@ -10,14 +10,24 @@ import traceback
 from typing import Any
 
 from .constants import DocumentTypeConstants
+from .logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class DocumentManager:
     """Manages Solid Edge documents"""
 
-    def __init__(self, connection):
+    def __init__(self, connection, sketch_manager=None):
         self.connection = connection
         self.active_document: Any | None = None
+        # Optional reference to clear sketch state on doc switch
+        self.sketch_manager = sketch_manager
+
+    def _clear_sketch_state(self) -> None:
+        """Clear sketch manager state to prevent stale profile references."""
+        if self.sketch_manager:
+            self.sketch_manager.clear_state()
 
     def create_part(self, template: str | None = None) -> dict[str, Any]:
         """Create a new part document"""
@@ -29,8 +39,10 @@ class DocumentManager:
             else:
                 doc = app.Documents.Add("SolidEdge.PartDocument")
 
+            self._clear_sketch_state()
             self.active_document = doc
 
+            _logger.info(f"Created Part document: {doc.Name}")
             return {
                 "status": "created",
                 "type": "Part",
@@ -38,6 +50,7 @@ class DocumentManager:
                 "path": doc.FullName if doc.FullName else "untitled",
             }
         except Exception as e:
+            _logger.error(f"Failed to create Part document: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_assembly(self, template: str | None = None) -> dict[str, Any]:
@@ -50,8 +63,10 @@ class DocumentManager:
             else:
                 doc = app.Documents.Add("SolidEdge.AssemblyDocument")
 
+            self._clear_sketch_state()
             self.active_document = doc
 
+            _logger.info(f"Created Assembly document: {doc.Name}")
             return {
                 "status": "created",
                 "type": "Assembly",
@@ -59,6 +74,7 @@ class DocumentManager:
                 "path": doc.FullName if doc.FullName else "untitled",
             }
         except Exception as e:
+            _logger.error(f"Failed to create Assembly document: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_sheet_metal(self, template: str | None = None) -> dict[str, Any]:
@@ -71,8 +87,10 @@ class DocumentManager:
             else:
                 doc = app.Documents.Add("SolidEdge.SheetMetalDocument")
 
+            self._clear_sketch_state()
             self.active_document = doc
 
+            _logger.info(f"Created SheetMetal document: {doc.Name}")
             return {
                 "status": "created",
                 "type": "SheetMetal",
@@ -80,6 +98,7 @@ class DocumentManager:
                 "path": doc.FullName if doc.FullName else "untitled",
             }
         except Exception as e:
+            _logger.error(f"Failed to create SheetMetal document: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_draft(self, template: str | None = None) -> dict[str, Any]:
@@ -92,8 +111,10 @@ class DocumentManager:
             else:
                 doc = app.Documents.Add("SolidEdge.DraftDocument")
 
+            self._clear_sketch_state()
             self.active_document = doc
 
+            _logger.info(f"Created Draft document: {doc.Name}")
             return {
                 "status": "created",
                 "type": "Draft",
@@ -101,6 +122,7 @@ class DocumentManager:
                 "path": doc.FullName if doc.FullName else "untitled",
             }
         except Exception as e:
+            _logger.error(f"Failed to create Draft document: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def open_document(self, file_path: str) -> dict[str, Any]:
@@ -111,8 +133,10 @@ class DocumentManager:
 
             app = self.connection.get_application()
             doc = app.Documents.Open(file_path)
+            self._clear_sketch_state()
             self.active_document = doc
 
+            _logger.info(f"Opened document: {file_path}")
             return {
                 "status": "opened",
                 "path": file_path,
@@ -120,6 +144,7 @@ class DocumentManager:
                 "type": self._get_document_type(doc),
             }
         except Exception as e:
+            _logger.error(f"Failed to open document {file_path}: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def save_document(self, file_path: str | None = None) -> dict[str, Any]:
@@ -130,15 +155,18 @@ class DocumentManager:
 
             if file_path:
                 self.active_document.SaveAs(file_path)
+                _logger.info(f"Saved document to: {file_path}")
                 return {"status": "saved", "path": file_path, "name": self.active_document.Name}
             else:
                 self.active_document.Save()
+                _logger.info(f"Saved document: {self.active_document.Name}")
                 return {
                     "status": "saved",
                     "path": self.active_document.FullName,
                     "name": self.active_document.Name,
                 }
         except Exception as e:
+            _logger.error(f"Failed to save document: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def close_document(self, save: bool = True) -> dict[str, Any]:
@@ -166,11 +194,16 @@ class DocumentManager:
             self.active_document.Close()
             self.active_document = None
 
+            # Clear sketch state since the document is gone
+            if self.sketch_manager:
+                self.sketch_manager.clear_state()
+
             # Re-enable alerts
             if not save:
                 with contextlib.suppress(Exception):
                     app.DisplayAlerts = True
 
+            _logger.info(f"Closed document: {doc_name} (saved={save})")
             return {"status": "closed", "document": doc_name, "saved": save}
         except Exception as e:
             # Make sure alerts are re-enabled
@@ -208,6 +241,9 @@ class DocumentManager:
         """
         Activate a specific open document by name or index.
 
+        Note: This clears the sketch manager's active profile and accumulated profiles
+        to prevent using stale sketch state from a previous document.
+
         Args:
             name_or_index: Document name (string) or 0-based index (int)
 
@@ -239,8 +275,10 @@ class DocumentManager:
                     return {"error": f"Document '{name_or_index}' not found"}
 
             doc.Activate()
+            self._clear_sketch_state()
             self.active_document = doc
 
+            _logger.info(f"Activated document: {doc.Name}")
             return {
                 "status": "activated",
                 "name": doc.Name,

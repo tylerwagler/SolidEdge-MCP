@@ -29,9 +29,12 @@ def measure(
 
     type: 'distance' (default) | 'angle'
 
+    All coordinate parameters (x1, y1, z1, etc.) are in meters.
+
     - distance: Euclidean distance between (x1,y1,z1) and (x2,y2,z2).
+      Returns distance in meters.
     - angle: Angle at vertex (x2,y2,z2) between rays to
-      (x1,y1,z1) and (x3,y3,z3).
+      (x1,y1,z1) and (x3,y3,z3). Returns angle in degrees.
     """
     match type:
         case "distance":
@@ -138,7 +141,7 @@ def manage_material(
             | 'get_library'
 
     - set: Assign material `material_name` to active part.
-    - set_density: Set material density for mass calculations.
+    - set_density: Set material density in kg/m³ for mass calculations.
     - set_by_name: Look up material by name and apply it.
     - get_library: Get the full material library with names,
       densities, and properties.
@@ -315,26 +318,27 @@ def edit_feature_extent(
       `feature_name`.
     - set_direction1: Set Direction 1 extent on `feature_name`
       (extent_type: 13=Finite, 16=ThroughAll, 44=None;
-      distance).
+      distance in meters).
     - get_direction2: Get Direction 2 extent params.
-    - set_direction2: Set Direction 2 extent.
+    - set_direction2: Set Direction 2 extent (distance in meters).
     - get_thin_wall: Get thin wall options from `feature_name`.
     - set_thin_wall: Set thin wall options (wall_type,
-      thickness1, thickness2).
+      thickness1 in meters, thickness2 in meters).
     - get_from_face: Get 'from face' offset data.
-    - set_from_face: Set 'from face' offset distance.
+    - set_from_face: Set 'from face' offset distance in meters.
     - get_body_array: Get multi-body references from feature.
     - set_body_array: Set body array using 0-based
       `body_indices`.
     - get_to_face: Get 'to face' offset data.
     - set_to_face: Set 'to face' offset (offset_side:
-      1=igLeft, 2=igRight; distance).
+      1=igLeft, 2=igRight; distance in meters).
     - get_direction1_treatment: Get Direction 1 treatment
       (crown/draft).
     - apply_direction1_treatment: Apply Direction 1 treatment
-      with treatment_type, draft_side, draft_angle, crown_type,
-      crown_side, crown_curvature_side,
-      crown_radius_or_offset, crown_takeoff_angle.
+      with treatment_type, draft_side, draft_angle (degrees),
+      crown_type, crown_side, crown_curvature_side,
+      crown_radius_or_offset (meters), crown_takeoff_angle
+      (degrees).
     """
     match property:
         case "get_direction1":
@@ -510,14 +514,17 @@ def query_body(
       | 'vertices' | 'shell_info' | 'point_inside'
       | 'user_physical_properties' | 'facet_data'
 
+    All coordinate parameters (direction_x/y/z, origin_x/y/z,
+    x/y/z) are in meters. tolerance is in meters.
+
     - extreme_point: Get extreme point in direction.
-    - faces_by_ray: Ray-cast to find hit faces.
+    - faces_by_ray: Ray-cast from origin (meters) in direction.
     - shells: List all shells with is_closed and volume.
-    - vertices: Get all vertices with XYZ coordinates.
+    - vertices: Get all vertices with XYZ in meters.
     - shell_info: Get shell topology at `shell_index`.
-    - point_inside: Test if (x,y,z) is inside body.
+    - point_inside: Test if (x,y,z) meters is inside body.
     - user_physical_properties: Get user-overridden props.
-    - facet_data: Get tessellation/mesh data (tolerance).
+    - facet_data: Get tessellation/mesh data (tolerance meters).
     """
     match property:
         case "extreme_point":

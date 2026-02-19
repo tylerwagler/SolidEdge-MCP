@@ -13,6 +13,7 @@ from solidedge_mcp.backends.sketching import SketchManager
 connection = SolidEdgeConnection()
 doc_manager = DocumentManager(connection)
 sketch_manager = SketchManager(doc_manager)
+doc_manager.sketch_manager = sketch_manager  # Provide reference for sketch state clearing
 feature_manager = FeatureManager(doc_manager, sketch_manager)
 assembly_manager = AssemblyManager(doc_manager, sketch_manager)
 query_manager = QueryManager(doc_manager)

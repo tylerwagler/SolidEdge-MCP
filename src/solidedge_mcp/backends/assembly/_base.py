@@ -4,6 +4,10 @@ Base class for AssemblyManager providing constructor and shared helpers.
 
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class AssemblyManagerBase:
     """Base providing __init__ and helpers shared across assembly mixins."""

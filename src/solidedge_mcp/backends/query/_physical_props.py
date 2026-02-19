@@ -4,6 +4,10 @@ import math
 import traceback
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class PhysicalPropsMixin:
     """Mixin providing physical property queries and body appearance methods."""
@@ -22,6 +26,7 @@ class PhysicalPropsMixin:
             Dict with volume, mass, surface area, center of gravity, moments of inertia
         """
         try:
+            _logger.info(f"Computing mass properties with density={density} kg/m³")
             doc, model = self._get_first_model()
 
             # ComputePhysicalPropertiesWithSpecifiedDensity(Density, Accuracy)
@@ -64,6 +69,7 @@ class PhysicalPropsMixin:
                 },
             }
         except Exception as e:
+            _logger.error(f"Mass properties computation failed: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def get_bounding_box(self) -> dict[str, Any]:

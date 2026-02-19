@@ -6,6 +6,9 @@ import traceback
 from typing import Any
 
 from ..constants import DrawingViewOrientationConstants
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class DrawingMixin:

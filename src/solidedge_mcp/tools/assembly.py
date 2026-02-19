@@ -28,14 +28,22 @@ def add_assembly_component(
       | 'family_with_transform' | 'family_with_matrix'
       | 'by_template' | 'adjustable' | 'tube'
 
-    - basic: place at (x, y, z)
-    - with_transform: place with position + Euler angles (deg)
-    - family: Family of Parts member at (x, y, z)
-    - family_with_transform: family member with Euler angles
+    - basic: place at (x, y, z) in meters
+    - with_transform: place with position (meters) + Euler angles (degrees)
+    - family: Family of Parts member at (x, y, z) in meters
+    - family_with_transform: family member with Euler angles (degrees)
     - family_with_matrix: family member with 4x4 matrix
     - by_template: place using a template name
-    - adjustable: place as adjustable part at (x, y, z)
+    - adjustable: place as adjustable part at (x, y, z) in meters
     - tube: add tube from segment_indices with file_path template
+
+    Parameters:
+        x, y, z: Position coordinates in meters (basic, family, adjustable).
+        origin_x, origin_y, origin_z: Position in meters (with_transform,
+            family_with_transform).
+        angle_x, angle_y, angle_z: Euler angles in degrees (with_transform,
+            family_with_transform).
+        matrix: 16-element 4x4 transform matrix (family_with_matrix).
     """
     match method:
         case "basic":
@@ -113,7 +121,7 @@ def manage_component(
     - make_writable: make component editable
     - swap_family: swap Family of Parts member name
     - ground: fix/unfix component (ground=True/False)
-    - pattern: linear pattern (count, spacing, direction)
+    - pattern: linear pattern (count, spacing in meters, direction)
     - mirror: mirror across plane_index (1=Top,2=Front,3=Right)
     """
     match action:
@@ -343,16 +351,19 @@ def transform_component(
       | 'set_origin' | 'move' | 'rotate'
       | 'put_euler' | 'put_origin'
 
-    - update_position: set position to (x, y, z)
-    - set_transform: set position + rotation (degrees)
-      uses origin_x/y/z and angle_x/y/z
-    - set_origin: set origin to (x, y, z)
-    - move: translate by (dx, dy, dz)
-    - rotate: rotate around axis by angle (degrees)
-      axis defined by (axis_x1..z1) to (axis_x2..z2)
+    All position/coordinate parameters are in meters.
+    All angle parameters are in degrees.
+
+    - update_position: set position to (x, y, z) meters
+    - set_transform: set position (origin_x/y/z meters)
+      + rotation (angle_x/y/z degrees)
+    - set_origin: set origin to (x, y, z) meters
+    - move: translate by (dx, dy, dz) meters
+    - rotate: rotate around axis by angle (degrees);
+      axis defined by points (axis_x1..z1) to (axis_x2..z2) meters
     - put_euler: set Euler angles (rx, ry, rz degrees)
-      and position (x, y, z)
-    - put_origin: set origin to (x, y, z)
+      and position (x, y, z) meters
+    - put_origin: set origin to (x, y, z) meters
     """
     match method:
         case "update_position":
@@ -628,11 +639,11 @@ def assembly_feature(
       | 'recompute'
 
     - extruded_cutout: cut across scope_parts with
-      extent_type, extent_side, profile_side, distance
+      extent_type, extent_side, profile_side, distance (meters)
     - revolved_cutout: revolve cut across scope_parts
       with angle (degrees)
-    - hole: hole across scope_parts with depth
-    - extruded_protrusion: extrude with distance
+    - hole: hole across scope_parts with depth (meters)
+    - extruded_protrusion: extrude with distance (meters)
     - revolved_protrusion: revolve with angle (degrees)
     - mirror: mirror feature_indices across plane_index
     - pattern: pattern feature_indices (Rectangular/Circular)
@@ -822,7 +833,7 @@ def wiring(
     - wire: add wire along path (path_indices, path_directions)
     - cable: add cable with wires (+ wire_indices)
     - bundle: add bundle of conductors (+ conductor_indices)
-    - splice: add splice at position (x, y, z, conductor_indices)
+    - splice: add splice at position (x, y, z in meters, conductor_indices)
     """
     match type:
         case "wire":

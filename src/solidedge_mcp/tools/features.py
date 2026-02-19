@@ -27,14 +27,14 @@ def create_extrude(
         | 'through_next_single'
 
     Parameters (used per method):
-        distance: Extrusion distance (finite, thin_wall, symmetric).
+        distance: Extrusion distance in meters (finite, thin_wall, symmetric).
         direction: 'Normal'|'Reverse'|'Both' (finite, infinite,
             through_next, thin_wall, through_next_v2, by_keypoint,
             through_next_single).
-        wall_thickness: Wall thickness (thin_wall).
-        from_plane_index: 1-based ref plane (from_to, from_to_v2,
+        wall_thickness: Wall thickness in meters (thin_wall).
+        from_plane_index: 1-based ref plane index (from_to, from_to_v2,
             from_to_single).
-        to_plane_index: 1-based ref plane (from_to, from_to_v2,
+        to_plane_index: 1-based ref plane index (from_to, from_to_v2,
             from_to_single).
     """
     match method:
@@ -86,7 +86,7 @@ def create_revolve(
         angle: Revolve angle in degrees (full, finite, sync,
             finite_sync, thin_wall, full_360).
         axis_type: 'CenterLine' or other axis type (finite).
-        wall_thickness: Wall thickness (thin_wall).
+        wall_thickness: Wall thickness in meters (thin_wall).
         treatment_type: Treatment type string (full_360).
     """
     match method:
@@ -130,13 +130,13 @@ def create_extruded_cutout(
         | 'through_all_multi_body'
 
     Parameters (used per method):
-        distance: Cut depth (finite, multi_body).
+        distance: Cut depth in meters (finite, multi_body).
         direction: 'Normal'|'Reverse'|'Both' (finite, through_all,
             through_next, by_keypoint, through_next_single,
             multi_body, through_all_multi_body).
-        from_plane_index: 1-based ref plane (from_to,
+        from_plane_index: 1-based ref plane index (from_to,
             from_to_v2, from_to_multi_body).
-        to_plane_index: 1-based ref plane (from_to,
+        to_plane_index: 1-based ref plane index (from_to,
             from_to_v2, from_to_multi_body).
     """
     match method:

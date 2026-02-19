@@ -93,9 +93,9 @@ def add_drawing_view(
             (projected, detail, auxiliary, section).
         fold_direction: 'Up'|'Down'|'Left'|'Right'
             (projected, auxiliary).
-        center_x: Detail view center X (detail).
-        center_y: Detail view center Y (detail).
-        radius: Detail view radius (detail).
+        center_x: Detail view center X in meters (detail).
+        center_y: Detail view center Y in meters (detail).
+        radius: Detail view radius in meters (detail).
         source_view_index: Source view index (by_draft_view).
         section_type: Section cut type: 0=standard, 1=revolved
             (section).
@@ -360,14 +360,16 @@ def add_2d_dimension(
 
     type: 'distance' | 'length' | 'radius' | 'angle'
 
+    All coordinate parameters are in meters (sheet space).
+
     Args:
         type: Dimension type to add.
-        x1: Start X (distance, angle).
-        y1: Start Y (distance, angle).
-        x2: End X (distance, angle).
-        y2: End Y (distance, angle).
-        x3: Third point X (angle). Vertex is (x2, y2).
-        y3: Third point Y (angle).
+        x1: Start X in meters (distance, angle).
+        y1: Start Y in meters (distance, angle).
+        x2: End X in meters (distance, angle).
+        y2: End Y in meters (distance, angle).
+        x3: Third point X in meters (angle). Vertex is (x2, y2).
+        y3: Third point Y in meters (angle).
         object_index: 0-based index into Lines2d (length)
             or Circles2d/Arcs2d (radius).
         object_type: 'circle' or 'arc' (radius).
@@ -528,9 +530,9 @@ def display_control(
         red: Red component 0-255 (set_background).
         green: Green component 0-255 (set_background).
         blue: Blue component 0-255 (set_background).
-        x: Model X coordinate (model_to_screen).
-        y: Model Y coordinate (model_to_screen).
-        z: Model Z coordinate (model_to_screen).
+        x: Model X coordinate in meters (model_to_screen).
+        y: Model Y coordinate in meters (model_to_screen).
+        z: Model Z coordinate in meters (model_to_screen).
         screen_x: Screen X pixel (screen_to_model).
         screen_y: Screen Y pixel (screen_to_model).
         face_index: 0-based face index (set_texture).
@@ -732,8 +734,8 @@ def manage_annotation_data(
     Args:
         action: Annotation data action.
         file_path: Symbol file path (add_symbol).
-        x: Symbol X position (add_symbol).
-        y: Symbol Y position (add_symbol).
+        x: Symbol X position in meters (add_symbol).
+        y: Symbol Y position in meters (add_symbol).
         insertion_type: Symbol insertion type (add_symbol).
         show: Show PMI (set_pmi_visibility).
         show_dimensions: Show PMI dimensions
@@ -780,16 +782,16 @@ def add_smart_frame(
     Args:
         method: Smart frame creation method.
         style_name: Frame style name.
-        x1: First corner X (two_point).
-        y1: First corner Y (two_point).
-        x2: Second corner X (two_point).
-        y2: Second corner Y (two_point).
-        x: Origin X (by_origin).
-        y: Origin Y (by_origin).
-        top: Top margin (by_origin).
-        bottom: Bottom margin (by_origin).
-        left: Left margin (by_origin).
-        right: Right margin (by_origin).
+        x1: First corner X in meters (two_point).
+        y1: First corner Y in meters (two_point).
+        x2: Second corner X in meters (two_point).
+        y2: Second corner Y in meters (two_point).
+        x: Origin X in meters (by_origin).
+        y: Origin Y in meters (by_origin).
+        top: Top margin in meters (by_origin).
+        bottom: Bottom margin in meters (by_origin).
+        left: Left margin in meters (by_origin).
+        right: Right margin in meters (by_origin).
     """
     match method:
         case "two_point":
@@ -823,8 +825,8 @@ def draft_config(
         action: Draft config action.
         parameter: Global parameter ID (get_global, set_global).
         value: Parameter value to set (set_global).
-        x: Symbol file origin X (set_origin).
-        y: Symbol file origin Y (set_origin).
+        x: Symbol file origin X in meters (set_origin).
+        y: Symbol file origin Y in meters (set_origin).
     """
     match action:
         case "get_global":

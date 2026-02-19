@@ -5,6 +5,10 @@ import os
 import traceback
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class PlacementMixin:
     """Mixin providing component placement methods."""
@@ -26,6 +30,7 @@ class PlacementMixin:
             Dict with status and component info
         """
         try:
+            _logger.info(f"Adding component: {file_path}")
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
 
@@ -61,6 +66,7 @@ class PlacementMixin:
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
+            _logger.error(f"Failed to add component: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     # Alias for MCP tool compatibility
@@ -91,6 +97,7 @@ class PlacementMixin:
             Dict with status and component info
         """
         try:
+            _logger.info(f"Adding component with transform: {file_path}")
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
 
@@ -119,6 +126,7 @@ class PlacementMixin:
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
+            _logger.error(f"Failed to add component with transform: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_family_member(
@@ -145,6 +153,7 @@ class PlacementMixin:
             Dict with status and component info
         """
         try:
+            _logger.info(f"Adding family member: {family_member_name} from {file_path}")
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
 
@@ -164,6 +173,7 @@ class PlacementMixin:
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
+            _logger.error(f"Failed to add family member: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_family_with_transform(
@@ -193,6 +203,10 @@ class PlacementMixin:
             Dict with status and component info
         """
         try:
+            _logger.info(
+                "Adding family member with transform: %s from %s",
+                family_member_name, file_path,
+            )
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
 
@@ -220,6 +234,7 @@ class PlacementMixin:
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
+            _logger.error(f"Failed to add family member with transform: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_family_with_matrix(
@@ -243,6 +258,7 @@ class PlacementMixin:
             Dict with status and component info
         """
         try:
+            _logger.info(f"Adding family member with matrix: {member_name} from {family_file_path}")
             if not os.path.exists(family_file_path):
                 return {"error": f"File not found: {family_file_path}"}
 
@@ -270,6 +286,7 @@ class PlacementMixin:
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
+            _logger.error(f"Failed to add family member with matrix: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_by_template(
@@ -290,6 +307,7 @@ class PlacementMixin:
             Dict with status and component info
         """
         try:
+            _logger.info(f"Adding component by template: {file_path}, template={template_name}")
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
 
@@ -309,6 +327,7 @@ class PlacementMixin:
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
+            _logger.error(f"Failed to add component by template: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_adjustable_part(
@@ -333,6 +352,7 @@ class PlacementMixin:
             Dict with status and component info
         """
         try:
+            _logger.info(f"Adding adjustable part: {file_path}")
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
 
@@ -352,6 +372,7 @@ class PlacementMixin:
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
+            _logger.error(f"Failed to add adjustable part: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def reorder_occurrence(
@@ -373,6 +394,7 @@ class PlacementMixin:
             Dict with status
         """
         try:
+            _logger.info(f"Reordering occurrence {component_index} to {target_index}")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -400,4 +422,5 @@ class PlacementMixin:
                 "target_index": target_index,
             }
         except Exception as e:
+            _logger.error(f"Failed to reorder occurrence: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}

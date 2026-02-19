@@ -4,6 +4,10 @@ import contextlib
 import traceback
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class FeatureQueryMixin:
     """Mixin providing feature tree query and editing methods."""

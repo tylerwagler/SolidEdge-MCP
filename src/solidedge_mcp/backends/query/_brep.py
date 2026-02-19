@@ -8,6 +8,9 @@ import pythoncom
 from win32com.client import VARIANT
 
 from ..constants import FaceQueryConstants
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class BRepMixin:

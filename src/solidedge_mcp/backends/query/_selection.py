@@ -5,6 +5,9 @@ import traceback
 from typing import Any
 
 from ..constants import FaceQueryConstants
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class SelectionMixin:

@@ -5,6 +5,10 @@ import os
 import traceback
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class SpecializedMixin:
     """Mixin providing specialized assembly subsystem methods."""
@@ -31,6 +35,7 @@ class SpecializedMixin:
             Dict with status and virtual component info
         """
         try:
+            _logger.info(f"Adding virtual component: name={name}, type={component_type}")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -58,6 +63,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add virtual component: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_virtual_component_predefined(
@@ -76,6 +82,7 @@ class SpecializedMixin:
             Dict with status and virtual component info
         """
         try:
+            _logger.info(f"Adding predefined virtual component: {filename}")
             if not os.path.exists(filename):
                 return {"error": f"File not found: {filename}"}
 
@@ -97,6 +104,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add predefined virtual component: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_virtual_component_bidm(
@@ -120,6 +128,7 @@ class SpecializedMixin:
             Dict with status and virtual component info
         """
         try:
+            _logger.info(f"Adding virtual component via BIDM: doc={doc_number}, rev={revision_id}")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -148,6 +157,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add virtual component via BIDM: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     # -- Tube Operations -----------------------------------------------------
@@ -165,6 +175,7 @@ class SpecializedMixin:
             Dict with tube properties (outer diameter, wall thickness, etc.)
         """
         try:
+            _logger.info(f"Getting tube info: component_index={component_index}")
             doc = self.doc_manager.get_active_document()
             occurrences, occurrence, err = self._validate_occurrence_index(doc, component_index)
             if err:
@@ -197,6 +208,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to get tube info: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_tube(
@@ -226,6 +238,7 @@ class SpecializedMixin:
             Dict with status and tube occurrence info
         """
         try:
+            _logger.info(f"Adding tube: part={part_filename}, segments={len(segment_indices)}")
             if not os.path.exists(part_filename):
                 return {"error": f"File not found: {part_filename}"}
 
@@ -272,6 +285,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add tube: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     # -- Structural Frames ---------------------------------------------------
@@ -294,6 +308,10 @@ class SpecializedMixin:
             Dict with status and frame info
         """
         try:
+            _logger.info(
+                "Adding structural frame: part=%s, paths=%d",
+                part_filename, len(path_indices),
+            )
             if not os.path.exists(part_filename):
                 return {"error": f"File not found: {part_filename}"}
 
@@ -330,6 +348,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add structural frame: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_structural_frame_by_orientation(
@@ -352,6 +371,10 @@ class SpecializedMixin:
             Dict with status and frame info
         """
         try:
+            _logger.info(
+                "Adding structural frame by orientation: part=%s, coord=%s",
+                part_filename, coord_system_name,
+            )
             if not os.path.exists(part_filename):
                 return {"error": f"File not found: {part_filename}"}
 
@@ -389,6 +412,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add structural frame by orientation: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     # -- Splices -------------------------------------------------------------
@@ -417,6 +441,7 @@ class SpecializedMixin:
             Dict with status and splice info
         """
         try:
+            _logger.info(f"Adding splice at ({x},{y},{z}) with {len(conductor_indices)} conductors")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -458,6 +483,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add splice: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     # -- Wires ---------------------------------------------------------------
@@ -483,6 +509,7 @@ class SpecializedMixin:
             Dict with status and wire info
         """
         try:
+            _logger.info(f"Adding wire with {len(path_indices)} path segments")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -520,6 +547,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add wire: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     # -- Cables --------------------------------------------------------------
@@ -550,6 +578,7 @@ class SpecializedMixin:
             Dict with status and cable info
         """
         try:
+            _logger.info(f"Adding cable with {len(path_indices)} paths, {len(wire_indices)} wires")
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -613,6 +642,7 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add cable: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     # -- Bundles -------------------------------------------------------------
@@ -643,6 +673,10 @@ class SpecializedMixin:
             Dict with status and bundle info
         """
         try:
+            _logger.info(
+                "Adding bundle with %d paths, %d conductors",
+                len(path_indices), len(conductor_indices),
+            )
             doc = self.doc_manager.get_active_document()
 
             if not hasattr(doc, "Occurrences"):
@@ -706,4 +740,5 @@ class SpecializedMixin:
 
             return result
         except Exception as e:
+            _logger.error(f"Failed to add bundle: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}

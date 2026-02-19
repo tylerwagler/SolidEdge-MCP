@@ -4,6 +4,10 @@ import os
 import traceback
 from typing import Any
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class FileExportMixin:
     """Mixin providing file export methods."""
@@ -28,6 +32,7 @@ class FileExportMixin:
             # Save as STEP
             doc.SaveAs(file_path)
 
+            _logger.info(f"Exported to STEP: {file_path}")
             return {
                 "status": "exported",
                 "format": "STEP",
@@ -35,6 +40,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
+            _logger.error(f"STEP export failed: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def export_to_stl(self, file_path: str, quality: str = "Medium") -> dict[str, Any]:

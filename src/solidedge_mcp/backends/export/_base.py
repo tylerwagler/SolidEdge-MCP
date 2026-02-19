@@ -4,6 +4,10 @@ Base class for ExportManager providing constructor and shared helpers.
 
 import contextlib
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class ExportManagerBase:
     """Base providing __init__ and helpers shared across export mixins."""
