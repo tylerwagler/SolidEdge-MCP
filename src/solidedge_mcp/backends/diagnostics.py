@@ -2,8 +2,10 @@
 Diagnostic tools for Solid Edge API exploration
 """
 
+from typing import Any
 
-def get_available_methods(obj, filter_prefix=None):
+
+def get_available_methods(obj: Any, filter_prefix: str | None = None) -> dict[str, Any]:
     """
     Get all available methods and properties on a COM object
 
@@ -14,8 +16,8 @@ def get_available_methods(obj, filter_prefix=None):
     Returns:
         Dictionary with methods and properties
     """
-    methods = []
-    properties = []
+    methods: list[str] = []
+    properties: list[str] = []
 
     try:
         # Get all attributes
@@ -42,7 +44,7 @@ def get_available_methods(obj, filter_prefix=None):
     }
 
 
-def diagnose_document(doc):
+def diagnose_document(doc: Any) -> dict[str, Any]:
     """
     Diagnose available features and collections in a document
 
@@ -52,7 +54,7 @@ def diagnose_document(doc):
     Returns:
         Dictionary with available collections and methods
     """
-    info = {
+    info: dict[str, Any] = {
         "document_type": type(doc).__name__,
         "available_collections": [],
         "models_methods": [],
@@ -102,14 +104,16 @@ def diagnose_document(doc):
 
         # Filter cutout-related
         cutout_methods = [
-            m for m in all_methods["methods"] if "cutout" in m.lower() or "cut" in m.lower()
+            m
+            for m in all_methods["methods"]
+            if "cutout" in m.lower() or "cut" in m.lower()
         ]
         info["cutout_related_methods"] = cutout_methods
 
     return info
 
 
-def diagnose_feature(model):
+def diagnose_feature(model: Any) -> dict[str, Any]:
     """
     Diagnose properties and methods available on a feature/model object.
 
@@ -119,7 +123,7 @@ def diagnose_feature(model):
     Returns:
         Dictionary with available properties, methods, and their values
     """
-    info = {
+    info: dict[str, Any] = {
         "model_type": type(model).__name__,
         "properties": {},
         "all_attributes": [],

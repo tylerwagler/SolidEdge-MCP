@@ -12,7 +12,7 @@ from typing import Any
 LOG_LEVEL = logging.INFO
 
 # Create a module-level logger
-logger = logging.getLogger("solidedge_mcp")
+logger: logging.Logger = logging.getLogger("solidedge_mcp")
 
 # Create handler with formatter if not already configured
 if not logger.handlers:
@@ -42,9 +42,9 @@ def get_logger(name: str) -> logging.Logger:
 def log_com_call(
     logger_instance: logging.Logger,
     method_name: str,
-    args: list,
+    args: list[Any],
     result: Any = None,
-    error: str = None,
+    error: str | None = None,
 ) -> None:
     """Log a COM method call and its result.
 
@@ -64,7 +64,7 @@ def log_com_call(
 def log_sketch_operation(
     logger_instance: logging.Logger,
     operation: str,
-    profile_state: dict,
+    profile_state: dict[str, Any],
 ) -> None:
     """Log sketch operations for debugging.
 
@@ -76,7 +76,9 @@ def log_sketch_operation(
     logger_instance.info(f"Sketch operation: {operation}, state: {profile_state}")
 
 
-def log_document_event(logger_instance: logging.Logger, event: str, doc_info: dict) -> None:
+def log_document_event(
+    logger_instance: logging.Logger, event: str, doc_info: dict[str, Any]
+) -> None:
     """Log document lifecycle events.
 
     Args:

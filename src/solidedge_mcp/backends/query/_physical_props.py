@@ -5,12 +5,15 @@ import traceback
 from typing import Any
 
 from ..logging import get_logger
+from ._base import QueryManagerBase
 
 _logger = get_logger(__name__)
 
 
-class PhysicalPropsMixin:
+class PhysicalPropsMixin(QueryManagerBase):
     """Mixin providing physical property queries and body appearance methods."""
+
+    doc_manager: Any
 
     def get_mass_properties(self, density: float = 7850) -> dict[str, Any]:
         """

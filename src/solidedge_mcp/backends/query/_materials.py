@@ -2,15 +2,18 @@
 
 import contextlib
 import traceback
-from typing import Any
+from typing import Any, Optional
 
 from ..logging import get_logger
+from ._base import QueryManagerBase
 
 _logger = get_logger(__name__)
 
 
-class MaterialsMixin:
+class MaterialsMixin(QueryManagerBase):
     """Mixin providing material and layer management methods."""
+
+    doc_manager: Any
 
     def get_material_table(self) -> dict[str, Any]:
         """

@@ -16,6 +16,8 @@ _logger = get_logger(__name__)
 class BRepMixin:
     """Mixin providing B-Rep topology query methods."""
 
+    doc_manager: Any
+
     def get_body_faces(self) -> dict[str, Any]:
         """
         Get all faces on the model body.

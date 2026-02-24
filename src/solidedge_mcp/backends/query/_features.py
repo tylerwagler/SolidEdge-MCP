@@ -2,7 +2,7 @@
 
 import contextlib
 import traceback
-from typing import Any
+from typing import Any, Optional, Tuple
 
 from ..logging import get_logger
 
@@ -11,6 +11,8 @@ _logger = get_logger(__name__)
 
 class FeatureQueryMixin:
     """Mixin providing feature tree query and editing methods."""
+
+    doc_manager: Any
 
     def get_design_edgebar_features(self) -> dict[str, Any]:
         """

@@ -18,7 +18,7 @@ _logger = get_logger(__name__)
 class SolidEdgeConnection:
     """Manages connection to Solid Edge application"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.application: Any | None = None
         self._is_connected: bool = False
 
@@ -115,7 +115,7 @@ class SolidEdgeConnection:
         if not self.is_connected():
             raise Exception("Not connected to Solid Edge. Call connect() first.")
 
-    def get_application(self):
+    def get_application(self) -> Any:
         """Get the application object"""
         self.ensure_connected()
         return self.application
@@ -210,10 +210,10 @@ class SolidEdgeConnection:
 
     def set_performance_mode(
         self,
-        delay_compute: bool = None,
-        screen_updating: bool = None,
-        interactive: bool = None,
-        display_alerts: bool = None,
+        delay_compute: bool | None = None,
+        screen_updating: bool | None = None,
+        interactive: bool | None = None,
+        display_alerts: bool | None = None,
     ) -> dict[str, Any]:
         """
         Set application performance flags for batch operations.
@@ -451,7 +451,7 @@ class SolidEdgeConnection:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def set_global_parameter(self, parameter: int, value) -> dict[str, Any]:
+    def set_global_parameter(self, parameter: int, value: Any) -> dict[str, Any]:
         """
         Set an application-level global parameter.
 
@@ -571,7 +571,7 @@ class SolidEdgeConnection:
         try:
             self.ensure_connected()
             cmd = self.application.ActiveCommand
-            result: dict[str, Any] = {"status": "success"}
+            result: dict[str, Any | None] = {"status": "success"}
             if cmd is not None:
                 result["has_active_command"] = True
                 with contextlib.suppress(Exception):

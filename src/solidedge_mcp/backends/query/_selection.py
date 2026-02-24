@@ -13,6 +13,8 @@ _logger = get_logger(__name__)
 class SelectionMixin:
     """Mixin providing selection set methods."""
 
+    doc_manager: Any
+
     def get_select_set(self) -> dict[str, Any]:
         """
         Get the current selection set.

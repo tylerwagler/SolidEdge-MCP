@@ -2,7 +2,7 @@
 
 import contextlib
 import traceback
-from typing import Any
+from typing import Any, Optional
 
 from ..logging import get_logger
 
@@ -11,6 +11,8 @@ _logger = get_logger(__name__)
 
 class VariablesMixin:
     """Mixin providing variable and custom property methods."""
+
+    doc_manager: Any
 
     def get_variables(self) -> dict[str, Any]:
         """
@@ -118,7 +120,9 @@ class VariablesMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def add_variable(self, name: str, formula: str, units_type: str = None) -> dict[str, Any]:
+    def add_variable(
+        self, name: str, formula: str, units_type: Optional[str] = None
+    ) -> dict[str, Any]:
         """
         Create a new user variable in the active document.
 
@@ -422,7 +426,9 @@ class VariablesMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def add_variable_from_clipboard(self, name: str, units_type: str = None) -> dict[str, Any]:
+    def add_variable_from_clipboard(
+        self, name: str, units_type: Optional[str] = None
+    ) -> dict[str, Any]:
         """
         Add a variable from the clipboard.
 

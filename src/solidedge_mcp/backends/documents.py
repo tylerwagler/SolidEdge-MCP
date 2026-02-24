@@ -18,7 +18,9 @@ _logger = get_logger(__name__)
 class DocumentManager:
     """Manages Solid Edge documents"""
 
-    def __init__(self, connection, sketch_manager=None):
+    def __init__(
+        self, connection: Any, sketch_manager: Any | None = None
+    ) -> None:
         self.connection = connection
         self.active_document: Any | None = None
         # Optional reference to clear sketch state on doc switch
@@ -237,7 +239,7 @@ class DocumentManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def activate_document(self, name_or_index) -> dict[str, Any]:
+    def activate_document(self, name_or_index: str | int) -> dict[str, Any]:
         """
         Activate a specific open document by name or index.
 
@@ -316,7 +318,7 @@ class DocumentManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def get_active_document(self):
+    def get_active_document(self) -> Any:
         """Get the active document object"""
         if not self.active_document:
             # Try to get active document from application
@@ -598,7 +600,7 @@ class DocumentManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def _get_document_type(self, doc) -> str:
+    def _get_document_type(self, doc: Any) -> str:
         """Determine document type"""
         try:
             doc_type = doc.Type

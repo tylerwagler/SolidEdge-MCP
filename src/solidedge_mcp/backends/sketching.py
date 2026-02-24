@@ -18,13 +18,13 @@ _logger = get_logger(__name__)
 class SketchManager:
     """Manages sketch creation and 2D geometry"""
 
-    def __init__(self, document_manager):
+    def __init__(self, document_manager: Any) -> None:
         self.doc_manager = document_manager
-        self.active_sketch = None
-        self.active_profile = None
-        self.active_refaxis = None  # Reference axis for revolve operations
-        self.accumulated_profiles = []  # For loft/sweep multi-profile operations
-        self._last_document_handle = None  # Track which document we're working with
+        self.active_sketch: Any | None = None
+        self.active_profile: Any | None = None
+        self.active_refaxis: Any | None = None  # Reference axis for revolve operations
+        self.accumulated_profiles: list[Any] = []  # For loft/sweep multi-profile operations
+        self._last_document_handle: Any | None = None  # Track which document we're working with
 
     def clear_state(self) -> None:
         """Clear all sketch state. Call this when switching documents."""
@@ -321,7 +321,7 @@ class SketchManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def draw_spline(self, points: list) -> dict[str, Any]:
+    def draw_spline(self, points: list[list[float]]) -> dict[str, Any]:
         """
         Draw a B-spline curve through a list of points.
 
@@ -621,7 +621,7 @@ class SketchManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def _get_sketch_element(self, element_type: str, index: int):
+    def _get_sketch_element(self, element_type: str, index: int) -> Any:
         """
         Resolve a sketch element by type name and 1-based index.
 
@@ -656,7 +656,9 @@ class SketchManager:
 
         return collection.Item(index)
 
-    def add_constraint(self, constraint_type: str, elements: list) -> dict[str, Any]:
+    def add_constraint(
+        self, constraint_type: str, elements: list[list[str | int]]
+    ) -> dict[str, Any]:
         """
         Add a geometric constraint to sketch elements.
 
@@ -836,7 +838,7 @@ class SketchManager:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
             profile = self.active_profile
-            info = {"status": "active"}
+            info: dict[str, Any] = {"status": "active"}
 
             # Count elements in each collection
             collections = {
@@ -864,19 +866,19 @@ class SketchManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def get_active_sketch(self):
+    def get_active_sketch(self) -> Any | None:
         """Get the active sketch object"""
         return self.active_profile
 
-    def get_active_refaxis(self):
+    def get_active_refaxis(self) -> Any | None:
         """Get the active reference axis for revolve operations"""
         return self.active_refaxis
 
-    def get_accumulated_profiles(self):
+    def get_accumulated_profiles(self) -> list[Any]:
         """Get the list of accumulated closed profiles (for loft/sweep)."""
         return list(self.accumulated_profiles)
 
-    def clear_accumulated_profiles(self):
+    def clear_accumulated_profiles(self) -> None:
         """Clear the accumulated profiles list."""
         self.accumulated_profiles.clear()
 
@@ -1316,7 +1318,7 @@ class SketchManager:
             sin_a = math.sin(angle_rad)
             cx, cy = center_x, center_y
 
-            def rotate_point(x, y):
+            def rotate_point(x: float, y: float) -> tuple[float, float]:
                 dx, dy = x - cx, y - cy
                 return cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a
 
@@ -1399,7 +1401,7 @@ class SketchManager:
 
             cx, cy = center_x, center_y
 
-            def scale_point(x, y):
+            def scale_point(x: float, y: float) -> tuple[float, float]:
                 return cx + (x - cx) * scale_factor, cy + (y - cy) * scale_factor
 
             profile = self.active_profile
@@ -1541,14 +1543,14 @@ class SketchManager:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
             profile = self.active_profile
-            constraints = []
+            constraints: list[dict[str, Any]] = []
 
             try:
                 relations = profile.Relations2d
                 for i in range(1, relations.Count + 1):
                     try:
                         rel = relations.Item(i)
-                        constraint_info = {"index": i - 1}
+                        constraint_info: dict[str, Any] = {"index": i - 1}
                         with contextlib.suppress(Exception):
                             constraint_info["type"] = rel.Type
                         with contextlib.suppress(Exception):
