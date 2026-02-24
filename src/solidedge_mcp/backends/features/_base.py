@@ -21,15 +21,15 @@ _logger = get_logger(__name__)
 class FeatureManagerBase:
     """Base providing __init__ and helpers shared across feature mixins."""
 
-    def __init__(self, document_manager, sketch_manager):
+    def __init__(self, document_manager: Any, sketch_manager: Any) -> None:
         self.doc_manager = document_manager
         self.sketch_manager = sketch_manager
 
-    def _get_ref_plane(self, doc, plane_index: int = 1):
+    def _get_ref_plane(self, doc: Any, plane_index: int = 1) -> Any:
         """Get a reference plane from the document (1=Top/XY, 2=Right/YZ, 3=Front/XZ)"""
         return doc.RefPlanes.Item(plane_index)
 
-    def _make_loft_variant_arrays(self, profiles):
+    def _make_loft_variant_arrays(self, profiles: list[Any]) -> tuple[Any, Any, Any]:
         """Create properly typed VARIANT arrays for loft/sweep COM calls.
 
         COM requires explicit VARIANT typing for SAFEARRAY parameters.
@@ -99,16 +99,10 @@ class FeatureManagerBase:
         edge = face_edges.Item(edge_index + 1)
         return model, face, edge, None
 
-    def _find_feature_by_name(self, feature_name: str):
-        """
-        Find a feature by name in DesignEdgebarFeatures.
+    def _find_feature_by_name(self, feature_name: str) -> tuple[Any | None, dict[str, Any] | None]:
+        """Find a feature by name in DesignEdgebarFeatures.
 
-        Args:
-            feature_name: Name of the feature to find
-
-        Returns:
-            Tuple of (feature_object, error_dict). If found, error_dict is None.
-            If not found, feature_object is None and error_dict has error info.
+        Returns (feature, error_dict). If found, error_dict is None.
         """
         doc = self.doc_manager.get_active_document()
         features = doc.DesignEdgebarFeatures
@@ -131,12 +125,8 @@ class FeatureManagerBase:
 
         return target, None
 
-    def _get_feature_by_index(self, index: int):
-        """Get a feature from DesignEdgebarFeatures by 0-based index.
-
-        Returns:
-            Tuple of (feature_object, error_dict).
-        """
+    def _get_feature_by_index(self, index: int) -> tuple[Any | None, dict[str, Any] | None]:
+        """Get a feature from DesignEdgebarFeatures by 0-based index."""
         doc = self.doc_manager.get_active_document()
         features = doc.DesignEdgebarFeatures
         com_index = index + 1  # Convert to 1-based

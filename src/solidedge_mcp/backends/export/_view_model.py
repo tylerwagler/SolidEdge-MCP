@@ -12,7 +12,7 @@ _logger = get_logger(__name__)
 class ViewModel:
     """Manages view manipulation"""
 
-    def __init__(self, document_manager):
+    def __init__(self, document_manager: Any) -> None:
         self.doc_manager = document_manager
 
     def set_view(self, view: str) -> dict[str, Any]:

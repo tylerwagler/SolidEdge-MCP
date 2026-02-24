@@ -12,7 +12,7 @@ _logger = get_logger(__name__)
 class AssemblyManagerBase:
     """Base providing __init__ and helpers shared across assembly mixins."""
 
-    def __init__(self, document_manager, sketch_manager=None):
+    def __init__(self, document_manager: Any, sketch_manager: Any | None = None) -> None:
         self.doc_manager = document_manager
         self.sketch_manager = sketch_manager
 

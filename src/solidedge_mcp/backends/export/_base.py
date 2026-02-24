@@ -3,6 +3,7 @@ Base class for ExportManager providing constructor and shared helpers.
 """
 
 import contextlib
+from typing import Any
 
 from ..logging import get_logger
 
@@ -12,10 +13,10 @@ _logger = get_logger(__name__)
 class ExportManagerBase:
     """Base providing __init__ and helpers shared across export mixins."""
 
-    def __init__(self, document_manager):
+    def __init__(self, document_manager: Any) -> None:
         self.doc_manager = document_manager
 
-    def _get_drawing_views(self):
+    def _get_drawing_views(self) -> Any:
         """Get the DrawingViews collection from the active sheet."""
         doc = self.doc_manager.get_active_document()
         if not hasattr(doc, "Sheets"):
