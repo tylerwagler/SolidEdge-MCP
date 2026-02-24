@@ -1,5 +1,7 @@
 """Connection tools for Solid Edge MCP."""
 
+from typing import Any
+
 from solidedge_mcp.managers import connection
 
 # === Composite: manage_connection ===
@@ -8,7 +10,7 @@ from solidedge_mcp.managers import connection
 def manage_connection(
     action: str = "connect",
     start_if_needed: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Manage the Solid Edge application connection.
 
     action: 'connect' | 'disconnect' | 'quit' | 'activate'
@@ -33,7 +35,7 @@ def app_command(
     action: str,
     command_id: int = 0,
     abort_all: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Execute an application command.
 
     action: 'start' | 'abort' | 'idle'
@@ -54,17 +56,17 @@ def app_command(
 
 def app_config(
     property: str,
-    delay_compute: bool = None,
-    screen_updating: bool = None,
-    interactive: bool = None,
-    display_alerts: bool = None,
+    delay_compute: bool | None = None,
+    screen_updating: bool | None = None,
+    interactive: bool | None = None,
+    display_alerts: bool | None = None,
     text: str = "",
     visible: bool = True,
     parameter: int = 0,
     value: float = 0.0,
     doc_type: int = 1,
     template_path: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Get or set application configuration properties.
 
     property: 'set_performance' | 'get_environment' | 'get_status_bar'
@@ -106,12 +108,12 @@ def app_config(
 # === Standalone tools ===
 
 
-def convert_by_file_path(input_path: str, output_path: str) -> dict:
+def convert_by_file_path(input_path: str, output_path: str) -> dict[str, Any]:
     """Batch-convert CAD files between formats."""
     return connection.convert_by_file_path(input_path, output_path)
 
 
-def arrange_windows(style: int = 1) -> dict:
+def arrange_windows(style: int = 1) -> dict[str, Any]:
     """Arrange document windows.
 
     style: 1=Tiled, 2=Horizontal, 4=Vertical, 8=Cascade
@@ -119,12 +121,12 @@ def arrange_windows(style: int = 1) -> dict:
     return connection.arrange_windows(style)
 
 
-def get_active_command() -> dict:
+def get_active_command() -> dict[str, Any]:
     """Get the currently active Solid Edge command."""
     return connection.get_active_command()
 
 
-def run_macro(filename: str) -> dict:
+def run_macro(filename: str) -> dict[str, Any]:
     """Run a VBA macro file in Solid Edge."""
     return connection.run_macro(filename)
 
@@ -132,7 +134,7 @@ def run_macro(filename: str) -> dict:
 # === Registration ===
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register connection tools with the MCP server."""
     # Composite tools
     mcp.tool()(manage_connection)

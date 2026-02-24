@@ -273,7 +273,7 @@ class CutoutMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_lofted_cutout(self, profile_indices: list = None) -> dict[str, Any]:
+    def create_lofted_cutout(self, profile_indices: list[int] | None = None) -> dict[str, Any]:
         """
         Create a lofted cutout between multiple profiles.
 
@@ -340,7 +340,7 @@ class CutoutMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_swept_cutout(self, path_profile_index: int = None) -> dict[str, Any]:
+    def create_swept_cutout(self, path_profile_index: int | None = None) -> dict[str, Any]:
         """
         Create a swept cutout (cut) along a path.
 
@@ -428,7 +428,8 @@ class CutoutMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_helix_cutout(
-        self, pitch: float, height: float, revolutions: float = None, direction: str = "Right"
+        self, pitch: float, height: float,
+        revolutions: float | None = None, direction: str = "Right",
     ) -> dict[str, Any]:
         """
         Create a helical cutout (cut) in the part.
@@ -940,7 +941,7 @@ class CutoutMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_lofted_cutout_full(self, profile_indices: list = None) -> dict[str, Any]:
+    def create_lofted_cutout_full(self, profile_indices: list[int] | None = None) -> dict[str, Any]:
         """
         Create a lofted cutout with guide curves support.
 
@@ -1010,7 +1011,9 @@ class CutoutMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_swept_cutout_multi_body(self, path_profile_index: int = None) -> dict[str, Any]:
+    def create_swept_cutout_multi_body(
+        self, path_profile_index: int | None = None,
+    ) -> dict[str, Any]:
         """
         Create a swept cutout that supports multi-body operations.
 
@@ -1094,7 +1097,8 @@ class CutoutMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_helix_cutout_sync(
-        self, pitch: float, height: float, revolutions: float = None, direction: str = "Right"
+        self, pitch: float, height: float,
+        revolutions: float | None = None, direction: str = "Right",
     ) -> dict[str, Any]:
         """
         Create a synchronous helical cutout.

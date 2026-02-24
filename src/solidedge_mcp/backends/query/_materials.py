@@ -2,7 +2,7 @@
 
 import contextlib
 import traceback
-from typing import Any, Optional
+from typing import Any
 
 from ..logging import get_logger
 from ._base import QueryManagerBase
@@ -281,7 +281,7 @@ class MaterialsMixin(QueryManagerBase):
             for i in range(1, layers_col.Count + 1):
                 try:
                     layer = layers_col.Item(i)
-                    info = {"index": i - 1}
+                    info: dict[str, Any] = {"index": i - 1}
                     try:
                         info["name"] = layer.Name
                     except Exception:
@@ -325,7 +325,7 @@ class MaterialsMixin(QueryManagerBase):
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def activate_layer(self, name_or_index) -> dict[str, Any]:
+    def activate_layer(self, name_or_index: str | int) -> dict[str, Any]:
         """
         Activate a layer by name or 0-based index.
 
@@ -371,7 +371,7 @@ class MaterialsMixin(QueryManagerBase):
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def set_layer_properties(
-        self, name_or_index, show: bool = None, selectable: bool = None
+        self, name_or_index: str | int, show: bool | None = None, selectable: bool | None = None
     ) -> dict[str, Any]:
         """
         Set layer visibility and selectability properties.
@@ -423,7 +423,7 @@ class MaterialsMixin(QueryManagerBase):
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def delete_layer(self, name_or_index) -> dict[str, Any]:
+    def delete_layer(self, name_or_index: str | int) -> dict[str, Any]:
         """
         Delete a layer from the active document.
 

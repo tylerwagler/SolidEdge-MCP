@@ -1,5 +1,7 @@
 """Helix, loft, and sweep tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -13,7 +15,7 @@ def create_helix(
     wall_thickness: float = 0.0,
     from_plane_index: int = 0,
     to_plane_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a helical feature (springs, threads).
 
     method: 'finite' | 'sync' | 'thin_wall'
@@ -64,10 +66,10 @@ def create_helix(
 
 def create_loft(
     method: str = "solid",
-    profile_indices: list | None = None,
+    profile_indices: list[int] | None = None,
     wall_thickness: float = 0.0,
     guide_profile_indices: list[int] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Create a loft feature between multiple profiles.
 
     method: 'solid' | 'thin_wall' | 'with_guides'
@@ -92,7 +94,7 @@ def create_sweep(
     method: str = "solid",
     path_profile_index: int | None = None,
     wall_thickness: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a sweep feature along a path.
 
     method: 'solid' | 'thin_wall'

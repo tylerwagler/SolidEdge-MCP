@@ -120,6 +120,13 @@ class SolidEdgeConnection:
         self.ensure_connected()
         return self.application
 
+    def _get_app(self) -> Any:
+        """Return the connected application, or raise if not connected."""
+        app = self.application
+        if app is None:
+            raise RuntimeError("Not connected to Solid Edge. Call connect() first.")
+        return app
+
     def quit_application(self) -> dict[str, Any]:
         """
         Quit the Solid Edge application.
@@ -153,8 +160,7 @@ class SolidEdgeConnection:
             Dict with process_id and window_handle
         """
         try:
-            self.ensure_connected()
-            app = self.application
+            app = self._get_app()
 
             info = {}
             try:
@@ -231,10 +237,9 @@ class SolidEdgeConnection:
             Dict with status and current settings
         """
         try:
-            self.ensure_connected()
-            app = self.application
+            app = self._get_app()
 
-            settings = {}
+            settings: dict[str, Any] = {}
 
             if delay_compute is not None:
                 try:
@@ -283,8 +288,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.StartCommand(command_id)
+            app = self._get_app()
+            app.StartCommand(command_id)
             return {"status": "success", "command_id": command_id}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -301,8 +306,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.DoIdle()
+            app = self._get_app()
+            app.DoIdle()
             return {"status": "success"}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -317,8 +322,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.Activate()
+            app = self._get_app()
+            app.Activate()
             return {"status": "activated"}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -337,8 +342,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.AbortCommand(abort_all)
+            app = self._get_app()
+            app.AbortCommand(abort_all)
             return {"status": "aborted", "abort_all": abort_all}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -354,8 +359,8 @@ class SolidEdgeConnection:
             Dict with environment info
         """
         try:
-            self.ensure_connected()
-            env = self.application.ActiveEnvironment
+            app = self._get_app()
+            env = app.ActiveEnvironment
 
             result = {"status": "success"}
             try:
@@ -377,8 +382,8 @@ class SolidEdgeConnection:
             Dict with status bar text
         """
         try:
-            self.ensure_connected()
-            text = self.application.StatusBar
+            app = self._get_app()
+            text = app.StatusBar
             return {"status": "success", "text": text}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -394,8 +399,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.StatusBar = text
+            app = self._get_app()
+            app.StatusBar = text
             return {"status": "set", "text": text}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -408,8 +413,8 @@ class SolidEdgeConnection:
             Dict with visible state
         """
         try:
-            self.ensure_connected()
-            visible = self.application.Visible
+            app = self._get_app()
+            visible = app.Visible
             return {"status": "success", "visible": visible}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -425,8 +430,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.Visible = visible
+            app = self._get_app()
+            app.Visible = visible
             return {"status": "set", "visible": visible}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -445,8 +450,8 @@ class SolidEdgeConnection:
             Dict with parameter value
         """
         try:
-            self.ensure_connected()
-            value = self.application.GetGlobalParameter(parameter)
+            app = self._get_app()
+            value = app.GetGlobalParameter(parameter)
             return {"status": "success", "parameter": parameter, "value": value}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -466,8 +471,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.SetGlobalParameter(parameter, value)
+            app = self._get_app()
+            app.SetGlobalParameter(parameter, value)
             return {"status": "set", "parameter": parameter, "value": value}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -489,8 +494,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.ConvertByFilePath(input_path, output_path)
+            app = self._get_app()
+            app.ConvertByFilePath(input_path, output_path)
             return {
                 "status": "converted",
                 "input": input_path,
@@ -510,8 +515,8 @@ class SolidEdgeConnection:
             Dict with template path
         """
         try:
-            self.ensure_connected()
-            path = self.application.GetDefaultTemplatePath(doc_type)
+            app = self._get_app()
+            path = app.GetDefaultTemplatePath(doc_type)
             return {"status": "success", "doc_type": doc_type, "template_path": path}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
@@ -528,8 +533,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.SetDefaultTemplatePath(doc_type, template_path)
+            app = self._get_app()
+            app.SetDefaultTemplatePath(doc_type, template_path)
             return {
                 "status": "set",
                 "doc_type": doc_type,
@@ -550,9 +555,9 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
+            app = self._get_app()
             style_names = {1: "Tiled", 2: "Horizontal", 4: "Vertical", 8: "Cascade"}
-            self.application.ArrangeWindows(style)
+            app.ArrangeWindows(style)
             return {
                 "status": "arranged",
                 "style": style,
@@ -569,8 +574,8 @@ class SolidEdgeConnection:
             Dict with active command info
         """
         try:
-            self.ensure_connected()
-            cmd = self.application.ActiveCommand
+            app = self._get_app()
+            cmd = app.ActiveCommand
             result: dict[str, Any | None] = {"status": "success"}
             if cmd is not None:
                 result["has_active_command"] = True
@@ -595,8 +600,8 @@ class SolidEdgeConnection:
             Dict with status
         """
         try:
-            self.ensure_connected()
-            self.application.RunMacro(filename)
+            app = self._get_app()
+            app.RunMacro(filename)
             return {"status": "executed", "filename": filename}
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}

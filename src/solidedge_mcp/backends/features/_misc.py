@@ -20,7 +20,7 @@ _logger = get_logger(__name__)
 class MiscFeaturesMixin:
     """Mixin providing mirror, pattern, face ops, body ops, and simplify methods."""
 
-    def create_pattern(self, pattern_type: str, **kwargs) -> dict[str, Any]:
+    def create_pattern(self, pattern_type: str, **kwargs: Any) -> dict[str, Any]:
         """
         Create a pattern of features.
 

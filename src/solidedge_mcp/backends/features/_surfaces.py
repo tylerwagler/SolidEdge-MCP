@@ -243,7 +243,7 @@ class SurfacesMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_swept_surface(
-        self, path_profile_index: int = None, want_end_caps: bool = False
+        self, path_profile_index: int | None = None, want_end_caps: bool = False
     ) -> dict[str, Any]:
         """
         Create a swept construction surface along a path.
@@ -686,7 +686,7 @@ class SurfacesMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_swept_surface_ex(
-        self, path_profile_index: int = None, want_end_caps: bool = False
+        self, path_profile_index: int | None = None, want_end_caps: bool = False
     ) -> dict[str, Any]:
         """
         Create a swept surface using the extended AddEx method.

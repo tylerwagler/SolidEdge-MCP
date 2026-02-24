@@ -5,6 +5,7 @@ Static resources require no parameters; resource templates accept URI parameters
 """
 
 import json
+from typing import Any
 
 from solidedge_mcp.managers import (
     connection,
@@ -17,7 +18,7 @@ from solidedge_mcp.managers import (
 )
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register read-only MCP resources (37 static + 15 templates)."""
 
     # ===================================================================

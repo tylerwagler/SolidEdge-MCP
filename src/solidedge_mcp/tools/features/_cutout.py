@@ -1,5 +1,7 @@
 """Cutout tools (extruded, revolved, normal, lofted, swept, helix)."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -10,7 +12,7 @@ def create_extruded_cutout(
     direction: str = "Normal",
     from_plane_index: int = 0,
     to_plane_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create an extruded cutout (removes material).
 
     method: 'finite' | 'through_all' | 'through_next' | 'from_to'
@@ -55,7 +57,7 @@ def create_extruded_cutout(
 def create_revolved_cutout(
     method: str = "finite",
     angle: float = 360.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a revolved cutout around the set axis.
 
     method: 'finite' | 'sync' | 'by_keypoint' | 'multi_body'
@@ -89,7 +91,7 @@ def create_normal_cutout(
     direction: str = "Normal",
     from_plane_index: int = 0,
     to_plane_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a normal cutout perpendicular to a face.
 
     method: 'finite' | 'through_all' | 'from_to'
@@ -118,7 +120,7 @@ def create_normal_cutout(
 def create_lofted_cutout(
     method: str = "basic",
     profile_indices: list[int] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Create a lofted cutout between multiple profiles.
 
     method: 'basic' | 'full'
@@ -135,7 +137,7 @@ def create_lofted_cutout(
 def create_swept_cutout(
     method: str = "basic",
     path_profile_index: int | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Create a swept cutout along a path.
 
     method: 'basic' | 'multi_body'
@@ -157,7 +159,7 @@ def create_helix_cutout(
     direction: str = "Right",
     from_plane_index: int = 0,
     to_plane_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a helical cutout.
 
     method: 'finite' | 'sync' | 'from_to' | 'from_to_sync'

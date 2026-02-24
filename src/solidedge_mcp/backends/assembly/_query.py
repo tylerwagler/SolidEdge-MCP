@@ -312,7 +312,7 @@ class QueryMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            result = {"component_index": component_index}
+            result: dict[str, Any] = {"component_index": component_index}
 
             try:
                 result["display_name"] = occurrence.DisplayName
@@ -355,7 +355,7 @@ class QueryMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            result = {"component_index": component_index}
+            result: dict[str, Any] = {"component_index": component_index}
 
             try:
                 occ_doc = occurrence.OccurrenceDocument
@@ -413,7 +413,7 @@ class QueryMixin:
                     for j in range(1, sub_occs.Count + 1):
                         try:
                             child = sub_occs.Item(j)
-                            child_info = {"index": j - 1}
+                            child_info: dict[str, Any] = {"index": j - 1}
                             try:
                                 child_info["name"] = child.Name
                             except Exception:
@@ -452,7 +452,7 @@ class QueryMixin:
 
             occurrences = doc.Occurrences
 
-            def build_bom_item(occ, depth=0):
+            def build_bom_item(occ: Any, depth: int = 0) -> dict[str, Any]:
                 item = {}
                 try:
                     item["name"] = occ.Name
@@ -858,7 +858,7 @@ class QueryMixin:
             for i in range(1, relations.Count + 1):
                 try:
                     rel = relations.Item(i)
-                    rel_info = {"index": i - 1}
+                    rel_info: dict[str, Any] = {"index": i - 1}
 
                     try:
                         rel_info["type"] = rel.Type
@@ -899,7 +899,7 @@ class QueryMixin:
             if not hasattr(doc, "Occurrences"):
                 return {"error": "Active document is not an assembly"}
 
-            def traverse_occurrence(occ, depth=0):
+            def traverse_occurrence(occ: Any, depth: int = 0) -> dict[str, Any]:
                 """Recursively build tree from an occurrence."""
                 node = {}
 

@@ -886,8 +886,6 @@ class TestCreateLouver:
 class TestCreatePattern:
     @pytest.mark.parametrize("disc, method", [
         ("rectangular_ex", "create_pattern_rectangular_ex"),
-        ("rectangular", "create_pattern_rectangular"),
-        ("circular", "create_pattern_circular"),
         ("circular_ex", "create_pattern_circular_ex"),
         ("duplicate", "create_pattern_duplicate"),
         ("by_fill", "create_pattern_by_fill"),
@@ -902,6 +900,11 @@ class TestCreatePattern:
         result = create_pattern(method=disc)
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
+
+    @pytest.mark.parametrize("disc", ["rectangular", "circular"])
+    def test_not_implemented(self, mock_mgr, disc):
+        result = create_pattern(method=disc)
+        assert "error" in result
 
     def test_unknown(self, mock_mgr):
         result = create_pattern(method="bogus")

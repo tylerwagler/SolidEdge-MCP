@@ -1,5 +1,7 @@
 """Hole creation tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -14,7 +16,7 @@ def create_hole(
     plane_index: int = 1,
     from_plane_index: int = 0,
     to_plane_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a hole at coordinates on a reference plane.
 
     method: 'finite' | 'through_all' | 'from_to'

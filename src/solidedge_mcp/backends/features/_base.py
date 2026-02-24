@@ -146,6 +146,7 @@ class FeatureManagerBase:
             feat, err = self._get_feature_by_index(index)
             if err:
                 return err
+            assert feat is not None
             name = getattr(feat, "Name", f"Feature_{index}")
             feat.Delete()
             _logger.info(f"Deleted feature: {name} (index={index})")
@@ -160,6 +161,7 @@ class FeatureManagerBase:
             feat, err = self._get_feature_by_index(index)
             if err:
                 return err
+            assert feat is not None
             name = getattr(feat, "Name", f"Feature_{index}")
             feat.Suppress()
             return {"status": "suppressed", "feature_name": name, "index": index}
@@ -172,6 +174,7 @@ class FeatureManagerBase:
             feat, err = self._get_feature_by_index(index)
             if err:
                 return err
+            assert feat is not None
             name = getattr(feat, "Name", f"Feature_{index}")
             feat.Unsuppress()
             return {"status": "unsuppressed", "feature_name": name, "index": index}
@@ -186,9 +189,11 @@ class FeatureManagerBase:
             feat, err = self._get_feature_by_index(index)
             if err:
                 return err
+            assert feat is not None
             target, err = self._get_feature_by_index(target_index)
             if err:
                 return err
+            assert target is not None
             name = getattr(feat, "Name", f"Feature_{index}")
             if after:
                 feat.MoveAfter(target)
@@ -210,6 +215,7 @@ class FeatureManagerBase:
             feat, err = self._get_feature_by_index(index)
             if err:
                 return err
+            assert feat is not None
             old_name = getattr(feat, "Name", f"Feature_{index}")
             feat.Name = new_name
             return {
@@ -229,6 +235,7 @@ class FeatureManagerBase:
             feat, err = self._find_feature_by_name(feature_name)
             if err:
                 return err
+            assert feat is not None
             feat.ConvertToType(target_type)
             return {
                 "status": "converted",

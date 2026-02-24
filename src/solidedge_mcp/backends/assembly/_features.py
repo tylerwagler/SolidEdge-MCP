@@ -79,7 +79,7 @@ class AssemblyFeaturesMixin:
             _logger.error(f"Failed to create component pattern: {e}")
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def _get_assembly_features(self):
+    def _get_assembly_features(self) -> tuple[Any, Any]:
         """Get the AssemblyFeatures object from the active assembly document."""
         doc = self.doc_manager.get_active_document()
         af = doc.AssemblyFeatures
@@ -123,7 +123,7 @@ class AssemblyFeaturesMixin:
             "Symmetric": AssemblyFeaturePropertyConstants.igAssemblyFeatureProfileSymmetric,
         }.get(profile_side, AssemblyFeaturePropertyConstants.igAssemblyFeatureProfileLeft)
 
-    def _get_scope_parts_array(self, doc, scope_parts: list[int]) -> list:
+    def _get_scope_parts_array(self, doc: Any, scope_parts: list[int]) -> list[Any]:
         """Resolve occurrence indices to occurrence objects."""
         occurrences = doc.Occurrences
         return [occurrences.Item(idx + 1) for idx in scope_parts]

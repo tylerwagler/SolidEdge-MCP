@@ -12,7 +12,7 @@ mcp = FastMCP("Solid Edge MCP Server")
 register_tools(mcp)
 
 
-def main():
+def main() -> None:
     """Entry point for the MCP server."""
     mcp.run()
 

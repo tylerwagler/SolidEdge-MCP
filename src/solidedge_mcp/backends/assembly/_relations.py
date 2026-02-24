@@ -103,7 +103,7 @@ class RelationsMixin:
         }
 
     def _validate_occurrences(
-        self, doc, occurrence1_index: int, occurrence2_index: int
+        self, doc: Any, occurrence1_index: int, occurrence2_index: int
     ) -> tuple[Any, Any, dict[str, Any] | None]:
         """Validate two occurrence indices and return occurrence objects.
 
@@ -138,7 +138,7 @@ class RelationsMixin:
         return occ1, occ2, None
 
     def _validate_relation_index(
-        self, doc, relation_index: int
+        self, doc: Any, relation_index: int
     ) -> tuple[Any, dict[str, Any] | None]:
         """Validate a relation index and return the relation object.
 
@@ -231,7 +231,7 @@ class RelationsMixin:
                 9: "Center",
             }
 
-            info = {"relation_index": relation_index}
+            info: dict[str, Any] = {"relation_index": relation_index}
 
             with contextlib.suppress(Exception):
                 info["type"] = rel.Type

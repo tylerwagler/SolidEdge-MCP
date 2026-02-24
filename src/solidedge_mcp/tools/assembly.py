@@ -1,3 +1,5 @@
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics, validate_path
 from solidedge_mcp.managers import assembly_manager
 
@@ -22,7 +24,7 @@ def add_assembly_component(
     template_name: str = "",
     matrix: list[float] | None = None,
     segment_indices: list[int] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Add a component to the active assembly.
 
     method: 'basic' | 'with_transform' | 'family'
@@ -103,7 +105,7 @@ def manage_component(
     count: int = 1,
     spacing: float = 0.0,
     direction: str = "X",
-) -> dict:
+) -> dict[str, Any]:
     """Manage an assembly component.
 
     action: 'delete' | 'replace' | 'suppress' | 'reorder'
@@ -171,7 +173,7 @@ def query_component(
     property: str = "list",
     component_index: int = 0,
     internal_id: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Query assembly component information.
 
     property: 'list' | 'info' | 'bounding_box' | 'bom'
@@ -268,7 +270,7 @@ def set_component_appearance(
     red: int = 0,
     green: int = 0,
     blue: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Set a component's visual appearance.
 
     property: 'visibility' | 'color'
@@ -304,7 +306,7 @@ def transform_component(
     dx: float = 0,
     dy: float = 0,
     dz: float = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Move or reposition a component.
 
     method: 'update_position' | 'set_origin' | 'put_origin' | 'move'
@@ -359,7 +361,7 @@ def set_component_orientation(
     rx: float = 0,
     ry: float = 0,
     rz: float = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Set a component's full transform (position + orientation).
 
     method: 'set_transform' | 'put_euler'
@@ -406,7 +408,7 @@ def rotate_component(
     axis_y2: float = 0,
     axis_z2: float = 0,
     angle: float = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Rotate a component around an axis.
 
     Axis defined by two points (meters). Angle in degrees. 0-based component_index.
@@ -437,7 +439,7 @@ def add_assembly_constraint(
     component2_index: int = 0,
     mate_type: str = "Mate",
     angle: float = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Add a constraint between two assembly components.
 
     type: 'mate' | 'align' | 'planar_align' | 'axial_align' | 'angle'
@@ -488,7 +490,7 @@ def add_assembly_relation(
     angle: float = 0.0,
     ratio1: float = 1.0,
     ratio2: float = 1.0,
-) -> dict:
+) -> dict[str, Any]:
     """Add a relation between two assembly components.
 
     type: 'planar' | 'axial' | 'angular' | 'point' | 'tangent' | 'gear'
@@ -544,7 +546,7 @@ def manage_relation(
     offset: float = 0.0,
     angle: float = 0.0,
     aligned: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Manage assembly relations/constraints.
 
     action: 'list' | 'info' | 'delete' | 'get_offset'
@@ -635,7 +637,7 @@ def assembly_feature(
     num_trace_curves: int = 1,
     num_cross_sections: int = 1,
     options: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create or manage assembly-level features.
 
     type: 'extruded_cutout' | 'revolved_cutout' | 'hole'
@@ -739,7 +741,7 @@ def virtual_component(
     filename: str = "",
     doc_number: str = "",
     revision_id: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Manage virtual components in the assembly.
 
     method: 'new' | 'predefined' | 'bidm'
@@ -777,7 +779,7 @@ def structural_frame(
     part_filename: str = "",
     path_indices: list[int] | None = None,
     coord_system_name: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Create a structural frame in the assembly.
 
     method: 'basic' | 'by_orientation'
@@ -822,7 +824,7 @@ def wiring(
     x: float = 0,
     y: float = 0,
     z: float = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create wiring harness elements in the assembly.
 
     type: 'wire' | 'cable' | 'bundle' | 'splice'
@@ -874,7 +876,7 @@ def wiring(
 # ================================================================
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register assembly tools with the MCP server."""
     mcp.tool()(add_assembly_component)
     mcp.tool()(manage_component)

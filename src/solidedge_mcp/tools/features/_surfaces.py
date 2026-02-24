@@ -1,5 +1,7 @@
 """Surface creation tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -14,7 +16,7 @@ def create_extruded_surface(
     keypoint_type: str = "End",
     treatment_type: str = "None",
     draft_angle: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create an extruded surface.
 
     method: 'finite' | 'from_to' | 'by_keypoint'
@@ -50,7 +52,7 @@ def create_revolved_surface(
     angle: float = 360.0,
     want_end_caps: bool = False,
     keypoint_type: str = "End",
-) -> dict:
+) -> dict[str, Any]:
     """Create a revolved surface.
 
     method: 'finite' | 'sync' | 'by_keypoint' | 'full'
@@ -79,7 +81,7 @@ def create_revolved_surface(
 def create_lofted_surface(
     method: str = "basic",
     want_end_caps: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Create a lofted surface.
 
     method: 'basic' | 'v2'
@@ -97,7 +99,7 @@ def create_swept_surface(
     method: str = "basic",
     path_profile_index: int | None = None,
     want_end_caps: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Create a swept surface.
 
     method: 'basic' | 'ex'
@@ -114,6 +116,6 @@ def create_swept_surface(
 def create_bounded_surface(
     want_end_caps: bool = True,
     periodic: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Create a bounded (blue) surface from accumulated profiles."""
     return feature_manager.create_bounded_surface(want_end_caps, periodic)

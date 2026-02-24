@@ -34,7 +34,7 @@ class SelectionMixin:
             for i in range(1, count + 1):
                 try:
                     item = select_set.Item(i)
-                    item_info = {"index": i - 1}
+                    item_info: dict[str, Any] = {"index": i - 1}
 
                     with contextlib.suppress(Exception):
                         item_info["type"] = str(type(item).__name__)

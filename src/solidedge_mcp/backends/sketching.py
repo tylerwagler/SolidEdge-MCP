@@ -685,7 +685,10 @@ class SketchManager:
             for elem in elements:
                 if not isinstance(elem, (list, tuple)) or len(elem) != 2:
                     return {"error": f"Each element must be [type, index], got: {elem}"}
-                objs.append(self._get_sketch_element(elem[0], elem[1]))
+                elem_type, elem_index = elem[0], elem[1]
+                if not isinstance(elem_type, str) or not isinstance(elem_index, int):
+                    return {"error": f"Element must be [str, int], got: {elem}"}
+                objs.append(self._get_sketch_element(elem_type, elem_index))
 
             ct = constraint_type.lower()
 
@@ -801,11 +804,12 @@ class SketchManager:
             # Add to accumulated profiles for loft/sweep operations
             self.accumulated_profiles.append(self.active_profile)
 
+            sketch_id = "sketch"
+            if self.active_sketch is not None and hasattr(self.active_sketch, "Name"):
+                sketch_id = self.active_sketch.Name
             result = {
                 "status": "closed",
-                "sketch_id": (
-                    self.active_sketch.Name if hasattr(self.active_sketch, "Name") else "sketch"
-                ),
+                "sketch_id": sketch_id,
                 "has_revolution_axis": self.active_refaxis is not None,
                 "accumulated_profiles": len(self.accumulated_profiles),
             }

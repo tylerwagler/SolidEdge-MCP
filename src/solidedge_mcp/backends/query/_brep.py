@@ -70,7 +70,7 @@ class BRepMixin:
             for i in range(1, faces.Count + 1):
                 try:
                     face = faces.Item(i)
-                    face_info = {"index": i - 1}
+                    face_info: dict[str, Any] = {"index": i - 1}
                     with contextlib.suppress(Exception):
                         face_info["area"] = face.Area
                     try:
@@ -511,7 +511,7 @@ class BRepMixin:
 
             edge = edges.Item(edge_index + 1)
 
-            info = {
+            info: dict[str, Any] = {
                 "face_index": face_index,
                 "edge_index": edge_index,
             }

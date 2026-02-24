@@ -190,7 +190,7 @@ class DocumentQueryMixin:
             for i in range(1, ref_planes.Count + 1):
                 try:
                     plane = ref_planes.Item(i)
-                    plane_info = {
+                    plane_info: dict[str, Any] = {
                         "index": i,
                         "is_default": i <= 3,
                     }

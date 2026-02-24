@@ -8,6 +8,8 @@ Composite tools use a discriminator parameter (type/action/property/target)
 to dispatch to the correct backend method via match/case.
 """
 
+from typing import Any
+
 from solidedge_mcp.managers import query_manager
 
 # ── Group 59: measure ──────────────────────────────────────────────
@@ -24,7 +26,7 @@ def measure(
     x3: float = 0.0,
     y3: float = 0.0,
     z3: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Measure distance or angle between 3D points.
 
     type: 'distance' | 'angle'
@@ -52,7 +54,7 @@ def manage_variable(
     new_name: str | None = None,
     pattern: str = "*",
     case_insensitive: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Manage document variables.
 
     action: 'set' | 'add' | 'query' | 'rename' | 'translate'
@@ -60,12 +62,18 @@ def manage_variable(
     """
     match action:
         case "set":
+            if value is None:
+                return {"error": "value is required for 'set' action"}
             return query_manager.set_variable(name, value)
         case "add":
+            if formula is None:
+                return {"error": "formula is required for 'add' action"}
             return query_manager.add_variable(name, formula, units_type)
         case "query":
             return query_manager.query_variables(pattern, case_insensitive)
         case "rename":
+            if new_name is None:
+                return {"error": "new_name is required for 'rename' action"}
             return query_manager.rename_variable(name, new_name)
         case "translate":
             return query_manager.translate_variable(name)
@@ -74,6 +82,8 @@ def manage_variable(
         case "add_from_clipboard":
             return query_manager.add_variable_from_clipboard(name, units_type)
         case "set_formula":
+            if formula is None:
+                return {"error": "formula is required for 'set_formula' action"}
             return query_manager.set_variable_formula(name, formula)
         case _:
             return {"error": f"Unknown action: {action}"}
@@ -86,7 +96,7 @@ def manage_property(
     action: str,
     name: str = "",
     value: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Manage document and custom properties.
 
     action: 'set_document' | 'set_custom' | 'delete_custom'
@@ -109,7 +119,7 @@ def manage_material(
     action: str = "set",
     material_name: str = "",
     density: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Manage material assignment and density.
 
     action: 'set' | 'set_density' | 'set_by_name' | 'get_library'
@@ -140,7 +150,7 @@ def set_appearance(
     face_index: int = 0,
     opacity: float = 1.0,
     reflectivity: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Set visual appearance of the active part body or a face.
 
     target: 'body_color' | 'face_color' | 'opacity' | 'reflectivity'
@@ -168,7 +178,7 @@ def manage_layer(
     name_or_index: str | int = "",
     show: bool | None = None,
     selectable: bool | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Manage layers in the active document.
 
     action: 'add' | 'activate' | 'set_properties' | 'delete'
@@ -177,6 +187,8 @@ def manage_layer(
     """
     match action:
         case "add":
+            if not isinstance(name_or_index, str):
+                return {"error": "name_or_index must be a string for 'add' action"}
             return query_manager.add_layer(name_or_index)
         case "activate":
             return query_manager.activate_layer(name_or_index)
@@ -195,7 +207,7 @@ def select_set(
     action: str,
     object_type: str = "",
     index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Manage the document selection set.
 
     action: 'clear' | 'add' | 'remove' | 'all' | 'copy' | 'cut'
@@ -249,7 +261,7 @@ def edit_feature_extent(
     crown_curvature_side: int = 0,
     crown_radius_or_offset: float = 0.0,
     crown_takeoff_angle: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Edit feature extent, thin wall, face offset, body array, and treatment properties.
 
     property: 'get_direction1' | 'set_direction1' | 'get_direction2' | 'set_direction2'
@@ -285,7 +297,7 @@ def edit_feature_extent(
         case "get_body_array":
             return query_manager.get_body_array(feature_name)
         case "set_body_array":
-            return query_manager.set_body_array(feature_name, body_indices)
+            return query_manager.set_body_array(feature_name, body_indices or [])
         case "get_to_face":
             return query_manager.get_to_face_offset(feature_name)
         case "set_to_face":
@@ -316,7 +328,7 @@ def manage_feature_tree(
     feature_name: str = "",
     new_name: str = "",
     mode: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Manage features in the design tree.
 
     action: 'rename' | 'suppress' | 'unsuppress' | 'set_mode'
@@ -345,7 +357,7 @@ def query_edge(
     edge_index: int = 0,
     param: float = 0.5,
     which: str = "start",
-) -> dict:
+) -> dict[str, Any]:
     """Query edge topology and geometry on a face.
 
     property: 'endpoints' | 'length' | 'tangent' | 'geometry' | 'curvature' | 'vertex'
@@ -377,7 +389,7 @@ def query_face(
     face_index: int = 0,
     u: float = 0.5,
     v: float = 0.5,
-) -> dict:
+) -> dict[str, Any]:
     """Query face topology and geometry.
 
     property: 'normal' | 'geometry' | 'loops' | 'curvature'
@@ -413,7 +425,7 @@ def query_body(
     z: float = 0.0,
     shell_index: int = 0,
     tolerance: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Query body-level topology and geometry.
 
     property: 'extreme_point' | 'faces_by_ray' | 'shells' | 'vertices'
@@ -457,7 +469,7 @@ def query_bspline(
     type: str,
     face_index: int = 0,
     edge_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Query B-spline (NURBS) metadata from edges or faces.
 
     type: 'curve' | 'surface'
@@ -474,7 +486,7 @@ def query_bspline(
 # ── Composite: recompute ──────────────────────────────────────────
 
 
-def recompute(scope: str = "model") -> dict:
+def recompute(scope: str = "model") -> dict[str, Any]:
     """Recompute the active model or document.
 
     scope: 'model' | 'document'
@@ -491,7 +503,7 @@ def recompute(scope: str = "model") -> dict:
 # ── Registration ──────────────────────────────────────────────────
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register query tools with the MCP server."""
     mcp.tool()(measure)
     mcp.tool()(manage_variable)

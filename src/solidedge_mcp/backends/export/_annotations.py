@@ -96,7 +96,8 @@ class AnnotationsMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_dimension(
-        self, x1: float, y1: float, x2: float, y2: float, dim_x: float = None, dim_y: float = None
+        self, x1: float, y1: float, x2: float, y2: float,
+        dim_x: float | None = None, dim_y: float | None = None,
     ) -> dict[str, Any]:
         """
         Add a linear dimension between two points on the active draft sheet.
@@ -140,7 +141,8 @@ class AnnotationsMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def add_balloon(
-        self, x: float, y: float, text: str = "", leader_x: float = None, leader_y: float = None
+        self, x: float, y: float, text: str = "",
+        leader_x: float | None = None, leader_y: float | None = None,
     ) -> dict[str, Any]:
         """
         Add a balloon annotation to the active draft sheet.

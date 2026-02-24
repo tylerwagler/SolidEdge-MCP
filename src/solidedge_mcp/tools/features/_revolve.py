@@ -1,5 +1,7 @@
 """Revolve protrusion tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -10,7 +12,7 @@ def create_revolve(
     axis_type: str = "CenterLine",
     wall_thickness: float = 0.0,
     treatment_type: str = "None",
-) -> dict:
+) -> dict[str, Any]:
     """Create a revolved protrusion around the set axis.
 
     method: 'full' | 'finite' | 'sync' | 'finite_sync'

@@ -1,5 +1,7 @@
 """Sketching tools for Solid Edge MCP."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import sketch_manager
 
@@ -15,7 +17,7 @@ def manage_sketch(
     x2: float = 0.0,
     y2: float = 0.0,
     visible: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Create, close, or configure a 2D sketch.
 
     action: 'create' | 'close' | 'create_on_plane'
@@ -64,10 +66,10 @@ def draw(
     end_angle: float = 360.0,
     angle: float = 0.0,
     sides: int = 6,
-    points: list | None = None,
+    points: list[list[float]] | None = None,
     x: float = 0.0,
     y: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Draw geometry in the active sketch.
 
     shape: 'line' | 'circle' | 'rectangle' | 'arc' | 'polygon'
@@ -136,7 +138,7 @@ def sketch_modify(
     angle_degrees: float = 0.0,
     scale_factor: float = 1.0,
     axis: str = "X",
-) -> dict:
+) -> dict[str, Any]:
     """Modify sketch geometry with common operations.
 
     action: 'fillet' | 'chamfer' | 'offset' | 'rotate' | 'scale'
@@ -192,7 +194,7 @@ def sketch_advanced_modify(
     clean_identical: bool = True,
     clean_small: bool = True,
     small_tolerance: float = 0.0001,
-) -> dict:
+) -> dict[str, Any]:
     """Specialized sketch modification operations.
 
     action: 'mirror_spline' | 'offset_2d' | 'clean'
@@ -231,14 +233,14 @@ def sketch_advanced_modify(
 def sketch_constraint(
     type: str = "geometric",
     constraint_type: str = "",
-    elements: list | None = None,
+    elements: list[Any] | None = None,
     element1_type: str = "",
     element1_index: int = 0,
     keypoint1: int = 0,
     element2_type: str = "",
     element2_index: int = 0,
     keypoint2: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Add a constraint to sketch elements.
 
     type: 'geometric' | 'keypoint'
@@ -272,7 +274,7 @@ def sketch_project(
     x: float = 0.0,
     y: float = 0.0,
     tolerance: float = 0.001,
-) -> dict:
+) -> dict[str, Any]:
     """Project external geometry into the active sketch.
 
     source: 'edge' | 'include_edge' | 'ref_plane' | 'silhouette'
@@ -305,7 +307,7 @@ def sketch_project(
 # === Registration ===
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register sketching tools with the MCP server."""
     mcp.tool()(manage_sketch)
     mcp.tool()(draw)

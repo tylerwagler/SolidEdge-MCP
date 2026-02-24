@@ -138,7 +138,9 @@ class RoundsChamfersMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_variable_round(self, radii: list, face_index: int = None) -> dict[str, Any]:
+    def create_variable_round(
+        self, radii: list[float], face_index: int | None = None,
+    ) -> dict[str, Any]:
         """
         Create a variable-radius round (fillet) on body edges.
 
@@ -475,7 +477,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_blend(self, radius: float, face_index: int = None) -> dict[str, Any]:
+    def create_blend(self, radius: float, face_index: int | None = None) -> dict[str, Any]:
         """
         Create a blend (face-to-face fillet) feature.
 
@@ -545,7 +547,7 @@ class RoundsChamfersMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_blend_variable(
-        self, radius1: float, radius2: float, face_index: int = None
+        self, radius1: float, radius2: float, face_index: int | None = None
     ) -> dict[str, Any]:
         """
         Create a variable-radius blend feature.

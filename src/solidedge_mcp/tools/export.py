@@ -1,5 +1,7 @@
 """Export, drawing, and view tools for Solid Edge MCP."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import export_manager, view_manager
 
@@ -14,7 +16,7 @@ def export_file(
     ini_file_path: str = "",
     width: int = 800,
     height: int = 600,
-) -> dict:
+) -> dict[str, Any]:
     """Export the active document to a file.
 
     format: 'step' | 'stl' | 'iges' | 'pdf' | 'dxf'
@@ -72,7 +74,7 @@ def add_drawing_view(
     radius: float = 0.01,
     source_view_index: int = 0,
     section_type: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Add a drawing view to the active draft.
 
     type: 'assembly' | 'assembly_ex' | 'with_config'
@@ -131,7 +133,7 @@ def manage_drawing_view(
     orientation: str = "Front",
     align: bool = True,
     force_update: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Manage an existing drawing view.
 
     action: 'get_model_link' | 'show_tangent_edges'
@@ -193,7 +195,7 @@ def add_annotation(
     height: float = 0.005,
     leader_x: float | None = None,
     leader_y: float | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Add a text annotation to the active draft.
 
     type: 'text_box' | 'leader' | 'balloon' | 'note'
@@ -234,7 +236,7 @@ def add_dimension_annotation(
     point_y: float = 0.0,
     origin_x: float = 0.0,
     origin_y: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Add a dimension annotation to the active draft.
 
     type: 'dimension' | 'angular_dimension' | 'radial_dimension'
@@ -294,7 +296,7 @@ def add_symbol_annotation(
     symbol_type: str = "machined",
     weld_type: str = "fillet",
     tolerance_text: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Add a symbol annotation to the active draft.
 
     type: 'center_mark' | 'centerline' | 'surface_finish'
@@ -334,7 +336,7 @@ def add_2d_dimension(
     y3: float = 0.0,
     object_index: int = 0,
     object_type: str = "circle",
-) -> dict:
+) -> dict[str, Any]:
     """Add a 2D dimension on the active draft sheet.
 
     type: 'distance' | 'length' | 'radius' | 'angle'
@@ -372,7 +374,7 @@ def camera_control(
     dx: int = 0,
     dy: int = 0,
     factor: float = 1.0,
-) -> dict:
+) -> dict[str, Any]:
     """Control the 3D camera/view.
 
     action: 'set_orientation' | 'zoom_fit' | 'zoom_to_selection'
@@ -429,7 +431,7 @@ def set_camera(
     up_z: float = 0.0,
     perspective: bool = False,
     scale_or_angle: float = 1.0,
-) -> dict:
+) -> dict[str, Any]:
     """Set the 3D camera position, target, and projection.
 
     Coordinates in meters. scale_or_angle is ortho scale or perspective FOV angle.
@@ -467,7 +469,7 @@ def display_control(
     screen_y: int = 0,
     face_index: int = 0,
     texture_name: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Control display settings and coordinate transforms.
 
     action: 'set_mode' | 'set_background'
@@ -503,7 +505,7 @@ def manage_sheet(
     new_name: str = "",
     template: str | None = None,
     views: list[str] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Manage draft sheets.
 
     action: 'activate' | 'rename' | 'delete'
@@ -549,7 +551,7 @@ def print_control(
     sheets: str | None = None,
     color_as_black: bool = False,
     collate: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Control printing for the active draft.
 
     action: 'print' | 'set_printer' | 'get_printer'
@@ -592,7 +594,7 @@ def print_control(
 def query_sheet(
     type: str,
     view_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Query sheet collections on the active draft.
 
     type: 'dimensions' | 'balloons' | 'text_boxes'
@@ -639,7 +641,7 @@ def manage_annotation_data(
     show: bool = True,
     show_dimensions: bool = True,
     show_annotations: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Manage symbols and PMI annotation data.
 
     action: 'add_symbol' | 'get_symbols'
@@ -682,7 +684,7 @@ def add_smart_frame(
     bottom: float = 0.0,
     left: float = 0.0,
     right: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Add a smart frame (title block/border) to the sheet.
 
     method: 'two_point' | 'by_origin'
@@ -711,7 +713,7 @@ def draft_config(
     value: float = 0.0,
     x: float = 0.0,
     y: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Manage draft document configuration.
 
     action: 'get_global' | 'set_global'
@@ -744,7 +746,7 @@ def create_table(
     y: float = 0.25,
     view_index: int = 0,
     saved_settings: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Create a table on the active draft sheet.
 
     type: 'parts_list' | 'bend'
@@ -765,7 +767,7 @@ def create_table(
 # ================================================================
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register export, drawing, and view tools."""
     mcp.tool()(export_file)
     mcp.tool()(add_drawing_view)

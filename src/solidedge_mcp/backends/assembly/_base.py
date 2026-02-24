@@ -17,7 +17,7 @@ class AssemblyManagerBase:
         self.sketch_manager = sketch_manager
 
     def _validate_occurrence_index(
-        self, doc, component_index: int
+        self, doc: Any, component_index: int
     ) -> tuple[Any, Any, dict[str, Any] | None]:
         """Validate a single occurrence index and return (occurrences, occurrence, error_dict).
 

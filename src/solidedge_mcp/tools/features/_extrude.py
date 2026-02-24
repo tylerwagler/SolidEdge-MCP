@@ -1,5 +1,7 @@
 """Extrude protrusion tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -11,7 +13,7 @@ def create_extrude(
     wall_thickness: float = 0.0,
     from_plane_index: int = 0,
     to_plane_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create an extruded protrusion from the active sketch profile.
 
     method: 'finite' | 'infinite' | 'through_next' | 'from_to'

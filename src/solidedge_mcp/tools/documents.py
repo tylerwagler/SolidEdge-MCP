@@ -1,5 +1,7 @@
 """Document management tools for Solid Edge MCP."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import doc_manager
 
@@ -9,7 +11,7 @@ from solidedge_mcp.managers import doc_manager
 def create_document(
     type: str = "part",
     template: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Create a new Solid Edge document.
 
     type: 'part' | 'assembly' | 'sheet_metal' | 'draft' | 'weldment'
@@ -38,7 +40,7 @@ def open_document(
     template: str = "",
     filename: str | None = None,
     dialog_title: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Open a document.
 
     method: 'foreground' | 'background' | 'with_template' | 'dialog'
@@ -70,7 +72,7 @@ def open_document(
 def close_document(
     scope: str = "active",
     save: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Close documents.
 
     scope: 'active' | 'all'
@@ -90,7 +92,7 @@ def close_document(
 def save_document(
     method: str = "save",
     file_path: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Save the active document.
 
     method: 'save' | 'copy_as'
@@ -103,6 +105,8 @@ def save_document(
         case "save":
             return doc_manager.save_document(file_path)
         case "copy_as":
+            if file_path is None:
+                return {"error": "file_path is required for 'copy_as' method"}
             return doc_manager.save_copy_as(file_path)
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -111,7 +115,7 @@ def save_document(
 # === Composite: undo_redo ===
 
 
-def undo_redo(action: str = "undo") -> dict:
+def undo_redo(action: str = "undo") -> dict[str, Any]:
     """Undo or redo the last operation.
 
     action: 'undo' | 'redo'
@@ -128,12 +132,12 @@ def undo_redo(action: str = "undo") -> dict:
 # === Standalone tools ===
 
 
-def activate_document(name_or_index) -> dict:
+def activate_document(name_or_index: str | int) -> dict[str, Any]:
     """Activate a specific open document by name or index."""
     return doc_manager.activate_document(name_or_index)
 
 
-def import_file(file_path: str) -> dict:
+def import_file(file_path: str) -> dict[str, Any]:
     """Import an external CAD file (STEP, IGES, Parasolid, etc.)."""
     file_path, err = validate_path(file_path, must_exist=True)
     if err:
@@ -144,7 +148,7 @@ def import_file(file_path: str) -> dict:
 # === Registration ===
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register document tools with the MCP server."""
     # Composite tools
     mcp.tool()(create_document)

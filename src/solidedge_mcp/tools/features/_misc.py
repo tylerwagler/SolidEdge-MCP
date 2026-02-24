@@ -1,5 +1,7 @@
 """Miscellaneous feature tools (thicken, pattern, mirror, thin wall, etc.)."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -8,7 +10,7 @@ def thicken(
     method: str = "basic",
     thickness: float = 0.0,
     direction: str = "Both",
-) -> dict:
+) -> dict[str, Any]:
     """Thicken a surface to create a solid.
 
     method: 'basic' | 'sync'
@@ -46,7 +48,7 @@ def create_pattern(
     y_offsets: list[float] | None = None,
     curve_edge_index: int = 0,
     spacing: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a pattern of a feature.
 
     method: 'rectangular_ex' | 'rectangular' | 'circular'
@@ -73,15 +75,15 @@ def create_pattern(
                 y_spacing,
             )
         case "rectangular":
-            return feature_manager.create_pattern_rectangular(
-                feature_index,
-                x_count,
-                y_count,
-                x_gap,
-                y_gap,
-            )
+            return {
+                "error": "Pattern 'rectangular' (by index) is not implemented. "
+                "Use 'rectangular_ex' (by name) instead."
+            }
         case "circular":
-            return feature_manager.create_pattern_circular(feature_index, count, angle, radius)
+            return {
+                "error": "Pattern 'circular' (by index) is not implemented. "
+                "Use 'circular_ex' (by name) instead."
+            }
         case "circular_ex":
             return feature_manager.create_pattern_circular_ex(
                 feature_name,
@@ -99,9 +101,13 @@ def create_pattern(
                 y_spacing,
             )
         case "by_table":
-            return feature_manager.create_pattern_by_table(feature_name, x_offsets, y_offsets)
+            return feature_manager.create_pattern_by_table(
+                feature_name, x_offsets or [], y_offsets or []
+            )
         case "by_table_sync":
-            return feature_manager.create_pattern_by_table_sync(feature_name, x_offsets, y_offsets)
+            return feature_manager.create_pattern_by_table_sync(
+                feature_name, x_offsets or [], y_offsets or []
+            )
         case "by_fill_ex":
             return feature_manager.create_pattern_by_fill_ex(
                 feature_name,
@@ -128,7 +134,7 @@ def create_mirror(
     mirror_plane_index: int = 0,
     new_file_name: str = "",
     link_to_original: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Mirror a feature across a reference plane, or save as mirror part.
 
     method: 'basic' | 'sync_ex' | 'save_as_part'
@@ -152,7 +158,7 @@ def create_thin_wall(
     method: str = "basic",
     thickness: float = 0.0,
     open_face_indices: list[int] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Convert a solid body to a thin wall (shell).
 
     method: 'basic' | 'with_open_faces'
@@ -178,7 +184,7 @@ def face_operation(
     vertex2_index: int = 0,
     edge_index: int = 0,
     angle: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Perform a face operation (rotate).
 
     type: 'rotate_by_points' | 'rotate_by_edge'
@@ -206,7 +212,7 @@ def add_body(
     method: str = "basic",
     body_type: str = "Solid",
     tag: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Add a body to the part.
 
     method: 'basic' | 'by_mesh' | 'feature' | 'construction'
@@ -229,7 +235,7 @@ def add_body(
 
 def simplify(
     method: str = "auto",
-) -> dict:
+) -> dict[str, Any]:
     """Simplify the model.
 
     method: 'auto' | 'enclosure' | 'duplicate'
@@ -256,7 +262,7 @@ def manage_feature(
     new_name: str = "",
     feature_name: str = "",
     target_type: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Manage features in the feature tree.
 
     action: 'delete' | 'suppress' | 'unsuppress' | 'reorder'
@@ -285,7 +291,7 @@ def create_draft_angle(
     face_index: int,
     angle: float,
     plane_index: int = 1,
-) -> dict:
+) -> dict[str, Any]:
     """Add a draft angle to a face."""
     err = validate_numerics(angle=angle)
     if err:

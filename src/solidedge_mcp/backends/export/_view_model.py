@@ -347,7 +347,7 @@ class ViewModel:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def _get_view_object(self):
+    def _get_view_object(self) -> Any:
         """Get the active view object from the first window."""
         doc = self.doc_manager.get_active_document()
         if not hasattr(doc, "Windows") or doc.Windows.Count == 0:

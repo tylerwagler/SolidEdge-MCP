@@ -4,6 +4,8 @@ Consolidated composite tools that use a `method` (or `shape`/`type`/`action`)
 discriminator parameter to dispatch to the correct backend method.
 """
 
+from typing import Any
+
 from solidedge_mcp.tools.features._cutout import (
     create_extruded_cutout,
     create_helix_cutout,
@@ -120,7 +122,7 @@ __all__ = [
 ]
 
 
-def register(mcp):
+def register(mcp: Any) -> None:
     """Register feature tools with the MCP server."""
     # Composite tools
     mcp.tool()(create_extrude)

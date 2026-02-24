@@ -39,6 +39,35 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 
+# pywin32 / pythoncom have no type stubs
+[[tool.mypy.overrides]]
+module = [
+    "win32com",
+    "win32com.*",
+    "pythoncom",
+    "pywintypes",
+]
+ignore_missing_imports = true
+
+# Backend mixin modules use cooperative multiple inheritance.
+# Mixins access attributes (doc_manager, sketch_manager, etc.) defined on
+# the base class; mypy can't resolve these without Protocol refactoring.
+[[tool.mypy.overrides]]
+module = [
+    "solidedge_mcp.backends.features.*",
+    "solidedge_mcp.backends.export.*",
+    "solidedge_mcp.backends.assembly.*",
+    "solidedge_mcp.backends.query.*",
+]
+disable_error_code = ["attr-defined", "no-any-return"]
+
+# FastMCP decorators (@mcp.tool(), @mcp.resource()) lack type information
+[[tool.mypy.overrides]]
+module = [
+    "solidedge_mcp.tools.*",
+]
+disable_error_code = ["untyped-decorator"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

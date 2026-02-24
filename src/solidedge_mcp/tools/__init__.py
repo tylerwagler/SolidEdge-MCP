@@ -1,3 +1,5 @@
+from typing import Any
+
 from . import (
     assembly,
     connection,
@@ -11,7 +13,7 @@ from . import (
 )
 
 
-def register_tools(mcp):
+def register_tools(mcp: Any) -> None:
     """Register all tools and resources with the MCP server instance."""
     # Resources (read-only data endpoints)
     resources.register(mcp)

@@ -248,7 +248,7 @@ class DrawingMixin:
         y: float = 0.15,
         orientation: str = "Isometric",
         scale: float = 1.0,
-        config: str = None,
+        config: str | None = None,
     ) -> dict[str, Any]:
         """
         Add an extended assembly drawing view with optional configuration.

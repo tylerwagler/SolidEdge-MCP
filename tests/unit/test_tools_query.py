@@ -55,19 +55,19 @@ class TestMeasure:
 # === manage_variable ===
 
 class TestManageVariable:
-    @pytest.mark.parametrize("disc, method", [
-        ("set", "set_variable"),
-        ("add", "add_variable"),
-        ("query", "query_variables"),
-        ("rename", "rename_variable"),
-        ("translate", "translate_variable"),
-        ("copy_clipboard", "copy_variable_to_clipboard"),
-        ("add_from_clipboard", "add_variable_from_clipboard"),
-        ("set_formula", "set_variable_formula"),
+    @pytest.mark.parametrize("disc, method, kwargs", [
+        ("set", "set_variable", {"value": 0.0}),
+        ("add", "add_variable", {"formula": "0"}),
+        ("query", "query_variables", {}),
+        ("rename", "rename_variable", {"new_name": "x"}),
+        ("translate", "translate_variable", {}),
+        ("copy_clipboard", "copy_variable_to_clipboard", {}),
+        ("add_from_clipboard", "add_variable_from_clipboard", {}),
+        ("set_formula", "set_variable_formula", {"formula": "0"}),
     ])
-    def test_dispatch(self, mock_mgr, disc, method):
+    def test_dispatch(self, mock_mgr, disc, method, kwargs):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
-        result = manage_variable(action=disc)
+        result = manage_variable(action=disc, **kwargs)
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
 

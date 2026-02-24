@@ -1,5 +1,7 @@
 """Primitive solid creation and cutout tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -21,7 +23,7 @@ def create_primitive(
     radius: float = 0.0,
     depth: float = 0.0,
     plane_index: int = 1,
-) -> dict:
+) -> dict[str, Any]:
     """Create a primitive solid shape.
 
     shape: 'box_two_points' | 'box_center' | 'box_three_points'
@@ -82,7 +84,7 @@ def create_primitive_cutout(
     radius: float = 0.0,
     height: float = 0.0,
     plane_index: int = 1,
-) -> dict:
+) -> dict[str, Any]:
     """Create a primitive cutout (removes material).
 
     shape: 'box' | 'cylinder' | 'sphere'

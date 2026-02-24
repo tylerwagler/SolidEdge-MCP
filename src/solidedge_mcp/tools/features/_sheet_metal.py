@@ -1,5 +1,7 @@
 """Sheet metal tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -15,7 +17,7 @@ def create_flange(
     bend_deduction: float = 0.0,
     ref_face_index: int = 0,
     bend_radius: float = 0.001,
-) -> dict:
+) -> dict[str, Any]:
     """Create a flange on an edge (sheet metal).
 
     method: 'basic' | 'by_match_face' | 'sync' | 'by_face'
@@ -86,7 +88,6 @@ def create_flange(
                 flange_length,
                 side,
                 inside_radius or 0.001,
-                bend_deduction,
             )
         case "by_face_with_bend":
             return feature_manager.create_flange_by_face_with_bend(
@@ -96,7 +97,6 @@ def create_flange(
                 flange_length,
                 side,
                 bend_radius,
-                bend_deduction,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -110,7 +110,7 @@ def create_contour_flange(
     face_index: int = 0,
     edge_index: int = 0,
     bend_deduction: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a contour flange (sheet metal).
 
     method: 'ex' | 'sync' | 'sync_with_bend' | 'v3'
@@ -153,7 +153,6 @@ def create_contour_flange(
                 thickness,
                 bend_radius,
                 direction,
-                bend_deduction,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -165,7 +164,7 @@ def create_sheet_metal_base(
     width: float | None = None,
     bend_radius: float | None = None,
     relief_type: str = "Default",
-) -> dict:
+) -> dict[str, Any]:
     """Create a sheet metal base feature.
 
     type: 'flange' | 'tab' | 'contour_advanced'
@@ -197,7 +196,7 @@ def create_lofted_flange(
     method: str = "basic",
     thickness: float = 0.0,
     bend_radius: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a lofted flange (sheet metal).
 
     method: 'basic' | 'advanced' | 'ex'
@@ -224,7 +223,7 @@ def create_bend(
     direction: str = "Normal",
     moving_side: str = "Right",
     bend_deduction: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a bend feature on sheet metal.
 
     method: 'basic' | 'with_calc'
@@ -253,7 +252,7 @@ def create_slot(
     width: float = 0.0,
     depth: float = 0.0,
     direction: str = "Normal",
-) -> dict:
+) -> dict[str, Any]:
     """Create a slot feature.
 
     method: 'basic' | 'ex' | 'sync' | 'multi_body'
@@ -284,7 +283,7 @@ def create_thread(
     face_index: int = 0,
     thread_diameter: float = 0.0,
     thread_depth: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a thread on a cylindrical face.
 
     method: 'basic' (cosmetic) | 'physical' (modeled geometry)
@@ -314,7 +313,7 @@ def create_drawn_cutout(
     method: str = "basic",
     depth: float = 0.0,
     direction: str = "Normal",
-) -> dict:
+) -> dict[str, Any]:
     """Create a drawn cutout (sheet metal).
 
     method: 'basic' | 'ex'
@@ -338,7 +337,7 @@ def create_dimple(
     depth: float = 0.0,
     direction: str = "Normal",
     punch_tool_diameter: float = 0.01,
-) -> dict:
+) -> dict[str, Any]:
     """Create a dimple feature.
 
     method: 'basic' | 'ex'
@@ -360,7 +359,7 @@ def create_dimple(
 def create_louver(
     method: str = "basic",
     depth: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a louver feature.
 
     method: 'basic' | 'sync'
@@ -395,7 +394,7 @@ def sheet_metal_misc(
     flange_length: float = 0.0,
     side: str = "Right",
     thickness: float = 0.001,
-) -> dict:
+) -> dict[str, Any]:
     """Miscellaneous sheet metal operations.
 
     action: 'hem' | 'jog' | 'close_corner' | 'multi_edge_flange'
@@ -432,7 +431,7 @@ def sheet_metal_misc(
 def create_stamped(
     type: str = "bead",
     depth: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a stamped feature (bead or gusset).
 
     type: 'bead' | 'gusset'
@@ -453,12 +452,12 @@ def create_stamped(
 
 def create_surface_mark(
     type: str = "emboss",
-    face_indices: list | None = None,
+    face_indices: list[int] | None = None,
     clearance: float = 0.001,
     thickness: float = 0.0,
     thicken: bool = False,
     default_side: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Create a surface mark (emboss or etch).
 
     type: 'emboss' | 'etch'
@@ -483,7 +482,7 @@ def create_reinforcement(
     type: str = "rib",
     thickness: float = 0.0,
     direction: str = "Normal",
-) -> dict:
+) -> dict[str, Any]:
     """Create a reinforcement feature (rib or lip).
 
     type: 'rib' | 'lip'
@@ -502,11 +501,11 @@ def create_reinforcement(
             return {"error": f"Unknown type: {type}"}
 
 
-def create_web_network() -> dict:
+def create_web_network() -> dict[str, Any]:
     """Create a web network (sheet metal)."""
     return feature_manager.create_web_network()
 
 
-def create_split() -> dict:
+def create_split() -> dict[str, Any]:
     """Split the body using the active profile."""
     return feature_manager.create_split()

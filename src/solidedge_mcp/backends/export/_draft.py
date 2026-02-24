@@ -301,7 +301,7 @@ class DraftMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def set_draft_global_parameter(self, parameter: int, value) -> dict[str, Any]:
+    def set_draft_global_parameter(self, parameter: int, value: Any) -> dict[str, Any]:
         """
         Set a draft document global parameter.
 
@@ -652,7 +652,7 @@ class DraftMixin:
             doc = self.doc_manager.get_active_document()
 
             # Build keyword args, omitting None values (COM optional params)
-            kwargs = {}
+            kwargs: dict[str, Any] = {}
             if printer is not None:
                 kwargs["Printer"] = printer
             if num_copies != 1:

@@ -2,7 +2,7 @@
 
 import contextlib
 import traceback
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from ..logging import get_logger
 
@@ -36,7 +36,7 @@ class FeatureQueryMixin:
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    entry = {"index": i - 1}
+                    entry: dict[str, Any] = {"index": i - 1}
                     try:
                         entry["name"] = feat.Name
                     except Exception:
@@ -317,7 +317,7 @@ class FeatureQueryMixin:
                     for j in range(1, parent_coll.Count + 1):
                         try:
                             parent = parent_coll.Item(j)
-                            p_info = {"index": j - 1}
+                            p_info: dict[str, Any] = {"index": j - 1}
                             with contextlib.suppress(Exception):
                                 p_info["name"] = parent.Name
                             parents.append(p_info)
@@ -466,7 +466,7 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            result = {"feature_name": feature_name}
+            result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 extent_data = feature.GetDirection1Extent()
                 if isinstance(extent_data, tuple):
@@ -534,7 +534,7 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            result = {"feature_name": feature_name}
+            result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 extent_data = feature.GetDirection2Extent()
                 if isinstance(extent_data, tuple):
@@ -606,7 +606,7 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            result = {"feature_name": feature_name}
+            result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 tw_data = feature.GetThinWallOptions()
                 if isinstance(tw_data, tuple):
@@ -682,7 +682,7 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            result = {"feature_name": feature_name}
+            result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 offset_data = feature.GetFromFaceOffsetData()
                 if isinstance(offset_data, tuple):
@@ -812,14 +812,14 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            result = {"feature_name": feature_name}
+            result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 body_array = feature.GetBodyArray()
-                bodies = []
+                bodies: list[dict[str, Any]] = []
                 if body_array is not None:
                     if isinstance(body_array, (list, tuple)):
                         for idx, body in enumerate(body_array):
-                            body_info = {"index": idx}
+                            body_info: dict[str, Any] = {"index": idx}
                             with contextlib.suppress(Exception):
                                 body_info["name"] = body.Name
                             with contextlib.suppress(Exception):

@@ -225,7 +225,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                     elif name == "CoMZ":
                         cog_z = var.Value
 
-                if cog_x is not None:
+                if cog_x is not None and cog_y is not None and cog_z is not None:
                     return {
                         "center_of_gravity": [cog_x, cog_y, cog_z],
                         "center_of_gravity_mm": [cog_x * 1000, cog_y * 1000, cog_z * 1000],

@@ -19,7 +19,7 @@ _logger = get_logger(__name__)
 class LoftSweepMixin:
     """Mixin providing loft, sweep, and helix protrusion methods."""
 
-    def create_loft(self, profile_indices: list = None) -> dict[str, Any]:
+    def create_loft(self, profile_indices: list[int] | None = None) -> dict[str, Any]:
         """
         Create a loft feature between multiple profiles.
 
@@ -109,7 +109,7 @@ class LoftSweepMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_sweep(self, path_profile_index: int = None) -> dict[str, Any]:
+    def create_sweep(self, path_profile_index: int | None = None) -> dict[str, Any]:
         """
         Create a sweep feature along a path.
 
@@ -191,7 +191,8 @@ class LoftSweepMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_helix(
-        self, pitch: float, height: float, revolutions: float = None, direction: str = "Right"
+        self, pitch: float, height: float,
+        revolutions: float | None = None, direction: str = "Right",
     ) -> dict[str, Any]:
         """
         Create a helical feature.
@@ -239,7 +240,7 @@ class LoftSweepMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_loft_thin_wall(
-        self, wall_thickness: float, profile_indices: list = None
+        self, wall_thickness: float, profile_indices: list[int] | None = None
     ) -> dict[str, Any]:
         """
         Create a thin-walled loft feature between multiple profiles.
@@ -301,7 +302,7 @@ class LoftSweepMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_sweep_thin_wall(
-        self, wall_thickness: float, path_profile_index: int = None
+        self, wall_thickness: float, path_profile_index: int | None = None
     ) -> dict[str, Any]:
         """
         Create a thin-walled sweep feature along a path.
@@ -375,7 +376,7 @@ class LoftSweepMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_helix_sync(
-        self, pitch: float, height: float, revolutions: float = None
+        self, pitch: float, height: float, revolutions: float | None = None
     ) -> dict[str, Any]:
         """Create synchronous helix feature"""
         try:
@@ -409,7 +410,7 @@ class LoftSweepMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_helix_thin_wall(
-        self, pitch: float, height: float, wall_thickness: float, revolutions: float = None
+        self, pitch: float, height: float, wall_thickness: float, revolutions: float | None = None
     ) -> dict[str, Any]:
         """Create thin-walled helix feature"""
         try:
@@ -444,7 +445,7 @@ class LoftSweepMixin:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
     def create_helix_sync_thin_wall(
-        self, pitch: float, height: float, wall_thickness: float, revolutions: float = None
+        self, pitch: float, height: float, wall_thickness: float, revolutions: float | None = None
     ) -> dict[str, Any]:
         """Create synchronous thin-walled helix feature"""
         try:

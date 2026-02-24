@@ -1,5 +1,7 @@
 """Reference plane creation tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -21,7 +23,7 @@ def create_ref_plane(
     z3: float = 0.0,
     plane1_index: int = 0,
     plane2_index: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a reference plane from basic geometric definitions.
 
     method: 'offset' | 'angle' | 'three_points' | 'midplane'
@@ -69,7 +71,7 @@ def create_ref_plane_on_curve(
     curve_edge_index: int = 0,
     orientation_plane_index: int = 0,
     normal_side_int: int = 2,
-) -> dict:
+) -> dict[str, Any]:
     """Create a reference plane normal to a curve or edge.
 
     method: 'normal_to_curve' | 'normal_at_distance' | 'normal_at_arc_ratio'
@@ -136,7 +138,7 @@ def create_ref_plane_tangent(
     angle: float = 0.0,
     keypoint_type: str = "End",
     normal_side_int: int = 2,
-) -> dict:
+) -> dict[str, Any]:
     """Create a reference plane tangent to a face or cylinder.
 
     method: 'parallel_by_tangent' | 'tangent_cylinder_angle'

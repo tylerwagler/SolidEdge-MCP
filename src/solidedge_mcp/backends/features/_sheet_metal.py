@@ -24,7 +24,7 @@ class SheetMetalMixin:
     """Mixin providing sheet metal and miscellaneous part feature methods."""
 
     def create_base_flange(
-        self, width: float, thickness: float, bend_radius: float = None
+        self, width: float, thickness: float, bend_radius: float | None = None
     ) -> dict[str, Any]:
         """
         Create a base contour flange (sheet metal).
@@ -66,7 +66,7 @@ class SheetMetalMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def create_base_tab(self, thickness: float, width: float = None) -> dict[str, Any]:
+    def create_base_tab(self, thickness: float, width: float | None = None) -> dict[str, Any]:
         """
         Create a base tab (sheet metal).
 
@@ -199,7 +199,7 @@ class SheetMetalMixin:
 
     def create_emboss(
         self,
-        face_indices: list,
+        face_indices: list[int],
         clearance: float = 0.001,
         thickness: float = 0.0,
         thicken: bool = False,
@@ -266,8 +266,8 @@ class SheetMetalMixin:
         edge_index: int,
         flange_length: float,
         side: str = "Right",
-        inside_radius: float = None,
-        bend_angle: float = None,
+        inside_radius: float | None = None,
+        bend_angle: float | None = None,
     ) -> dict[str, Any]:
         """
         Create a flange feature on a sheet metal edge.
@@ -349,6 +349,7 @@ class SheetMetalMixin:
                 elif inside_radius is not None:
                     flanges.Add(edge, side_const, flange_length, None, inside_radius)
                 else:
+                    assert bend_angle is not None
                     bend_angle_rad = math.radians(bend_angle)
                     flanges.Add(
                         edge,
@@ -696,7 +697,7 @@ class SheetMetalMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def _find_cylinder_end_face(self, body, cyl_face):
+    def _find_cylinder_end_face(self, body: Any, cyl_face: Any) -> Any | None:
         """Find a face adjacent to a cylindrical face by shared edge topology.
 
         For holes, the cylindrical face shares circular edges with the planar
@@ -744,8 +745,8 @@ class SheetMetalMixin:
     def create_thread(
         self,
         face_index: int,
-        thread_diameter: float = None,
-        thread_depth: float = None,
+        thread_diameter: float | None = None,
+        thread_depth: float | None = None,
         physical: bool = False,
     ) -> dict[str, Any]:
         """
@@ -1774,8 +1775,8 @@ class SheetMetalMixin:
     def create_thread_ex(
         self,
         face_index: int,
-        thread_diameter: float = None,
-        thread_depth: float = None,
+        thread_diameter: float | None = None,
+        thread_depth: float | None = None,
     ) -> dict[str, Any]:
         """
         Create a physical (modeled) thread on a cylindrical face.

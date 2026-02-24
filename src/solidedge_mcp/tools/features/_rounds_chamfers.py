@@ -1,5 +1,7 @@
 """Round, chamfer, blend, and topology deletion tools."""
 
+from typing import Any
+
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
@@ -8,10 +10,10 @@ def create_round(
     method: str = "all_edges",
     radius: float = 0.0,
     face_index: int | None = None,
-    radii: list | None = None,
+    radii: list[float] | None = None,
     face_index1: int = 0,
     face_index2: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Round (fillet) edges of the active body.
 
     method: 'all_edges' | 'on_face' | 'variable' | 'blend'
@@ -26,9 +28,9 @@ def create_round(
         case "all_edges":
             return feature_manager.create_round(radius)
         case "on_face":
-            return feature_manager.create_round_on_face(radius, face_index)
+            return feature_manager.create_round_on_face(radius, face_index or 0)
         case "variable":
-            return feature_manager.create_variable_round(radii, face_index)
+            return feature_manager.create_variable_round(radii or [], face_index)
         case "blend":
             return feature_manager.create_round_blend(face_index1, face_index2, radius)
         case "surface_blend":
@@ -44,7 +46,7 @@ def create_chamfer(
     distance1: float = 0.0,
     distance2: float = 0.0,
     angle: float = 0.0,
-) -> dict:
+) -> dict[str, Any]:
     """Chamfer edges of the active body.
 
     method: 'equal' | 'on_face' | 'unequal'
@@ -81,7 +83,7 @@ def create_blend(
     radius2: float = 0.0,
     face_index1: int = 0,
     face_index2: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Create a blend (face-to-face fillet).
 
     method: 'basic' | 'variable' | 'surface'
@@ -108,7 +110,7 @@ def delete_topology(
     hole_type: str = "All",
     face_index: int = 0,
     face_indices: list[int] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Delete topology features (holes, blends, faces).
 
     type: 'hole' | 'hole_by_face' | 'blend' | 'faces'
@@ -126,6 +128,6 @@ def delete_topology(
         case "blend":
             return feature_manager.create_delete_blend(face_index)
         case "faces":
-            return feature_manager.delete_faces(face_indices)
+            return feature_manager.delete_faces(face_indices or [])
         case _:
             return {"error": f"Unknown type: {type}"}
