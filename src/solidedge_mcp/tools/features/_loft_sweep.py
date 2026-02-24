@@ -1,5 +1,6 @@
 """Helix, loft, and sweep tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -19,18 +20,11 @@ def create_helix(
         | 'sync_thin_wall' | 'from_to' | 'from_to_thin_wall'
         | 'from_to_sync' | 'from_to_sync_thin_wall'
 
-    Parameters (used per method):
-        pitch: Helix pitch distance.
-        height: Helix height (finite, sync, thin_wall,
-            sync_thin_wall).
-        revolutions: Number of revolutions.
-        direction: 'Right' or 'Left' (finite).
-        wall_thickness: Wall thickness (thin_wall,
-            sync_thin_wall, from_to_thin_wall,
-            from_to_sync_thin_wall).
-        from_plane_index: 1-based ref plane (from_to variants).
-        to_plane_index: 1-based ref plane (from_to variants).
+    pitch/height/wall_thickness in meters. Plane indices are 1-based.
     """
+    err = validate_numerics(pitch=pitch, height=height, wall_thickness=wall_thickness)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_helix(pitch, height, revolutions, direction)
@@ -78,12 +72,11 @@ def create_loft(
 
     method: 'solid' | 'thin_wall' | 'with_guides'
 
-    Parameters (used per method):
-        profile_indices: Indices of accumulated profiles.
-        wall_thickness: Wall thickness (thin_wall).
-        guide_profile_indices: Indices of guide curve profiles
-            (with_guides).
+    wall_thickness in meters.
     """
+    err = validate_numerics(wall_thickness=wall_thickness)
+    if err:
+        return err
     match method:
         case "solid":
             return feature_manager.create_loft(profile_indices)
@@ -104,10 +97,11 @@ def create_sweep(
 
     method: 'solid' | 'thin_wall'
 
-    Parameters (used per method):
-        path_profile_index: Index of path profile.
-        wall_thickness: Wall thickness (thin_wall).
+    wall_thickness in meters.
     """
+    err = validate_numerics(wall_thickness=wall_thickness)
+    if err:
+        return err
     match method:
         case "solid":
             return feature_manager.create_sweep(path_profile_index)

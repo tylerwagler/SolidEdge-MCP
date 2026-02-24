@@ -1,3 +1,4 @@
+from solidedge_mcp.backends.validation import validate_numerics, validate_path
 from solidedge_mcp.managers import assembly_manager
 
 # ================================================================
@@ -28,23 +29,18 @@ def add_assembly_component(
       | 'family_with_transform' | 'family_with_matrix'
       | 'by_template' | 'adjustable' | 'tube'
 
-    - basic: place at (x, y, z) in meters
-    - with_transform: place with position (meters) + Euler angles (degrees)
-    - family: Family of Parts member at (x, y, z) in meters
-    - family_with_transform: family member with Euler angles (degrees)
-    - family_with_matrix: family member with 4x4 matrix
-    - by_template: place using a template name
-    - adjustable: place as adjustable part at (x, y, z) in meters
-    - tube: add tube from segment_indices with file_path template
-
-    Parameters:
-        x, y, z: Position coordinates in meters (basic, family, adjustable).
-        origin_x, origin_y, origin_z: Position in meters (with_transform,
-            family_with_transform).
-        angle_x, angle_y, angle_z: Euler angles in degrees (with_transform,
-            family_with_transform).
-        matrix: 16-element 4x4 transform matrix (family_with_matrix).
+    Positions in meters. Angles in degrees. Matrix is 16-element 4x4.
     """
+    if file_path:
+        file_path, err = validate_path(file_path, must_exist=True)
+        if err:
+            return err
+    err = validate_numerics(
+        x=x, y=y, z=z, origin_x=origin_x, origin_y=origin_y,
+        origin_z=origin_z, angle_x=angle_x, angle_y=angle_y, angle_z=angle_z,
+    )
+    if err:
+        return err
     match method:
         case "basic":
             return assembly_manager.add_component(
@@ -114,16 +110,15 @@ def manage_component(
       | 'make_writable' | 'swap_family' | 'ground'
       | 'pattern' | 'mirror'
 
-    - delete: remove component at component_index
-    - replace: replace with new_file_path
-    - suppress: suppress/unsuppress (suppress=True/False)
-    - reorder: move to target_index in tree
-    - make_writable: make component editable
-    - swap_family: swap Family of Parts member name
-    - ground: fix/unfix component (ground=True/False)
-    - pattern: linear pattern (count, spacing in meters, direction)
-    - mirror: mirror across plane_index (1=Top,2=Front,3=Right)
+    Spacing in meters. plane_index: 1=Top, 2=Front, 3=Right.
     """
+    if action == "replace" and new_file_path:
+        new_file_path, err = validate_path(new_file_path, must_exist=True)
+        if err:
+            return err
+    err = validate_numerics(spacing=spacing)
+    if err:
+        return err
     match action:
         case "delete":
             return assembly_manager.delete_component(
@@ -186,25 +181,7 @@ def query_component(
       | 'is_tube' | 'adjustable_part' | 'face_style'
       | 'occurrence' | 'interference' | 'tube'
 
-    - list: list all components
-    - info: detailed info for component_index
-    - bounding_box: bounding box of component_index
-    - bom: flat Bill of Materials
-    - structured_bom: hierarchical Bill of Materials
-    - tree: hierarchical component tree
-    - transform: full 4x4 matrix of component_index
-    - count: number of top-level occurrences
-    - is_subassembly: check if component is subassembly
-    - display_name: user-visible label in assembly tree
-    - document: source file info for component_index
-    - sub_occurrences: children of component_index
-    - bodies: body information from component_index
-    - style: appearance style of component_index
-    - is_tube: check if component is a tube
-    - adjustable_part: adjustable part info
-    - face_style: face style of component_index
-    - occurrence: get occurrence by internal_id
-    - tube: get tube properties from tube component
+    0-based component_index. 'occurrence' uses internal_id instead.
     """
     match property:
         case "list":
@@ -296,8 +273,7 @@ def set_component_appearance(
 
     property: 'visibility' | 'color'
 
-    - visibility: show/hide component (visible=True/False)
-    - color: set RGB color (red, green, blue 0-255)
+    RGB values 0-255.
     """
     match property:
         case "visibility":
@@ -315,7 +291,7 @@ def set_component_appearance(
 
 
 # ================================================================
-# Group 76: transform_component (7 -> 1)
+# Group 76a: transform_component (4 of 7)
 # ================================================================
 
 
@@ -328,15 +304,101 @@ def transform_component(
     dx: float = 0,
     dy: float = 0,
     dz: float = 0,
+) -> dict:
+    """Move or reposition a component.
+
+    method: 'update_position' | 'set_origin' | 'put_origin' | 'move'
+
+    Coordinates in meters. 0-based component_index.
+    """
+    err = validate_numerics(
+        x=x, y=y, z=z, dx=dx, dy=dy, dz=dz,
+    )
+    if err:
+        return err
+    match method:
+        case "update_position":
+            return assembly_manager.update_component_position(
+                component_index, x, y, z
+            )
+        case "set_origin":
+            return assembly_manager.set_component_origin(
+                component_index, x, y, z
+            )
+        case "put_origin":
+            return assembly_manager.put_origin(
+                component_index, x, y, z
+            )
+        case "move":
+            return assembly_manager.occurrence_move(
+                component_index, dx, dy, dz
+            )
+        case _:
+            return {
+                "error": f"Unknown method: {method}"
+            }
+
+
+# ================================================================
+# Group 76b: set_component_orientation (2 of 7)
+# ================================================================
+
+
+def set_component_orientation(
+    method: str,
+    component_index: int = 0,
     origin_x: float = 0,
     origin_y: float = 0,
     origin_z: float = 0,
     angle_x: float = 0,
     angle_y: float = 0,
     angle_z: float = 0,
+    x: float = 0,
+    y: float = 0,
+    z: float = 0,
     rx: float = 0,
     ry: float = 0,
     rz: float = 0,
+) -> dict:
+    """Set a component's full transform (position + orientation).
+
+    method: 'set_transform' | 'put_euler'
+
+    - set_transform: position via origin_x/y/z (meters), rotation via angle_x/y/z (degrees)
+    - put_euler: position via x/y/z (meters), rotation via rx/ry/rz (degrees)
+    """
+    err = validate_numerics(
+        origin_x=origin_x, origin_y=origin_y, origin_z=origin_z,
+        angle_x=angle_x, angle_y=angle_y, angle_z=angle_z,
+        x=x, y=y, z=z, rx=rx, ry=ry, rz=rz,
+    )
+    if err:
+        return err
+    match method:
+        case "set_transform":
+            return assembly_manager.set_component_transform(
+                component_index,
+                origin_x, origin_y, origin_z,
+                angle_x, angle_y, angle_z,
+            )
+        case "put_euler":
+            return assembly_manager.put_transform_euler(
+                component_index,
+                x, y, z, rx, ry, rz,
+            )
+        case _:
+            return {
+                "error": f"Unknown method: {method}"
+            }
+
+
+# ================================================================
+# Group 76c: rotate_component (1 of 7)
+# ================================================================
+
+
+def rotate_component(
+    component_index: int = 0,
     axis_x1: float = 0,
     axis_y1: float = 0,
     axis_z1: float = 0,
@@ -345,65 +407,23 @@ def transform_component(
     axis_z2: float = 0,
     angle: float = 0,
 ) -> dict:
-    """Transform (move/rotate/position) a component.
+    """Rotate a component around an axis.
 
-    method: 'update_position' | 'set_transform'
-      | 'set_origin' | 'move' | 'rotate'
-      | 'put_euler' | 'put_origin'
-
-    All position/coordinate parameters are in meters.
-    All angle parameters are in degrees.
-
-    - update_position: set position to (x, y, z) meters
-    - set_transform: set position (origin_x/y/z meters)
-      + rotation (angle_x/y/z degrees)
-    - set_origin: set origin to (x, y, z) meters
-    - move: translate by (dx, dy, dz) meters
-    - rotate: rotate around axis by angle (degrees);
-      axis defined by points (axis_x1..z1) to (axis_x2..z2) meters
-    - put_euler: set Euler angles (rx, ry, rz degrees)
-      and position (x, y, z) meters
-    - put_origin: set origin to (x, y, z) meters
+    Axis defined by two points (meters). Angle in degrees. 0-based component_index.
     """
-    match method:
-        case "update_position":
-            return assembly_manager.update_component_position(
-                component_index, x, y, z
-            )
-        case "set_transform":
-            return assembly_manager.set_component_transform(
-                component_index,
-                origin_x, origin_y, origin_z,
-                angle_x, angle_y, angle_z,
-            )
-        case "set_origin":
-            return assembly_manager.set_component_origin(
-                component_index, x, y, z
-            )
-        case "move":
-            return assembly_manager.occurrence_move(
-                component_index, dx, dy, dz
-            )
-        case "rotate":
-            return assembly_manager.occurrence_rotate(
-                component_index,
-                axis_x1, axis_y1, axis_z1,
-                axis_x2, axis_y2, axis_z2,
-                angle,
-            )
-        case "put_euler":
-            return assembly_manager.put_transform_euler(
-                component_index,
-                x, y, z, rx, ry, rz,
-            )
-        case "put_origin":
-            return assembly_manager.put_origin(
-                component_index, x, y, z
-            )
-        case _:
-            return {
-                "error": f"Unknown method: {method}"
-            }
+    err = validate_numerics(
+        angle=angle,
+        axis_x1=axis_x1, axis_y1=axis_y1, axis_z1=axis_z1,
+        axis_x2=axis_x2, axis_y2=axis_y2, axis_z2=axis_z2,
+    )
+    if err:
+        return err
+    return assembly_manager.occurrence_rotate(
+        component_index,
+        axis_x1, axis_y1, axis_z1,
+        axis_x2, axis_y2, axis_z2,
+        angle,
+    )
 
 
 # ================================================================
@@ -420,16 +440,13 @@ def add_assembly_constraint(
 ) -> dict:
     """Add a constraint between two assembly components.
 
-    type: 'mate' | 'align' | 'planar_align'
-      | 'axial_align' | 'angle'
+    type: 'mate' | 'align' | 'planar_align' | 'axial_align' | 'angle'
 
-    - mate: create mate (mate_type: 'Mate'/'PlanarAlign'/
-      'AxialAlign')
-    - align: search-based align constraint
-    - planar_align: search-based planar align
-    - axial_align: search-based axial align
-    - angle: angle constraint (angle in degrees)
+    Angle in degrees. mate_type: 'Mate'/'PlanarAlign'/'AxialAlign'.
     """
+    err = validate_numerics(angle=angle)
+    if err:
+        return err
     match type:
         case "mate":
             return assembly_manager.create_mate(
@@ -474,16 +491,13 @@ def add_assembly_relation(
 ) -> dict:
     """Add a relation between two assembly components.
 
-    type: 'planar' | 'axial' | 'angular' | 'point'
-      | 'tangent' | 'gear'
+    type: 'planar' | 'axial' | 'angular' | 'point' | 'tangent' | 'gear'
 
-    - planar: with offset (meters), orientation
-    - axial: with orientation
-    - angular: with angle (degrees)
-    - point: connect relation
-    - tangent: tangent relation
-    - gear: gear relation with ratio1, ratio2
+    Offset in meters. Angle in degrees.
     """
+    err = validate_numerics(offset=offset, angle=angle, ratio1=ratio1, ratio2=ratio2)
+    if err:
+        return err
     match type:
         case "planar":
             return assembly_manager.add_planar_relation(
@@ -538,20 +552,11 @@ def manage_relation(
       | 'get_normals' | 'set_normals' | 'suppress'
       | 'unsuppress' | 'get_geometry' | 'get_gear_ratio'
 
-    - list: get all assembly relations
-    - info: detailed info for relation_index
-    - delete: delete relation at relation_index
-    - get_offset: get offset from planar relation
-    - set_offset: set offset (meters) on planar relation
-    - get_angle: get angle from angular relation (deg)
-    - set_angle: set angle on angular relation (deg)
-    - get_normals: get NormalsAligned boolean
-    - set_normals: set NormalsAligned (aligned=True/False)
-    - suppress: suppress relation
-    - unsuppress: unsuppress relation
-    - get_geometry: get geometry info from relation
-    - get_gear_ratio: get gear ratio values
+    Offset in meters. Angle in degrees.
     """
+    err = validate_numerics(offset=offset, angle=angle)
+    if err:
+        return err
     match action:
         case "list":
             return assembly_manager.get_assembly_relations()
@@ -638,18 +643,11 @@ def assembly_feature(
       | 'mirror' | 'pattern' | 'swept_protrusion'
       | 'recompute'
 
-    - extruded_cutout: cut across scope_parts with
-      extent_type, extent_side, profile_side, distance (meters)
-    - revolved_cutout: revolve cut across scope_parts
-      with angle (degrees)
-    - hole: hole across scope_parts with depth (meters)
-    - extruded_protrusion: extrude with distance (meters)
-    - revolved_protrusion: revolve with angle (degrees)
-    - mirror: mirror feature_indices across plane_index
-    - pattern: pattern feature_indices (Rectangular/Circular)
-    - swept_protrusion: sweep with trace/cross-section counts
-    - recompute: recompute all assembly features
+    Distance/depth in meters. Angle in degrees.
     """
+    err = validate_numerics(distance=distance, angle=angle, depth=depth)
+    if err:
+        return err
     match type:
         case "extruded_cutout":
             return (
@@ -745,12 +743,11 @@ def virtual_component(
     """Manage virtual components in the assembly.
 
     method: 'new' | 'predefined' | 'bidm'
-
-    - new: create a virtual placeholder (name, component_type)
-    - predefined: add from existing file (filename)
-    - bidm: add by document number + revision
-      (doc_number, revision_id, component_type)
     """
+    if method == "predefined" and filename:
+        filename, err = validate_path(filename, must_exist=True)
+        if err:
+            return err
     match method:
         case "new":
             return assembly_manager.add_virtual_component(
@@ -784,11 +781,11 @@ def structural_frame(
     """Create a structural frame in the assembly.
 
     method: 'basic' | 'by_orientation'
-
-    - basic: add frame from part_filename along path_indices
-    - by_orientation: add with coordinate system orientation
-      (part_filename, coord_system_name, path_indices)
     """
+    if part_filename:
+        part_filename, err = validate_path(part_filename, must_exist=True)
+        if err:
+            return err
     match method:
         case "basic":
             return assembly_manager.add_structural_frame(
@@ -830,11 +827,11 @@ def wiring(
 
     type: 'wire' | 'cable' | 'bundle' | 'splice'
 
-    - wire: add wire along path (path_indices, path_directions)
-    - cable: add cable with wires (+ wire_indices)
-    - bundle: add bundle of conductors (+ conductor_indices)
-    - splice: add splice at position (x, y, z in meters, conductor_indices)
+    Splice position in meters.
     """
+    err = validate_numerics(x=x, y=y, z=z)
+    if err:
+        return err
     match type:
         case "wire":
             return assembly_manager.add_wire(
@@ -884,6 +881,8 @@ def register(mcp):
     mcp.tool()(query_component)
     mcp.tool()(set_component_appearance)
     mcp.tool()(transform_component)
+    mcp.tool()(set_component_orientation)
+    mcp.tool()(rotate_component)
     mcp.tool()(add_assembly_constraint)
     mcp.tool()(add_assembly_relation)
     mcp.tool()(manage_relation)

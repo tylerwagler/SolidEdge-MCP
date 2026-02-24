@@ -7,6 +7,7 @@ import pytest
 from solidedge_mcp.tools.sketching import (
     draw,
     manage_sketch,
+    sketch_advanced_modify,
     sketch_constraint,
     sketch_modify,
     sketch_project,
@@ -112,9 +113,6 @@ class TestSketchModify:
         ("scale", "sketch_scale"),
         ("mirror", "sketch_mirror"),
         ("paste", "sketch_paste"),
-        ("mirror_spline", "mirror_spline"),
-        ("offset_2d", "offset_sketch_2d"),
-        ("clean", "clean_sketch_geometry"),
     ])
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
@@ -134,6 +132,52 @@ class TestSketchModify:
 
     def test_unknown(self, mock_mgr):
         result = sketch_modify(action="bogus")
+        assert "error" in result
+
+
+# === sketch_advanced_modify ===
+
+class TestSketchAdvancedModify:
+    @pytest.mark.parametrize("disc, method", [
+        ("mirror_spline", "mirror_spline"),
+        ("offset_2d", "offset_sketch_2d"),
+        ("clean", "clean_sketch_geometry"),
+    ])
+    def test_dispatch(self, mock_mgr, disc, method):
+        getattr(mock_mgr, method).return_value = {"status": "ok"}
+        result = sketch_advanced_modify(action=disc)
+        getattr(mock_mgr, method).assert_called_once()
+        assert result == {"status": "ok"}
+
+    def test_mirror_spline_passes_args(self, mock_mgr):
+        mock_mgr.mirror_spline.return_value = {"status": "ok"}
+        sketch_advanced_modify(
+            action="mirror_spline",
+            axis_x1=0.0, axis_y1=0.0, axis_x2=1.0, axis_y2=0.0, copy=False,
+        )
+        mock_mgr.mirror_spline.assert_called_once_with(0.0, 0.0, 1.0, 0.0, False)
+
+    def test_offset_2d_passes_args(self, mock_mgr):
+        mock_mgr.offset_sketch_2d.return_value = {"status": "ok"}
+        sketch_advanced_modify(
+            action="offset_2d",
+            offset_side_x=1.0, offset_side_y=0.0, offset_distance=0.01,
+        )
+        mock_mgr.offset_sketch_2d.assert_called_once_with(1.0, 0.0, 0.01)
+
+    def test_clean_passes_args(self, mock_mgr):
+        mock_mgr.clean_sketch_geometry.return_value = {"status": "ok"}
+        sketch_advanced_modify(
+            action="clean",
+            clean_points=False, clean_splines=True,
+            clean_identical=False, clean_small=True, small_tolerance=0.01,
+        )
+        mock_mgr.clean_sketch_geometry.assert_called_once_with(
+            False, True, False, True, 0.01,
+        )
+
+    def test_unknown(self, mock_mgr):
+        result = sketch_advanced_modify(action="bogus")
         assert "error" in result
 
 

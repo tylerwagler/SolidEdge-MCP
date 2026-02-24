@@ -1,5 +1,6 @@
 """Round, chamfer, blend, and topology deletion tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -16,14 +17,11 @@ def create_round(
     method: 'all_edges' | 'on_face' | 'variable' | 'blend'
         | 'surface_blend'
 
-    Parameters (used per method):
-        radius: Fillet radius (all_edges, on_face, blend,
-            surface_blend).
-        face_index: Face index (on_face, variable).
-        radii: List of radii (variable).
-        face_index1: First face (blend, surface_blend).
-        face_index2: Second face (blend, surface_blend).
+    radius/radii in meters.
     """
+    err = validate_numerics(radius=radius)
+    if err:
+        return err
     match method:
         case "all_edges":
             return feature_manager.create_round(radius)
@@ -52,14 +50,14 @@ def create_chamfer(
     method: 'equal' | 'on_face' | 'unequal'
         | 'unequal_on_face' | 'angle'
 
-    Parameters (used per method):
-        distance: Chamfer distance (equal, on_face, angle).
-        face_index: Face index (on_face, unequal,
-            unequal_on_face, angle).
-        distance1: First distance (unequal, unequal_on_face).
-        distance2: Second distance (unequal, unequal_on_face).
-        angle: Chamfer angle in degrees (angle).
+    Distances in meters. angle in degrees.
     """
+    err = validate_numerics(
+        distance=distance, distance1=distance1,
+        distance2=distance2, angle=angle,
+    )
+    if err:
+        return err
     match method:
         case "equal":
             return feature_manager.create_chamfer(distance)
@@ -88,14 +86,11 @@ def create_blend(
 
     method: 'basic' | 'variable' | 'surface'
 
-    Parameters (used per method):
-        radius: Blend radius (basic).
-        face_index: Face index (basic, variable).
-        radius1: Start radius (variable).
-        radius2: End radius (variable).
-        face_index1: First face (surface).
-        face_index2: Second face (surface).
+    Radii in meters.
     """
+    err = validate_numerics(radius=radius, radius1=radius1, radius2=radius2)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_blend(radius, face_index)
@@ -118,12 +113,11 @@ def delete_topology(
 
     type: 'hole' | 'hole_by_face' | 'blend' | 'faces'
 
-    Parameters (used per type):
-        max_diameter: Maximum hole diameter (hole).
-        hole_type: Hole type filter (hole).
-        face_index: Face index (hole_by_face, blend).
-        face_indices: List of face indices (faces).
+    max_diameter in meters.
     """
+    err = validate_numerics(max_diameter=max_diameter)
+    if err:
+        return err
     match type:
         case "hole":
             return feature_manager.create_delete_hole(max_diameter, hole_type)

@@ -1,5 +1,6 @@
 """Export, drawing, and view tools for Solid Edge MCP."""
 
+from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import export_manager, view_manager
 
 # ================================================================
@@ -19,14 +20,11 @@ def export_file(
     format: 'step' | 'stl' | 'iges' | 'pdf' | 'dxf'
             | 'parasolid' | 'jt' | 'flat_dxf'
             | 'prc' | 'plmxml' | 'image'
-
-    Args:
-        format: Export file format.
-        file_path: Output file path.
-        ini_file_path: Path to PLMXML INI config file (plmxml).
-        width: Image width in pixels (image).
-        height: Image height in pixels (image).
     """
+    if file_path:
+        file_path, err = validate_path(file_path, must_exist=False)
+        if err:
+            return err
     match format:
         case "step":
             return export_manager.export_step(file_path)
@@ -81,24 +79,7 @@ def add_drawing_view(
           | 'projected' | 'detail' | 'auxiliary'
           | 'draft' | 'by_draft_view' | 'section'
 
-    Args:
-        type: Drawing view type to add.
-        x: X position for the view (meters).
-        y: Y position for the view (meters).
-        orientation: View orientation (assembly types).
-        scale: View scale factor.
-        config: Optional configuration (assembly_ex).
-        configuration: Configuration name (with_config).
-        parent_view_index: Parent view 0-based index
-            (projected, detail, auxiliary, section).
-        fold_direction: 'Up'|'Down'|'Left'|'Right'
-            (projected, auxiliary).
-        center_x: Detail view center X in meters (detail).
-        center_y: Detail view center Y in meters (detail).
-        radius: Detail view radius in meters (detail).
-        source_view_index: Source view index (by_draft_view).
-        section_type: Section cut type: 0=standard, 1=revolved
-            (section).
+    Positions/radii in meters. View indices are 0-based.
     """
     match type:
         case "assembly":
@@ -159,23 +140,8 @@ def manage_drawing_view(
             | 'set_orientation' | 'activate' | 'deactivate'
             | 'get_dimensions' | 'align' | 'update_all'
 
-    Args:
-        action: Management action to perform.
-        view_index: 0-based drawing view index.
-        view_index2: Second view index (align).
-        scale: Scale factor (set_scale).
-        x: X position in meters (move).
-        y: Y position in meters (move).
-        show: Visibility flag (show_tangent_edges,
-            show_hidden_edges).
-        mode: Display mode string (set_display_mode):
-            'Wireframe'|'HiddenEdgesVisible'|'Shaded'
-            |'ShadedWithEdges'.
-        orientation: View orientation (set_orientation):
-            'Front'|'Top'|'Right'|'Back'|'Bottom'|'Left'
-            |'Isometric'.
-        align: Align or unalign views (align).
-        force_update: Force update all views (update_all).
+    View indices are 0-based. Positions in meters.
+    mode: 'Wireframe' | 'HiddenEdgesVisible' | 'Shaded' | 'ShadedWithEdges'.
     """
     match action:
         case "get_model_link":
@@ -211,7 +177,7 @@ def manage_drawing_view(
 
 
 # ================================================================
-# Group 50: add_annotation (14 → 1)
+# Group 50a: add_annotation — text annotations (4 cases)
 # ================================================================
 
 
@@ -223,12 +189,43 @@ def add_annotation(
     y1: float = 0.0,
     x2: float = 0.0,
     y2: float = 0.0,
-    x3: float = 0.0,
-    y3: float = 0.0,
     text: str = "",
     height: float = 0.005,
     leader_x: float | None = None,
     leader_y: float | None = None,
+) -> dict:
+    """Add a text annotation to the active draft.
+
+    type: 'text_box' | 'leader' | 'balloon' | 'note'
+
+    Positions in meters. height is text height in meters.
+    """
+    match type:
+        case "text_box":
+            return export_manager.add_text_box(x, y, text, height)
+        case "leader":
+            return export_manager.add_leader(x1, y1, x2, y2, text)
+        case "balloon":
+            return export_manager.add_balloon(x, y, text, leader_x, leader_y)
+        case "note":
+            return export_manager.add_note(x, y, text, height)
+        case _:
+            return {"error": f"Unknown type: {type}"}
+
+
+# ================================================================
+# Group 50b: add_dimension_annotation — dimension annotations (5 cases)
+# ================================================================
+
+
+def add_dimension_annotation(
+    type: str,
+    x1: float = 0.0,
+    y1: float = 0.0,
+    x2: float = 0.0,
+    y2: float = 0.0,
+    x3: float = 0.0,
+    y3: float = 0.0,
     dim_x: float | None = None,
     dim_y: float | None = None,
     center_x: float = 0.0,
@@ -237,66 +234,17 @@ def add_annotation(
     point_y: float = 0.0,
     origin_x: float = 0.0,
     origin_y: float = 0.0,
-    symbol_type: str = "machined",
-    weld_type: str = "fillet",
-    tolerance_text: str = "",
 ) -> dict:
-    """Add an annotation to the active draft.
+    """Add a dimension annotation to the active draft.
 
-    type: 'text_box' | 'leader' | 'dimension' | 'balloon'
-          | 'note' | 'angular_dimension'
-          | 'radial_dimension' | 'diameter_dimension'
-          | 'ordinate_dimension' | 'center_mark'
-          | 'centerline' | 'surface_finish'
-          | 'weld_symbol' | 'geometric_tolerance'
+    type: 'dimension' | 'angular_dimension' | 'radial_dimension'
+          | 'diameter_dimension' | 'ordinate_dimension'
 
-    Args:
-        type: Annotation type to add.
-        x: X position (text_box, balloon, note, center_mark,
-            surface_finish, weld_symbol, geometric_tolerance).
-        y: Y position (text_box, balloon, note, center_mark,
-            surface_finish, weld_symbol, geometric_tolerance).
-        x1: Start X (leader, dimension, centerline).
-        y1: Start Y (leader, dimension, centerline).
-        x2: End X (leader, dimension, centerline).
-        y2: End Y (leader, dimension, centerline).
-        x3: Third point X (angular_dimension).
-        y3: Third point Y (angular_dimension).
-        text: Text content (text_box, leader, balloon, note).
-        height: Text height (text_box, note).
-        leader_x: Leader X (balloon).
-        leader_y: Leader Y (balloon).
-        dim_x: Dimension placement X (dimension,
-            angular/radial/diameter/ordinate).
-        dim_y: Dimension placement Y (dimension,
-            angular/radial/diameter/ordinate).
-        center_x: Center X (radial_dimension,
-            diameter_dimension).
-        center_y: Center Y (radial_dimension,
-            diameter_dimension).
-        point_x: Point X (radial_dimension,
-            diameter_dimension).
-        point_y: Point Y (radial_dimension,
-            diameter_dimension).
-        origin_x: Datum origin X (ordinate_dimension).
-        origin_y: Datum origin Y (ordinate_dimension).
-        symbol_type: Surface finish type:
-            'machined'|'any'|'prohibited'.
-        weld_type: Weld type:
-            'fillet'|'groove'|'plug'|'spot'|'seam'.
-        tolerance_text: GD&T text (geometric_tolerance).
+    All coordinates in meters.
     """
     match type:
-        case "text_box":
-            return export_manager.add_text_box(x, y, text, height)
-        case "leader":
-            return export_manager.add_leader(x1, y1, x2, y2, text)
         case "dimension":
             return export_manager.add_dimension(x1, y1, x2, y2, dim_x, dim_y)
-        case "balloon":
-            return export_manager.add_balloon(x, y, text, leader_x, leader_y)
-        case "note":
-            return export_manager.add_note(x, y, text, height)
         case "angular_dimension":
             return export_manager.add_angular_dimension(x1, y1, x2, y2, x3, y3, dim_x, dim_y)
         case "radial_dimension":
@@ -326,6 +274,37 @@ def add_annotation(
                 dim_x,
                 dim_y,
             )
+        case _:
+            return {"error": f"Unknown type: {type}"}
+
+
+# ================================================================
+# Group 50c: add_symbol_annotation — symbol annotations (5 cases)
+# ================================================================
+
+
+def add_symbol_annotation(
+    type: str,
+    x: float = 0.0,
+    y: float = 0.0,
+    x1: float = 0.0,
+    y1: float = 0.0,
+    x2: float = 0.0,
+    y2: float = 0.0,
+    symbol_type: str = "machined",
+    weld_type: str = "fillet",
+    tolerance_text: str = "",
+) -> dict:
+    """Add a symbol annotation to the active draft.
+
+    type: 'center_mark' | 'centerline' | 'surface_finish'
+          | 'weld_symbol' | 'geometric_tolerance'
+
+    Positions in meters.
+    symbol_type: 'machined' | 'any' | 'prohibited'.
+    weld_type: 'fillet' | 'groove' | 'plug' | 'spot' | 'seam'.
+    """
+    match type:
         case "center_mark":
             return export_manager.add_center_mark(x, y)
         case "centerline":
@@ -360,19 +339,7 @@ def add_2d_dimension(
 
     type: 'distance' | 'length' | 'radius' | 'angle'
 
-    All coordinate parameters are in meters (sheet space).
-
-    Args:
-        type: Dimension type to add.
-        x1: Start X in meters (distance, angle).
-        y1: Start Y in meters (distance, angle).
-        x2: End X in meters (distance, angle).
-        y2: End Y in meters (distance, angle).
-        x3: Third point X in meters (angle). Vertex is (x2, y2).
-        y3: Third point Y in meters (angle).
-        object_index: 0-based index into Lines2d (length)
-            or Circles2d/Arcs2d (radius).
-        object_type: 'circle' or 'arc' (radius).
+    Coordinates in meters (sheet space). object_index is 0-based.
     """
     match type:
         case "distance":
@@ -388,7 +355,7 @@ def add_2d_dimension(
 
 
 # ================================================================
-# Group 52: camera_control (10 → 1)
+# Group 52a: camera_control — simple view actions (9 cases)
 # ================================================================
 
 
@@ -405,52 +372,14 @@ def camera_control(
     dx: int = 0,
     dy: int = 0,
     factor: float = 1.0,
-    eye_x: float = 0.0,
-    eye_y: float = 0.0,
-    eye_z: float = 1.0,
-    target_x: float = 0.0,
-    target_y: float = 0.0,
-    target_z: float = 0.0,
-    up_x: float = 0.0,
-    up_y: float = 1.0,
-    up_z: float = 0.0,
-    perspective: bool = False,
-    scale_or_angle: float = 1.0,
 ) -> dict:
     """Control the 3D camera/view.
 
-    action: 'set_orientation' | 'zoom_fit'
-            | 'zoom_to_selection' | 'rotate' | 'pan'
-            | 'zoom' | 'refresh' | 'set_camera'
+    action: 'set_orientation' | 'zoom_fit' | 'zoom_to_selection'
+            | 'rotate' | 'pan' | 'zoom' | 'refresh'
             | 'begin_dynamics' | 'end_dynamics'
 
-    Args:
-        action: Camera action to perform.
-        view: Named view (set_orientation):
-            'Iso'|'Top'|'Front'|'Right'|'Left'
-            |'Back'|'Bottom'.
-        angle: Rotation angle in radians (rotate).
-        center_x: Rotation center X in meters (rotate).
-        center_y: Rotation center Y in meters (rotate).
-        center_z: Rotation center Z in meters (rotate).
-        axis_x: Rotation axis X component (rotate).
-        axis_y: Rotation axis Y component (rotate).
-        axis_z: Rotation axis Z component (rotate).
-        dx: Horizontal pan in pixels (pan).
-        dy: Vertical pan in pixels (pan).
-        factor: Zoom factor >1=in, <1=out (zoom).
-        eye_x: Camera eye X (set_camera).
-        eye_y: Camera eye Y (set_camera).
-        eye_z: Camera eye Z (set_camera).
-        target_x: Camera target X (set_camera).
-        target_y: Camera target Y (set_camera).
-        target_z: Camera target Z (set_camera).
-        up_x: Camera up vector X (set_camera).
-        up_y: Camera up vector Y (set_camera).
-        up_z: Camera up vector Z (set_camera).
-        perspective: Use perspective projection (set_camera).
-        scale_or_angle: Ortho scale or perspective angle
-            (set_camera).
+    angle in radians. factor >1 zooms in, <1 zooms out. dx/dy in pixels.
     """
     match action:
         case "set_orientation":
@@ -475,26 +404,49 @@ def camera_control(
             return view_manager.zoom_camera(factor)
         case "refresh":
             return view_manager.refresh_view()
-        case "set_camera":
-            return view_manager.set_camera(
-                eye_x,
-                eye_y,
-                eye_z,
-                target_x,
-                target_y,
-                target_z,
-                up_x,
-                up_y,
-                up_z,
-                perspective,
-                scale_or_angle,
-            )
         case "begin_dynamics":
             return view_manager.begin_camera_dynamics()
         case "end_dynamics":
             return view_manager.end_camera_dynamics()
         case _:
             return {"error": f"Unknown action: {action}"}
+
+
+# ================================================================
+# Group 52b: set_camera — full camera placement
+# ================================================================
+
+
+def set_camera(
+    eye_x: float = 0.0,
+    eye_y: float = 0.0,
+    eye_z: float = 1.0,
+    target_x: float = 0.0,
+    target_y: float = 0.0,
+    target_z: float = 0.0,
+    up_x: float = 0.0,
+    up_y: float = 1.0,
+    up_z: float = 0.0,
+    perspective: bool = False,
+    scale_or_angle: float = 1.0,
+) -> dict:
+    """Set the 3D camera position, target, and projection.
+
+    Coordinates in meters. scale_or_angle is ortho scale or perspective FOV angle.
+    """
+    return view_manager.set_camera(
+        eye_x,
+        eye_y,
+        eye_z,
+        target_x,
+        target_y,
+        target_z,
+        up_x,
+        up_y,
+        up_z,
+        perspective,
+        scale_or_angle,
+    )
 
 
 # ================================================================
@@ -522,21 +474,8 @@ def display_control(
             | 'model_to_screen' | 'screen_to_model'
             | 'set_texture'
 
-    Args:
-        action: Display action to perform.
-        mode: Display mode (set_mode):
-            'Shaded'|'ShadedWithEdges'|'Wireframe'
-            |'HiddenEdgesVisible'.
-        red: Red component 0-255 (set_background).
-        green: Green component 0-255 (set_background).
-        blue: Blue component 0-255 (set_background).
-        x: Model X coordinate in meters (model_to_screen).
-        y: Model Y coordinate in meters (model_to_screen).
-        z: Model Z coordinate in meters (model_to_screen).
-        screen_x: Screen X pixel (screen_to_model).
-        screen_y: Screen Y pixel (screen_to_model).
-        face_index: 0-based face index (set_texture).
-        texture_name: Texture name to apply (set_texture).
+    mode: 'Shaded' | 'ShadedWithEdges' | 'Wireframe' | 'HiddenEdgesVisible'.
+    RGB values 0-255. face_index is 0-based.
     """
     match action:
         case "set_mode":
@@ -570,12 +509,7 @@ def manage_sheet(
     action: 'activate' | 'rename' | 'delete'
             | 'create_drawing' | 'add'
 
-    Args:
-        action: Sheet management action.
-        sheet_index: 0-based sheet index.
-        new_name: New sheet name (rename).
-        template: Drawing template path (create_drawing).
-        views: List of view orientations (create_drawing).
+    sheet_index is 0-based.
     """
     match action:
         case "activate":
@@ -621,25 +555,7 @@ def print_control(
     action: 'print' | 'set_printer' | 'get_printer'
             | 'set_paper_size' | 'print_full'
 
-    Args:
-        action: Print action to perform.
-        copies: Number of copies (print).
-        all_sheets: Print all sheets (print).
-        printer_name: Printer name (set_printer, print_full).
-        width: Paper width in meters (set_paper_size).
-        height: Paper height in meters (set_paper_size).
-        orientation: 'Landscape' or 'Portrait'
-            (set_paper_size).
-        num_copies: Number of copies (print_full).
-        print_orientation: Orientation constant (print_full).
-        paper_size: Paper size constant (print_full).
-        scale: Print scale (print_full).
-        print_to_file: Print to file (print_full).
-        output_file_name: Output file path (print_full).
-        print_range: Print range constant (print_full).
-        sheets: Sheet range string (print_full).
-        color_as_black: Print color as black (print_full).
-        collate: Collate copies (print_full).
+    Paper dimensions in meters. orientation: 'Landscape' | 'Portrait'.
     """
     match action:
         case "print":
@@ -684,9 +600,7 @@ def query_sheet(
           | 'lines2d' | 'circles2d' | 'arcs2d'
           | 'section_cuts'
 
-    Args:
-        type: Collection type to query.
-        view_index: Drawing view index (section_cuts only).
+    view_index (0-based) only used for 'section_cuts'.
     """
     match type:
         case "dimensions":
@@ -731,18 +645,12 @@ def manage_annotation_data(
     action: 'add_symbol' | 'get_symbols'
             | 'get_pmi' | 'set_pmi_visibility'
 
-    Args:
-        action: Annotation data action.
-        file_path: Symbol file path (add_symbol).
-        x: Symbol X position in meters (add_symbol).
-        y: Symbol Y position in meters (add_symbol).
-        insertion_type: Symbol insertion type (add_symbol).
-        show: Show PMI (set_pmi_visibility).
-        show_dimensions: Show PMI dimensions
-            (set_pmi_visibility).
-        show_annotations: Show PMI annotations
-            (set_pmi_visibility).
+    Positions in meters.
     """
+    if action == "add_symbol" and file_path:
+        file_path, err = validate_path(file_path, must_exist=True)
+        if err:
+            return err
     match action:
         case "add_symbol":
             return export_manager.add_symbol(file_path, x, y, insertion_type)
@@ -779,19 +687,7 @@ def add_smart_frame(
 
     method: 'two_point' | 'by_origin'
 
-    Args:
-        method: Smart frame creation method.
-        style_name: Frame style name.
-        x1: First corner X in meters (two_point).
-        y1: First corner Y in meters (two_point).
-        x2: Second corner X in meters (two_point).
-        y2: Second corner Y in meters (two_point).
-        x: Origin X in meters (by_origin).
-        y: Origin Y in meters (by_origin).
-        top: Top margin in meters (by_origin).
-        bottom: Bottom margin in meters (by_origin).
-        left: Left margin in meters (by_origin).
-        right: Right margin in meters (by_origin).
+    Positions and margins in meters.
     """
     match method:
         case "two_point":
@@ -821,12 +717,7 @@ def draft_config(
     action: 'get_global' | 'set_global'
             | 'get_origin' | 'set_origin'
 
-    Args:
-        action: Draft config action.
-        parameter: Global parameter ID (get_global, set_global).
-        value: Parameter value to set (set_global).
-        x: Symbol file origin X in meters (set_origin).
-        y: Symbol file origin Y in meters (set_origin).
+    Positions in meters.
     """
     match action:
         case "get_global":
@@ -858,13 +749,7 @@ def create_table(
 
     type: 'parts_list' | 'bend'
 
-    Args:
-        type: Table type to create.
-        auto_balloon: Auto-create balloons (parts_list, bend).
-        x: Table X position (parts_list).
-        y: Table Y position (parts_list).
-        view_index: 0-based drawing view index (bend).
-        saved_settings: Saved settings name (bend).
+    view_index is 0-based (bend only).
     """
     match type:
         case "parts_list":
@@ -886,8 +771,11 @@ def register(mcp):
     mcp.tool()(add_drawing_view)
     mcp.tool()(manage_drawing_view)
     mcp.tool()(add_annotation)
+    mcp.tool()(add_dimension_annotation)
+    mcp.tool()(add_symbol_annotation)
     mcp.tool()(add_2d_dimension)
     mcp.tool()(camera_control)
+    mcp.tool()(set_camera)
     mcp.tool()(display_control)
     mcp.tool()(manage_sheet)
     mcp.tool()(print_control)

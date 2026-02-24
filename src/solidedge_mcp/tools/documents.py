@@ -1,5 +1,6 @@
 """Document management tools for Solid Edge MCP."""
 
+from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import doc_manager
 
 # === Composite: create_document ===
@@ -12,7 +13,6 @@ def create_document(
     """Create a new Solid Edge document.
 
     type: 'part' | 'assembly' | 'sheet_metal' | 'draft' | 'weldment'
-    template: Optional path to a template file.
     """
     match type:
         case "part":
@@ -42,12 +42,11 @@ def open_document(
     """Open a document.
 
     method: 'foreground' | 'background' | 'with_template' | 'dialog'
-
-    - foreground: Open file normally
-    - background: Open without showing a window
-    - with_template: Open and map to a specific template
-    - dialog: Use Solid Edge's built-in file open dialog
     """
+    if method in ("foreground", "background", "with_template") and file_path:
+        file_path, err = validate_path(file_path, must_exist=True)
+        if err:
+            return err
     match method:
         case "foreground":
             return doc_manager.open_document(file_path)
@@ -75,9 +74,6 @@ def close_document(
     """Close documents.
 
     scope: 'active' | 'all'
-
-    - active: Close the active document (saves if save=True)
-    - all: Close all open documents (saves if save=True)
     """
     match scope:
         case "active":
@@ -98,10 +94,11 @@ def save_document(
     """Save the active document.
 
     method: 'save' | 'copy_as'
-
-    - save: Save to file_path (or current location if None)
-    - copy_as: Save a copy without changing the active file name
     """
+    if file_path:
+        file_path, err = validate_path(file_path, must_exist=False)
+        if err:
+            return err
     match method:
         case "save":
             return doc_manager.save_document(file_path)
@@ -138,6 +135,9 @@ def activate_document(name_or_index) -> dict:
 
 def import_file(file_path: str) -> dict:
     """Import an external CAD file (STEP, IGES, Parasolid, etc.)."""
+    file_path, err = validate_path(file_path, must_exist=True)
+    if err:
+        return err
     return doc_manager.import_file(file_path)
 
 

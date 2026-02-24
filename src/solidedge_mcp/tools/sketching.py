@@ -1,5 +1,6 @@
 """Sketching tools for Solid Edge MCP."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import sketch_manager
 
 # === Composite: manage_sketch ===
@@ -20,14 +21,12 @@ def manage_sketch(
     action: 'create' | 'close' | 'create_on_plane'
       | 'set_axis' | 'set_visibility' | 'get_geometry'
 
-    - create: New sketch on named plane
-      ('Top','Front','Right','XY','XZ','YZ')
-    - close: Close/finish the active sketch
-    - create_on_plane: New sketch on plane by 1-based index
-    - set_axis: Draw axis of revolution from (x1,y1) to (x2,y2)
-    - set_visibility: Show/hide the active sketch profile
-    - get_geometry: Get ordered geometry elements from sketch
+    Named planes: 'Top','Front','Right','XY','XZ','YZ'.
+    Coordinates in meters.
     """
+    err = validate_numerics(x1=x1, y1=y1, x2=x2, y2=y2)
+    if err:
+        return err
     match action:
         case "create":
             return sketch_manager.create_sketch(plane)
@@ -75,10 +74,17 @@ def draw(
            | 'ellipse' | 'spline' | 'arc_3pt' | 'circle_2pt'
            | 'circle_3pt' | 'point' | 'construction_line'
 
-    All coordinate parameters (x1, y1, x2, y2, center_x, center_y, etc.)
-    are in meters. All angle parameters (start_angle, end_angle, angle,
-    angle_degrees) are in degrees.
+    Coordinates in meters. Angles in degrees.
     """
+    err = validate_numerics(
+        x1=x1, y1=y1, x2=x2, y2=y2, x3=x3, y3=y3,
+        center_x=center_x, center_y=center_y, radius=radius,
+        major_radius=major_radius, minor_radius=minor_radius,
+        start_angle=start_angle, end_angle=end_angle, angle=angle,
+        x=x, y=y,
+    )
+    if err:
+        return err
     match shape:
         case "line":
             return sketch_manager.draw_line(x1, y1, x2, y2)
@@ -118,7 +124,7 @@ def draw(
             return {"error": f"Unknown shape: {shape}"}
 
 
-# === Composite: sketch_modify ===
+# === Composite: sketch_modify (common operations) ===
 
 
 def sketch_modify(
@@ -130,30 +136,21 @@ def sketch_modify(
     angle_degrees: float = 0.0,
     scale_factor: float = 1.0,
     axis: str = "X",
-    axis_x1: float = 0.0,
-    axis_y1: float = 0.0,
-    axis_x2: float = 0.0,
-    axis_y2: float = 0.0,
-    copy: bool = True,
-    offset_side_x: float = 0.0,
-    offset_side_y: float = 0.0,
-    offset_distance: float = 0.0,
-    clean_points: bool = True,
-    clean_splines: bool = True,
-    clean_identical: bool = True,
-    clean_small: bool = True,
-    small_tolerance: float = 0.0001,
 ) -> dict:
-    """Modify sketch geometry.
+    """Modify sketch geometry with common operations.
 
     action: 'fillet' | 'chamfer' | 'offset' | 'rotate' | 'scale'
-      | 'mirror' | 'paste' | 'mirror_spline' | 'offset_2d'
-      | 'clean'
+      | 'mirror' | 'paste'
 
-    All numeric parameters (radius, distance, coordinates, angles,
-    scale_factor, offset_distance, small_tolerance) are in meters
-    except angle_degrees which is in degrees.
+    Distances in meters. angle_degrees in degrees.
     """
+    err = validate_numerics(
+        radius=radius, distance=distance, center_x=center_x,
+        center_y=center_y, angle_degrees=angle_degrees,
+        scale_factor=scale_factor,
+    )
+    if err:
+        return err
     match action:
         case "fillet":
             return sketch_manager.sketch_fillet(radius)
@@ -173,6 +170,44 @@ def sketch_modify(
             return sketch_manager.sketch_mirror(axis)
         case "paste":
             return sketch_manager.sketch_paste()
+        case _:
+            return {"error": f"Unknown action: {action}"}
+
+
+# === Composite: sketch_advanced_modify (specialized operations) ===
+
+
+def sketch_advanced_modify(
+    action: str,
+    axis_x1: float = 0.0,
+    axis_y1: float = 0.0,
+    axis_x2: float = 0.0,
+    axis_y2: float = 0.0,
+    copy: bool = True,
+    offset_side_x: float = 0.0,
+    offset_side_y: float = 0.0,
+    offset_distance: float = 0.0,
+    clean_points: bool = True,
+    clean_splines: bool = True,
+    clean_identical: bool = True,
+    clean_small: bool = True,
+    small_tolerance: float = 0.0001,
+) -> dict:
+    """Specialized sketch modification operations.
+
+    action: 'mirror_spline' | 'offset_2d' | 'clean'
+
+    Coordinates and distances in meters.
+    """
+    err = validate_numerics(
+        axis_x1=axis_x1, axis_y1=axis_y1, axis_x2=axis_x2,
+        axis_y2=axis_y2, offset_side_x=offset_side_x,
+        offset_side_y=offset_side_y, offset_distance=offset_distance,
+        small_tolerance=small_tolerance,
+    )
+    if err:
+        return err
+    match action:
         case "mirror_spline":
             return sketch_manager.mirror_spline(
                 axis_x1, axis_y1, axis_x2, axis_y2, copy
@@ -208,8 +243,8 @@ def sketch_constraint(
 
     type: 'geometric' | 'keypoint'
 
-    - geometric: constraint_type (Horizontal, Vertical, etc.) + elements
-    - keypoint: connect two elements at specific keypoints
+    geometric: constraint_type (Horizontal, Vertical, etc.) + elements list.
+    keypoint: connect two elements at specific keypoints.
     """
     match type:
         case "geometric":
@@ -243,6 +278,9 @@ def sketch_project(
     source: 'edge' | 'include_edge' | 'ref_plane' | 'silhouette'
             | 'region_faces' | 'chain' | 'to_curve'
     """
+    err = validate_numerics(x=x, y=y, tolerance=tolerance)
+    if err:
+        return err
     match source:
         case "edge":
             return sketch_manager.project_edge(face_index, edge_index)
@@ -272,5 +310,6 @@ def register(mcp):
     mcp.tool()(manage_sketch)
     mcp.tool()(draw)
     mcp.tool()(sketch_modify)
+    mcp.tool()(sketch_advanced_modify)
     mcp.tool()(sketch_constraint)
     mcp.tool()(sketch_project)

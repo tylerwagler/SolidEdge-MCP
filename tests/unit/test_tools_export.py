@@ -7,8 +7,10 @@ import pytest
 from solidedge_mcp.tools.export import (
     add_2d_dimension,
     add_annotation,
+    add_dimension_annotation,
     add_drawing_view,
     add_smart_frame,
+    add_symbol_annotation,
     camera_control,
     create_table,
     display_control,
@@ -19,6 +21,7 @@ from solidedge_mcp.tools.export import (
     manage_sheet,
     print_control,
     query_sheet,
+    set_camera,
 )
 
 
@@ -128,24 +131,14 @@ class TestManageDrawingView:
         assert "error" in result
 
 
-# === add_annotation ===
+# === add_annotation (text annotations only) ===
 
 class TestAddAnnotation:
     @pytest.mark.parametrize("disc, method", [
         ("text_box", "add_text_box"),
         ("leader", "add_leader"),
-        ("dimension", "add_dimension"),
         ("balloon", "add_balloon"),
         ("note", "add_note"),
-        ("angular_dimension", "add_angular_dimension"),
-        ("radial_dimension", "add_radial_dimension"),
-        ("diameter_dimension", "add_diameter_dimension"),
-        ("ordinate_dimension", "add_ordinate_dimension"),
-        ("center_mark", "add_center_mark"),
-        ("centerline", "add_centerline"),
-        ("surface_finish", "add_surface_finish_symbol"),
-        ("weld_symbol", "add_weld_symbol"),
-        ("geometric_tolerance", "add_geometric_tolerance"),
     ])
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
@@ -155,6 +148,48 @@ class TestAddAnnotation:
 
     def test_unknown(self, mock_export, mock_view):
         result = add_annotation(type="bogus")
+        assert "error" in result
+
+
+# === add_dimension_annotation ===
+
+class TestAddDimensionAnnotation:
+    @pytest.mark.parametrize("disc, method", [
+        ("dimension", "add_dimension"),
+        ("angular_dimension", "add_angular_dimension"),
+        ("radial_dimension", "add_radial_dimension"),
+        ("diameter_dimension", "add_diameter_dimension"),
+        ("ordinate_dimension", "add_ordinate_dimension"),
+    ])
+    def test_dispatch(self, mock_export, mock_view, disc, method):
+        getattr(mock_export, method).return_value = {"status": "ok"}
+        result = add_dimension_annotation(type=disc)
+        getattr(mock_export, method).assert_called_once()
+        assert result == {"status": "ok"}
+
+    def test_unknown(self, mock_export, mock_view):
+        result = add_dimension_annotation(type="bogus")
+        assert "error" in result
+
+
+# === add_symbol_annotation ===
+
+class TestAddSymbolAnnotation:
+    @pytest.mark.parametrize("disc, method", [
+        ("center_mark", "add_center_mark"),
+        ("centerline", "add_centerline"),
+        ("surface_finish", "add_surface_finish_symbol"),
+        ("weld_symbol", "add_weld_symbol"),
+        ("geometric_tolerance", "add_geometric_tolerance"),
+    ])
+    def test_dispatch(self, mock_export, mock_view, disc, method):
+        getattr(mock_export, method).return_value = {"status": "ok"}
+        result = add_symbol_annotation(type=disc)
+        getattr(mock_export, method).assert_called_once()
+        assert result == {"status": "ok"}
+
+    def test_unknown(self, mock_export, mock_view):
+        result = add_symbol_annotation(type="bogus")
         assert "error" in result
 
 
@@ -178,7 +213,7 @@ class TestAdd2dDimension:
         assert "error" in result
 
 
-# === camera_control (uses view_manager) ===
+# === camera_control (simple view actions) ===
 
 class TestCameraControl:
     @pytest.mark.parametrize("disc, method", [
@@ -189,7 +224,6 @@ class TestCameraControl:
         ("pan", "pan_camera"),
         ("zoom", "zoom_camera"),
         ("refresh", "refresh_view"),
-        ("set_camera", "set_camera"),
         ("begin_dynamics", "begin_camera_dynamics"),
         ("end_dynamics", "end_camera_dynamics"),
     ])
@@ -212,6 +246,27 @@ class TestCameraControl:
     def test_unknown(self, mock_export, mock_view):
         result = camera_control(action="bogus")
         assert "error" in result
+
+
+# === set_camera ===
+
+class TestSetCamera:
+    def test_dispatch(self, mock_export, mock_view):
+        mock_view.set_camera.return_value = {"status": "ok"}
+        result = set_camera(eye_x=1.0, eye_z=5.0)
+        mock_view.set_camera.assert_called_once_with(
+            1.0, 0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, False, 1.0
+        )
+        assert result == {"status": "ok"}
+
+    def test_perspective(self, mock_export, mock_view):
+        mock_view.set_camera.return_value = {"status": "ok"}
+        result = set_camera(perspective=True, scale_or_angle=45.0)
+        mock_view.set_camera.assert_called_once()
+        call_args = mock_view.set_camera.call_args[0]
+        assert call_args[9] is True
+        assert call_args[10] == 45.0
+        assert result == {"status": "ok"}
 
 
 # === display_control (mixed: view_manager + export_manager) ===

@@ -1,5 +1,6 @@
 """Surface creation tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -19,16 +20,11 @@ def create_extruded_surface(
     method: 'finite' | 'from_to' | 'by_keypoint'
         | 'by_curves' | 'full'
 
-    Parameters (used per method):
-        distance: Extrusion distance (finite, by_curves, full).
-        direction: Direction (finite, by_curves, full).
-        end_caps: Whether to add end caps (finite).
-        from_plane_index: 1-based ref plane (from_to).
-        to_plane_index: 1-based ref plane (from_to).
-        keypoint_type: 'Start' or 'End' (by_keypoint).
-        treatment_type: Treatment type string (full).
-        draft_angle: Draft angle in degrees (full).
+    distance in meters. draft_angle in degrees. Plane indices are 1-based.
     """
+    err = validate_numerics(distance=distance, draft_angle=draft_angle)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_extruded_surface(distance, direction, end_caps)
@@ -60,11 +56,11 @@ def create_revolved_surface(
     method: 'finite' | 'sync' | 'by_keypoint' | 'full'
         | 'full_sync'
 
-    Parameters (used per method):
-        angle: Revolve angle in degrees.
-        want_end_caps: Whether to add end caps.
-        keypoint_type: 'Start' or 'End' (by_keypoint).
+    angle in degrees.
     """
+    err = validate_numerics(angle=angle)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_revolved_surface(angle, want_end_caps)
@@ -87,9 +83,6 @@ def create_lofted_surface(
     """Create a lofted surface.
 
     method: 'basic' | 'v2'
-
-    Parameters:
-        want_end_caps: Whether to add end caps.
     """
     match method:
         case "basic":
@@ -108,10 +101,6 @@ def create_swept_surface(
     """Create a swept surface.
 
     method: 'basic' | 'ex'
-
-    Parameters:
-        path_profile_index: Index of path profile.
-        want_end_caps: Whether to add end caps.
     """
     match method:
         case "basic":
@@ -126,10 +115,5 @@ def create_bounded_surface(
     want_end_caps: bool = True,
     periodic: bool = False,
 ) -> dict:
-    """Create a bounded (blue) surface from accumulated profiles.
-
-    Args:
-        want_end_caps: Whether to add end caps.
-        periodic: Whether the surface is periodic.
-    """
+    """Create a bounded (blue) surface from accumulated profiles."""
     return feature_manager.create_bounded_surface(want_end_caps, periodic)

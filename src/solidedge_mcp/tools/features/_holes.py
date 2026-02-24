@@ -1,5 +1,6 @@
 """Hole creation tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -14,7 +15,7 @@ def create_hole(
     from_plane_index: int = 0,
     to_plane_index: int = 0,
 ) -> dict:
-    """Create a hole at coordinates (meters).
+    """Create a hole at coordinates on a reference plane.
 
     method: 'finite' | 'through_all' | 'from_to'
         | 'through_next' | 'sync' | 'finite_ex'
@@ -22,19 +23,11 @@ def create_hole(
         | 'through_all_ex' | 'sync_ex' | 'multi_body'
         | 'sync_multi_body'
 
-    Parameters (used per method):
-        x, y: Hole center coordinates.
-        diameter: Hole diameter.
-        depth: Hole depth (finite, sync, finite_ex, sync_ex,
-            multi_body, sync_multi_body).
-        direction: 'Normal'|'Reverse' (finite, through_next,
-            finite_ex, through_next_ex, multi_body).
-        plane_index: 1-based ref plane index.
-        from_plane_index: 1-based ref plane (from_to,
-            from_to_ex).
-        to_plane_index: 1-based ref plane (from_to,
-            from_to_ex).
+    All dimensions in meters. Plane indices are 1-based.
     """
+    err = validate_numerics(x=x, y=y, diameter=diameter, depth=depth)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_hole(x, y, diameter, depth, direction)

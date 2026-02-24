@@ -27,7 +27,11 @@ from solidedge_mcp.tools.features._misc import (
     thicken,
 )
 from solidedge_mcp.tools.features._primitives import create_primitive, create_primitive_cutout
-from solidedge_mcp.tools.features._ref_planes import create_ref_plane
+from solidedge_mcp.tools.features._ref_planes import (
+    create_ref_plane,
+    create_ref_plane_on_curve,
+    create_ref_plane_tangent,
+)
 from solidedge_mcp.tools.features._revolve import create_revolve
 from solidedge_mcp.tools.features._rounds_chamfers import (
     create_blend,
@@ -89,6 +93,8 @@ __all__ = [
     "create_primitive",
     "create_primitive_cutout",
     "create_ref_plane",
+    "create_ref_plane_on_curve",
+    "create_ref_plane_tangent",
     "create_reinforcement",
     "create_revolve",
     "create_revolved_cutout",
@@ -141,6 +147,8 @@ def register(mcp):
     mcp.tool()(create_blend)
     mcp.tool()(delete_topology)
     mcp.tool()(create_ref_plane)
+    mcp.tool()(create_ref_plane_on_curve)
+    mcp.tool()(create_ref_plane_tangent)
     mcp.tool()(create_flange)
     mcp.tool()(create_contour_flange)
     mcp.tool()(create_sheet_metal_base)

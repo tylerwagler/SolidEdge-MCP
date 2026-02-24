@@ -1,5 +1,6 @@
 """Miscellaneous feature tools (thicken, pattern, mirror, thin wall, etc.)."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -12,10 +13,11 @@ def thicken(
 
     method: 'basic' | 'sync'
 
-    Parameters:
-        thickness: Thicken distance.
-        direction: 'Both'|'Normal'|'Reverse'.
+    thickness in meters.
     """
+    err = validate_numerics(thickness=thickness)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.thicken_surface(thickness, direction)
@@ -52,30 +54,15 @@ def create_pattern(
         | 'by_table' | 'by_table_sync' | 'by_fill_ex'
         | 'by_curve_ex' | 'user_defined'
 
-    Parameters (used per method):
-        feature_index: 0-based feature index (rectangular,
-            circular).
-        feature_name: Feature name string (rectangular_ex,
-            circular_ex, duplicate, by_fill, by_table,
-            by_table_sync, by_fill_ex, by_curve_ex,
-            user_defined).
-        x_count, y_count: Pattern counts (rectangular,
-            rectangular_ex).
-        x_gap, y_gap: Gap between instances (rectangular).
-        x_spacing, y_spacing: Spacing (rectangular_ex,
-            by_fill, by_fill_ex).
-        count: Instance count (circular, circular_ex,
-            by_curve_ex).
-        angle: Pattern angle (circular, circular_ex).
-        radius: Pattern radius (circular).
-        axis_face_index: Axis face (circular_ex).
-        fill_region_face_index: Fill region face (by_fill,
-            by_fill_ex).
-        x_offsets, y_offsets: Offset lists (by_table,
-            by_table_sync).
-        curve_edge_index: Curve edge (by_curve_ex).
-        spacing: Spacing along curve (by_curve_ex).
+    Spacing/gap values in meters. angle in degrees.
+    feature_index is 0-based; feature_name used by _ex variants.
     """
+    err = validate_numerics(
+        x_gap=x_gap, y_gap=y_gap, x_spacing=x_spacing,
+        y_spacing=y_spacing, angle=angle, radius=radius, spacing=spacing,
+    )
+    if err:
+        return err
     match method:
         case "rectangular_ex":
             return feature_manager.create_pattern_rectangular_ex(
@@ -146,15 +133,7 @@ def create_mirror(
 
     method: 'basic' | 'sync_ex' | 'save_as_part'
 
-    Parameters (used per method):
-        feature_name: Name of the feature to mirror (basic,
-            sync_ex).
-        mirror_plane_index: 1-based ref plane index (basic,
-            sync_ex, save_as_part).
-        new_file_name: Full path for mirrored part .par
-            (save_as_part).
-        link_to_original: Maintain link to original
-            (save_as_part).
+    mirror_plane_index is 1-based.
     """
     match method:
         case "basic":
@@ -178,11 +157,11 @@ def create_thin_wall(
 
     method: 'basic' | 'with_open_faces'
 
-    Parameters:
-        thickness: Shell wall thickness.
-        open_face_indices: Faces to leave open
-            (with_open_faces).
+    thickness in meters.
     """
+    err = validate_numerics(thickness=thickness)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_shell(thickness)
@@ -204,13 +183,11 @@ def face_operation(
 
     type: 'rotate_by_points' | 'rotate_by_edge'
 
-    Parameters (used per type):
-        face_index: Face to rotate.
-        vertex1_index, vertex2_index: Axis vertices
-            (rotate_by_points).
-        edge_index: Axis edge (rotate_by_edge).
-        angle: Rotation angle in degrees.
+    angle in degrees.
     """
+    err = validate_numerics(angle=angle)
+    if err:
+        return err
     match type:
         case "rotate_by_points":
             return feature_manager.create_face_rotate_by_points(
@@ -234,10 +211,6 @@ def add_body(
 
     method: 'basic' | 'by_mesh' | 'feature' | 'construction'
         | 'by_tag'
-
-    Parameters (used per method):
-        body_type: Body type string (basic).
-        tag: Tag reference string (by_tag).
     """
     match method:
         case "basic":
@@ -289,14 +262,7 @@ def manage_feature(
     action: 'delete' | 'suppress' | 'unsuppress' | 'reorder'
         | 'rename' | 'convert'
 
-    Parameters (used per action):
-        index: Feature index (delete, suppress, unsuppress,
-            reorder, rename).
-        target_index: Target position index (reorder).
-        after: Insert after target (reorder).
-        new_name: New feature name (rename).
-        feature_name: Feature name (convert).
-        target_type: Target type string (convert).
+    index is 0-based.
     """
     match action:
         case "delete":
@@ -321,4 +287,7 @@ def create_draft_angle(
     plane_index: int = 1,
 ) -> dict:
     """Add a draft angle to a face."""
+    err = validate_numerics(angle=angle)
+    if err:
+        return err
     return feature_manager.create_draft_angle(face_index, angle, plane_index)

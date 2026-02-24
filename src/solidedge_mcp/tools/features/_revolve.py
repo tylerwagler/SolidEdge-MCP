@@ -1,5 +1,6 @@
 """Revolve protrusion tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -16,13 +17,11 @@ def create_revolve(
         | 'thin_wall' | 'by_keypoint' | 'full_360'
         | 'by_keypoint_sync'
 
-    Parameters (used per method):
-        angle: Revolve angle in degrees (full, finite, sync,
-            finite_sync, thin_wall, full_360).
-        axis_type: 'CenterLine' or other axis type (finite).
-        wall_thickness: Wall thickness in meters (thin_wall).
-        treatment_type: Treatment type string (full_360).
+    angle in degrees. wall_thickness in meters.
     """
+    err = validate_numerics(angle=angle, wall_thickness=wall_thickness)
+    if err:
+        return err
     match method:
         case "full":
             return feature_manager.create_revolve(angle)

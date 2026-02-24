@@ -1,5 +1,6 @@
 """Primitive solid creation and cutout tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -26,16 +27,16 @@ def create_primitive(
     shape: 'box_two_points' | 'box_center' | 'box_three_points'
         | 'cylinder' | 'sphere'
 
-    Parameters (used per shape):
-        x1,y1,z1,x2,y2,z2: Corner coords (box_two_points),
-            or center+corner (box_center uses x1,y1,z1 as
-            center), or first two points (box_three_points).
-        x3,y3,z3: Third point (box_three_points).
-        length,width,height: Dimensions (box_center).
-        radius: Radius (cylinder, sphere).
-        depth: Cylinder height (cylinder).
-        plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    All coordinates/dimensions in meters.
+    plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
     """
+    err = validate_numerics(
+        x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2,
+        x3=x3, y3=y3, z3=z3, length=length, width=width,
+        height=height, radius=radius, depth=depth,
+    )
+    if err:
+        return err
     match shape:
         case "box_two_points":
             return feature_manager.create_box_by_two_points(x1, y1, z1, x2, y2, z2, plane_index)
@@ -82,17 +83,19 @@ def create_primitive_cutout(
     height: float = 0.0,
     plane_index: int = 1,
 ) -> dict:
-    """Create a primitive cutout shape.
+    """Create a primitive cutout (removes material).
 
     shape: 'box' | 'cylinder' | 'sphere'
 
-    Parameters (used per shape):
-        x1,y1,z1,x2,y2,z2: Corner coords (box).
-        x1,y1,z1: Center coords (cylinder, sphere).
-        radius: Radius (cylinder, sphere).
-        height: Cylinder height (cylinder).
-        plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    All coordinates/dimensions in meters.
+    plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
     """
+    err = validate_numerics(
+        x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2,
+        radius=radius, height=height,
+    )
+    if err:
+        return err
     match shape:
         case "box":
             return feature_manager.create_box_cutout_by_two_points(

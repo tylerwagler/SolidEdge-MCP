@@ -19,6 +19,11 @@ from solidedge_mcp.tools.documents import (
 def mock_mgr(monkeypatch):
     mgr = MagicMock()
     monkeypatch.setattr("solidedge_mcp.tools.documents.doc_manager", mgr)
+    # Bypass path validation so tests with dummy file paths still pass
+    monkeypatch.setattr(
+        "solidedge_mcp.tools.documents.validate_path",
+        lambda p, **kw: (p, None),
+    )
     return mgr
 
 

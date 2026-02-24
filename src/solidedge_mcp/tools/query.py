@@ -27,14 +27,9 @@ def measure(
 ) -> dict:
     """Measure distance or angle between 3D points.
 
-    type: 'distance' (default) | 'angle'
+    type: 'distance' | 'angle'
 
-    All coordinate parameters (x1, y1, z1, etc.) are in meters.
-
-    - distance: Euclidean distance between (x1,y1,z1) and (x2,y2,z2).
-      Returns distance in meters.
-    - angle: Angle at vertex (x2,y2,z2) between rays to
-      (x1,y1,z1) and (x3,y3,z3). Returns angle in degrees.
+    Coordinates in meters. 'angle' returns degrees at vertex (x2,y2,z2).
     """
     match type:
         case "distance":
@@ -60,22 +55,8 @@ def manage_variable(
 ) -> dict:
     """Manage document variables.
 
-    action: 'set' (default) | 'add' | 'query' | 'rename'
-            | 'translate' | 'copy_clipboard'
-            | 'add_from_clipboard' | 'set_formula'
-
-    - set: Set variable `name` to `value` (float).
-    - add: Add new variable `name` with `formula`
-      (and optional `units_type`).
-    - query: Query variables matching `pattern`
-      (default '*', `case_insensitive`).
-    - rename: Rename variable `name` to `new_name`.
-    - translate: Look up variable `name` via Variables.Translate().
-    - copy_clipboard: Copy variable `name` definition to clipboard.
-    - add_from_clipboard: Add variable `name` from clipboard
-      (optional `units_type`).
-    - set_formula: Set formula of existing variable `name`
-      to `formula`.
+    action: 'set' | 'add' | 'query' | 'rename' | 'translate'
+            | 'copy_clipboard' | 'add_from_clipboard' | 'set_formula'
     """
     match action:
         case "set":
@@ -109,12 +90,6 @@ def manage_property(
     """Manage document and custom properties.
 
     action: 'set_document' | 'set_custom' | 'delete_custom'
-
-    - set_document: Set a summary/document property `name`
-      to `value`.
-    - set_custom: Set or create a custom property `name`
-      to `value`.
-    - delete_custom: Delete a custom property by `name`.
     """
     match action:
         case "set_document":
@@ -137,14 +112,9 @@ def manage_material(
 ) -> dict:
     """Manage material assignment and density.
 
-    action: 'set' (default) | 'set_density' | 'set_by_name'
-            | 'get_library'
+    action: 'set' | 'set_density' | 'set_by_name' | 'get_library'
 
-    - set: Assign material `material_name` to active part.
-    - set_density: Set material density in kg/m³ for mass calculations.
-    - set_by_name: Look up material by name and apply it.
-    - get_library: Get the full material library with names,
-      densities, and properties.
+    density is in kg/m3.
     """
     match action:
         case "set":
@@ -171,18 +141,11 @@ def set_appearance(
     opacity: float = 1.0,
     reflectivity: float = 0.0,
 ) -> dict:
-    """Set visual appearance of the active part body or face.
+    """Set visual appearance of the active part body or a face.
 
-    target: 'body_color' | 'face_color' | 'opacity'
-            | 'reflectivity'
+    target: 'body_color' | 'face_color' | 'opacity' | 'reflectivity'
 
-    - body_color: Set body color using `red`, `green`, `blue`
-      (0-255).
-    - face_color: Set color of face at `face_index` using
-      `red`, `green`, `blue`.
-    - opacity: Set body opacity (0.0=transparent,
-      1.0=opaque).
-    - reflectivity: Set body reflectivity (0.0 to 1.0).
+    RGB values 0-255. opacity/reflectivity 0.0-1.0.
     """
     match target:
         case "body_color":
@@ -210,11 +173,7 @@ def manage_layer(
 
     action: 'add' | 'activate' | 'set_properties' | 'delete'
 
-    - add: Add a new layer with `name_or_index` (str name).
-    - activate: Activate a layer by name (str) or index (int).
-    - set_properties: Set visibility (`show`) and selectability
-      (`selectable`) on a layer identified by `name_or_index`.
-    - delete: Delete a layer by name (str) or index (int).
+    name_or_index accepts either a string name or integer index.
     """
     match action:
         case "add":
@@ -242,17 +201,6 @@ def select_set(
     action: 'clear' | 'add' | 'remove' | 'all' | 'copy' | 'cut'
             | 'delete' | 'suspend_display' | 'resume_display'
             | 'refresh_display'
-
-    - clear: Clear the current selection set.
-    - add: Add an object of `object_type` at `index` to selection.
-    - remove: Remove object at `index` from selection set.
-    - all: Select all objects in the active document.
-    - copy: Copy current selection to clipboard.
-    - cut: Cut current selection to clipboard.
-    - delete: Delete currently selected objects.
-    - suspend_display: Suspend display updates (batch perf).
-    - resume_display: Resume display updates.
-    - refresh_display: Refresh the display of the selection set.
     """
     match action:
         case "clear":
@@ -302,43 +250,15 @@ def edit_feature_extent(
     crown_radius_or_offset: float = 0.0,
     crown_takeoff_angle: float = 0.0,
 ) -> dict:
-    """Edit feature extent, thin wall, face offset, body array,
-    and treatment properties.
+    """Edit feature extent, thin wall, face offset, body array, and treatment properties.
 
-    property: 'get_direction1' | 'set_direction1'
-      | 'get_direction2' | 'set_direction2'
-      | 'get_thin_wall' | 'set_thin_wall'
-      | 'get_from_face' | 'set_from_face'
-      | 'get_body_array' | 'set_body_array'
-      | 'get_to_face' | 'set_to_face'
-      | 'get_direction1_treatment'
-      | 'apply_direction1_treatment'
+    property: 'get_direction1' | 'set_direction1' | 'get_direction2' | 'set_direction2'
+              | 'get_thin_wall' | 'set_thin_wall' | 'get_from_face' | 'set_from_face'
+              | 'get_body_array' | 'set_body_array' | 'get_to_face' | 'set_to_face'
+              | 'get_direction1_treatment' | 'apply_direction1_treatment'
 
-    - get_direction1: Get Direction 1 extent params from
-      `feature_name`.
-    - set_direction1: Set Direction 1 extent on `feature_name`
-      (extent_type: 13=Finite, 16=ThroughAll, 44=None;
-      distance in meters).
-    - get_direction2: Get Direction 2 extent params.
-    - set_direction2: Set Direction 2 extent (distance in meters).
-    - get_thin_wall: Get thin wall options from `feature_name`.
-    - set_thin_wall: Set thin wall options (wall_type,
-      thickness1 in meters, thickness2 in meters).
-    - get_from_face: Get 'from face' offset data.
-    - set_from_face: Set 'from face' offset distance in meters.
-    - get_body_array: Get multi-body references from feature.
-    - set_body_array: Set body array using 0-based
-      `body_indices`.
-    - get_to_face: Get 'to face' offset data.
-    - set_to_face: Set 'to face' offset (offset_side:
-      1=igLeft, 2=igRight; distance in meters).
-    - get_direction1_treatment: Get Direction 1 treatment
-      (crown/draft).
-    - apply_direction1_treatment: Apply Direction 1 treatment
-      with treatment_type, draft_side, draft_angle (degrees),
-      crown_type, crown_side, crown_curvature_side,
-      crown_radius_or_offset (meters), crown_takeoff_angle
-      (degrees).
+    extent_type: 13=Finite, 16=ThroughAll, 44=None. offset_side: 1=igLeft, 2=igRight.
+    Distances/thicknesses in meters. Angles in degrees. body_indices are 0-based.
     """
     match property:
         case "get_direction1":
@@ -401,10 +321,7 @@ def manage_feature_tree(
 
     action: 'rename' | 'suppress' | 'unsuppress' | 'set_mode'
 
-    - rename: Rename feature `feature_name` to `new_name`.
-    - suppress: Suppress feature by `feature_name`.
-    - unsuppress: Unsuppress feature by `feature_name`.
-    - set_mode: Set modeling mode ('ordered' or 'synchronous').
+    mode: 'ordered' or 'synchronous' (for set_mode).
     """
     match action:
         case "rename":
@@ -431,15 +348,9 @@ def query_edge(
 ) -> dict:
     """Query edge topology and geometry on a face.
 
-    property: 'endpoints' | 'length' | 'tangent' | 'geometry'
-      | 'curvature' | 'vertex'
+    property: 'endpoints' | 'length' | 'tangent' | 'geometry' | 'curvature' | 'vertex'
 
-    - endpoints: Get start/end XYZ of edge.
-    - length: Get total length of the edge.
-    - tangent: Get tangent vector at `param` (0.0-1.0).
-    - geometry: Get underlying geometry type and data.
-    - curvature: Get curvature at `param` on the edge.
-    - vertex: Get XYZ of a vertex (which='start' or 'end').
+    param is a 0.0-1.0 parametric position along the edge. which: 'start' or 'end'.
     """
     match property:
         case "endpoints":
@@ -471,12 +382,7 @@ def query_face(
 
     property: 'normal' | 'geometry' | 'loops' | 'curvature'
 
-    - normal: Get normal vector at parametric (u, v) on face.
-    - geometry: Get geometry type and data of the face
-      (Plane/Cylinder/Cone/etc).
-    - loops: Get loop info (outer boundary vs holes).
-    - curvature: Get principal curvatures at parametric
-      (u, v).
+    u, v are parametric coordinates on the face (0.0-1.0).
     """
     match property:
         case "normal":
@@ -510,21 +416,11 @@ def query_body(
 ) -> dict:
     """Query body-level topology and geometry.
 
-    property: 'extreme_point' | 'faces_by_ray' | 'shells'
-      | 'vertices' | 'shell_info' | 'point_inside'
-      | 'user_physical_properties' | 'facet_data'
+    property: 'extreme_point' | 'faces_by_ray' | 'shells' | 'vertices'
+              | 'shell_info' | 'point_inside' | 'user_physical_properties'
+              | 'facet_data'
 
-    All coordinate parameters (direction_x/y/z, origin_x/y/z,
-    x/y/z) are in meters. tolerance is in meters.
-
-    - extreme_point: Get extreme point in direction.
-    - faces_by_ray: Ray-cast from origin (meters) in direction.
-    - shells: List all shells with is_closed and volume.
-    - vertices: Get all vertices with XYZ in meters.
-    - shell_info: Get shell topology at `shell_index`.
-    - point_inside: Test if (x,y,z) meters is inside body.
-    - user_physical_properties: Get user-overridden props.
-    - facet_data: Get tessellation/mesh data (tolerance meters).
+    All coordinates and tolerance in meters.
     """
     match property:
         case "extreme_point":
@@ -565,11 +461,6 @@ def query_bspline(
     """Query B-spline (NURBS) metadata from edges or faces.
 
     type: 'curve' | 'surface'
-
-    - curve: Get NURBS curve metadata (order, poles, knots,
-      flags) from edge at `face_index`, `edge_index`.
-    - surface: Get NURBS surface metadata (order, poles,
-      knots, flags) from face at `face_index`.
     """
     match type:
         case "curve":
@@ -587,9 +478,6 @@ def recompute(scope: str = "model") -> dict:
     """Recompute the active model or document.
 
     scope: 'model' | 'document'
-
-    - model: Recompute the active model features.
-    - document: Force a full document-level recompute.
     """
     match scope:
         case "model":

@@ -12,11 +12,6 @@ def manage_connection(
     """Manage the Solid Edge application connection.
 
     action: 'connect' | 'disconnect' | 'quit' | 'activate'
-
-    - connect: Connect (start if needed when start_if_needed=True)
-    - disconnect: Disconnect without closing Solid Edge
-    - quit: Quit the Solid Edge application
-    - activate: Bring the Solid Edge window to foreground
     """
     match action:
         case "connect":
@@ -42,10 +37,6 @@ def app_command(
     """Execute an application command.
 
     action: 'start' | 'abort' | 'idle'
-
-    - start: Execute a command by its ID
-    - abort: Abort the current command
-    - idle: Process pending background operations
     """
     match action:
         case "start":
@@ -76,14 +67,11 @@ def app_config(
 ) -> dict:
     """Get or set application configuration properties.
 
-    property: 'set_performance' | 'get_environment'
-      | 'get_status_bar' | 'set_status_bar'
-      | 'get_visible' | 'set_visible'
-      | 'get_global' | 'set_global'
-      | 'get_template' | 'set_template'
+    property: 'set_performance' | 'get_environment' | 'get_status_bar'
+      | 'set_status_bar' | 'get_visible' | 'set_visible'
+      | 'get_global' | 'set_global' | 'get_template' | 'set_template'
 
-    - get_template/set_template: doc_type 1=Part, 2=Draft,
-      3=Assembly, 4=SheetMetal
+    doc_type: 1=Part, 2=Draft, 3=Assembly, 4=SheetMetal
     """
     match property:
         case "set_performance":

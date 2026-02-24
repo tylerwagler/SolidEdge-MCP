@@ -1,5 +1,6 @@
 """Cutout tools (extruded, revolved, normal, lofted, swept, helix)."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -17,16 +18,11 @@ def create_extruded_cutout(
         | 'multi_body' | 'from_to_multi_body'
         | 'through_all_multi_body'
 
-    Parameters (used per method):
-        distance: Cut depth in meters (finite, multi_body).
-        direction: 'Normal'|'Reverse'|'Both' (finite, through_all,
-            through_next, by_keypoint, through_next_single,
-            multi_body, through_all_multi_body).
-        from_plane_index: 1-based ref plane index (from_to,
-            from_to_v2, from_to_multi_body).
-        to_plane_index: 1-based ref plane index (from_to,
-            from_to_v2, from_to_multi_body).
+    distance in meters. Plane indices are 1-based.
     """
+    err = validate_numerics(distance=distance)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_extruded_cutout(distance, direction)
@@ -65,10 +61,11 @@ def create_revolved_cutout(
     method: 'finite' | 'sync' | 'by_keypoint' | 'multi_body'
         | 'full' | 'full_sync'
 
-    Parameters (used per method):
-        angle: Revolve angle in degrees (finite, sync, multi_body,
-            full, full_sync).
+    angle in degrees.
     """
+    err = validate_numerics(angle=angle)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_revolved_cutout(angle)
@@ -98,13 +95,11 @@ def create_normal_cutout(
     method: 'finite' | 'through_all' | 'from_to'
         | 'through_next' | 'by_keypoint'
 
-    Parameters (used per method):
-        distance: Cut depth (finite).
-        direction: 'Normal'|'Reverse'|'Both' (finite, through_all,
-            through_next, by_keypoint).
-        from_plane_index: 1-based ref plane (from_to).
-        to_plane_index: 1-based ref plane (from_to).
+    distance in meters. Plane indices are 1-based.
     """
+    err = validate_numerics(distance=distance)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_normal_cutout(distance, direction)
@@ -127,9 +122,6 @@ def create_lofted_cutout(
     """Create a lofted cutout between multiple profiles.
 
     method: 'basic' | 'full'
-
-    Parameters:
-        profile_indices: Indices of accumulated profiles.
     """
     match method:
         case "basic":
@@ -147,9 +139,6 @@ def create_swept_cutout(
     """Create a swept cutout along a path.
 
     method: 'basic' | 'multi_body'
-
-    Parameters:
-        path_profile_index: Index of path profile (multi_body).
     """
     match method:
         case "basic":
@@ -173,16 +162,11 @@ def create_helix_cutout(
 
     method: 'finite' | 'sync' | 'from_to' | 'from_to_sync'
 
-    Parameters (used per method):
-        pitch: Helix pitch distance.
-        height: Helix height (finite, sync).
-        revolutions: Number of revolutions (finite, sync).
-        direction: 'Right' or 'Left' (finite, sync).
-        from_plane_index: 1-based ref plane (from_to,
-            from_to_sync).
-        to_plane_index: 1-based ref plane (from_to,
-            from_to_sync).
+    pitch/height in meters. Plane indices are 1-based.
     """
+    err = validate_numerics(pitch=pitch, height=height)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_helix_cutout(pitch, height, revolutions, direction)

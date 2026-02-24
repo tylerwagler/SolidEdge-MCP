@@ -12,7 +12,9 @@ from solidedge_mcp.tools.assembly import (
     manage_component,
     manage_relation,
     query_component,
+    rotate_component,
     set_component_appearance,
+    set_component_orientation,
     structural_frame,
     transform_component,
     virtual_component,
@@ -24,6 +26,11 @@ from solidedge_mcp.tools.assembly import (
 def mock_mgr(monkeypatch):
     mgr = MagicMock()
     monkeypatch.setattr("solidedge_mcp.tools.assembly.assembly_manager", mgr)
+    # Bypass path validation so tests with dummy file paths still pass
+    monkeypatch.setattr(
+        "solidedge_mcp.tools.assembly.validate_path",
+        lambda p, **kw: (p, None),
+    )
     return mgr
 
 
@@ -166,12 +173,9 @@ class TestSetComponentAppearance:
 class TestTransformComponent:
     @pytest.mark.parametrize("disc, method", [
         ("update_position", "update_component_position"),
-        ("set_transform", "set_component_transform"),
         ("set_origin", "set_component_origin"),
-        ("move", "occurrence_move"),
-        ("rotate", "occurrence_rotate"),
-        ("put_euler", "put_transform_euler"),
         ("put_origin", "put_origin"),
+        ("move", "occurrence_move"),
     ])
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
@@ -187,6 +191,62 @@ class TestTransformComponent:
     def test_unknown(self, mock_mgr):
         result = transform_component(method="bogus")
         assert "error" in result
+
+
+# === set_component_orientation ===
+
+class TestSetComponentOrientation:
+    @pytest.mark.parametrize("disc, method", [
+        ("set_transform", "set_component_transform"),
+        ("put_euler", "put_transform_euler"),
+    ])
+    def test_dispatch(self, mock_mgr, disc, method):
+        getattr(mock_mgr, method).return_value = {"status": "ok"}
+        result = set_component_orientation(method=disc)
+        getattr(mock_mgr, method).assert_called_once()
+        assert result == {"status": "ok"}
+
+    def test_set_transform_passes_args(self, mock_mgr):
+        mock_mgr.set_component_transform.return_value = {"status": "ok"}
+        set_component_orientation(
+            method="set_transform", component_index=1,
+            origin_x=0.1, origin_y=0.2, origin_z=0.3,
+            angle_x=10, angle_y=20, angle_z=30,
+        )
+        mock_mgr.set_component_transform.assert_called_once_with(
+            1, 0.1, 0.2, 0.3, 10, 20, 30,
+        )
+
+    def test_put_euler_passes_args(self, mock_mgr):
+        mock_mgr.put_transform_euler.return_value = {"status": "ok"}
+        set_component_orientation(
+            method="put_euler", component_index=2,
+            x=0.1, y=0.2, z=0.3, rx=45, ry=90, rz=180,
+        )
+        mock_mgr.put_transform_euler.assert_called_once_with(
+            2, 0.1, 0.2, 0.3, 45, 90, 180,
+        )
+
+    def test_unknown(self, mock_mgr):
+        result = set_component_orientation(method="bogus")
+        assert "error" in result
+
+
+# === rotate_component ===
+
+class TestRotateComponent:
+    def test_dispatch(self, mock_mgr):
+        mock_mgr.occurrence_rotate.return_value = {"status": "ok"}
+        result = rotate_component(
+            component_index=1,
+            axis_x1=0, axis_y1=0, axis_z1=0,
+            axis_x2=0, axis_y2=0, axis_z2=1,
+            angle=90,
+        )
+        mock_mgr.occurrence_rotate.assert_called_once_with(
+            1, 0, 0, 0, 0, 0, 1, 90,
+        )
+        assert result == {"status": "ok"}
 
 
 # === add_assembly_constraint ===

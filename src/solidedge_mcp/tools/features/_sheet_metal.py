@@ -1,5 +1,6 @@
 """Sheet metal tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -21,23 +22,14 @@ def create_flange(
         | 'with_bend_calc' | 'sync_with_bend_calc'
         | 'match_face_with_bend' | 'by_face_with_bend'
 
-    Parameters (used per method):
-        face_index: Face index.
-        edge_index: Edge index.
-        flange_length: Length of flange.
-        side: 'Right' or 'Left' (basic, by_match_face,
-            with_bend_calc, match_face_with_bend, by_face,
-            by_face_with_bend).
-        inside_radius: Bend inside radius (basic,
-            by_match_face, match_face_with_bend).
-        bend_angle: Bend angle (basic).
-        bend_deduction: Bend deduction value (with_bend_calc,
-            sync_with_bend_calc, match_face_with_bend,
-            by_face_with_bend).
-        ref_face_index: Reference face (by_face,
-            by_face_with_bend).
-        bend_radius: Bend radius (by_face, by_face_with_bend).
+    Lengths/radii in meters. bend_angle in degrees.
     """
+    err = validate_numerics(
+        flange_length=flange_length, bend_deduction=bend_deduction,
+        bend_radius=bend_radius,
+    )
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_flange(
@@ -124,17 +116,14 @@ def create_contour_flange(
     method: 'ex' | 'sync' | 'sync_with_bend' | 'v3'
         | 'sync_ex'
 
-    Parameters (used per method):
-        thickness: Material thickness.
-        bend_radius: Bend radius.
-        direction: Direction.
-        face_index: Face index (sync, sync_with_bend,
-            sync_ex).
-        edge_index: Edge index (sync, sync_with_bend,
-            sync_ex).
-        bend_deduction: Bend deduction (sync_with_bend,
-            sync_ex).
+    Dimensions in meters.
     """
+    err = validate_numerics(
+        thickness=thickness, bend_radius=bend_radius,
+        bend_deduction=bend_deduction,
+    )
+    if err:
+        return err
     match method:
         case "ex":
             return feature_manager.create_contour_flange_ex(thickness, bend_radius, direction)
@@ -182,12 +171,11 @@ def create_sheet_metal_base(
     type: 'flange' | 'tab' | 'contour_advanced'
         | 'tab_multi_profile'
 
-    Parameters (used per type):
-        thickness: Material thickness.
-        width: Flange/tab width (flange, tab).
-        bend_radius: Bend radius (flange, contour_advanced).
-        relief_type: Relief type string (contour_advanced).
+    Dimensions in meters.
     """
+    err = validate_numerics(thickness=thickness)
+    if err:
+        return err
     match type:
         case "flange":
             return feature_manager.create_base_flange(width or 0.0, thickness, bend_radius)
@@ -214,10 +202,11 @@ def create_lofted_flange(
 
     method: 'basic' | 'advanced' | 'ex'
 
-    Parameters:
-        thickness: Material thickness.
-        bend_radius: Bend radius (advanced).
+    Dimensions in meters.
     """
+    err = validate_numerics(thickness=thickness, bend_radius=bend_radius)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_lofted_flange(thickness)
@@ -240,12 +229,11 @@ def create_bend(
 
     method: 'basic' | 'with_calc'
 
-    Parameters:
-        bend_angle: Bend angle in degrees.
-        direction: Direction.
-        moving_side: 'Right' or 'Left'.
-        bend_deduction: Bend deduction value (with_calc).
+    bend_angle in degrees.
     """
+    err = validate_numerics(bend_angle=bend_angle, bend_deduction=bend_deduction)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_bend(bend_angle, direction, moving_side)
@@ -271,13 +259,11 @@ def create_slot(
     method: 'basic' | 'ex' | 'sync' | 'multi_body'
         | 'sync_multi_body'
 
-    Parameters:
-        width: Slot width.
-        depth: Slot depth (ex, sync, multi_body,
-            sync_multi_body).
-        direction: Direction (basic, ex, multi_body,
-            sync_multi_body).
+    Dimensions in meters.
     """
+    err = validate_numerics(width=width, depth=depth)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_slot(width, direction)
@@ -301,13 +287,13 @@ def create_thread(
 ) -> dict:
     """Create a thread on a cylindrical face.
 
-    method: 'basic' (cosmetic thread) | 'physical' (modeled thread geometry)
+    method: 'basic' (cosmetic) | 'physical' (modeled geometry)
 
-    Parameters:
-        face_index: 0-based cylindrical face index.
-        thread_diameter: Thread diameter in meters (0 = auto-detect from face).
-        thread_depth: Thread depth in meters (0 = full depth).
+    face_index is 0-based. Diameter/depth in meters; 0 = auto-detect.
     """
+    err = validate_numerics(thread_diameter=thread_diameter, thread_depth=thread_depth)
+    if err:
+        return err
     diameter = thread_diameter if thread_diameter > 0 else None
     depth = thread_depth if thread_depth > 0 else None
 
@@ -333,10 +319,11 @@ def create_drawn_cutout(
 
     method: 'basic' | 'ex'
 
-    Parameters:
-        depth: Cut depth.
-        direction: Direction.
+    depth in meters.
     """
+    err = validate_numerics(depth=depth)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_drawn_cutout(depth, direction)
@@ -356,11 +343,11 @@ def create_dimple(
 
     method: 'basic' | 'ex'
 
-    Parameters:
-        depth: Dimple depth.
-        direction: Direction.
-        punch_tool_diameter: Punch tool diameter (ex).
+    Dimensions in meters.
     """
+    err = validate_numerics(depth=depth, punch_tool_diameter=punch_tool_diameter)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_dimple(depth, direction)
@@ -378,9 +365,11 @@ def create_louver(
 
     method: 'basic' | 'sync'
 
-    Parameters:
-        depth: Louver depth.
+    depth in meters.
     """
+    err = validate_numerics(depth=depth)
+    if err:
+        return err
     match method:
         case "basic":
             return feature_manager.create_louver(depth)
@@ -412,23 +401,15 @@ def sheet_metal_misc(
     action: 'hem' | 'jog' | 'close_corner' | 'multi_edge_flange'
         | 'convert'
 
-    Parameters (used per action):
-        face_index: Face index (hem, close_corner,
-            multi_edge_flange).
-        edge_index: Edge index (hem, close_corner).
-        hem_width: Hem width (hem).
-        bend_radius: Bend radius (hem).
-        hem_type: 'Closed'|'Open'|etc. (hem).
-        jog_offset: Jog offset distance (jog).
-        jog_angle: Jog angle in degrees (jog).
-        direction: Direction (jog).
-        moving_side: 'Right' or 'Left' (jog).
-        closure_type: 'Close'|'Overlap'|etc. (close_corner).
-        edge_indices: List of edge indices (multi_edge_flange).
-        flange_length: Flange length (multi_edge_flange).
-        side: 'Right' or 'Left' (multi_edge_flange).
-        thickness: Material thickness (convert).
+    Dimensions in meters. jog_angle in degrees.
     """
+    err = validate_numerics(
+        hem_width=hem_width, bend_radius=bend_radius,
+        jog_offset=jog_offset, jog_angle=jog_angle,
+        flange_length=flange_length, thickness=thickness,
+    )
+    if err:
+        return err
     match action:
         case "hem":
             return feature_manager.create_hem(
@@ -456,9 +437,11 @@ def create_stamped(
 
     type: 'bead' | 'gusset'
 
-    Parameters:
-        depth: Stamping depth.
+    depth in meters.
     """
+    err = validate_numerics(depth=depth)
+    if err:
+        return err
     match type:
         case "bead":
             return feature_manager.create_bead(depth)
@@ -480,13 +463,11 @@ def create_surface_mark(
 
     type: 'emboss' | 'etch'
 
-    Parameters (used per type):
-        face_indices: Faces to emboss onto (emboss).
-        clearance: Clearance distance (emboss).
-        thickness: Emboss thickness (emboss).
-        thicken: Whether to thicken (emboss).
-        default_side: Use default side (emboss).
+    Dimensions in meters.
     """
+    err = validate_numerics(clearance=clearance, thickness=thickness)
+    if err:
+        return err
     match type:
         case "emboss":
             return feature_manager.create_emboss(
@@ -507,10 +488,11 @@ def create_reinforcement(
 
     type: 'rib' | 'lip'
 
-    Parameters:
-        thickness: Wall thickness.
-        direction: Direction (rib only).
+    thickness in meters.
     """
+    err = validate_numerics(thickness=thickness)
+    if err:
+        return err
     match type:
         case "rib":
             return feature_manager.create_rib(thickness, direction)

@@ -32,6 +32,8 @@ from solidedge_mcp.tools.features import (
     create_primitive,
     create_primitive_cutout,
     create_ref_plane,
+    create_ref_plane_on_curve,
+    create_ref_plane_tangent,
     create_reinforcement,
     create_revolve,
     create_revolved_cutout,
@@ -55,7 +57,6 @@ from solidedge_mcp.tools.features import (
     simplify,
     thicken,
 )
-
 
 _FEATURE_SUBMODULES = [
     "solidedge_mcp.tools.features._extrude",
@@ -575,19 +576,6 @@ class TestCreateRefPlane:
         ("angle", "create_ref_plane_by_angle"),
         ("three_points", "create_ref_plane_by_3_points"),
         ("midplane", "create_ref_plane_midplane"),
-        ("normal_to_curve", "create_ref_plane_normal_to_curve"),
-        ("normal_at_distance", "create_ref_plane_normal_at_distance"),
-        ("normal_at_arc_ratio", "create_ref_plane_normal_at_arc_ratio"),
-        ("normal_at_distance_along", "create_ref_plane_normal_at_distance_along"),
-        ("parallel_by_tangent", "create_ref_plane_parallel_by_tangent"),
-        ("normal_at_keypoint", "create_ref_plane_normal_at_keypoint"),
-        ("tangent_cylinder_angle", "create_ref_plane_tangent_cylinder_angle"),
-        ("tangent_cylinder_keypoint", "create_ref_plane_tangent_cylinder_keypoint"),
-        ("tangent_surface_keypoint", "create_ref_plane_tangent_surface_keypoint"),
-        ("normal_at_distance_v2", "create_ref_plane_normal_at_distance_v2"),
-        ("normal_at_arc_ratio_v2", "create_ref_plane_normal_at_arc_ratio_v2"),
-        ("normal_at_distance_along_v2", "create_ref_plane_normal_at_distance_along_v2"),
-        ("tangent_parallel", "create_ref_plane_tangent_parallel"),
     ])
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
@@ -604,6 +592,51 @@ class TestCreateRefPlane:
 
     def test_unknown(self, mock_mgr):
         result = create_ref_plane(method="bogus")
+        assert "error" in result
+
+
+# === create_ref_plane_on_curve ===
+
+class TestCreateRefPlaneOnCurve:
+    @pytest.mark.parametrize("disc, method", [
+        ("normal_to_curve", "create_ref_plane_normal_to_curve"),
+        ("normal_at_distance", "create_ref_plane_normal_at_distance"),
+        ("normal_at_arc_ratio", "create_ref_plane_normal_at_arc_ratio"),
+        ("normal_at_distance_along", "create_ref_plane_normal_at_distance_along"),
+        ("normal_at_keypoint", "create_ref_plane_normal_at_keypoint"),
+        ("normal_at_distance_v2", "create_ref_plane_normal_at_distance_v2"),
+        ("normal_at_arc_ratio_v2", "create_ref_plane_normal_at_arc_ratio_v2"),
+        ("normal_at_distance_along_v2", "create_ref_plane_normal_at_distance_along_v2"),
+    ])
+    def test_dispatch(self, mock_mgr, disc, method):
+        getattr(mock_mgr, method).return_value = {"status": "ok"}
+        result = create_ref_plane_on_curve(method=disc)
+        getattr(mock_mgr, method).assert_called_once()
+        assert result == {"status": "ok"}
+
+    def test_unknown(self, mock_mgr):
+        result = create_ref_plane_on_curve(method="bogus")
+        assert "error" in result
+
+
+# === create_ref_plane_tangent ===
+
+class TestCreateRefPlaneTangent:
+    @pytest.mark.parametrize("disc, method", [
+        ("parallel_by_tangent", "create_ref_plane_parallel_by_tangent"),
+        ("tangent_cylinder_angle", "create_ref_plane_tangent_cylinder_angle"),
+        ("tangent_cylinder_keypoint", "create_ref_plane_tangent_cylinder_keypoint"),
+        ("tangent_surface_keypoint", "create_ref_plane_tangent_surface_keypoint"),
+        ("tangent_parallel", "create_ref_plane_tangent_parallel"),
+    ])
+    def test_dispatch(self, mock_mgr, disc, method):
+        getattr(mock_mgr, method).return_value = {"status": "ok"}
+        result = create_ref_plane_tangent(method=disc)
+        getattr(mock_mgr, method).assert_called_once()
+        assert result == {"status": "ok"}
+
+    def test_unknown(self, mock_mgr):
+        result = create_ref_plane_tangent(method="bogus")
         assert "error" in result
 
 

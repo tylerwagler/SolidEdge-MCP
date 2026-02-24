@@ -7,7 +7,6 @@ from . import (
     features,
     query,
     resources,
-    sheet_metal,
     sketching,
 )
 
@@ -22,7 +21,6 @@ def register_tools(mcp):
     sketching.register(mcp)
     features.register(mcp)
     assembly.register(mcp)
-    sheet_metal.register(mcp)
     query.register(mcp)
     export.register(mcp)
     diagnostics.register(mcp)

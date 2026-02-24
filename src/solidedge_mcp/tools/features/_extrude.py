@@ -1,5 +1,6 @@
 """Extrude protrusion tools."""
 
+from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
@@ -18,17 +19,11 @@ def create_extrude(
         | 'from_to_v2' | 'by_keypoint' | 'from_to_single'
         | 'through_next_single'
 
-    Parameters (used per method):
-        distance: Extrusion distance in meters (finite, thin_wall, symmetric).
-        direction: 'Normal'|'Reverse'|'Both' (finite, infinite,
-            through_next, thin_wall, through_next_v2, by_keypoint,
-            through_next_single).
-        wall_thickness: Wall thickness in meters (thin_wall).
-        from_plane_index: 1-based ref plane index (from_to, from_to_v2,
-            from_to_single).
-        to_plane_index: 1-based ref plane index (from_to, from_to_v2,
-            from_to_single).
+    distance/wall_thickness in meters. Plane indices are 1-based.
     """
+    err = validate_numerics(distance=distance, wall_thickness=wall_thickness)
+    if err:
+        return err
     match method:
         case "finite":
             return feature_manager.create_extrude(distance, direction)
