@@ -1,8 +1,9 @@
 """Transform operations for assembly components."""
 
 import math
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -55,7 +56,7 @@ class TransformsMixin:
                 }
         except Exception as e:
             _logger.error(f"Failed to update component position: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def occurrence_move(
         self, component_index: int, dx: float, dy: float, dz: float
@@ -96,7 +97,7 @@ class TransformsMixin:
             return {"status": "moved", "component_index": component_index, "delta": [dx, dy, dz]}
         except Exception as e:
             _logger.error(f"Failed to move component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def occurrence_rotate(
         self,
@@ -154,7 +155,7 @@ class TransformsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to rotate component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_component_transform(
         self,
@@ -216,7 +217,7 @@ class TransformsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to set component transform: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_component_origin(
         self, component_index: int, x: float, y: float, z: float
@@ -257,7 +258,7 @@ class TransformsMixin:
             return {"status": "updated", "component_index": component_index, "origin": [x, y, z]}
         except Exception as e:
             _logger.error(f"Failed to set component origin: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def mirror_component(self, component_index: int, plane_index: int) -> dict[str, Any]:
         """
@@ -303,7 +304,7 @@ class TransformsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to mirror component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def put_transform_euler(
         self,
@@ -353,7 +354,7 @@ class TransformsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to set Euler transform: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def put_origin(
         self,
@@ -392,4 +393,4 @@ class TransformsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to set origin: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

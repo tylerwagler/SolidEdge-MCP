@@ -1,7 +1,8 @@
 """Hole feature operations."""
 
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -79,7 +80,7 @@ class HolesMixin:
                 "hole_type": hole_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_all(
         self, x: float, y: float, diameter: float, plane_index: int = 1, direction: str = "Normal"
@@ -133,7 +134,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_hole_by_face(self, face_index: int) -> dict[str, Any]:
         """
@@ -169,7 +170,7 @@ class HolesMixin:
 
             return {"status": "created", "type": "delete_hole_by_face", "face_index": face_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_from_to(
         self,
@@ -237,7 +238,7 @@ class HolesMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_next(
         self,
@@ -293,7 +294,7 @@ class HolesMixin:
                 "plane_index": plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_sync(
         self,
@@ -345,7 +346,7 @@ class HolesMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_finite_ex(
         self,
@@ -403,7 +404,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_from_to_ex(
         self,
@@ -469,7 +470,7 @@ class HolesMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_next_ex(
         self,
@@ -524,7 +525,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_all_ex(
         self,
@@ -573,7 +574,7 @@ class HolesMixin:
                 "plane_index": plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_sync_ex(
         self,
@@ -624,7 +625,7 @@ class HolesMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_multi_body(
         self,
@@ -682,7 +683,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_sync_multi_body(
         self,
@@ -733,4 +734,4 @@ class HolesMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

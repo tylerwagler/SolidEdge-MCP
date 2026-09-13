@@ -23,15 +23,19 @@ def mock_mgr(monkeypatch):
 
 # === manage_sketch ===
 
+
 class TestManageSketch:
-    @pytest.mark.parametrize("disc, method", [
-        ("create", "create_sketch"),
-        ("close", "close_sketch"),
-        ("create_on_plane", "create_sketch_on_plane_index"),
-        ("set_axis", "set_axis_of_revolution"),
-        ("set_visibility", "hide_profile"),
-        ("get_geometry", "get_ordered_geometry"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("create", "create_sketch"),
+            ("close", "close_sketch"),
+            ("create_on_plane", "create_sketch_on_plane_index"),
+            ("set_axis", "set_axis_of_revolution"),
+            ("set_visibility", "hide_profile"),
+            ("get_geometry", "get_ordered_geometry"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_sketch(action=disc)
@@ -65,21 +69,25 @@ class TestManageSketch:
 
 # === draw ===
 
+
 class TestDraw:
-    @pytest.mark.parametrize("disc, method", [
-        ("line", "draw_line"),
-        ("circle", "draw_circle"),
-        ("rectangle", "draw_rectangle"),
-        ("arc", "draw_arc"),
-        ("polygon", "draw_polygon"),
-        ("ellipse", "draw_ellipse"),
-        ("spline", "draw_spline"),
-        ("arc_3pt", "draw_arc_by_3_points"),
-        ("circle_2pt", "draw_circle_by_2_points"),
-        ("circle_3pt", "draw_circle_by_3_points"),
-        ("point", "draw_point"),
-        ("construction_line", "draw_construction_line"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("line", "draw_line"),
+            ("circle", "draw_circle"),
+            ("rectangle", "draw_rectangle"),
+            ("arc", "draw_arc"),
+            ("polygon", "draw_polygon"),
+            ("ellipse", "draw_ellipse"),
+            ("spline", "draw_spline"),
+            ("arc_3pt", "draw_arc_by_3_points"),
+            ("circle_2pt", "draw_circle_by_2_points"),
+            ("circle_3pt", "draw_circle_by_3_points"),
+            ("point", "draw_point"),
+            ("construction_line", "draw_construction_line"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = draw(shape=disc)
@@ -114,16 +122,20 @@ class TestDraw:
 
 # === sketch_modify ===
 
+
 class TestSketchModify:
-    @pytest.mark.parametrize("disc, method", [
-        ("fillet", "sketch_fillet"),
-        ("chamfer", "sketch_chamfer"),
-        ("offset", "sketch_offset"),
-        ("rotate", "sketch_rotate"),
-        ("scale", "sketch_scale"),
-        ("mirror", "sketch_mirror"),
-        ("paste", "sketch_paste"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("fillet", "sketch_fillet"),
+            ("chamfer", "sketch_chamfer"),
+            ("offset", "sketch_offset"),
+            ("rotate", "sketch_rotate"),
+            ("scale", "sketch_scale"),
+            ("mirror", "sketch_mirror"),
+            ("paste", "sketch_paste"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = sketch_modify(action=disc)
@@ -147,12 +159,16 @@ class TestSketchModify:
 
 # === sketch_advanced_modify ===
 
+
 class TestSketchAdvancedModify:
-    @pytest.mark.parametrize("disc, method", [
-        ("mirror_spline", "mirror_spline"),
-        ("offset_2d", "offset_sketch_2d"),
-        ("clean", "clean_sketch_geometry"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("mirror_spline", "mirror_spline"),
+            ("offset_2d", "offset_sketch_2d"),
+            ("clean", "clean_sketch_geometry"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = sketch_advanced_modify(action=disc)
@@ -163,7 +179,11 @@ class TestSketchAdvancedModify:
         mock_mgr.mirror_spline.return_value = {"status": "ok"}
         sketch_advanced_modify(
             action="mirror_spline",
-            axis_x1=0.0, axis_y1=0.0, axis_x2=1.0, axis_y2=0.0, copy=False,
+            axis_x1=0.0,
+            axis_y1=0.0,
+            axis_x2=1.0,
+            axis_y2=0.0,
+            copy=False,
         )
         mock_mgr.mirror_spline.assert_called_once_with(0.0, 0.0, 1.0, 0.0, False)
 
@@ -171,7 +191,9 @@ class TestSketchAdvancedModify:
         mock_mgr.offset_sketch_2d.return_value = {"status": "ok"}
         sketch_advanced_modify(
             action="offset_2d",
-            offset_side_x=1.0, offset_side_y=0.0, offset_distance=0.01,
+            offset_side_x=1.0,
+            offset_side_y=0.0,
+            offset_distance=0.01,
         )
         mock_mgr.offset_sketch_2d.assert_called_once_with(1.0, 0.0, 0.01)
 
@@ -179,11 +201,18 @@ class TestSketchAdvancedModify:
         mock_mgr.clean_sketch_geometry.return_value = {"status": "ok"}
         sketch_advanced_modify(
             action="clean",
-            clean_points=False, clean_splines=True,
-            clean_identical=False, clean_small=True, small_tolerance=0.01,
+            clean_points=False,
+            clean_splines=True,
+            clean_identical=False,
+            clean_small=True,
+            small_tolerance=0.01,
         )
         mock_mgr.clean_sketch_geometry.assert_called_once_with(
-            False, True, False, True, 0.01,
+            False,
+            True,
+            False,
+            True,
+            0.01,
         )
 
     def test_unknown(self, mock_mgr):
@@ -193,11 +222,15 @@ class TestSketchAdvancedModify:
 
 # === sketch_constraint ===
 
+
 class TestSketchConstraint:
-    @pytest.mark.parametrize("disc, method", [
-        ("geometric", "add_constraint"),
-        ("keypoint", "add_keypoint_constraint"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("geometric", "add_constraint"),
+            ("keypoint", "add_keypoint_constraint"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = sketch_constraint(type=disc)
@@ -221,16 +254,20 @@ class TestSketchConstraint:
 
 # === sketch_project ===
 
+
 class TestSketchProject:
-    @pytest.mark.parametrize("disc, method", [
-        ("edge", "project_edge"),
-        ("include_edge", "include_edge"),
-        ("ref_plane", "project_ref_plane"),
-        ("silhouette", "project_silhouette_edges"),
-        ("region_faces", "include_region_faces"),
-        ("chain", "chain_locate"),
-        ("to_curve", "convert_to_curve"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("edge", "project_edge"),
+            ("include_edge", "include_edge"),
+            ("ref_plane", "project_ref_plane"),
+            ("silhouette", "project_silhouette_edges"),
+            ("region_faces", "include_region_faces"),
+            ("chain", "chain_locate"),
+            ("to_curve", "convert_to_curve"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = sketch_project(source=disc)

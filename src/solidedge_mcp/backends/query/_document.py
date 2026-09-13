@@ -1,8 +1,9 @@
 """Document properties, feature counts, reference planes, modeling mode, and recompute."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import ModelingModeConstants
 from ..logging import get_logger
@@ -51,7 +52,7 @@ class DocumentQueryMixin:
 
             return properties
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_document_property(self, name: str, value: str) -> dict[str, Any]:
         """
@@ -93,7 +94,7 @@ class DocumentQueryMixin:
 
             return {"status": "set", "property": name, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_count(self) -> dict[str, Any]:
         """Get count of features in the document"""
@@ -119,7 +120,7 @@ class DocumentQueryMixin:
 
             return counts
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def list_features(self) -> dict[str, Any]:
         """
@@ -164,7 +165,7 @@ class DocumentQueryMixin:
 
             return {"features": features, "count": len(features)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_ref_planes(self) -> dict[str, Any]:
         """
@@ -215,7 +216,7 @@ class DocumentQueryMixin:
                 "create_ref_plane_by_offset",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_modeling_mode(self) -> dict[str, Any]:
         """
@@ -239,7 +240,7 @@ class DocumentQueryMixin:
             except Exception:
                 return {"error": "ModelingMode not available on this document type"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_modeling_mode(self, mode: str) -> dict[str, Any]:
         """
@@ -283,7 +284,7 @@ class DocumentQueryMixin:
             except Exception as e:
                 return {"error": f"Cannot change modeling mode: {e}"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def recompute(self) -> dict[str, Any]:
         """
@@ -312,7 +313,7 @@ class DocumentQueryMixin:
 
             return {"status": "recomputed"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def recompute_document(self) -> dict[str, Any]:
         """
@@ -329,4 +330,4 @@ class DocumentQueryMixin:
             doc.Recompute()
             return {"status": "recomputed_document"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

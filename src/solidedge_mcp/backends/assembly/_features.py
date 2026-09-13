@@ -2,8 +2,9 @@
 
 import contextlib
 import math
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     AssemblyFeaturePropertyConstants,
@@ -35,7 +36,9 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating component pattern: index=%d, count=%d, spacing=%s",
-                component_index, count, spacing,
+                component_index,
+                count,
+                spacing,
             )
             doc = self.doc_manager.get_active_document()
             occurrences = doc.Occurrences
@@ -77,7 +80,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create component pattern: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _get_assembly_features(self) -> tuple[Any, Any]:
         """Get the AssemblyFeatures object from the active assembly document."""
@@ -99,7 +102,7 @@ class AssemblyFeaturesMixin:
             return {"status": "recomputed", "options": options}
         except Exception as e:
             _logger.error(f"Failed to recompute assembly features: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _map_extent_type(self, extent_type: str) -> int:
         """Map extent type string to constant."""
@@ -151,7 +154,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly extruded cutout: dist=%s, extent=%s",
-                distance, extent_type,
+                distance,
+                extent_type,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
@@ -182,7 +186,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly extruded cutout: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_revolved_cutout(
         self,
@@ -236,7 +240,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly revolved cutout: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_hole(
         self,
@@ -287,7 +291,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly hole: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_extruded_protrusion(
         self,
@@ -310,7 +314,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly extruded protrusion: dist=%s, extent=%s",
-                distance, extent_type,
+                distance,
+                extent_type,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
@@ -338,7 +343,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly extruded protrusion: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_revolved_protrusion(
         self,
@@ -361,7 +366,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly revolved protrusion: angle=%s, extent=%s",
-                angle, extent_type,
+                angle,
+                extent_type,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
@@ -390,7 +396,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly revolved protrusion: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_mirror(
         self,
@@ -409,7 +415,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly mirror: features=%s, plane=%d",
-                feature_indices, plane_index,
+                feature_indices,
+                plane_index,
             )
             doc, af = self._get_assembly_features()
 
@@ -448,7 +455,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly mirror: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_pattern(
         self,
@@ -465,7 +472,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly pattern: features=%s, type=%s",
-                feature_indices, pattern_type,
+                feature_indices,
+                pattern_type,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
@@ -508,7 +516,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly pattern: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_swept_protrusion(
         self,
@@ -528,7 +536,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly swept protrusion: traces=%d, sections=%d",
-                num_trace_curves, num_cross_sections,
+                num_trace_curves,
+                num_cross_sections,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
@@ -565,4 +574,4 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly swept protrusion: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -24,13 +24,17 @@ def mock_mgr(monkeypatch):
 
 # === manage_connection ===
 
+
 class TestManageConnection:
-    @pytest.mark.parametrize("disc, method", [
-        ("connect", "connect"),
-        ("disconnect", "disconnect"),
-        ("quit", "quit_application"),
-        ("activate", "activate_application"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("connect", "connect"),
+            ("disconnect", "disconnect"),
+            ("quit", "quit_application"),
+            ("activate", "activate_application"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_connection(action=disc)
@@ -49,12 +53,16 @@ class TestManageConnection:
 
 # === app_command ===
 
+
 class TestAppCommand:
-    @pytest.mark.parametrize("disc, method", [
-        ("start", "start_command"),
-        ("abort", "abort_command"),
-        ("idle", "do_idle"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("start", "start_command"),
+            ("abort", "abort_command"),
+            ("idle", "do_idle"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = app_command(action=disc)
@@ -73,19 +81,23 @@ class TestAppCommand:
 
 # === app_config ===
 
+
 class TestAppConfig:
-    @pytest.mark.parametrize("disc, method", [
-        ("set_performance", "set_performance_mode"),
-        ("get_environment", "get_active_environment"),
-        ("get_status_bar", "get_status_bar"),
-        ("set_status_bar", "set_status_bar"),
-        ("get_visible", "get_visible"),
-        ("set_visible", "set_visible"),
-        ("get_global", "get_global_parameter"),
-        ("set_global", "set_global_parameter"),
-        ("get_template", "get_default_template_path"),
-        ("set_template", "set_default_template_path"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("set_performance", "set_performance_mode"),
+            ("get_environment", "get_active_environment"),
+            ("get_status_bar", "get_status_bar"),
+            ("set_status_bar", "set_status_bar"),
+            ("get_visible", "get_visible"),
+            ("set_visible", "set_visible"),
+            ("get_global", "get_global_parameter"),
+            ("set_global", "set_global_parameter"),
+            ("get_template", "get_default_template_path"),
+            ("set_template", "set_default_template_path"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = app_config(property=disc)
@@ -114,6 +126,7 @@ class TestAppConfig:
 
 
 # === Standalone tools ===
+
 
 class TestStandaloneConnection:
     def test_convert_by_file_path(self, mock_mgr):

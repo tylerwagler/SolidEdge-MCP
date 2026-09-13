@@ -1,8 +1,9 @@
 """Draft-specific operations (smart frames, symbols, PMI, printing, etc.)."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -52,7 +53,7 @@ class DraftMixin:
                 "corner2": [x2, y2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_smart_frame_by_origin(
         self,
@@ -104,7 +105,7 @@ class DraftMixin:
                 },
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SYMBOLS
@@ -145,7 +146,7 @@ class DraftMixin:
                 "insertion_type": insertion_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_symbols(self) -> dict[str, Any]:
         """
@@ -177,7 +178,7 @@ class DraftMixin:
                 items.append(info)
             return {"count": len(items), "symbols": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # PMI (Product Manufacturing Information)
@@ -229,7 +230,7 @@ class DraftMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_pmi_visibility(
         self,
@@ -273,7 +274,7 @@ class DraftMixin:
                 "show_annotations": show_annotations,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # DRAFT GLOBAL PARAMETERS
@@ -299,7 +300,7 @@ class DraftMixin:
             value = doc.GetGlobalParameter(parameter)
             return {"status": "success", "parameter": parameter, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_draft_global_parameter(self, parameter: int, value: Any) -> dict[str, Any]:
         """
@@ -322,7 +323,7 @@ class DraftMixin:
             doc.SetGlobalParameter(parameter, value)
             return {"status": "set", "parameter": parameter, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SYMBOL FILE ORIGIN
@@ -349,7 +350,7 @@ class DraftMixin:
                 "y": result[1],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_symbol_file_origin(self, x: float, y: float) -> dict[str, Any]:
         """
@@ -372,7 +373,7 @@ class DraftMixin:
             doc.SetSymbolFileOrigin(x, y)
             return {"status": "set", "x": x, "y": y}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # FACE TEXTURE
@@ -419,10 +420,7 @@ class DraftMixin:
                     style = face.Style
                     style.TextureName = texture_name
                 except Exception as inner_e:
-                    return {
-                        "error": f"Cannot set texture: {inner_e}",
-                        "traceback": traceback.format_exc(),
-                    }
+                    return error_result(inner_e, context="Cannot set texture")
 
             return {
                 "status": "set",
@@ -430,7 +428,7 @@ class DraftMixin:
                 "texture_name": texture_name,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # BEND TABLE
@@ -476,7 +474,7 @@ class DraftMixin:
                 "count": bend_tables.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # PRINTING
@@ -518,7 +516,7 @@ class DraftMixin:
 
             return {"error": "Active document does not support printing"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_printer(self, printer_name: str) -> dict[str, Any]:
         """
@@ -543,7 +541,7 @@ class DraftMixin:
 
             return {"status": "set", "printer": printer_name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_printer(self) -> dict[str, Any]:
         """
@@ -565,7 +563,7 @@ class DraftMixin:
 
             return {"printer": printer_name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_paper_size(
         self, width: float, height: float, orientation: str = "Landscape"
@@ -611,7 +609,7 @@ class DraftMixin:
                 "orientation": orientation,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def print_document(
         self,
@@ -685,4 +683,4 @@ class DraftMixin:
                 "copies": num_copies,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -33,9 +33,20 @@ def create_primitive(
     plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
     """
     err = validate_numerics(
-        x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2,
-        x3=x3, y3=y3, z3=z3, length=length, width=width,
-        height=height, radius=radius, depth=depth,
+        x1=x1,
+        y1=y1,
+        z1=z1,
+        x2=x2,
+        y2=y2,
+        z2=z2,
+        x3=x3,
+        y3=y3,
+        z3=z3,
+        length=length,
+        width=width,
+        height=height,
+        radius=radius,
+        depth=depth,
     )
     if err:
         return err
@@ -93,8 +104,14 @@ def create_primitive_cutout(
     plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
     """
     err = validate_numerics(
-        x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2,
-        radius=radius, height=height,
+        x1=x1,
+        y1=y1,
+        z1=z1,
+        x2=x2,
+        y2=y2,
+        z2=z2,
+        radius=radius,
+        height=height,
     )
     if err:
         return err

@@ -1,7 +1,8 @@
 """Extrude feature operations."""
 
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -73,7 +74,7 @@ class ExtrudeMixin:
             }
         except Exception as e:
             _logger.error(f"Extrude failed: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_symmetric(self, distance: float) -> dict[str, Any]:
         """
@@ -107,7 +108,7 @@ class ExtrudeMixin:
                 "direction": "Symmetric",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_thin_wall(
         self, distance: float, wall_thickness: float, direction: str = "Normal"
@@ -157,7 +158,7 @@ class ExtrudeMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_infinite(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -192,7 +193,7 @@ class ExtrudeMixin:
 
             return {"status": "created", "type": "extrude_infinite", "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_through_next(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -233,7 +234,7 @@ class ExtrudeMixin:
 
             return {"status": "created", "type": "extrude_through_next", "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_from_to(self, from_plane_index: int, to_plane_index: int) -> dict[str, Any]:
         """
@@ -289,7 +290,7 @@ class ExtrudeMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_through_next_v2(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -330,7 +331,7 @@ class ExtrudeMixin:
 
             return {"status": "created", "type": "extrude_through_next_v2", "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_from_to_v2(
         self, from_plane_index: int, to_plane_index: int
@@ -388,7 +389,7 @@ class ExtrudeMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_by_keypoint(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -429,7 +430,7 @@ class ExtrudeMixin:
 
             return {"status": "created", "type": "extrude_by_keypoint", "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_from_to_single(
         self, from_plane_index: int, to_plane_index: int
@@ -491,7 +492,7 @@ class ExtrudeMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extrude_through_next_single(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -537,4 +538,4 @@ class ExtrudeMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

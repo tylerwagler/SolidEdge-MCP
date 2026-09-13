@@ -1,8 +1,9 @@
 """Property operations for assembly components."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -32,7 +33,7 @@ class PropertiesMixin:
 
             return {"status": "updated", "component": component_index, "suppressed": suppress}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_component_visibility(self, component_index: int, visible: bool) -> dict[str, Any]:
         """
@@ -65,7 +66,7 @@ class PropertiesMixin:
 
             return {"status": "updated", "component_index": component_index, "visible": visible}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_component(self, component_index: int) -> dict[str, Any]:
         """
@@ -100,7 +101,7 @@ class PropertiesMixin:
 
             return {"status": "deleted", "component_index": component_index, "name": name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def ground_component(self, component_index: int, ground: bool = True) -> dict[str, Any]:
         """
@@ -150,7 +151,7 @@ class PropertiesMixin:
 
                 return {"error": "No ground relation found for this component"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_component_color(
         self, component_index: int, red: int, green: int, blue: int
@@ -203,7 +204,7 @@ class PropertiesMixin:
                 "color": [red, green, blue],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def replace_component(self, component_index: int, new_file_path: str) -> dict[str, Any]:
         """
@@ -254,7 +255,7 @@ class PropertiesMixin:
                 "new_file": new_file_path,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def is_tube(self, component_index: int) -> dict[str, Any]:
         """
@@ -284,7 +285,7 @@ class PropertiesMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_adjustable_part(self, component_index: int) -> dict[str, Any]:
         """
@@ -319,7 +320,7 @@ class PropertiesMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def make_writable(self, component_index: int) -> dict[str, Any]:
         """
@@ -346,7 +347,7 @@ class PropertiesMixin:
                 "component_index": component_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def swap_family_member(
         self,
@@ -379,4 +380,4 @@ class PropertiesMixin:
                 "new_member_name": new_member_name,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

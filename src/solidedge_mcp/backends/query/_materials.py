@@ -1,8 +1,9 @@
 """Material table and layer management operations."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 from ._base import QueryManagerBase
@@ -79,7 +80,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"material_properties": material_vars, "property_count": len(material_vars)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_material_list(self) -> dict[str, Any]:
         """
@@ -114,7 +115,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"materials": materials, "count": len(materials)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_material(self, material_name: str) -> dict[str, Any]:
         """
@@ -137,7 +138,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"status": "applied", "material": material_name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_material_property(self, material_name: str, property_index: int) -> dict[str, Any]:
         """
@@ -165,7 +166,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"material": material_name, "property_index": property_index, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_material_library(self) -> dict[str, Any]:
         """
@@ -196,7 +197,7 @@ class MaterialsMixin(QueryManagerBase):
                 materials.append(info)
             return {"count": len(materials), "materials": materials}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_material_by_name(self, material_name: str) -> dict[str, Any]:
         """
@@ -254,7 +255,7 @@ class MaterialsMixin(QueryManagerBase):
                 result["density"] = found_mat.Density
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # LAYER MANAGEMENT
@@ -298,7 +299,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"layers": layers, "count": len(layers)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_layer(self, name: str) -> dict[str, Any]:
         """
@@ -323,7 +324,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"status": "added", "name": name, "total_layers": layers.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def activate_layer(self, name_or_index: str | int) -> dict[str, Any]:
         """
@@ -368,7 +369,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"status": "activated", "name": layer_name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_layer_properties(
         self, name_or_index: str | int, show: bool | None = None, selectable: bool | None = None
@@ -421,7 +422,7 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"status": "updated", "name": layer_name, "properties": updated}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_layer(self, name_or_index: str | int) -> dict[str, Any]:
         """
@@ -465,4 +466,4 @@ class MaterialsMixin(QueryManagerBase):
 
             return {"status": "deleted", "name": layer_name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

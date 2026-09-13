@@ -29,14 +29,18 @@ def mock_mgr(monkeypatch):
 
 # === create_document ===
 
+
 class TestCreateDocument:
-    @pytest.mark.parametrize("disc, method", [
-        ("part", "create_part"),
-        ("assembly", "create_assembly"),
-        ("sheet_metal", "create_sheet_metal"),
-        ("draft", "create_draft"),
-        ("weldment", "create_weldment"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("part", "create_part"),
+            ("assembly", "create_assembly"),
+            ("sheet_metal", "create_sheet_metal"),
+            ("draft", "create_draft"),
+            ("weldment", "create_weldment"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = create_document(type=disc, template="t.par")
@@ -50,13 +54,17 @@ class TestCreateDocument:
 
 # === open_document ===
 
+
 class TestOpenDocument:
-    @pytest.mark.parametrize("disc, method", [
-        ("foreground", "open_document"),
-        ("background", "open_in_background"),
-        ("with_template", "open_with_template"),
-        ("dialog", "open_with_file_open_dialog"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("foreground", "open_document"),
+            ("background", "open_in_background"),
+            ("with_template", "open_with_template"),
+            ("dialog", "open_with_file_open_dialog"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = open_document(method=disc)
@@ -80,11 +88,15 @@ class TestOpenDocument:
 
 # === close_document ===
 
+
 class TestCloseDocument:
-    @pytest.mark.parametrize("disc, method", [
-        ("active", "close_document"),
-        ("all", "close_all_documents"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("active", "close_document"),
+            ("all", "close_all_documents"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = close_document(scope=disc, save=False)
@@ -98,11 +110,15 @@ class TestCloseDocument:
 
 # === save_document ===
 
+
 class TestSaveDocument:
-    @pytest.mark.parametrize("disc, method", [
-        ("save", "save_document"),
-        ("copy_as", "save_copy_as"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("save", "save_document"),
+            ("copy_as", "save_copy_as"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = save_document(method=disc, file_path="out.par")
@@ -116,11 +132,15 @@ class TestSaveDocument:
 
 # === undo_redo ===
 
+
 class TestUndoRedo:
-    @pytest.mark.parametrize("disc, method", [
-        ("undo", "undo"),
-        ("redo", "redo"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("undo", "undo"),
+            ("redo", "redo"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = undo_redo(action=disc)
@@ -133,6 +153,7 @@ class TestUndoRedo:
 
 
 # === Standalone tools ===
+
 
 class TestStandaloneDocuments:
     def test_activate_document(self, mock_mgr):

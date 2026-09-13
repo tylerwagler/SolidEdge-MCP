@@ -2,8 +2,9 @@
 
 import contextlib
 import os
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -64,7 +65,7 @@ class QueryMixin:
 
             return {"components": components, "count": len(components)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_component_info(self, component_index: int) -> dict[str, Any]:
         """
@@ -130,7 +131,7 @@ class QueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_component_transform(self, component_index: int) -> dict[str, Any]:
         """
@@ -184,7 +185,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_bounding_box(self, component_index: int) -> dict[str, Any]:
         """
@@ -234,7 +235,7 @@ class QueryMixin:
                 ],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def is_subassembly(self, component_index: int) -> dict[str, Any]:
         """
@@ -281,7 +282,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_component_display_name(self, component_index: int) -> dict[str, Any]:
         """
@@ -327,7 +328,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_document(self, component_index: int) -> dict[str, Any]:
         """
@@ -375,7 +376,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sub_occurrences(self, component_index: int) -> dict[str, Any]:
         """
@@ -432,7 +433,7 @@ class QueryMixin:
                 "count": len(children),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_structured_bom(self) -> dict[str, Any]:
         """
@@ -507,7 +508,7 @@ class QueryMixin:
                 "document": doc.Name if hasattr(doc, "Name") else "Unknown",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_bodies(self, component_index: int) -> dict[str, Any]:
         """
@@ -552,7 +553,7 @@ class QueryMixin:
                 "bodies": bodies_info,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_style(self, component_index: int) -> dict[str, Any]:
         """
@@ -583,7 +584,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_style(self, component_index: int) -> dict[str, Any]:
         """
@@ -614,7 +615,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence(self, internal_id: int) -> dict[str, Any]:
         """
@@ -684,7 +685,7 @@ class QueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def check_interference(self, component_index: int | None = None) -> dict[str, Any]:
         """
@@ -750,16 +751,14 @@ class QueryMixin:
                 }
             except Exception as e:
                 # CheckInterference has complex COM signature; report what we can
-                return {
-                    "error": f"Interference check failed: {e}",
-                    "note": "CheckInterference COM signature "
-                    "is complex. Use Solid Edge UI for "
-                    "reliable results.",
-                    "traceback": traceback.format_exc(),
-                }
+                return error_result(
+                    e,
+                    note="CheckInterference COM signature is complex. "
+                    "Use Solid Edge UI for reliable results.",
+                )
 
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_bom(self) -> dict[str, Any]:
         """
@@ -820,7 +819,7 @@ class QueryMixin:
                 "bom": bom_items,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_assembly_relations(self) -> dict[str, Any]:
         """
@@ -881,7 +880,7 @@ class QueryMixin:
 
             return {"relations": relation_list, "count": len(relation_list)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_document_tree(self) -> dict[str, Any]:
         """
@@ -954,7 +953,7 @@ class QueryMixin:
                 "document": doc.Name if hasattr(doc, "Name") else "Unknown",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_count(self) -> dict[str, Any]:
         """
@@ -971,4 +970,4 @@ class QueryMixin:
 
             return {"count": doc.Occurrences.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -1,10 +1,11 @@
 """Revolve feature operations."""
 
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -76,7 +77,7 @@ class RevolveMixin:
 
             return {"status": "created", "type": "revolve", "angle": angle, "operation": operation}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolve_finite(self, angle: float, axis_type: str = "CenterLine") -> dict[str, Any]:
         """
@@ -122,7 +123,7 @@ class RevolveMixin:
 
             return {"status": "created", "type": "revolve_finite", "angle": angle}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolve_thin_wall(self, angle: float, wall_thickness: float) -> dict[str, Any]:
         """
@@ -174,7 +175,7 @@ class RevolveMixin:
                 "wall_thickness": wall_thickness,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolve_sync(self, angle: float) -> dict[str, Any]:
         """Create synchronous revolve feature"""
@@ -208,7 +209,7 @@ class RevolveMixin:
 
             return {"status": "created", "type": "revolve_sync", "angle": angle}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolve_finite_sync(self, angle: float) -> dict[str, Any]:
         """Create finite synchronous revolve feature"""
@@ -242,7 +243,7 @@ class RevolveMixin:
 
             return {"status": "created", "type": "revolve_finite_sync", "angle": angle}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolve_by_keypoint(self) -> dict[str, Any]:
         """
@@ -281,7 +282,7 @@ class RevolveMixin:
 
             return {"status": "created", "type": "revolve_by_keypoint"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolve_full(
         self, angle: float = 360.0, treatment_type: str = "None"
@@ -358,7 +359,7 @@ class RevolveMixin:
                 "treatment_type": treatment_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolve_by_keypoint_sync(self) -> dict[str, Any]:
         """
@@ -406,4 +407,4 @@ class RevolveMixin:
                 "type": "revolve_by_keypoint_sync",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

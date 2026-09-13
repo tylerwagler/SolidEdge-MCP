@@ -31,11 +31,15 @@ def mock_mgr(monkeypatch):
 
 # === measure ===
 
+
 class TestMeasure:
-    @pytest.mark.parametrize("disc, method", [
-        ("distance", "measure_distance"),
-        ("angle", "measure_angle"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("distance", "measure_distance"),
+            ("angle", "measure_angle"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = measure(type=disc)
@@ -54,17 +58,21 @@ class TestMeasure:
 
 # === manage_variable ===
 
+
 class TestManageVariable:
-    @pytest.mark.parametrize("disc, method, kwargs", [
-        ("set", "set_variable", {"value": 0.0}),
-        ("add", "add_variable", {"formula": "0"}),
-        ("query", "query_variables", {}),
-        ("rename", "rename_variable", {"new_name": "x"}),
-        ("translate", "translate_variable", {}),
-        ("copy_clipboard", "copy_variable_to_clipboard", {}),
-        ("add_from_clipboard", "add_variable_from_clipboard", {}),
-        ("set_formula", "set_variable_formula", {"formula": "0"}),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method, kwargs",
+        [
+            ("set", "set_variable", {"value": 0.0}),
+            ("add", "add_variable", {"formula": "0"}),
+            ("query", "query_variables", {}),
+            ("rename", "rename_variable", {"new_name": "x"}),
+            ("translate", "translate_variable", {}),
+            ("copy_clipboard", "copy_variable_to_clipboard", {}),
+            ("add_from_clipboard", "add_variable_from_clipboard", {}),
+            ("set_formula", "set_variable_formula", {"formula": "0"}),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method, kwargs):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_variable(action=disc, **kwargs)
@@ -83,12 +91,16 @@ class TestManageVariable:
 
 # === manage_property ===
 
+
 class TestManageProperty:
-    @pytest.mark.parametrize("disc, method", [
-        ("set_document", "set_document_property"),
-        ("set_custom", "set_custom_property"),
-        ("delete_custom", "delete_custom_property"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("set_document", "set_document_property"),
+            ("set_custom", "set_custom_property"),
+            ("delete_custom", "delete_custom_property"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_property(action=disc, name="Title", value="Test")
@@ -102,13 +114,17 @@ class TestManageProperty:
 
 # === manage_material ===
 
+
 class TestManageMaterial:
-    @pytest.mark.parametrize("disc, method", [
-        ("set", "set_material"),
-        ("set_density", "set_material_density"),
-        ("set_by_name", "set_material_by_name"),
-        ("get_library", "get_material_library"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("set", "set_material"),
+            ("set_density", "set_material_density"),
+            ("set_by_name", "set_material_by_name"),
+            ("get_library", "get_material_library"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_material(action=disc)
@@ -122,13 +138,17 @@ class TestManageMaterial:
 
 # === set_appearance ===
 
+
 class TestSetAppearance:
-    @pytest.mark.parametrize("disc, method", [
-        ("body_color", "set_body_color"),
-        ("face_color", "set_face_color"),
-        ("opacity", "set_body_opacity"),
-        ("reflectivity", "set_body_reflectivity"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("body_color", "set_body_color"),
+            ("face_color", "set_face_color"),
+            ("opacity", "set_body_opacity"),
+            ("reflectivity", "set_body_reflectivity"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = set_appearance(target=disc)
@@ -152,13 +172,17 @@ class TestSetAppearance:
 
 # === manage_layer ===
 
+
 class TestManageLayer:
-    @pytest.mark.parametrize("disc, method", [
-        ("add", "add_layer"),
-        ("activate", "activate_layer"),
-        ("set_properties", "set_layer_properties"),
-        ("delete", "delete_layer"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("add", "add_layer"),
+            ("activate", "activate_layer"),
+            ("set_properties", "set_layer_properties"),
+            ("delete", "delete_layer"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_layer(action=disc)
@@ -172,19 +196,23 @@ class TestManageLayer:
 
 # === select_set ===
 
+
 class TestSelectSet:
-    @pytest.mark.parametrize("disc, method", [
-        ("clear", "clear_select_set"),
-        ("add", "select_add"),
-        ("remove", "select_remove"),
-        ("all", "select_all"),
-        ("copy", "select_copy"),
-        ("cut", "select_cut"),
-        ("delete", "select_delete"),
-        ("suspend_display", "select_suspend_display"),
-        ("resume_display", "select_resume_display"),
-        ("refresh_display", "select_refresh_display"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("clear", "clear_select_set"),
+            ("add", "select_add"),
+            ("remove", "select_remove"),
+            ("all", "select_all"),
+            ("copy", "select_copy"),
+            ("cut", "select_cut"),
+            ("delete", "select_delete"),
+            ("suspend_display", "select_suspend_display"),
+            ("resume_display", "select_resume_display"),
+            ("refresh_display", "select_refresh_display"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = select_set(action=disc)
@@ -203,23 +231,27 @@ class TestSelectSet:
 
 # === edit_feature_extent ===
 
+
 class TestEditFeatureExtent:
-    @pytest.mark.parametrize("disc, method", [
-        ("get_direction1", "get_direction1_extent"),
-        ("set_direction1", "set_direction1_extent"),
-        ("get_direction2", "get_direction2_extent"),
-        ("set_direction2", "set_direction2_extent"),
-        ("get_thin_wall", "get_thin_wall_options"),
-        ("set_thin_wall", "set_thin_wall_options"),
-        ("get_from_face", "get_from_face_offset"),
-        ("set_from_face", "set_from_face_offset"),
-        ("get_body_array", "get_body_array"),
-        ("set_body_array", "set_body_array"),
-        ("get_to_face", "get_to_face_offset"),
-        ("set_to_face", "set_to_face_offset"),
-        ("get_direction1_treatment", "get_direction1_treatment"),
-        ("apply_direction1_treatment", "apply_direction1_treatment"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("get_direction1", "get_direction1_extent"),
+            ("set_direction1", "set_direction1_extent"),
+            ("get_direction2", "get_direction2_extent"),
+            ("set_direction2", "set_direction2_extent"),
+            ("get_thin_wall", "get_thin_wall_options"),
+            ("set_thin_wall", "set_thin_wall_options"),
+            ("get_from_face", "get_from_face_offset"),
+            ("set_from_face", "set_from_face_offset"),
+            ("get_body_array", "get_body_array"),
+            ("set_body_array", "set_body_array"),
+            ("get_to_face", "get_to_face_offset"),
+            ("set_to_face", "set_to_face_offset"),
+            ("get_direction1_treatment", "get_direction1_treatment"),
+            ("apply_direction1_treatment", "apply_direction1_treatment"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = edit_feature_extent(property=disc, feature_name="Extrude1")
@@ -243,13 +275,17 @@ class TestEditFeatureExtent:
 
 # === manage_feature_tree ===
 
+
 class TestManageFeatureTree:
-    @pytest.mark.parametrize("disc, method", [
-        ("rename", "rename_feature"),
-        ("suppress", "suppress_feature"),
-        ("unsuppress", "unsuppress_feature"),
-        ("set_mode", "set_modeling_mode"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("rename", "rename_feature"),
+            ("suppress", "suppress_feature"),
+            ("unsuppress", "unsuppress_feature"),
+            ("set_mode", "set_modeling_mode"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_feature_tree(action=disc)
@@ -268,15 +304,19 @@ class TestManageFeatureTree:
 
 # === query_edge ===
 
+
 class TestQueryEdge:
-    @pytest.mark.parametrize("disc, method", [
-        ("endpoints", "get_edge_endpoints"),
-        ("length", "get_edge_length"),
-        ("tangent", "get_edge_tangent"),
-        ("geometry", "get_edge_geometry"),
-        ("curvature", "get_edge_curvature"),
-        ("vertex", "get_vertex_point"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("endpoints", "get_edge_endpoints"),
+            ("length", "get_edge_length"),
+            ("tangent", "get_edge_tangent"),
+            ("geometry", "get_edge_geometry"),
+            ("curvature", "get_edge_curvature"),
+            ("vertex", "get_vertex_point"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = query_edge(property=disc)
@@ -295,13 +335,17 @@ class TestQueryEdge:
 
 # === query_face ===
 
+
 class TestQueryFace:
-    @pytest.mark.parametrize("disc, method", [
-        ("normal", "get_face_normal"),
-        ("geometry", "get_face_geometry"),
-        ("loops", "get_face_loops"),
-        ("curvature", "get_face_curvature"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("normal", "get_face_normal"),
+            ("geometry", "get_face_geometry"),
+            ("loops", "get_face_loops"),
+            ("curvature", "get_face_curvature"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = query_face(property=disc)
@@ -320,17 +364,21 @@ class TestQueryFace:
 
 # === query_body ===
 
+
 class TestQueryBody:
-    @pytest.mark.parametrize("disc, method", [
-        ("extreme_point", "get_body_extreme_point"),
-        ("faces_by_ray", "get_faces_by_ray"),
-        ("shells", "get_body_shells"),
-        ("vertices", "get_body_vertices"),
-        ("shell_info", "get_shell_info"),
-        ("point_inside", "is_point_inside_body"),
-        ("user_physical_properties", "get_user_physical_properties"),
-        ("facet_data", "get_body_facet_data"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("extreme_point", "get_body_extreme_point"),
+            ("faces_by_ray", "get_faces_by_ray"),
+            ("shells", "get_body_shells"),
+            ("vertices", "get_body_vertices"),
+            ("shell_info", "get_shell_info"),
+            ("point_inside", "is_point_inside_body"),
+            ("user_physical_properties", "get_user_physical_properties"),
+            ("facet_data", "get_body_facet_data"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = query_body(property=disc)
@@ -344,11 +392,15 @@ class TestQueryBody:
 
 # === query_bspline ===
 
+
 class TestQueryBspline:
-    @pytest.mark.parametrize("disc, method", [
-        ("curve", "get_bspline_curve_info"),
-        ("surface", "get_bspline_surface_info"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("curve", "get_bspline_curve_info"),
+            ("surface", "get_bspline_surface_info"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = query_bspline(type=disc)
@@ -367,11 +419,15 @@ class TestQueryBspline:
 
 # === recompute ===
 
+
 class TestRecompute:
-    @pytest.mark.parametrize("disc, method", [
-        ("model", "recompute"),
-        ("document", "recompute_document"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("model", "recompute"),
+            ("document", "recompute_document"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = recompute(scope=disc)

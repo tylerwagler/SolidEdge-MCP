@@ -361,9 +361,7 @@ class TestAddStructuralFrameByOrientation:
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=False):
-            result = am.add_structural_frame_by_orientation(
-                "C:\\missing.par", "CS1", [0]
-            )
+            result = am.add_structural_frame_by_orientation("C:\\missing.par", "CS1", [0])
         assert "error" in result
 
     def test_not_assembly(self, asm_mgr):
@@ -373,9 +371,7 @@ class TestAddStructuralFrameByOrientation:
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame_by_orientation(
-                "C:\\frames\\beam.par", "CS1", [0]
-            )
+            result = am.add_structural_frame_by_orientation("C:\\frames\\beam.par", "CS1", [0])
         assert "error" in result
 
 

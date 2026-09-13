@@ -163,9 +163,7 @@ class TestPrintDocument:
 
         result = em.print_document(print_to_file=True, output_file_name="C:/temp/out.pdf")
         assert result["status"] == "printed"
-        doc.PrintOut.assert_called_once_with(
-            PrintToFile=True, OutputFileName="C:/temp/out.pdf"
-        )
+        doc.PrintOut.assert_called_once_with(PrintToFile=True, OutputFileName="C:/temp/out.pdf")
 
     def test_color_as_black(self, export_mgr):
         em, doc = export_mgr

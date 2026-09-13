@@ -390,7 +390,7 @@ class TestProjectSilhouetteEdges:
 
         result = sm.project_silhouette_edges()
         assert "error" in result
-        assert "traceback" in result
+        assert "traceback" not in result  # tracebacks only under SOLIDEDGE_MCP_DEBUG
 
 
 # ============================================================================
@@ -514,7 +514,7 @@ class TestConvertToCurve:
 
         result = sm.convert_to_curve()
         assert "error" in result
-        assert "traceback" in result
+        assert "traceback" not in result  # tracebacks only under SOLIDEDGE_MCP_DEBUG
 
 
 # ============================================================================
@@ -549,7 +549,7 @@ class TestSketchPaste:
 
         result = sm.sketch_paste()
         assert "error" in result
-        assert "traceback" in result
+        assert "traceback" not in result  # tracebacks only under SOLIDEDGE_MCP_DEBUG
 
 
 # ============================================================================

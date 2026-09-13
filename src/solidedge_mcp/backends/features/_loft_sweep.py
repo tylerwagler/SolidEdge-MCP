@@ -1,10 +1,11 @@
 """Loft, sweep, and helix protrusion operations."""
 
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -114,7 +115,7 @@ class LoftSweepMixin:
                 "method": "models.AddLoftedProtrusion",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sweep(self, path_profile_index: int | None = None) -> dict[str, Any]:
         """
@@ -195,11 +196,14 @@ class LoftSweepMixin:
                 "method": "models.AddSweptProtrusion",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix(
-        self, pitch: float, height: float,
-        revolutions: float | None = None, direction: str = "Right",
+        self,
+        pitch: float,
+        height: float,
+        revolutions: float | None = None,
+        direction: str = "Right",
     ) -> dict[str, Any]:
         """
         Create a helical feature.
@@ -244,7 +248,7 @@ class LoftSweepMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_loft_thin_wall(
         self, wall_thickness: float, profile_indices: list[int] | None = None
@@ -306,7 +310,7 @@ class LoftSweepMixin:
                 "num_profiles": len(profiles),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sweep_thin_wall(
         self, wall_thickness: float, path_profile_index: int | None = None
@@ -380,7 +384,7 @@ class LoftSweepMixin:
                 "num_cross_sections": len(cross_sections),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_sync(
         self, pitch: float, height: float, revolutions: float | None = None
@@ -414,7 +418,7 @@ class LoftSweepMixin:
                 "revolutions": revolutions,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_thin_wall(
         self, pitch: float, height: float, wall_thickness: float, revolutions: float | None = None
@@ -449,7 +453,7 @@ class LoftSweepMixin:
                 "wall_thickness": wall_thickness,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_sync_thin_wall(
         self, pitch: float, height: float, wall_thickness: float, revolutions: float | None = None
@@ -484,7 +488,7 @@ class LoftSweepMixin:
                 "wall_thickness": wall_thickness,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_from_to(
         self, from_plane_index: int, to_plane_index: int, pitch: float
@@ -563,7 +567,7 @@ class LoftSweepMixin:
                 "pitch": pitch,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_from_to_thin_wall(
         self,
@@ -650,7 +654,7 @@ class LoftSweepMixin:
                 "wall_thickness": wall_thickness,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_from_to_sync(
         self, from_plane_index: int, to_plane_index: int, pitch: float
@@ -732,7 +736,7 @@ class LoftSweepMixin:
                 "pitch": pitch,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_from_to_sync_thin_wall(
         self,
@@ -822,7 +826,7 @@ class LoftSweepMixin:
                 "wall_thickness": wall_thickness,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_loft_with_guides(
         self,
@@ -973,4 +977,4 @@ class LoftSweepMixin:
                 "method": "models.AddLoftedProtrusion",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

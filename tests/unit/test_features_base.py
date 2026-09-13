@@ -105,7 +105,7 @@ def test_conservative_when_faces_not_readable():
 
 def test_no_geometry_created_logic():
     f = FeatureManagerBase._no_geometry_created
-    assert f((1, 6), (1, 6)) is True      # body unchanged
-    assert f((1, 6), (1, 8)) is False     # faces changed
-    assert f((0, 0), (1, 6)) is False     # base solid appeared
+    assert f((1, 6), (1, 6)) is True  # body unchanged
+    assert f((1, 6), (1, 8)) is False  # faces changed
+    assert f((0, 0), (1, 6)) is False  # base solid appeared
     assert f((None, None), (None, None)) is False  # unknown -> no claim

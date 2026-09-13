@@ -1,7 +1,8 @@
 """ViewModel class for view manipulation (orientation, zoom, display, camera)."""
 
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import RenderModeConstants
 from ..logging import get_logger
@@ -55,7 +56,7 @@ class ViewModel:
                     "note": "Use View menu in Solid Edge UI",
                 }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def zoom_fit(self) -> dict[str, Any]:
         """Zoom to fit all geometry in view"""
@@ -81,7 +82,7 @@ class ViewModel:
                     "note": "Use View > Fit in Solid Edge UI",
                 }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def zoom_to_selection(self) -> dict[str, Any]:
         """Zoom to fit all geometry (equivalent to View > Fit)."""
@@ -101,7 +102,7 @@ class ViewModel:
 
             return {"status": "zoomed_to_selection"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_display_mode(self, mode: str) -> dict[str, Any]:
         """
@@ -144,7 +145,7 @@ class ViewModel:
             view_obj.SetRenderMode(mode_value)
             return {"status": "display_mode_set", "mode": mode}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_view_background(self, red: int, green: int, blue: int) -> dict[str, Any]:
         """
@@ -182,7 +183,7 @@ class ViewModel:
 
             return {"status": "updated", "color": [red, green, blue]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_camera(self) -> dict[str, Any]:
         """
@@ -219,7 +220,7 @@ class ViewModel:
                 "scale_or_angle": result[10],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def rotate_camera(
         self,
@@ -263,7 +264,7 @@ class ViewModel:
                 "axis": [axis_x, axis_y, axis_z],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def pan_camera(self, dx: int, dy: int) -> dict[str, Any]:
         """
@@ -292,7 +293,7 @@ class ViewModel:
 
             return {"status": "camera_panned", "dx": dx, "dy": dy}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def zoom_camera(self, factor: float) -> dict[str, Any]:
         """
@@ -320,7 +321,7 @@ class ViewModel:
 
             return {"status": "camera_zoomed", "factor": factor}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def refresh_view(self) -> dict[str, Any]:
         """
@@ -345,7 +346,7 @@ class ViewModel:
 
             return {"status": "view_refreshed"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _get_view_object(self) -> Any:
         """Get the active view object from the first window."""
@@ -382,7 +383,7 @@ class ViewModel:
                 "screen_y": result[1],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def transform_screen_to_model(self, screen_x: int, screen_y: int) -> dict[str, Any]:
         """
@@ -408,7 +409,7 @@ class ViewModel:
                 "z": result[2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def begin_camera_dynamics(self) -> dict[str, Any]:
         """
@@ -426,7 +427,7 @@ class ViewModel:
             view_obj.BeginCameraDynamics()
             return {"status": "camera_dynamics_started"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def end_camera_dynamics(self) -> dict[str, Any]:
         """
@@ -443,7 +444,7 @@ class ViewModel:
             view_obj.EndCameraDynamics()
             return {"status": "camera_dynamics_ended"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_camera(
         self,
@@ -507,4 +508,4 @@ class ViewModel:
                 "scale_or_angle": scale_or_angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

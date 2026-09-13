@@ -248,9 +248,7 @@ class TestGetUserPhysicalProperties:
         # the method must compute from geometry instead of erroring.
         qm, doc = query_mgr
         doc.GetUserPhysicalProperties.side_effect = Exception("Not a part doc")
-        qm.get_mass_properties = MagicMock(
-            return_value={"status": "computed", "mass": 0.44}
-        )
+        qm.get_mass_properties = MagicMock(return_value={"status": "computed", "mass": 0.44})
 
         result = qm.get_user_physical_properties(density=2700.0)
         qm.get_mass_properties.assert_called_once_with(2700.0)

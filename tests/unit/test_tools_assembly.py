@@ -36,17 +36,21 @@ def mock_mgr(monkeypatch):
 
 # === add_assembly_component ===
 
+
 class TestAddAssemblyComponent:
-    @pytest.mark.parametrize("disc, method", [
-        ("basic", "add_component"),
-        ("with_transform", "add_component_with_transform"),
-        ("family", "add_family_member"),
-        ("family_with_transform", "add_family_with_transform"),
-        ("family_with_matrix", "add_family_with_matrix"),
-        ("by_template", "add_by_template"),
-        ("adjustable", "add_adjustable_part"),
-        ("tube", "add_tube"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("basic", "add_component"),
+            ("with_transform", "add_component_with_transform"),
+            ("family", "add_family_member"),
+            ("family_with_transform", "add_family_with_transform"),
+            ("family_with_matrix", "add_family_with_matrix"),
+            ("by_template", "add_by_template"),
+            ("adjustable", "add_adjustable_part"),
+            ("tube", "add_tube"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = add_assembly_component(method=disc, file_path="p.par")
@@ -70,18 +74,22 @@ class TestAddAssemblyComponent:
 
 # === manage_component ===
 
+
 class TestManageComponent:
-    @pytest.mark.parametrize("disc, method", [
-        ("delete", "delete_component"),
-        ("replace", "replace_component"),
-        ("suppress", "suppress_component"),
-        ("reorder", "reorder_occurrence"),
-        ("make_writable", "make_writable"),
-        ("swap_family", "swap_family_member"),
-        ("ground", "ground_component"),
-        ("pattern", "pattern_component"),
-        ("mirror", "mirror_component"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("delete", "delete_component"),
+            ("replace", "replace_component"),
+            ("suppress", "suppress_component"),
+            ("reorder", "reorder_occurrence"),
+            ("make_writable", "make_writable"),
+            ("swap_family", "swap_family_member"),
+            ("ground", "ground_component"),
+            ("pattern", "pattern_component"),
+            ("mirror", "mirror_component"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_component(action=disc)
@@ -95,29 +103,33 @@ class TestManageComponent:
 
 # === query_component ===
 
+
 class TestQueryComponent:
-    @pytest.mark.parametrize("disc, method", [
-        ("list", "list_components"),
-        ("info", "get_component_info"),
-        ("bounding_box", "get_occurrence_bounding_box"),
-        ("bom", "get_bom"),
-        ("structured_bom", "get_structured_bom"),
-        ("tree", "get_document_tree"),
-        ("transform", "get_component_transform"),
-        ("count", "get_occurrence_count"),
-        ("is_subassembly", "is_subassembly"),
-        ("display_name", "get_component_display_name"),
-        ("document", "get_occurrence_document"),
-        ("sub_occurrences", "get_sub_occurrences"),
-        ("bodies", "get_occurrence_bodies"),
-        ("style", "get_occurrence_style"),
-        ("is_tube", "is_tube"),
-        ("adjustable_part", "get_adjustable_part"),
-        ("face_style", "get_face_style"),
-        ("occurrence", "get_occurrence"),
-        ("interference", "check_interference"),
-        ("tube", "get_tube"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("list", "list_components"),
+            ("info", "get_component_info"),
+            ("bounding_box", "get_occurrence_bounding_box"),
+            ("bom", "get_bom"),
+            ("structured_bom", "get_structured_bom"),
+            ("tree", "get_document_tree"),
+            ("transform", "get_component_transform"),
+            ("count", "get_occurrence_count"),
+            ("is_subassembly", "is_subassembly"),
+            ("display_name", "get_component_display_name"),
+            ("document", "get_occurrence_document"),
+            ("sub_occurrences", "get_sub_occurrences"),
+            ("bodies", "get_occurrence_bodies"),
+            ("style", "get_occurrence_style"),
+            ("is_tube", "is_tube"),
+            ("adjustable_part", "get_adjustable_part"),
+            ("face_style", "get_face_style"),
+            ("occurrence", "get_occurrence"),
+            ("interference", "check_interference"),
+            ("tube", "get_tube"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         # interference needs a nonzero component_index to avoid None transform
@@ -147,11 +159,15 @@ class TestQueryComponent:
 
 # === set_component_appearance ===
 
+
 class TestSetComponentAppearance:
-    @pytest.mark.parametrize("disc, method", [
-        ("visibility", "set_component_visibility"),
-        ("color", "set_component_color"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("visibility", "set_component_visibility"),
+            ("color", "set_component_color"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = set_component_appearance(property=disc)
@@ -170,13 +186,17 @@ class TestSetComponentAppearance:
 
 # === transform_component ===
 
+
 class TestTransformComponent:
-    @pytest.mark.parametrize("disc, method", [
-        ("update_position", "update_component_position"),
-        ("set_origin", "set_component_origin"),
-        ("put_origin", "put_origin"),
-        ("move", "occurrence_move"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("update_position", "update_component_position"),
+            ("set_origin", "set_component_origin"),
+            ("put_origin", "put_origin"),
+            ("move", "occurrence_move"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = transform_component(method=disc)
@@ -195,11 +215,15 @@ class TestTransformComponent:
 
 # === set_component_orientation ===
 
+
 class TestSetComponentOrientation:
-    @pytest.mark.parametrize("disc, method", [
-        ("set_transform", "set_component_transform"),
-        ("put_euler", "put_transform_euler"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("set_transform", "set_component_transform"),
+            ("put_euler", "put_transform_euler"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = set_component_orientation(method=disc)
@@ -209,22 +233,45 @@ class TestSetComponentOrientation:
     def test_set_transform_passes_args(self, mock_mgr):
         mock_mgr.set_component_transform.return_value = {"status": "ok"}
         set_component_orientation(
-            method="set_transform", component_index=1,
-            origin_x=0.1, origin_y=0.2, origin_z=0.3,
-            angle_x=10, angle_y=20, angle_z=30,
+            method="set_transform",
+            component_index=1,
+            origin_x=0.1,
+            origin_y=0.2,
+            origin_z=0.3,
+            angle_x=10,
+            angle_y=20,
+            angle_z=30,
         )
         mock_mgr.set_component_transform.assert_called_once_with(
-            1, 0.1, 0.2, 0.3, 10, 20, 30,
+            1,
+            0.1,
+            0.2,
+            0.3,
+            10,
+            20,
+            30,
         )
 
     def test_put_euler_passes_args(self, mock_mgr):
         mock_mgr.put_transform_euler.return_value = {"status": "ok"}
         set_component_orientation(
-            method="put_euler", component_index=2,
-            x=0.1, y=0.2, z=0.3, rx=45, ry=90, rz=180,
+            method="put_euler",
+            component_index=2,
+            x=0.1,
+            y=0.2,
+            z=0.3,
+            rx=45,
+            ry=90,
+            rz=180,
         )
         mock_mgr.put_transform_euler.assert_called_once_with(
-            2, 0.1, 0.2, 0.3, 45, 90, 180,
+            2,
+            0.1,
+            0.2,
+            0.3,
+            45,
+            90,
+            180,
         )
 
     def test_unknown(self, mock_mgr):
@@ -234,31 +281,47 @@ class TestSetComponentOrientation:
 
 # === rotate_component ===
 
+
 class TestRotateComponent:
     def test_dispatch(self, mock_mgr):
         mock_mgr.occurrence_rotate.return_value = {"status": "ok"}
         result = rotate_component(
             component_index=1,
-            axis_x1=0, axis_y1=0, axis_z1=0,
-            axis_x2=0, axis_y2=0, axis_z2=1,
+            axis_x1=0,
+            axis_y1=0,
+            axis_z1=0,
+            axis_x2=0,
+            axis_y2=0,
+            axis_z2=1,
             angle=90,
         )
         mock_mgr.occurrence_rotate.assert_called_once_with(
-            1, 0, 0, 0, 0, 0, 1, 90,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            90,
         )
         assert result == {"status": "ok"}
 
 
 # === add_assembly_constraint ===
 
+
 class TestAddAssemblyConstraint:
-    @pytest.mark.parametrize("disc, method", [
-        ("mate", "create_mate"),
-        ("align", "add_align_constraint"),
-        ("planar_align", "add_planar_align_constraint"),
-        ("axial_align", "add_axial_align_constraint"),
-        ("angle", "add_angle_constraint"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("mate", "create_mate"),
+            ("align", "add_align_constraint"),
+            ("planar_align", "add_planar_align_constraint"),
+            ("axial_align", "add_axial_align_constraint"),
+            ("angle", "add_angle_constraint"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = add_assembly_constraint(type=disc)
@@ -272,15 +335,19 @@ class TestAddAssemblyConstraint:
 
 # === add_assembly_relation ===
 
+
 class TestAddAssemblyRelation:
-    @pytest.mark.parametrize("disc, method", [
-        ("planar", "add_planar_relation"),
-        ("axial", "add_axial_relation"),
-        ("angular", "add_angular_relation"),
-        ("point", "add_point_relation"),
-        ("tangent", "add_tangent_relation"),
-        ("gear", "add_gear_relation"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("planar", "add_planar_relation"),
+            ("axial", "add_axial_relation"),
+            ("angular", "add_angular_relation"),
+            ("point", "add_point_relation"),
+            ("tangent", "add_tangent_relation"),
+            ("gear", "add_gear_relation"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = add_assembly_relation(type=disc)
@@ -294,22 +361,26 @@ class TestAddAssemblyRelation:
 
 # === manage_relation ===
 
+
 class TestManageRelation:
-    @pytest.mark.parametrize("disc, method", [
-        ("list", "get_assembly_relations"),
-        ("info", "get_relation_info"),
-        ("delete", "delete_relation"),
-        ("get_offset", "get_relation_offset"),
-        ("set_offset", "set_relation_offset"),
-        ("get_angle", "get_relation_angle"),
-        ("set_angle", "set_relation_angle"),
-        ("get_normals", "get_normals_aligned"),
-        ("set_normals", "set_normals_aligned"),
-        ("suppress", "suppress_relation"),
-        ("unsuppress", "unsuppress_relation"),
-        ("get_geometry", "get_relation_geometry"),
-        ("get_gear_ratio", "get_gear_ratio"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("list", "get_assembly_relations"),
+            ("info", "get_relation_info"),
+            ("delete", "delete_relation"),
+            ("get_offset", "get_relation_offset"),
+            ("set_offset", "set_relation_offset"),
+            ("get_angle", "get_relation_angle"),
+            ("set_angle", "set_relation_angle"),
+            ("get_normals", "get_normals_aligned"),
+            ("set_normals", "set_normals_aligned"),
+            ("suppress", "suppress_relation"),
+            ("unsuppress", "unsuppress_relation"),
+            ("get_geometry", "get_relation_geometry"),
+            ("get_gear_ratio", "get_gear_ratio"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = manage_relation(action=disc)
@@ -323,18 +394,22 @@ class TestManageRelation:
 
 # === assembly_feature ===
 
+
 class TestAssemblyFeature:
-    @pytest.mark.parametrize("disc, method", [
-        ("extruded_cutout", "create_assembly_extruded_cutout"),
-        ("revolved_cutout", "create_assembly_revolved_cutout"),
-        ("hole", "create_assembly_hole"),
-        ("extruded_protrusion", "create_assembly_extruded_protrusion"),
-        ("revolved_protrusion", "create_assembly_revolved_protrusion"),
-        ("mirror", "create_assembly_mirror"),
-        ("pattern", "create_assembly_pattern"),
-        ("swept_protrusion", "create_assembly_swept_protrusion"),
-        ("recompute", "recompute_assembly_features"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("extruded_cutout", "create_assembly_extruded_cutout"),
+            ("revolved_cutout", "create_assembly_revolved_cutout"),
+            ("hole", "create_assembly_hole"),
+            ("extruded_protrusion", "create_assembly_extruded_protrusion"),
+            ("revolved_protrusion", "create_assembly_revolved_protrusion"),
+            ("mirror", "create_assembly_mirror"),
+            ("pattern", "create_assembly_pattern"),
+            ("swept_protrusion", "create_assembly_swept_protrusion"),
+            ("recompute", "recompute_assembly_features"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = assembly_feature(type=disc)
@@ -360,12 +435,16 @@ class TestAssemblyFeature:
 
 # === virtual_component ===
 
+
 class TestVirtualComponent:
-    @pytest.mark.parametrize("disc, method", [
-        ("new", "add_virtual_component"),
-        ("predefined", "add_virtual_component_predefined"),
-        ("bidm", "add_virtual_component_bidm"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("new", "add_virtual_component"),
+            ("predefined", "add_virtual_component_predefined"),
+            ("bidm", "add_virtual_component_bidm"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = virtual_component(method=disc)
@@ -379,11 +458,15 @@ class TestVirtualComponent:
 
 # === structural_frame ===
 
+
 class TestStructuralFrame:
-    @pytest.mark.parametrize("disc, method", [
-        ("basic", "add_structural_frame"),
-        ("by_orientation", "add_structural_frame_by_orientation"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("basic", "add_structural_frame"),
+            ("by_orientation", "add_structural_frame_by_orientation"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = structural_frame(method=disc)
@@ -402,13 +485,17 @@ class TestStructuralFrame:
 
 # === wiring ===
 
+
 class TestWiring:
-    @pytest.mark.parametrize("disc, method", [
-        ("wire", "add_wire"),
-        ("cable", "add_cable"),
-        ("bundle", "add_bundle"),
-        ("splice", "add_splice"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("wire", "add_wire"),
+            ("cable", "add_cable"),
+            ("bundle", "add_bundle"),
+            ("splice", "add_splice"),
+        ],
+    )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = wiring(type=disc)

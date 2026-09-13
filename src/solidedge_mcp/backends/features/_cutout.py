@@ -1,10 +1,11 @@
 """Cutout feature operations (extruded, revolved, normal, lofted, swept, helix cutouts)."""
 
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -78,7 +79,7 @@ class CutoutMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout(self, distance: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -125,7 +126,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_through_all(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -170,7 +171,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_cutout(self, angle: float = 360) -> dict[str, Any]:
         """
@@ -224,7 +225,7 @@ class CutoutMixin:
 
             return {"status": "created", "type": "revolved_cutout", "angle": angle}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_normal_cutout(self, distance: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -273,7 +274,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_cutout(self, profile_indices: list[int] | None = None) -> dict[str, Any]:
         """
@@ -340,7 +341,7 @@ class CutoutMixin:
                 "method": "LoftedCutouts.AddSimple",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_swept_cutout(self, path_profile_index: int | None = None) -> dict[str, Any]:
         """
@@ -427,11 +428,14 @@ class CutoutMixin:
                 "method": "model.SweptCutouts.Add",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_cutout(
-        self, pitch: float, height: float,
-        revolutions: float | None = None, direction: str = "Right",
+        self,
+        pitch: float,
+        height: float,
+        revolutions: float | None = None,
+        direction: str = "Right",
     ) -> dict[str, Any]:
         """
         Create a helical cutout (cut) in the part.
@@ -506,7 +510,7 @@ class CutoutMixin:
                 "method": "model.HelixCutouts.AddFinite",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_through_next(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -551,7 +555,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_normal_cutout_through_all(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -597,7 +601,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_from_to_v2(
         self, from_plane_index: int, to_plane_index: int
@@ -655,7 +659,7 @@ class CutoutMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_by_keypoint(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -699,7 +703,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_cutout_sync(self, angle: float = 360.0) -> dict[str, Any]:
         """
@@ -750,7 +754,7 @@ class CutoutMixin:
 
             return {"status": "created", "type": "revolved_cutout_sync", "angle": angle}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_cutout_by_keypoint(self) -> dict[str, Any]:
         """
@@ -794,7 +798,7 @@ class CutoutMixin:
 
             return {"status": "created", "type": "revolved_cutout_by_keypoint"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_normal_cutout_from_to(
         self, from_plane_index: int, to_plane_index: int
@@ -852,7 +856,7 @@ class CutoutMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_normal_cutout_through_next(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -896,7 +900,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_normal_cutout_by_keypoint(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -941,7 +945,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_cutout_full(self, profile_indices: list[int] | None = None) -> dict[str, Any]:
         """
@@ -1011,10 +1015,11 @@ class CutoutMixin:
                 "method": "LoftedCutouts.Add",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_swept_cutout_multi_body(
-        self, path_profile_index: int | None = None,
+        self,
+        path_profile_index: int | None = None,
     ) -> dict[str, Any]:
         """
         Create a swept cutout that supports multi-body operations.
@@ -1096,11 +1101,14 @@ class CutoutMixin:
                 "method": "SweptCutouts.AddMultiBody",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_cutout_sync(
-        self, pitch: float, height: float,
-        revolutions: float | None = None, direction: str = "Right",
+        self,
+        pitch: float,
+        height: float,
+        revolutions: float | None = None,
+        direction: str = "Right",
     ) -> dict[str, Any]:
         """
         Create a synchronous helical cutout.
@@ -1170,7 +1178,7 @@ class CutoutMixin:
                 "method": "HelixCutouts.AddFiniteSync",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_cutout_from_to(
         self, from_plane_index: int, to_plane_index: int, pitch: float
@@ -1250,7 +1258,7 @@ class CutoutMixin:
                 "method": "HelixCutouts.AddFromTo",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_helix_cutout_from_to_sync(
         self, from_plane_index: int, to_plane_index: int, pitch: float
@@ -1330,7 +1338,7 @@ class CutoutMixin:
                 "pitch": pitch,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_through_next_single(
         self, direction: str = "Normal"
@@ -1378,7 +1386,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_multi_body(
         self, distance: float, direction: str = "Normal"
@@ -1435,7 +1443,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_from_to_multi_body(
         self, from_plane_index: int, to_plane_index: int
@@ -1503,7 +1511,7 @@ class CutoutMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_cutout_through_all_multi_body(
         self, direction: str = "Normal"
@@ -1557,7 +1565,7 @@ class CutoutMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_cutout_multi_body(self, angle: float = 360.0) -> dict[str, Any]:
         """
@@ -1617,7 +1625,7 @@ class CutoutMixin:
                 "angle": angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_cutout_full(self, angle: float = 360.0) -> dict[str, Any]:
         """
@@ -1678,7 +1686,7 @@ class CutoutMixin:
 
             return {"status": "created", "type": "revolved_cutout_full", "angle": angle}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_cutout_full_sync(self, angle: float = 360.0) -> dict[str, Any]:
         """
@@ -1739,4 +1747,4 @@ class CutoutMixin:
 
             return {"status": "created", "type": "revolved_cutout_full_sync", "angle": angle}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

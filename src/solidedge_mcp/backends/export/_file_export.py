@@ -1,8 +1,9 @@
 """File export operations (STEP, STL, IGES, PDF, DXF, Parasolid, JT, etc.)."""
 
 import os
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -30,7 +31,7 @@ class FileExportMixin:
                 file_path += ".step"
 
             # Save as STEP
-            doc.SaveAs(file_path)
+            doc.SaveCopyAs(file_path)
 
             _logger.info(f"Exported to STEP: {file_path}")
             return {
@@ -41,7 +42,7 @@ class FileExportMixin:
             }
         except Exception as e:
             _logger.error(f"STEP export failed: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_to_stl(self, file_path: str, quality: str = "Medium") -> dict[str, Any]:
         """
@@ -68,7 +69,7 @@ class FileExportMixin:
             # Save as STL
             # Note: Actual method may vary by Solid Edge version
             try:
-                doc.SaveAs(file_path)
+                doc.SaveCopyAs(file_path)
             except Exception:
                 # Alternative export method
                 if hasattr(doc, "SaveAsJT"):
@@ -83,7 +84,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_to_iges(self, file_path: str) -> dict[str, Any]:
         """
@@ -103,7 +104,7 @@ class FileExportMixin:
                 file_path += ".iges"
 
             # Save as IGES
-            doc.SaveAs(file_path)
+            doc.SaveCopyAs(file_path)
 
             return {
                 "status": "exported",
@@ -112,7 +113,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_to_pdf(self, file_path: str) -> dict[str, Any]:
         """Export drawing to PDF"""
@@ -123,11 +124,11 @@ class FileExportMixin:
                 file_path += ".pdf"
 
             # PDF export typically works for draft documents
-            doc.SaveAs(file_path)
+            doc.SaveCopyAs(file_path)
 
             return {"status": "exported", "format": "PDF", "path": file_path}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_to_dxf(self, file_path: str) -> dict[str, Any]:
         """Export to DXF format"""
@@ -137,7 +138,7 @@ class FileExportMixin:
             if not file_path.lower().endswith(".dxf"):
                 file_path += ".dxf"
 
-            doc.SaveAs(file_path)
+            doc.SaveCopyAs(file_path)
 
             return {
                 "status": "exported",
@@ -146,7 +147,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_to_parasolid(self, file_path: str) -> dict[str, Any]:
         """Export to Parasolid format (X_T or X_B)"""
@@ -156,7 +157,7 @@ class FileExportMixin:
             if not (file_path.lower().endswith(".x_t") or file_path.lower().endswith(".x_b")):
                 file_path += ".x_t"
 
-            doc.SaveAs(file_path)
+            doc.SaveCopyAs(file_path)
 
             return {
                 "status": "exported",
@@ -165,7 +166,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_to_jt(self, file_path: str) -> dict[str, Any]:
         """Export to JT format"""
@@ -175,7 +176,7 @@ class FileExportMixin:
             if not file_path.lower().endswith(".jt"):
                 file_path += ".jt"
 
-            doc.SaveAs(file_path)
+            doc.SaveCopyAs(file_path)
 
             return {
                 "status": "exported",
@@ -184,7 +185,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_flat_dxf(self, file_path: str) -> dict[str, Any]:
         """
@@ -226,7 +227,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def capture_screenshot(
         self, file_path: str, width: int = 1920, height: int = 1080
@@ -272,7 +273,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def export_to_prc(self, file_path: str) -> dict[str, Any]:
         """
@@ -299,11 +300,9 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def export_to_plmxml(
-        self, file_path: str, ini_file_path: str
-    ) -> dict[str, Any]:
+    def export_to_plmxml(self, file_path: str, ini_file_path: str) -> dict[str, Any]:
         """
         Export the active document to PLMXML format.
 
@@ -327,7 +326,7 @@ class FileExportMixin:
                 "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # Aliases for consistency with MCP tool names
     def export_step(self, file_path: str) -> dict[str, Any]:

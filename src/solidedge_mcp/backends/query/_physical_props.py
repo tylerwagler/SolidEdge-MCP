@@ -1,8 +1,9 @@
 """Physical properties, measurements, and body appearance operations."""
 
 import math
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 from ._base import QueryManagerBase
@@ -73,7 +74,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             }
         except Exception as e:
             _logger.error(f"Mass properties computation failed: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_bounding_box(self) -> dict[str, Any]:
         """
@@ -105,7 +106,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "units": "meters",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_surface_area(self) -> dict[str, Any]:
         """
@@ -144,7 +145,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "method": "sum_of_faces",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_volume(self) -> dict[str, Any]:
         """
@@ -164,7 +165,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "volume_cm3": volume * 1e6,  # m³ to cm³
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_area(self, face_index: int) -> dict[str, Any]:
         """
@@ -196,7 +197,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "area_mm2": area * 1e6,  # Convert m² to mm²
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_center_of_gravity(self) -> dict[str, Any]:
         """
@@ -240,7 +241,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             cog = result[3]
             return {"center_of_gravity": list(cog), "center_of_gravity_mm": [c * 1000 for c in cog]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_moments_of_inertia(self) -> dict[str, Any]:
         """
@@ -265,7 +266,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 ),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_user_physical_properties(self, density: float = 7850.0) -> dict[str, Any]:
         """
@@ -320,7 +321,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 )
             return computed
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def measure_distance(
         self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float
@@ -350,7 +351,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "units": "meters",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def measure_angle(
         self,
@@ -400,7 +401,7 @@ class PhysicalPropsMixin(QueryManagerBase):
 
             return {"angle_degrees": angle_deg, "angle_radians": angle_rad, "vertex": [x2, y2, z2]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_body_color(self, red: int, green: int, blue: int) -> dict[str, Any]:
         """
@@ -435,7 +436,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "hex": f"#{red:02x}{green:02x}{blue:02x}",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_body_color(self) -> dict[str, Any]:
         """
@@ -463,7 +464,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 except Exception:
                     return {"error": "Could not determine body color"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_body_opacity(self, opacity: float) -> dict[str, Any]:
         """
@@ -486,7 +487,7 @@ class PhysicalPropsMixin(QueryManagerBase):
 
             return {"status": "set", "opacity": opacity}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_body_reflectivity(self, reflectivity: float) -> dict[str, Any]:
         """
@@ -509,7 +510,7 @@ class PhysicalPropsMixin(QueryManagerBase):
 
             return {"status": "set", "reflectivity": reflectivity}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_material_density(self, density: float) -> dict[str, Any]:
         """
@@ -544,4 +545,4 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "units": {"density": "kg/m³", "mass": "kg", "volume": "m³"},
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

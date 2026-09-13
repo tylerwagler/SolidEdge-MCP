@@ -5,15 +5,32 @@ description = "Solid Edge MCP server for AI-assisted CAD design — create, anal
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = [
-    "fastmcp>=2.0",
-    "pywin32>=306",
+authors = [{ name = "Tyler Wagler" }]
+keywords = ["solid-edge", "cad", "mcp", "model-context-protocol", "com-automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
 ]
+dependencies = [
+    "fastmcp>=2.14,<3",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.urls]
+Homepage = "https://github.com/tylerwagler/SolidEdge-MCP"
+Issues = "https://github.com/tylerwagler/SolidEdge-MCP/issues"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "pytest-asyncio>=0.24",
     "ruff>=0.9",
     "mypy>=1.14",
 ]
@@ -26,12 +43,18 @@ target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "TCH"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "TC"]
 ignore = ["TC001", "TC002", "TC003"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "auto"
+# tests/manual holds hand-run COM scripts that touch Solid Edge at import time.
+norecursedirs = ["manual", ".*", "__pycache__"]
+# Integration tests need a running Solid Edge; opt in with `-m integration`.
+addopts = "--strict-markers -m 'not integration'"
+markers = [
+    "integration: requires a licensed, running Solid Edge on Windows",
+]
 
 [tool.mypy]
 python_version = "3.11"

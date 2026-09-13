@@ -1,7 +1,8 @@
 """Reference plane creation operations."""
 
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -64,7 +65,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance(
         self, distance: float, curve_end: str = "End", pivot_plane_index: int = 2
@@ -108,7 +109,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_arc_ratio(
         self, ratio: float, curve_end: str = "End", pivot_plane_index: int = 2
@@ -158,7 +159,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance_along(
         self, distance_along: float, curve_end: str = "End", pivot_plane_index: int = 2
@@ -203,7 +204,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_parallel_by_tangent(
         self, parent_plane_index: int, face_index: int, normal_side: str = "Normal"
@@ -264,7 +265,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_to_curve(
         self, curve_end: str = "End", pivot_plane_index: int = 2
@@ -311,7 +312,7 @@ class RefPlaneMixin:
                 "new_plane_index": new_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_by_angle(
         self, parent_plane_index: int, angle: float, normal_side: str = "Normal"
@@ -365,7 +366,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_by_3_points(
         self,
@@ -409,7 +410,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_midplane(self, plane1_index: int, plane2_index: int) -> dict[str, Any]:
         """
@@ -448,7 +449,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_keypoint(
         self, keypoint_type: str = "End", pivot_plane_index: int = 2
@@ -516,7 +517,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_cylinder_angle(
         self, face_index: int, angle: float, parent_plane_index: int = 1
@@ -581,7 +582,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_cylinder_keypoint(
         self, face_index: int, keypoint_type: str = "End", parent_plane_index: int = 1
@@ -649,7 +650,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_surface_keypoint(
         self, face_index: int, keypoint_type: str = "End", parent_plane_index: int = 1
@@ -716,7 +717,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance_v2(
         self,
@@ -772,7 +773,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_arc_ratio_v2(
         self,
@@ -831,7 +832,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance_along_v2(
         self,
@@ -887,7 +888,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_parallel(
         self,
@@ -942,4 +943,4 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

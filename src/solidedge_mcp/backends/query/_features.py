@@ -1,8 +1,9 @@
 """Feature tree queries, editing, and extent/treatment operations."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -51,7 +52,7 @@ class FeatureQueryMixin:
 
             return {"features": feature_list, "count": len(feature_list)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def rename_feature(self, old_name: str, new_name: str) -> dict[str, Any]:
         """
@@ -83,7 +84,7 @@ class FeatureQueryMixin:
 
             return {"error": f"Feature '{old_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def suppress_feature(self, feature_name: str) -> dict[str, Any]:
         """
@@ -112,7 +113,7 @@ class FeatureQueryMixin:
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def unsuppress_feature(self, feature_name: str) -> dict[str, Any]:
         """
@@ -139,7 +140,7 @@ class FeatureQueryMixin:
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_feature(self, feature_name: str) -> dict[str, Any]:
         """
@@ -171,7 +172,7 @@ class FeatureQueryMixin:
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_status(self, feature_name: str) -> dict[str, Any]:
         """
@@ -214,7 +215,7 @@ class FeatureQueryMixin:
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_profiles(self, feature_name: str) -> dict[str, Any]:
         """
@@ -275,7 +276,7 @@ class FeatureQueryMixin:
 
             return {"feature_name": feature_name, "profiles": profiles, "count": len(profiles)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_parents(self, feature_name: str) -> dict[str, Any]:
         """
@@ -332,7 +333,7 @@ class FeatureQueryMixin:
 
             return {"feature_name": feature_name, "parents": parents, "count": len(parents)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_dimensions(self, feature_name: str) -> dict[str, Any]:
         """
@@ -407,7 +408,7 @@ class FeatureQueryMixin:
                 "count": len(dimensions),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_vertex_count(self) -> dict[str, Any]:
         """
@@ -442,7 +443,7 @@ class FeatureQueryMixin:
                 "note": "Shared vertices are counted once per face",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # EXTENTS
@@ -481,7 +482,7 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_direction1_extent(
         self, feature_name: str, extent_type: int, distance: float = 0.0
@@ -514,7 +515,7 @@ class FeatureQueryMixin:
                 "distance": distance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_direction2_extent(self, feature_name: str) -> dict[str, Any]:
         """
@@ -549,7 +550,7 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_direction2_extent(
         self, feature_name: str, extent_type: int, distance: float = 0.0
@@ -582,7 +583,7 @@ class FeatureQueryMixin:
                 "distance": distance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # THIN WALL OPTIONS
@@ -620,7 +621,7 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_thin_wall_options(
         self,
@@ -658,7 +659,7 @@ class FeatureQueryMixin:
                 "thickness2": thickness2,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # FACE OFFSET DATA
@@ -696,7 +697,7 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_from_face_offset(self, feature_name: str, offset: float) -> dict[str, Any]:
         """
@@ -724,7 +725,7 @@ class FeatureQueryMixin:
                 "offset": offset,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_to_face_offset(self, feature_name: str) -> dict[str, Any]:
         """
@@ -755,7 +756,7 @@ class FeatureQueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_to_face_offset(
         self, feature_name: str, offset_side: int, distance: float
@@ -788,7 +789,7 @@ class FeatureQueryMixin:
                 "distance": distance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # BODY ARRAY
@@ -836,7 +837,7 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_body_array(self, feature_name: str, body_indices: list[int]) -> dict[str, Any]:
         """
@@ -876,7 +877,7 @@ class FeatureQueryMixin:
                 "body_count": len(body_array),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # DIRECTION 1 TREATMENT (CROWN/DRAFT)
@@ -918,7 +919,7 @@ class FeatureQueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def apply_direction1_treatment(
         self,
@@ -970,4 +971,4 @@ class FeatureQueryMixin:
                 "treatment_type": treatment_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

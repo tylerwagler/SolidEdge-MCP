@@ -27,7 +27,8 @@ def create_flange(
     Lengths/radii in meters. bend_angle in degrees.
     """
     err = validate_numerics(
-        flange_length=flange_length, bend_deduction=bend_deduction,
+        flange_length=flange_length,
+        bend_deduction=bend_deduction,
         bend_radius=bend_radius,
     )
     if err:
@@ -119,7 +120,8 @@ def create_contour_flange(
     Dimensions in meters.
     """
     err = validate_numerics(
-        thickness=thickness, bend_radius=bend_radius,
+        thickness=thickness,
+        bend_radius=bend_radius,
         bend_deduction=bend_deduction,
     )
     if err:
@@ -403,9 +405,12 @@ def sheet_metal_misc(
     Dimensions in meters. jog_angle in degrees.
     """
     err = validate_numerics(
-        hem_width=hem_width, bend_radius=bend_radius,
-        jog_offset=jog_offset, jog_angle=jog_angle,
-        flange_length=flange_length, thickness=thickness,
+        hem_width=hem_width,
+        bend_radius=bend_radius,
+        jog_offset=jog_offset,
+        jog_angle=jog_angle,
+        flange_length=flange_length,
+        thickness=thickness,
     )
     if err:
         return err

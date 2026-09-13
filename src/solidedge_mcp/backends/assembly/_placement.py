@@ -2,8 +2,9 @@
 
 import math
 import os
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -67,7 +68,7 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # Alias for MCP tool compatibility
     place_component = add_component
@@ -127,7 +128,7 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add component with transform: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_family_member(
         self,
@@ -174,7 +175,7 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add family member: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_family_with_transform(
         self,
@@ -205,7 +206,8 @@ class PlacementMixin:
         try:
             _logger.info(
                 "Adding family member with transform: %s from %s",
-                family_member_name, file_path,
+                family_member_name,
+                file_path,
             )
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
@@ -235,7 +237,7 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add family member with transform: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_family_with_matrix(
         self,
@@ -287,7 +289,7 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add family member with matrix: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_by_template(
         self,
@@ -328,7 +330,7 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add component by template: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_adjustable_part(
         self,
@@ -373,7 +375,7 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add adjustable part: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def reorder_occurrence(
         self,
@@ -423,4 +425,4 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to reorder occurrence: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

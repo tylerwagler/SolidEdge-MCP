@@ -2,11 +2,12 @@
 
 import contextlib
 import math
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -85,7 +86,7 @@ class MiscFeaturesMixin:
 
             return {"features": features, "count": len(features)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_info(self, feature_index: int) -> dict[str, Any]:
         """Get detailed information about a specific feature"""
@@ -115,7 +116,7 @@ class MiscFeaturesMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_body(self, body_type: str = "Solid") -> dict[str, Any]:
         """
@@ -136,7 +137,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "body", "body_type": body_type}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def thicken_surface(self, thickness: float, direction: str = "Both") -> dict[str, Any]:
         """
@@ -163,7 +164,7 @@ class MiscFeaturesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def auto_simplify(self) -> dict[str, Any]:
         """Auto-simplify the model"""
@@ -175,7 +176,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "auto_simplify"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def simplify_enclosure(self) -> dict[str, Any]:
         """Create simplified enclosure"""
@@ -187,7 +188,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "simplify_enclosure"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def simplify_duplicate(self) -> dict[str, Any]:
         """Create simplified duplicate"""
@@ -199,7 +200,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "simplify_duplicate"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def local_simplify_enclosure(self) -> dict[str, Any]:
         """Create local simplified enclosure"""
@@ -211,7 +212,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "local_simplify_enclosure"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_mirror(self, feature_name: str, mirror_plane_index: int) -> dict[str, Any]:
         """
@@ -283,7 +284,7 @@ class MiscFeaturesMixin:
                 "in Solid Edge UI.",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_faces(self, face_indices: list[int]) -> dict[str, Any]:
         """
@@ -328,7 +329,7 @@ class MiscFeaturesMixin:
                 "face_indices": face_indices,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_faces_no_heal(self, face_indices: list[int]) -> dict[str, Any]:
         """
@@ -374,7 +375,7 @@ class MiscFeaturesMixin:
                 "face_indices": face_indices,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_body_by_mesh(self) -> dict[str, Any]:
         """Add body by mesh facets"""
@@ -386,7 +387,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "body_by_mesh"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_body_feature(self) -> dict[str, Any]:
         """Add body feature"""
@@ -398,7 +399,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "body_feature"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_by_construction(self) -> dict[str, Any]:
         """Add construction body"""
@@ -410,7 +411,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "construction_body"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_body_by_tag(self, tag: str) -> dict[str, Any]:
         """Add body by tag reference"""
@@ -422,7 +423,7 @@ class MiscFeaturesMixin:
 
             return {"status": "created", "type": "body_by_tag", "tag": tag}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_face_rotate_by_edge(
         self, face_index: int, edge_index: int, angle: float
@@ -483,7 +484,7 @@ class MiscFeaturesMixin:
                 "angle_degrees": angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_face_rotate_by_points(
         self, face_index: int, vertex1_index: int, vertex2_index: int, angle: float
@@ -550,7 +551,7 @@ class MiscFeaturesMixin:
                 "angle_degrees": angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_draft_angle(
         self, face_index: int, angle: float, plane_index: int = 1
@@ -600,7 +601,7 @@ class MiscFeaturesMixin:
                 "plane_index": plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def convert_feature_type(self, feature_name: str, target_type: str) -> dict[str, Any]:
         """
@@ -662,7 +663,7 @@ class MiscFeaturesMixin:
                     "error": f"Invalid target_type: {target_type}. Use 'cutout' or 'protrusion'"
                 }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_thicken_sync(self, thickness: float, direction: str = "Both") -> dict[str, Any]:
         """
@@ -703,7 +704,7 @@ class MiscFeaturesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_mirror_sync_ex(self, feature_name: str, mirror_plane_index: int) -> dict[str, Any]:
         """
@@ -750,7 +751,7 @@ class MiscFeaturesMixin:
                 "name": mirror.Name if hasattr(mirror, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_rectangular_ex(
         self,
@@ -805,7 +806,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_circular_ex(
         self,
@@ -866,7 +867,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_duplicate(self, feature_name: str) -> dict[str, Any]:
         """
@@ -904,7 +905,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_by_fill(
         self,
@@ -965,7 +966,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_by_table(
         self,
@@ -1025,7 +1026,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_by_table_sync(
         self,
@@ -1082,7 +1083,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_by_fill_ex(
         self,
@@ -1157,7 +1158,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_pattern_by_curve_ex(
         self,
@@ -1231,7 +1232,7 @@ class MiscFeaturesMixin:
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def save_as_mirror_part(
         self,
@@ -1278,11 +1279,9 @@ class MiscFeaturesMixin:
                 "linked": link_to_original,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def create_user_defined_pattern(
-        self, feature_name: str
-    ) -> dict[str, Any]:
+    def create_user_defined_pattern(self, feature_name: str) -> dict[str, Any]:
         """
         Create a user-defined pattern using accumulated profiles as occurrence locations.
 
@@ -1322,9 +1321,7 @@ class MiscFeaturesMixin:
                     "to define occurrence locations."
                 }
 
-            profiles_var = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles
-            )
+            profiles_var = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
 
             udp = model.UserDefinedPatterns
             udp.AddByProfiles(len(all_profiles), profiles_var, seed_feature)
@@ -1338,4 +1335,4 @@ class MiscFeaturesMixin:
                 "num_occurrences": len(all_profiles),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

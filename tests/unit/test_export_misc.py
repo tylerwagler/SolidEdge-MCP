@@ -105,6 +105,7 @@ class TestUndo:
         dm, app = doc_mgr
         doc = MagicMock()
         dm.active_document = doc
+        app.ActiveDocument = doc
 
         result = dm.undo()
         assert result["status"] == "undone"
@@ -116,6 +117,7 @@ class TestRedo:
         dm, app = doc_mgr
         doc = MagicMock()
         dm.active_document = doc
+        app.ActiveDocument = doc
 
         result = dm.redo()
         assert result["status"] == "redone"
@@ -573,6 +575,7 @@ class TestGetActiveDocumentType:
         doc.FullName = "C:/Part1.par"
         doc.Type = 1  # igPartDocument
         dm.active_document = doc
+        app.ActiveDocument = doc
 
         result = dm.get_active_document_type()
         assert result["type"] is not None
@@ -1374,9 +1377,7 @@ class TestOpenWithTemplate:
         assert result["status"] == "opened_with_template"
         assert result["name"] == "imported.par"
         assert result["template"] == "C:/templates/metric.par"
-        app.Documents.OpenWithTemplate.assert_called_once_with(
-            str(f), "C:/templates/metric.par"
-        )
+        app.Documents.OpenWithTemplate.assert_called_once_with(str(f), "C:/templates/metric.par")
 
     def test_file_not_found(self, doc_mgr):
         dm, _ = doc_mgr
@@ -1429,9 +1430,7 @@ class TestOpenWithFileOpenDialog:
         doc.Type = 1
         app.Documents.OpenWithFileOpenDialog.return_value = doc
 
-        result = dm.open_with_file_open_dialog(
-            filename="*.par", dialog_title="Select Part"
-        )
+        result = dm.open_with_file_open_dialog(filename="*.par", dialog_title="Select Part")
         assert result["status"] == "opened"
         assert result["name"] == "myfile.par"
         app.Documents.OpenWithFileOpenDialog.assert_called_once_with(

@@ -1,7 +1,8 @@
 """Primitive solid feature operations (box, cylinder, sphere)."""
 
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import DirectionConstants
 from ..logging import get_logger
@@ -67,7 +68,7 @@ class PrimitiveMixin:
                 "dimensions": {"length": length, "width": width, "height": height},
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_by_two_points(
         self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float, plane_index: int = 1
@@ -117,7 +118,7 @@ class PrimitiveMixin:
                 "corner2": [x2, y2, z2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_by_three_points(
         self,
@@ -187,7 +188,7 @@ class PrimitiveMixin:
                 "point3": [x3, y3, z3],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_cylinder(
         self,
@@ -239,7 +240,7 @@ class PrimitiveMixin:
                 "height": height,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sphere(
         self, center_x: float, center_y: float, center_z: float, radius: float, plane_index: int = 1
@@ -283,7 +284,7 @@ class PrimitiveMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_cutout_by_two_points(
         self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float, plane_index: int = 1
@@ -348,7 +349,7 @@ class PrimitiveMixin:
                 "corner2": [x2, y2, z2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_cutout_by_center(
         self,
@@ -416,7 +417,7 @@ class PrimitiveMixin:
                 "dimensions": {"length": length, "width": width, "height": height},
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_cutout_by_three_points(
         self,
@@ -498,7 +499,7 @@ class PrimitiveMixin:
                 "point3": [x3, y3, z3],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_cylinder_cutout(
         self,
@@ -568,7 +569,7 @@ class PrimitiveMixin:
                 "height": height,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sphere_cutout(
         self, center_x: float, center_y: float, center_z: float, radius: float, plane_index: int = 1
@@ -629,4 +630,4 @@ class PrimitiveMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

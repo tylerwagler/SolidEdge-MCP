@@ -32,20 +32,13 @@ def validate_numerics(**values: Any) -> dict[str, Any] | None:
         if value is None:
             continue
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return {
-                "error": (
-                    f"Parameter '{name}' must be a number, "
-                    f"got {type(value).__name__}"
-                )
-            }
+            return {"error": (f"Parameter '{name}' must be a number, got {type(value).__name__}")}
         if not math.isfinite(float(value)):
             return {"error": f"Parameter '{name}' must be finite, got {value!r}"}
     return None
 
 
-def validate_path(
-    path: str, must_exist: bool = False
-) -> tuple[str, dict[str, Any] | None]:
+def validate_path(path: str, must_exist: bool = False) -> tuple[str, dict[str, Any] | None]:
     """Normalize a filesystem path and optionally verify it exists.
 
     Returns a ``(normalized_path, error)`` tuple. ``error`` is ``None`` on

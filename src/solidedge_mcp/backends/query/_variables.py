@@ -1,8 +1,9 @@
 """Variable management and custom properties."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -48,7 +49,7 @@ class VariablesMixin:
 
             return {"variables": var_list, "count": len(var_list)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_variable(self, name: str) -> dict[str, Any]:
         """
@@ -83,7 +84,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_variable(self, name: str, value: float) -> dict[str, Any]:
         """
@@ -118,7 +119,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_variable(
         self, name: str, formula: str, units_type: str | None = None
@@ -154,7 +155,7 @@ class VariablesMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_variable_formula(self, name: str, formula: str) -> dict[str, Any]:
         """
@@ -194,7 +195,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def query_variables(self, pattern: str = "*", case_insensitive: bool = True) -> dict[str, Any]:
         """
@@ -270,7 +271,7 @@ class VariablesMixin:
 
             return {"pattern": pattern, "matches": matches, "count": len(matches)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_variable_formula(self, name: str) -> dict[str, Any]:
         """
@@ -304,7 +305,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def rename_variable(self, old_name: str, new_name: str) -> dict[str, Any]:
         """
@@ -335,7 +336,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{old_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_variable_names(self, name: str) -> dict[str, Any]:
         """
@@ -372,7 +373,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def translate_variable(self, name: str) -> dict[str, Any]:
         """
@@ -403,7 +404,7 @@ class VariablesMixin:
                 result["formula"] = var.Formula
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def copy_variable_to_clipboard(self, name: str) -> dict[str, Any]:
         """
@@ -424,7 +425,7 @@ class VariablesMixin:
             variables.CopyToClipboard(name)
             return {"status": "copied", "name": name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_variable_from_clipboard(
         self, name: str, units_type: str | None = None
@@ -456,7 +457,7 @@ class VariablesMixin:
                 result["value"] = new_var.Value
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # CUSTOM PROPERTIES
@@ -501,7 +502,7 @@ class VariablesMixin:
 
             return {"property_sets": properties, "count": len(properties)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_custom_property(self, name: str, value: str) -> dict[str, Any]:
         """
@@ -554,7 +555,7 @@ class VariablesMixin:
             custom_ps.Add(name, value)
             return {"status": "created", "name": name, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_custom_property(self, name: str) -> dict[str, Any]:
         """
@@ -589,4 +590,4 @@ class VariablesMixin:
 
             return {"error": "Custom property set not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from solidedge_mcp.backends.errors import error_result
 from solidedge_mcp.managers import diagnose_document, diagnose_feature, doc_manager
 
 
@@ -17,14 +18,13 @@ def diagnose_feature_tool(feature_index: int = 0) -> dict[str, Any]:
     Args:
         feature_index: 0-based index into the Models collection (default: first model)
     """
-    import traceback
 
     try:
         doc = doc_manager.get_active_document()
         model = doc.Models.Item(feature_index + 1)
         return diagnose_feature(model)
     except Exception as e:
-        return {"error": str(e), "traceback": traceback.format_exc()}
+        return error_result(e)
 
 
 def register(mcp: Any) -> None:

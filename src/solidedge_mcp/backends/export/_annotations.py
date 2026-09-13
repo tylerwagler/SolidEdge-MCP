@@ -1,8 +1,9 @@
 """Annotation operations (dimensions, marks, symbols, text, leaders, balloons, 2D queries)."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -50,7 +51,7 @@ class AnnotationsMixin:
 
             return {"status": "added", "type": "text_box", "text": text, "position": [x, y]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_leader(
         self, x1: float, y1: float, x2: float, y2: float, text: str = ""
@@ -93,11 +94,16 @@ class AnnotationsMixin:
                 "text": text,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_dimension(
-        self, x1: float, y1: float, x2: float, y2: float,
-        dim_x: float | None = None, dim_y: float | None = None,
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        dim_x: float | None = None,
+        dim_y: float | None = None,
     ) -> dict[str, Any]:
         """
         Add a linear dimension between two points on the active draft sheet.
@@ -138,11 +144,15 @@ class AnnotationsMixin:
                 "text_position": [dim_x, dim_y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_balloon(
-        self, x: float, y: float, text: str = "",
-        leader_x: float | None = None, leader_y: float | None = None,
+        self,
+        x: float,
+        y: float,
+        text: str = "",
+        leader_x: float | None = None,
+        leader_y: float | None = None,
     ) -> dict[str, Any]:
         """
         Add a balloon annotation to the active draft sheet.
@@ -183,7 +193,7 @@ class AnnotationsMixin:
 
             return {"status": "added", "type": "balloon", "position": [x, y], "text": text}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_note(self, x: float, y: float, text: str, height: float = 0.005) -> dict[str, Any]:
         """
@@ -224,7 +234,7 @@ class AnnotationsMixin:
                 "height": height,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # DIMENSION ANNOTATIONS
@@ -281,7 +291,7 @@ class AnnotationsMixin:
                 "text_position": [text_x, text_y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_radial_dimension(
         self,
@@ -328,7 +338,7 @@ class AnnotationsMixin:
                 "text_position": [text_x, text_y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_diameter_dimension(
         self,
@@ -375,7 +385,7 @@ class AnnotationsMixin:
                 "text_position": [text_x, text_y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_ordinate_dimension(
         self,
@@ -425,7 +435,7 @@ class AnnotationsMixin:
                 "text_position": [text_x, text_y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_distance_dimension(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
         """
@@ -466,7 +476,7 @@ class AnnotationsMixin:
                 "text_position": [dim_x, dim_y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_length_dimension(self, object_index: int) -> dict[str, Any]:
         """
@@ -509,7 +519,7 @@ class AnnotationsMixin:
                 "object_index": object_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_radius_dimension_2d(
         self, object_index: int, object_type: str = "circle"
@@ -566,7 +576,7 @@ class AnnotationsMixin:
                 "object_index": object_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_angle_dimension_2d(
         self,
@@ -614,7 +624,7 @@ class AnnotationsMixin:
                 "text_position": [dim_x, dim_y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SYMBOL ANNOTATIONS
@@ -647,7 +657,7 @@ class AnnotationsMixin:
                 "position": [x, y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_centerline(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
         """
@@ -679,7 +689,7 @@ class AnnotationsMixin:
                 "end": [x2, y2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_surface_finish_symbol(
         self, x: float, y: float, symbol_type: str = "machined"
@@ -726,7 +736,7 @@ class AnnotationsMixin:
                 "position": [x, y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_weld_symbol(self, x: float, y: float, weld_type: str = "fillet") -> dict[str, Any]:
         """
@@ -771,7 +781,7 @@ class AnnotationsMixin:
                 "position": [x, y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_geometric_tolerance(
         self, x: float, y: float, tolerance_text: str = ""
@@ -814,7 +824,7 @@ class AnnotationsMixin:
                 "text": tolerance_text,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # 2D GEOMETRY COLLECTION ACCESS (Draft Sheets)
@@ -847,7 +857,7 @@ class AnnotationsMixin:
                 items.append(info)
             return {"count": len(items), "lines": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_circles2d(self) -> dict[str, Any]:
         """
@@ -876,7 +886,7 @@ class AnnotationsMixin:
                 items.append(info)
             return {"count": len(items), "circles": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_arcs2d(self) -> dict[str, Any]:
         """
@@ -909,4 +919,4 @@ class AnnotationsMixin:
                 items.append(info)
             return {"count": len(items), "arcs": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

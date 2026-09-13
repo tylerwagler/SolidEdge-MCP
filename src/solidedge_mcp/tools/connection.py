@@ -78,8 +78,10 @@ def app_config(
     match property:
         case "set_performance":
             return connection.set_performance_mode(
-                delay_compute, screen_updating,
-                interactive, display_alerts,
+                delay_compute,
+                screen_updating,
+                interactive,
+                display_alerts,
             )
         case "get_environment":
             return connection.get_active_environment()
@@ -98,9 +100,7 @@ def app_config(
         case "get_template":
             return connection.get_default_template_path(doc_type)
         case "set_template":
-            return connection.set_default_template_path(
-                doc_type, template_path
-            )
+            return connection.set_default_template_path(doc_type, template_path)
         case _:
             return {"error": f"Unknown property: {property}"}
 

@@ -2,8 +2,9 @@
 
 import contextlib
 import os
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -64,7 +65,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add virtual component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_virtual_component_predefined(
         self,
@@ -105,7 +106,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add predefined virtual component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_virtual_component_bidm(
         self,
@@ -158,7 +159,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add virtual component via BIDM: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Tube Operations -----------------------------------------------------
 
@@ -209,7 +210,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to get tube info: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_tube(
         self,
@@ -286,7 +287,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add tube: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Structural Frames ---------------------------------------------------
 
@@ -310,7 +311,8 @@ class SpecializedMixin:
         try:
             _logger.info(
                 "Adding structural frame: part=%s, paths=%d",
-                part_filename, len(path_indices),
+                part_filename,
+                len(path_indices),
             )
             if not os.path.exists(part_filename):
                 return {"error": f"File not found: {part_filename}"}
@@ -349,7 +351,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add structural frame: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_structural_frame_by_orientation(
         self,
@@ -373,7 +375,8 @@ class SpecializedMixin:
         try:
             _logger.info(
                 "Adding structural frame by orientation: part=%s, coord=%s",
-                part_filename, coord_system_name,
+                part_filename,
+                coord_system_name,
             )
             if not os.path.exists(part_filename):
                 return {"error": f"File not found: {part_filename}"}
@@ -413,7 +416,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add structural frame by orientation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Splices -------------------------------------------------------------
 
@@ -484,7 +487,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add splice: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Wires ---------------------------------------------------------------
 
@@ -548,7 +551,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add wire: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Cables --------------------------------------------------------------
 
@@ -643,7 +646,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add cable: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Bundles -------------------------------------------------------------
 
@@ -675,7 +678,8 @@ class SpecializedMixin:
         try:
             _logger.info(
                 "Adding bundle with %d paths, %d conductors",
-                len(path_indices), len(conductor_indices),
+                len(path_indices),
+                len(conductor_indices),
             )
             doc = self.doc_manager.get_active_document()
 
@@ -741,4 +745,4 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add bundle: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -1,10 +1,11 @@
 """Round, chamfer, and blend feature operations."""
 
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     FaceQueryConstants,
@@ -79,7 +80,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     @verifies_geometry
     def create_round_on_face(self, radius: float, face_index: int) -> dict[str, Any]:
@@ -139,10 +140,12 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_variable_round(
-        self, radii: list[float], face_index: int | None = None,
+        self,
+        radii: list[float],
+        face_index: int | None = None,
     ) -> dict[str, Any]:
         """
         Create a variable-radius round (fillet) on body edges.
@@ -218,7 +221,7 @@ class RoundsChamfersMixin:
                 "radii": radius_values[: len(edge_list)],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     @verifies_geometry
     def create_chamfer(self, distance: float) -> dict[str, Any]:
@@ -270,7 +273,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     @verifies_geometry
     def create_chamfer_on_face(self, distance: float, face_index: int) -> dict[str, Any]:
@@ -321,7 +324,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_chamfer_unequal(
         self, distance1: float, distance2: float, face_index: int = 0
@@ -375,7 +378,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_chamfer_unequal_on_face(
         self, distance1: float, distance2: float, face_index: int
@@ -426,7 +429,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     @verifies_geometry
     def create_chamfer_angle(
@@ -481,7 +484,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_blend(self, radius: float, face_index: int | None = None) -> dict[str, Any]:
         """
@@ -550,7 +553,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_blend_variable(
         self, radius1: float, radius2: float, face_index: int | None = None
@@ -620,7 +623,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_blend_surface(self, face_index1: int, face_index2: int) -> dict[str, Any]:
         """
@@ -672,7 +675,7 @@ class RoundsChamfersMixin:
                 "face_index2": face_index2,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_round_blend(
         self, face_index1: int, face_index2: int, radius: float
@@ -728,7 +731,7 @@ class RoundsChamfersMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_round_surface_blend(
         self, face_index1: int, face_index2: int, radius: float
@@ -784,7 +787,7 @@ class RoundsChamfersMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_delete_hole(
         self, max_diameter: float = 1.0, hole_type: str = "All"
@@ -830,7 +833,7 @@ class RoundsChamfersMixin:
                 "hole_type": hole_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_delete_blend(self, face_index: int) -> dict[str, Any]:
         """
@@ -866,4 +869,4 @@ class RoundsChamfersMixin:
 
             return {"status": "created", "type": "delete_blend", "face_index": face_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

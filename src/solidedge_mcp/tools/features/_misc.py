@@ -60,8 +60,13 @@ def create_pattern(
     feature_index is 0-based; feature_name used by _ex variants.
     """
     err = validate_numerics(
-        x_gap=x_gap, y_gap=y_gap, x_spacing=x_spacing,
-        y_spacing=y_spacing, angle=angle, radius=radius, spacing=spacing,
+        x_gap=x_gap,
+        y_gap=y_gap,
+        x_spacing=x_spacing,
+        y_spacing=y_spacing,
+        angle=angle,
+        radius=radius,
+        spacing=spacing,
     )
     if err:
         return err

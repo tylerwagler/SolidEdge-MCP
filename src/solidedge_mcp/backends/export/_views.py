@@ -1,8 +1,9 @@
 """Drawing view management operations (scale, delete, update, project, move, display, etc.)."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import DrawingViewOrientationConstants, FoldTypeConstants, RenderModeConstants
 from ..logging import get_logger
@@ -34,7 +35,7 @@ class ViewsMixin:
 
             return {"status": "set", "view_index": view_index, "scale": scale}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_drawing_view(self, view_index: int) -> dict[str, Any]:
         """
@@ -56,7 +57,7 @@ class ViewsMixin:
 
             return {"status": "deleted", "view_index": view_index, "remaining_views": dvs.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def update_drawing_view(self, view_index: int) -> dict[str, Any]:
         """
@@ -78,7 +79,7 @@ class ViewsMixin:
 
             return {"status": "updated", "view_index": view_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_projected_view(
         self, parent_view_index: int, fold_direction: str, x: float, y: float
@@ -129,7 +130,7 @@ class ViewsMixin:
                 "total_views": dvs.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def move_drawing_view(self, view_index: int, x: float, y: float) -> dict[str, Any]:
         """
@@ -160,7 +161,7 @@ class ViewsMixin:
 
             return {"status": "moved", "view_index": view_index, "position": [x, y]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def show_hidden_edges(self, view_index: int, show: bool = True) -> dict[str, Any]:
         """
@@ -184,7 +185,7 @@ class ViewsMixin:
 
             return {"status": "updated", "view_index": view_index, "show_hidden_edges": show}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_drawing_view_display_mode(self, view_index: int, mode: str) -> dict[str, Any]:
         """
@@ -224,7 +225,7 @@ class ViewsMixin:
 
             return {"status": "updated", "view_index": view_index, "mode": mode}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_drawing_view_info(self, view_index: int) -> dict[str, Any]:
         """
@@ -263,7 +264,7 @@ class ViewsMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_drawing_view_orientation(self, view_index: int, orientation: str) -> dict[str, Any]:
         """
@@ -303,7 +304,7 @@ class ViewsMixin:
 
             return {"status": "updated", "view_index": view_index, "orientation": orientation}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_drawing_view_model_link(self, view_index: int) -> dict[str, Any]:
         """
@@ -345,7 +346,7 @@ class ViewsMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def show_tangent_edges(self, view_index: int, show: bool = True) -> dict[str, Any]:
         """
@@ -376,7 +377,7 @@ class ViewsMixin:
                 "show_tangent_edges": show,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # DRAWING VIEW VARIANTS
@@ -437,7 +438,7 @@ class ViewsMixin:
                 "total_views": dvs.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_auxiliary_view(
         self,
@@ -498,7 +499,7 @@ class ViewsMixin:
                 "total_views": dvs.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_draft_view(self, x: float, y: float) -> dict[str, Any]:
         """
@@ -526,7 +527,7 @@ class ViewsMixin:
                 "total_views": dvs.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # DRAWING VIEW PROPERTIES
@@ -577,7 +578,7 @@ class ViewsMixin:
                 "view_index2": view_index2,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_by_draft_view(
         self, source_view_index: int, x: float, y: float, scale: float | None = None
@@ -630,7 +631,7 @@ class ViewsMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def activate_drawing_view(self, view_index: int) -> dict[str, Any]:
         """
@@ -652,7 +653,7 @@ class ViewsMixin:
             view.Activate()
             return {"status": "activated", "view_index": view_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def deactivate_drawing_view(self, view_index: int) -> dict[str, Any]:
         """
@@ -674,7 +675,7 @@ class ViewsMixin:
             view.Deactivate()
             return {"status": "deactivated", "view_index": view_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SECTION CUTS / DIMENSIONS ON VIEWS
@@ -741,7 +742,7 @@ class ViewsMixin:
 
             return {"count": len(items), "section_cuts": items, "view_index": view_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_section_cut(
         self,
@@ -811,7 +812,7 @@ class ViewsMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_drawing_view_dimensions(self, view_index: int) -> dict[str, Any]:
         """
@@ -893,7 +894,7 @@ class ViewsMixin:
                 "view_index": view_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def update_all_views(self, force_update: bool = True) -> dict[str, Any]:
         """
@@ -915,4 +916,4 @@ class ViewsMixin:
             doc.UpdateAll(force_update)
             return {"status": "updated_all", "force_update": force_update}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

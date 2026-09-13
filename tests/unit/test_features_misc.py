@@ -390,12 +390,14 @@ class TestCreateThread:
         end_edges.Count = 1
         end_edges.Item.return_value = cyl_edge  # same edge object
         end_face.Edges = end_edges
+
         # Make faces.Item return end_face for second call (fi=1 candidate)
         # but cyl_face for the thread target (face_index+1=3)
         def faces_item_side_effect(idx):
             if idx == 3:  # face_index=2, 1-based=3
                 return cyl_face
             return end_face
+
         faces.Item.side_effect = faces_item_side_effect
 
         # Mock HoleDataCollection
@@ -964,11 +966,13 @@ class TestCreateThreadEx:
         end_face = MagicMock()
         faces = MagicMock()
         faces.Count = 2
+
         # face_index=0 → 1-based=1 → cyl_face; fi=2 → end_face (candidate)
         def faces_item_side_effect(idx):
             if idx == 1:
                 return cyl_face
             return end_face
+
         faces.Item.side_effect = faces_item_side_effect
         model.Body.Faces.return_value = faces
 

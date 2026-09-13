@@ -1,11 +1,12 @@
 """B-Rep topology queries: faces, edges, vertices, shells, and geometry inspection."""
 
 import contextlib
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import FaceQueryConstants
 from ..logging import get_logger
@@ -90,7 +91,7 @@ class BRepMixin:
 
             return {"faces": face_list, "count": len(face_list)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_info(self, face_index: int) -> dict[str, Any]:
         """
@@ -131,7 +132,7 @@ class BRepMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_count(self) -> dict[str, Any]:
         """
@@ -146,7 +147,7 @@ class BRepMixin:
             faces = body.Faces(FaceQueryConstants.igQueryAll)
             return {"face_count": faces.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_normal(self, face_index: int, u: float = 0.5, v: float = 0.5) -> dict[str, Any]:
         """
@@ -181,7 +182,7 @@ class BRepMixin:
                 "face_index": face_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_geometry(self, face_index: int) -> dict[str, Any]:
         """
@@ -279,7 +280,7 @@ class BRepMixin:
                 result["raw_type"] = geom.Type
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_loops(self, face_index: int) -> dict[str, Any]:
         """
@@ -320,7 +321,7 @@ class BRepMixin:
                 "loops": loop_list,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_curvature(self, face_index: int, u: float = 0.5, v: float = 0.5) -> dict[str, Any]:
         """
@@ -368,7 +369,7 @@ class BRepMixin:
                 "face_index": face_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_face_color(self, face_index: int, red: int, green: int, blue: int) -> dict[str, Any]:
         """
@@ -407,7 +408,7 @@ class BRepMixin:
 
             return {"status": "updated", "face_index": face_index, "color": [red, green, blue]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # EDGE QUERIES
@@ -448,7 +449,7 @@ class BRepMixin:
                 "note": "Edge count includes shared edges (counted once per face)",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_edge_count(self) -> dict[str, Any]:
         """
@@ -482,7 +483,7 @@ class BRepMixin:
                 "note": "Shared edges are counted once per face",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_edge_info(self, face_index: int, edge_index: int) -> dict[str, Any]:
         """
@@ -535,7 +536,7 @@ class BRepMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_edge_endpoints(self, face_index: int, edge_index: int) -> dict[str, Any]:
         """
@@ -572,7 +573,7 @@ class BRepMixin:
                 "edge_index": edge_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_edge_length(self, face_index: int, edge_index: int) -> dict[str, Any]:
         """
@@ -621,7 +622,7 @@ class BRepMixin:
                 "edge_index": edge_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_edge_tangent(
         self, face_index: int, edge_index: int, param: float = 0.5
@@ -659,7 +660,7 @@ class BRepMixin:
                 "edge_index": edge_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_edge_geometry(self, face_index: int, edge_index: int) -> dict[str, Any]:
         """
@@ -739,7 +740,7 @@ class BRepMixin:
             result["raw_type"] = geom_type
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_edge_curvature(
         self, face_index: int, edge_index: int, param: float = 0.5
@@ -783,7 +784,7 @@ class BRepMixin:
                 "edge_index": edge_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # BODY / VERTEX / SHELL QUERIES
@@ -866,16 +867,14 @@ class BRepMixin:
                     "has_data": len(points) > 0,
                 }
             except Exception as e2:
-                return {
-                    "error": f"GetFacetData failed: {e2}",
-                    "note": "Body facet data may require "
-                    "specific COM marshaling. "
+                return error_result(
+                    e2,
+                    note="Body facet data may require specific COM marshaling. "
                     "Try export_stl() instead.",
-                    "traceback": traceback.format_exc(),
-                }
+                )
 
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_solid_bodies(self) -> dict[str, Any]:
         """
@@ -944,7 +943,7 @@ class BRepMixin:
 
             return {"total_bodies": len(bodies), "bodies": bodies}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_body_extreme_point(
         self, direction_x: float, direction_y: float, direction_z: float
@@ -985,7 +984,7 @@ class BRepMixin:
                 "direction": [direction_x, direction_y, direction_z],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_faces_by_ray(
         self,
@@ -1038,7 +1037,7 @@ class BRepMixin:
                 "ray_direction": [direction_x, direction_y, direction_z],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_shell_info(self, shell_index: int = 0) -> dict[str, Any]:
         """
@@ -1083,7 +1082,7 @@ class BRepMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def is_point_inside_body(self, x: float, y: float, z: float) -> dict[str, Any]:
         """
@@ -1114,7 +1113,7 @@ class BRepMixin:
                 "point": [x, y, z],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_body_shells(self) -> dict[str, Any]:
         """
@@ -1147,7 +1146,7 @@ class BRepMixin:
                 "shells": shell_list,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_body_vertices(self) -> dict[str, Any]:
         """
@@ -1184,7 +1183,7 @@ class BRepMixin:
                 "vertices": vertex_list,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_vertex_point(
         self, face_index: int, edge_index: int, which: str = "start"
@@ -1228,7 +1227,7 @@ class BRepMixin:
                 "edge_index": edge_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # B-SPLINE
@@ -1279,7 +1278,7 @@ class BRepMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_bspline_surface_info(self, face_index: int) -> dict[str, Any]:
         """
@@ -1327,4 +1326,4 @@ class BRepMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

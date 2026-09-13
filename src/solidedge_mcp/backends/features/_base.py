@@ -4,12 +4,13 @@ Base class for FeatureManager providing constructor and shared helpers.
 
 import contextlib
 import functools
-import traceback
 from collections.abc import Callable
 from typing import Any, Concatenate, ParamSpec
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     FaceQueryConstants,
@@ -257,8 +258,7 @@ class FeatureManagerBase:
 
         if com_index < 1 or com_index > features.Count:
             return None, {
-                "error": f"Invalid feature index: {index}. "
-                f"Feature count: {features.Count}",
+                "error": f"Invalid feature index: {index}. Feature count: {features.Count}",
             }
 
         feat = features.Item(com_index)
@@ -277,7 +277,7 @@ class FeatureManagerBase:
             return {"status": "deleted", "feature_name": name, "index": index}
         except Exception as e:
             _logger.error(f"Delete feature failed: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def feature_suppress(self, index: int) -> dict[str, Any]:
         """Suppress a feature by 0-based index."""
@@ -290,7 +290,7 @@ class FeatureManagerBase:
             feat.Suppress()
             return {"status": "suppressed", "feature_name": name, "index": index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def feature_unsuppress(self, index: int) -> dict[str, Any]:
         """Unsuppress a feature by 0-based index."""
@@ -303,11 +303,9 @@ class FeatureManagerBase:
             feat.Unsuppress()
             return {"status": "unsuppressed", "feature_name": name, "index": index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def feature_reorder(
-        self, index: int, target_index: int, after: bool = True
-    ) -> dict[str, Any]:
+    def feature_reorder(self, index: int, target_index: int, after: bool = True) -> dict[str, Any]:
         """Reorder a feature by moving it relative to another feature."""
         try:
             feat, err = self._get_feature_by_index(index)
@@ -331,7 +329,7 @@ class FeatureManagerBase:
                 "after": after,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def feature_rename(self, index: int, new_name: str) -> dict[str, Any]:
         """Rename a feature by 0-based index."""
@@ -349,11 +347,9 @@ class FeatureManagerBase:
                 "index": index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def convert_feature_type(
-        self, feature_name: str, target_type: str
-    ) -> dict[str, Any]:
+    def convert_feature_type(self, feature_name: str, target_type: str) -> dict[str, Any]:
         """Convert a feature to a different type."""
         try:
             feat, err = self._find_feature_by_name(feature_name)
@@ -367,4 +363,4 @@ class FeatureManagerBase:
                 "target_type": target_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

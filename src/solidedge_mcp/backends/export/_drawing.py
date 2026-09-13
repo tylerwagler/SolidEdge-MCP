@@ -2,8 +2,9 @@
 
 import contextlib
 import os
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import DrawingViewOrientationConstants
 from ..logging import get_logger
@@ -116,7 +117,7 @@ class DrawingMixin:
                 "total_views": len(views_added),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_assembly_drawing_view(
         self, x: float = 0.15, y: float = 0.15, orientation: str = "Isometric", scale: float = 1.0
@@ -186,7 +187,7 @@ class DrawingMixin:
                 "position": [x, y],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_parts_list(
         self, auto_balloon: bool = True, x: float = 0.15, y: float = 0.25
@@ -240,7 +241,7 @@ class DrawingMixin:
                 "total_parts_lists": parts_lists.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_assembly_drawing_view_ex(
         self,
@@ -331,7 +332,7 @@ class DrawingMixin:
                 result["note"] = "Configuration param not applied; used standard view."
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_drawing_view_with_config(
         self,
@@ -405,7 +406,7 @@ class DrawingMixin:
                 "configuration": configuration,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SHEET MANAGEMENT
@@ -439,7 +440,7 @@ class DrawingMixin:
                 "name": sheet.Name if hasattr(sheet, "Name") else f"Sheet {sheets.Count}",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sheet_info(self) -> dict[str, Any]:
         """
@@ -486,7 +487,7 @@ class DrawingMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def activate_sheet(self, sheet_index: int) -> dict[str, Any]:
         """
@@ -513,7 +514,7 @@ class DrawingMixin:
 
             return {"status": "activated", "sheet_name": sheet.Name, "sheet_index": sheet_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def rename_sheet(self, sheet_index: int, new_name: str) -> dict[str, Any]:
         """
@@ -547,7 +548,7 @@ class DrawingMixin:
                 "sheet_index": sheet_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_sheet(self, sheet_index: int) -> dict[str, Any]:
         """
@@ -578,7 +579,7 @@ class DrawingMixin:
 
             return {"status": "deleted", "sheet_name": sheet_name, "remaining_sheets": sheets.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SHEET COLLECTION QUERIES
@@ -613,7 +614,7 @@ class DrawingMixin:
                 items.append(info)
             return {"count": len(items), "dimensions": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sheet_balloons(self) -> dict[str, Any]:
         """
@@ -644,7 +645,7 @@ class DrawingMixin:
                 items.append(info)
             return {"count": len(items), "balloons": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sheet_text_boxes(self) -> dict[str, Any]:
         """
@@ -677,7 +678,7 @@ class DrawingMixin:
                 items.append(info)
             return {"count": len(items), "text_boxes": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sheet_drawing_objects(self) -> dict[str, Any]:
         """
@@ -706,7 +707,7 @@ class DrawingMixin:
                 items.append(info)
             return {"count": len(items), "drawing_objects": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sheet_sections(self) -> dict[str, Any]:
         """
@@ -737,7 +738,7 @@ class DrawingMixin:
                 items.append(info)
             return {"count": len(items), "sections": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_drawing_view_count(self) -> dict[str, Any]:
         """
@@ -750,7 +751,7 @@ class DrawingMixin:
             dvs = self._get_drawing_views()
             return {"count": dvs.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_drawing_view_scale(self, view_index: int) -> dict[str, Any]:
         """
@@ -772,4 +773,4 @@ class DrawingMixin:
 
             return {"view_index": view_index, "scale": scale}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

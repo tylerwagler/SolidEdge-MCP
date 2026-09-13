@@ -105,9 +105,7 @@ class TestCreateLoftWithGuides:
         p1, g1 = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, g1]
 
-        result = feature_mgr.create_loft_with_guides(
-            guide_profile_indices=[1], profile_indices=[0]
-        )
+        result = feature_mgr.create_loft_with_guides(guide_profile_indices=[1], profile_indices=[0])
         assert "error" in result
         assert "at least 2 cross-section profiles" in result["error"]
 
@@ -119,9 +117,7 @@ class TestCreateLoftWithGuides:
         lp = MagicMock()
         model.LoftedProtrusions = lp
 
-        result = feature_mgr.create_loft_with_guides(
-            guide_profile_indices=[3]
-        )
+        result = feature_mgr.create_loft_with_guides(guide_profile_indices=[3])
         assert result["status"] == "created"
         assert result["num_profiles"] == 3
         assert result["num_guides"] == 1

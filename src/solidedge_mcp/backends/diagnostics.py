@@ -104,9 +104,7 @@ def diagnose_document(doc: Any) -> dict[str, Any]:
 
         # Filter cutout-related
         cutout_methods = [
-            m
-            for m in all_methods["methods"]
-            if "cutout" in m.lower() or "cut" in m.lower()
+            m for m in all_methods["methods"] if "cutout" in m.lower() or "cut" in m.lower()
         ]
         info["cutout_related_methods"] = cutout_methods
 

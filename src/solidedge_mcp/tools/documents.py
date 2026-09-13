@@ -55,13 +55,9 @@ def open_document(
         case "background":
             return doc_manager.open_in_background(file_path)
         case "with_template":
-            return doc_manager.open_with_template(
-                file_path, template
-            )
+            return doc_manager.open_with_template(file_path, template)
         case "dialog":
-            return doc_manager.open_with_file_open_dialog(
-                filename, dialog_title
-            )
+            return doc_manager.open_with_file_open_dialog(filename, dialog_title)
         case _:
             return {"error": f"Unknown method: {method}"}
 

@@ -919,9 +919,7 @@ class TestApplyDirection1Treatment:
         assert result["status"] == "applied"
         assert result["feature"] == "Extrude 1"
         assert result["treatment_type"] == 1
-        feat.ApplyDirection1Treatment.assert_called_once_with(
-            1, 2, 0.087, 0, 0, 0, 0.0, 0.0
-        )
+        feat.ApplyDirection1Treatment.assert_called_once_with(1, 2, 0.087, 0, 0, 0, 0.0, 0.0)
 
     def test_all_params(self, query_mgr):
         qm, doc = query_mgr
@@ -945,9 +943,7 @@ class TestApplyDirection1Treatment:
             crown_takeoff_angle=0.02,
         )
         assert result["status"] == "applied"
-        feat.ApplyDirection1Treatment.assert_called_once_with(
-            2, 1, 0.1, 3, 1, 2, 0.005, 0.02
-        )
+        feat.ApplyDirection1Treatment.assert_called_once_with(2, 1, 0.1, 3, 1, 2, 0.005, 0.02)
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr

@@ -55,8 +55,10 @@ def create_chamfer(
     Distances in meters. angle in degrees.
     """
     err = validate_numerics(
-        distance=distance, distance1=distance1,
-        distance2=distance2, angle=angle,
+        distance=distance,
+        distance1=distance1,
+        distance2=distance2,
+        angle=angle,
     )
     if err:
         return err

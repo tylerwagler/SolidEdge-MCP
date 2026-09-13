@@ -6,8 +6,9 @@ Handles creating, opening, saving, and closing documents.
 
 import contextlib
 import os
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from .constants import DocumentTypeConstants
 from .logging import get_logger
@@ -18,13 +19,14 @@ _logger = get_logger(__name__)
 class DocumentManager:
     """Manages Solid Edge documents"""
 
-    def __init__(
-        self, connection: Any, sketch_manager: Any | None = None
-    ) -> None:
+    def __init__(self, connection: Any, sketch_manager: Any | None = None) -> None:
         self.connection = connection
         self.active_document: Any | None = None
         # Optional reference to clear sketch state on doc switch
         self.sketch_manager = sketch_manager
+        # Drop cached pointers when the connection layer detects SE went away
+        if hasattr(connection, "on_disconnect"):
+            connection.on_disconnect = self.on_connection_lost
 
     def _clear_sketch_state(self) -> None:
         """Clear sketch manager state to prevent stale profile references."""
@@ -53,7 +55,7 @@ class DocumentManager:
             }
         except Exception as e:
             _logger.error(f"Failed to create Part document: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly(self, template: str | None = None) -> dict[str, Any]:
         """Create a new assembly document"""
@@ -77,7 +79,7 @@ class DocumentManager:
             }
         except Exception as e:
             _logger.error(f"Failed to create Assembly document: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sheet_metal(self, template: str | None = None) -> dict[str, Any]:
         """Create a new sheet metal document"""
@@ -101,7 +103,7 @@ class DocumentManager:
             }
         except Exception as e:
             _logger.error(f"Failed to create SheetMetal document: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_draft(self, template: str | None = None) -> dict[str, Any]:
         """Create a new draft document"""
@@ -125,7 +127,7 @@ class DocumentManager:
             }
         except Exception as e:
             _logger.error(f"Failed to create Draft document: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def open_document(self, file_path: str) -> dict[str, Any]:
         """Open an existing document"""
@@ -147,7 +149,7 @@ class DocumentManager:
             }
         except Exception as e:
             _logger.error(f"Failed to open document {file_path}: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def save_document(self, file_path: str | None = None) -> dict[str, Any]:
         """Save the active document"""
@@ -169,7 +171,7 @@ class DocumentManager:
                 }
         except Exception as e:
             _logger.error(f"Failed to save document: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def close_document(self, save: bool = True) -> dict[str, Any]:
         """Close the active document"""
@@ -214,7 +216,7 @@ class DocumentManager:
                 app.DisplayAlerts = True
             except Exception:
                 pass
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def list_documents(self) -> dict[str, Any]:
         """List all open documents"""
@@ -237,7 +239,7 @@ class DocumentManager:
 
             return {"documents": documents, "count": len(documents)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def activate_document(self, name_or_index: str | int) -> dict[str, Any]:
         """
@@ -288,7 +290,7 @@ class DocumentManager:
                 "type": self._get_document_type(doc),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def undo(self) -> dict[str, Any]:
         """
@@ -302,7 +304,7 @@ class DocumentManager:
             doc.Undo()
             return {"status": "undone"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def redo(self) -> dict[str, Any]:
         """
@@ -316,18 +318,61 @@ class DocumentManager:
             doc.Redo()
             return {"status": "redone"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_active_document(self) -> Any:
-        """Get the active document object"""
-        if not self.active_document:
-            # Try to get active document from application
+        """Get the active document, tracking switches made in the Solid Edge UI.
+
+        Re-reads ``Application.ActiveDocument`` on every call. If the user (or a
+        previous call) activated a different document, cached sketch state is
+        cleared so profiles from the old document are never reused.
+        """
+        current: Any = None
+        try:
+            app = self.connection.get_application()
+            current = app.ActiveDocument
+        except Exception as e:
+            if self.active_document is not None:
+                # Cannot reach the app right now; serve the cached document.
+                return self.active_document
+            raise Exception("No active document") from e
+
+        if current is None:
+            if self.active_document is not None:
+                return self.active_document
+            raise Exception("No active document")
+
+        if self.active_document is not None and not self._same_document(
+            self.active_document, current
+        ):
+            _logger.info("Active document changed outside the tool layer; clearing sketch state")
+            if self.sketch_manager is not None:
+                self.sketch_manager.clear_state()
+        self.active_document = current
+        return current
+
+    @staticmethod
+    def _document_key(doc: Any) -> Any:
+        """Stable identity for a document proxy (COM proxies don't support ==)."""
+        for attr in ("FullName", "Name"):
             try:
-                app = self.connection.get_application()
-                self.active_document = app.ActiveDocument
-            except Exception as e:
-                raise Exception("No active document") from e
-        return self.active_document
+                value = getattr(doc, attr)
+            except Exception:
+                continue
+            if value:
+                return value
+        return id(doc)
+
+    def _same_document(self, a: Any, b: Any) -> bool:
+        if a is b:
+            return True
+        return bool(self._document_key(a) == self._document_key(b))
+
+    def on_connection_lost(self) -> None:
+        """Drop every cached COM pointer after Solid Edge goes away."""
+        self.active_document = None
+        if self.sketch_manager is not None:
+            self.sketch_manager.clear_state()
 
     def get_active_document_type(self) -> dict[str, Any]:
         """
@@ -346,7 +391,7 @@ class DocumentManager:
                 "path": doc.FullName if hasattr(doc, "FullName") else "untitled",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_weldment(self, template: str | None = None) -> dict[str, Any]:
         """Create a new weldment document"""
@@ -367,7 +412,7 @@ class DocumentManager:
                 "path": doc.FullName if doc.FullName else "untitled",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def import_file(self, file_path: str) -> dict[str, Any]:
         """
@@ -396,7 +441,7 @@ class DocumentManager:
                 "type": self._get_document_type(doc),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_document_count(self) -> dict[str, Any]:
         """
@@ -409,7 +454,7 @@ class DocumentManager:
             app = self.connection.get_application()
             return {"count": app.Documents.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def open_in_background(self, file_path: str) -> dict[str, Any]:
         """
@@ -439,7 +484,7 @@ class DocumentManager:
                 "type": self._get_document_type(doc),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def close_all_documents(self, save: bool = False) -> dict[str, Any]:
         """
@@ -497,7 +542,7 @@ class DocumentManager:
                 app.DisplayAlerts = True
             except Exception:
                 pass
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def save_copy_as(self, file_path: str) -> dict[str, Any]:
         """
@@ -523,7 +568,7 @@ class DocumentManager:
                 "active_document": self.active_document.Name,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def open_with_template(self, file_path: str, template: str) -> dict[str, Any]:
         """
@@ -555,7 +600,7 @@ class DocumentManager:
                 "type": self._get_document_type(doc),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def open_with_file_open_dialog(
         self, filename: str | None = None, dialog_title: str | None = None
@@ -598,7 +643,7 @@ class DocumentManager:
             else:
                 return {"status": "cancelled", "message": "User cancelled the dialog"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _get_document_type(self, doc: Any) -> str:
         """Determine document type"""

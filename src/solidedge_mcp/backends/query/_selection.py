@@ -1,8 +1,9 @@
 """Selection set operations."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import FaceQueryConstants
 from ..logging import get_logger
@@ -51,7 +52,7 @@ class SelectionMixin:
 
             return {"count": count, "items": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def clear_select_set(self) -> dict[str, Any]:
         """
@@ -71,7 +72,7 @@ class SelectionMixin:
 
             return {"status": "cleared", "items_removed": old_count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_add(self, object_type: str, index: int) -> dict[str, Any]:
         """
@@ -133,7 +134,7 @@ class SelectionMixin:
                 "selection_count": select_set.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_remove(self, index: int) -> dict[str, Any]:
         """
@@ -159,7 +160,7 @@ class SelectionMixin:
 
             return {"status": "removed", "index": index, "selection_count": select_set.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_all(self) -> dict[str, Any]:
         """
@@ -177,7 +178,7 @@ class SelectionMixin:
 
             return {"status": "selected_all", "selection_count": select_set.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_copy(self) -> dict[str, Any]:
         """
@@ -199,7 +200,7 @@ class SelectionMixin:
 
             return {"status": "copied", "items_copied": select_set.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_cut(self) -> dict[str, Any]:
         """
@@ -222,7 +223,7 @@ class SelectionMixin:
 
             return {"status": "cut", "items_cut": count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_delete(self) -> dict[str, Any]:
         """
@@ -245,7 +246,7 @@ class SelectionMixin:
 
             return {"status": "deleted", "items_deleted": count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_suspend_display(self) -> dict[str, Any]:
         """
@@ -262,7 +263,7 @@ class SelectionMixin:
             doc.SelectSet.SuspendDisplay()
             return {"status": "display_suspended"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_resume_display(self) -> dict[str, Any]:
         """
@@ -279,7 +280,7 @@ class SelectionMixin:
             doc.SelectSet.ResumeDisplay()
             return {"status": "display_resumed"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def select_refresh_display(self) -> dict[str, Any]:
         """
@@ -296,4 +297,4 @@ class SelectionMixin:
             doc.SelectSet.RefreshDisplay()
             return {"status": "display_refreshed"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

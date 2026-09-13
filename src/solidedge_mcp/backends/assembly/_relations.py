@@ -2,8 +2,9 @@
 
 import contextlib
 import math
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 
@@ -33,7 +34,9 @@ class RelationsMixin:
         try:
             _logger.info(
                 "Creating mate: type=%s, components=%d,%d",
-                mate_type, component1_index, component2_index,
+                mate_type,
+                component1_index,
+                component2_index,
             )
             doc = self.doc_manager.get_active_document()
 
@@ -57,7 +60,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create mate: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_align_constraint(self, component1_index: int, component2_index: int) -> dict[str, Any]:
         """Add an align constraint between two components (requires UI for face selection)"""
@@ -190,7 +193,7 @@ class RelationsMixin:
             return {"status": "deleted", "relation_index": relation_index, "name": name}
         except Exception as e:
             _logger.error(f"Failed to delete relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_relation_info(self, relation_index: int) -> dict[str, Any]:
         """
@@ -250,7 +253,7 @@ class RelationsMixin:
             return info
         except Exception as e:
             _logger.error(f"Failed to get relation info: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_planar_relation(
         self,
@@ -276,7 +279,9 @@ class RelationsMixin:
         try:
             _logger.info(
                 "Adding planar relation: occ1=%d, occ2=%d, offset=%s",
-                occurrence1_index, occurrence2_index, offset,
+                occurrence1_index,
+                occurrence2_index,
+                offset,
             )
             doc = self.doc_manager.get_active_document()
             occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
@@ -299,7 +304,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add planar relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_axial_relation(
         self,
@@ -323,7 +328,8 @@ class RelationsMixin:
         try:
             _logger.info(
                 "Adding axial relation: occ1=%d, occ2=%d",
-                occurrence1_index, occurrence2_index,
+                occurrence1_index,
+                occurrence2_index,
             )
             doc = self.doc_manager.get_active_document()
             occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
@@ -345,7 +351,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add axial relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_angular_relation(
         self,
@@ -369,7 +375,9 @@ class RelationsMixin:
         try:
             _logger.info(
                 "Adding angular relation: occ1=%d, occ2=%d, angle=%s",
-                occurrence1_index, occurrence2_index, angle,
+                occurrence1_index,
+                occurrence2_index,
+                angle,
             )
             doc = self.doc_manager.get_active_document()
             occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
@@ -390,7 +398,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add angular relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_point_relation(
         self,
@@ -412,7 +420,8 @@ class RelationsMixin:
         try:
             _logger.info(
                 "Adding point relation: occ1=%d, occ2=%d",
-                occurrence1_index, occurrence2_index,
+                occurrence1_index,
+                occurrence2_index,
             )
             doc = self.doc_manager.get_active_document()
             occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
@@ -430,7 +439,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add point relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_tangent_relation(
         self,
@@ -452,7 +461,8 @@ class RelationsMixin:
         try:
             _logger.info(
                 "Adding tangent relation: occ1=%d, occ2=%d",
-                occurrence1_index, occurrence2_index,
+                occurrence1_index,
+                occurrence2_index,
             )
             doc = self.doc_manager.get_active_document()
             occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
@@ -470,7 +480,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add tangent relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_gear_relation(
         self,
@@ -496,7 +506,10 @@ class RelationsMixin:
         try:
             _logger.info(
                 "Adding gear relation: occ1=%d, occ2=%d, ratio=%s:%s",
-                occurrence1_index, occurrence2_index, ratio1, ratio2,
+                occurrence1_index,
+                occurrence2_index,
+                ratio1,
+                ratio2,
             )
             doc = self.doc_manager.get_active_document()
             occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
@@ -516,7 +529,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to add gear relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_relation_offset(self, relation_index: int) -> dict[str, Any]:
         """
@@ -542,7 +555,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to get relation offset: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_relation_offset(self, relation_index: int, offset: float) -> dict[str, Any]:
         """
@@ -571,7 +584,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to set relation offset: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_relation_angle(self, relation_index: int) -> dict[str, Any]:
         """
@@ -601,7 +614,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to get relation angle: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_relation_angle(self, relation_index: int, angle: float) -> dict[str, Any]:
         """
@@ -631,7 +644,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to set relation angle: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_normals_aligned(self, relation_index: int) -> dict[str, Any]:
         """
@@ -657,7 +670,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to get normals aligned: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_normals_aligned(self, relation_index: int, aligned: bool) -> dict[str, Any]:
         """
@@ -686,7 +699,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to set normals aligned: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def suppress_relation(self, relation_index: int) -> dict[str, Any]:
         """
@@ -713,7 +726,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to suppress relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def unsuppress_relation(self, relation_index: int) -> dict[str, Any]:
         """
@@ -740,7 +753,7 @@ class RelationsMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to unsuppress relation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_relation_geometry(self, relation_index: int) -> dict[str, Any]:
         """
@@ -791,7 +804,7 @@ class RelationsMixin:
             return info
         except Exception as e:
             _logger.error(f"Failed to get relation geometry: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_gear_ratio(self, relation_index: int) -> dict[str, Any]:
         """
@@ -828,4 +841,4 @@ class RelationsMixin:
             return info
         except Exception as e:
             _logger.error(f"Failed to get gear ratio: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

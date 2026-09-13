@@ -38,54 +38,61 @@ def add_assembly_component(
         if err:
             return err
     err = validate_numerics(
-        x=x, y=y, z=z, origin_x=origin_x, origin_y=origin_y,
-        origin_z=origin_z, angle_x=angle_x, angle_y=angle_y, angle_z=angle_z,
+        x=x,
+        y=y,
+        z=z,
+        origin_x=origin_x,
+        origin_y=origin_y,
+        origin_z=origin_z,
+        angle_x=angle_x,
+        angle_y=angle_y,
+        angle_z=angle_z,
     )
     if err:
         return err
     match method:
         case "basic":
-            return assembly_manager.add_component(
-                file_path, x, y, z
-            )
+            return assembly_manager.add_component(file_path, x, y, z)
         case "with_transform":
             return assembly_manager.add_component_with_transform(
                 file_path,
-                origin_x, origin_y, origin_z,
-                angle_x, angle_y, angle_z,
+                origin_x,
+                origin_y,
+                origin_z,
+                angle_x,
+                angle_y,
+                angle_z,
             )
         case "family":
-            return assembly_manager.add_family_member(
-                file_path, family_member_name, x, y, z
-            )
+            return assembly_manager.add_family_member(file_path, family_member_name, x, y, z)
         case "family_with_transform":
             return assembly_manager.add_family_with_transform(
-                file_path, family_member_name,
-                origin_x, origin_y, origin_z,
-                angle_x, angle_y, angle_z,
+                file_path,
+                family_member_name,
+                origin_x,
+                origin_y,
+                origin_z,
+                angle_x,
+                angle_y,
+                angle_z,
             )
         case "family_with_matrix":
             return assembly_manager.add_family_with_matrix(
-                file_path, family_member_name,
+                file_path,
+                family_member_name,
                 matrix or [],
             )
         case "by_template":
-            return assembly_manager.add_by_template(
-                file_path, template_name
-            )
+            return assembly_manager.add_by_template(file_path, template_name)
         case "adjustable":
-            return assembly_manager.add_adjustable_part(
-                file_path, x, y, z
-            )
+            return assembly_manager.add_adjustable_part(file_path, x, y, z)
         case "tube":
             return assembly_manager.add_tube(
                 segment_indices or [],
                 file_path,
             )
         case _:
-            return {
-                "error": f"Unknown method: {method}"
-            }
+            return {"error": f"Unknown method: {method}"}
 
 
 # ================================================================
@@ -123,45 +130,25 @@ def manage_component(
         return err
     match action:
         case "delete":
-            return assembly_manager.delete_component(
-                component_index
-            )
+            return assembly_manager.delete_component(component_index)
         case "replace":
-            return assembly_manager.replace_component(
-                component_index, new_file_path
-            )
+            return assembly_manager.replace_component(component_index, new_file_path)
         case "suppress":
-            return assembly_manager.suppress_component(
-                component_index, suppress
-            )
+            return assembly_manager.suppress_component(component_index, suppress)
         case "reorder":
-            return assembly_manager.reorder_occurrence(
-                component_index, target_index
-            )
+            return assembly_manager.reorder_occurrence(component_index, target_index)
         case "make_writable":
-            return assembly_manager.make_writable(
-                component_index
-            )
+            return assembly_manager.make_writable(component_index)
         case "swap_family":
-            return assembly_manager.swap_family_member(
-                component_index, new_member_name
-            )
+            return assembly_manager.swap_family_member(component_index, new_member_name)
         case "ground":
-            return assembly_manager.ground_component(
-                component_index, ground
-            )
+            return assembly_manager.ground_component(component_index, ground)
         case "pattern":
-            return assembly_manager.pattern_component(
-                component_index, count, spacing, direction
-            )
+            return assembly_manager.pattern_component(component_index, count, spacing, direction)
         case "mirror":
-            return assembly_manager.mirror_component(
-                component_index, plane_index
-            )
+            return assembly_manager.mirror_component(component_index, plane_index)
         case _:
-            return {
-                "error": f"Unknown action: {action}"
-            }
+            return {"error": f"Unknown action: {action}"}
 
 
 # ================================================================
@@ -189,13 +176,9 @@ def query_component(
         case "list":
             return assembly_manager.list_components()
         case "info":
-            return assembly_manager.get_component_info(
-                component_index
-            )
+            return assembly_manager.get_component_info(component_index)
         case "bounding_box":
-            return assembly_manager.get_occurrence_bounding_box(
-                component_index
-            )
+            return assembly_manager.get_occurrence_bounding_box(component_index)
         case "bom":
             return assembly_manager.get_bom()
         case "structured_bom":
@@ -203,59 +186,35 @@ def query_component(
         case "tree":
             return assembly_manager.get_document_tree()
         case "transform":
-            return assembly_manager.get_component_transform(
-                component_index
-            )
+            return assembly_manager.get_component_transform(component_index)
         case "count":
             return assembly_manager.get_occurrence_count()
         case "is_subassembly":
-            return assembly_manager.is_subassembly(
-                component_index
-            )
+            return assembly_manager.is_subassembly(component_index)
         case "display_name":
-            return assembly_manager.get_component_display_name(
-                component_index
-            )
+            return assembly_manager.get_component_display_name(component_index)
         case "document":
-            return assembly_manager.get_occurrence_document(
-                component_index
-            )
+            return assembly_manager.get_occurrence_document(component_index)
         case "sub_occurrences":
-            return assembly_manager.get_sub_occurrences(
-                component_index
-            )
+            return assembly_manager.get_sub_occurrences(component_index)
         case "bodies":
-            return assembly_manager.get_occurrence_bodies(
-                component_index
-            )
+            return assembly_manager.get_occurrence_bodies(component_index)
         case "style":
-            return assembly_manager.get_occurrence_style(
-                component_index
-            )
+            return assembly_manager.get_occurrence_style(component_index)
         case "is_tube":
             return assembly_manager.is_tube(component_index)
         case "adjustable_part":
-            return assembly_manager.get_adjustable_part(
-                component_index
-            )
+            return assembly_manager.get_adjustable_part(component_index)
         case "face_style":
-            return assembly_manager.get_face_style(
-                component_index
-            )
+            return assembly_manager.get_face_style(component_index)
         case "occurrence":
-            return assembly_manager.get_occurrence(
-                internal_id
-            )
+            return assembly_manager.get_occurrence(internal_id)
         case "interference":
-            return assembly_manager.check_interference(
-                component_index if component_index else None
-            )
+            return assembly_manager.check_interference(component_index if component_index else None)
         case "tube":
             return assembly_manager.get_tube(component_index)
         case _:
-            return {
-                "error": f"Unknown property: {property}"
-            }
+            return {"error": f"Unknown property: {property}"}
 
 
 # ================================================================
@@ -279,17 +238,11 @@ def set_component_appearance(
     """
     match property:
         case "visibility":
-            return assembly_manager.set_component_visibility(
-                component_index, visible
-            )
+            return assembly_manager.set_component_visibility(component_index, visible)
         case "color":
-            return assembly_manager.set_component_color(
-                component_index, red, green, blue
-            )
+            return assembly_manager.set_component_color(component_index, red, green, blue)
         case _:
-            return {
-                "error": f"Unknown property: {property}"
-            }
+            return {"error": f"Unknown property: {property}"}
 
 
 # ================================================================
@@ -314,31 +267,26 @@ def transform_component(
     Coordinates in meters. 0-based component_index.
     """
     err = validate_numerics(
-        x=x, y=y, z=z, dx=dx, dy=dy, dz=dz,
+        x=x,
+        y=y,
+        z=z,
+        dx=dx,
+        dy=dy,
+        dz=dz,
     )
     if err:
         return err
     match method:
         case "update_position":
-            return assembly_manager.update_component_position(
-                component_index, x, y, z
-            )
+            return assembly_manager.update_component_position(component_index, x, y, z)
         case "set_origin":
-            return assembly_manager.set_component_origin(
-                component_index, x, y, z
-            )
+            return assembly_manager.set_component_origin(component_index, x, y, z)
         case "put_origin":
-            return assembly_manager.put_origin(
-                component_index, x, y, z
-            )
+            return assembly_manager.put_origin(component_index, x, y, z)
         case "move":
-            return assembly_manager.occurrence_move(
-                component_index, dx, dy, dz
-            )
+            return assembly_manager.occurrence_move(component_index, dx, dy, dz)
         case _:
-            return {
-                "error": f"Unknown method: {method}"
-            }
+            return {"error": f"Unknown method: {method}"}
 
 
 # ================================================================
@@ -370,9 +318,18 @@ def set_component_orientation(
     - put_euler: position via x/y/z (meters), rotation via rx/ry/rz (degrees)
     """
     err = validate_numerics(
-        origin_x=origin_x, origin_y=origin_y, origin_z=origin_z,
-        angle_x=angle_x, angle_y=angle_y, angle_z=angle_z,
-        x=x, y=y, z=z, rx=rx, ry=ry, rz=rz,
+        origin_x=origin_x,
+        origin_y=origin_y,
+        origin_z=origin_z,
+        angle_x=angle_x,
+        angle_y=angle_y,
+        angle_z=angle_z,
+        x=x,
+        y=y,
+        z=z,
+        rx=rx,
+        ry=ry,
+        rz=rz,
     )
     if err:
         return err
@@ -380,18 +337,25 @@ def set_component_orientation(
         case "set_transform":
             return assembly_manager.set_component_transform(
                 component_index,
-                origin_x, origin_y, origin_z,
-                angle_x, angle_y, angle_z,
+                origin_x,
+                origin_y,
+                origin_z,
+                angle_x,
+                angle_y,
+                angle_z,
             )
         case "put_euler":
             return assembly_manager.put_transform_euler(
                 component_index,
-                x, y, z, rx, ry, rz,
+                x,
+                y,
+                z,
+                rx,
+                ry,
+                rz,
             )
         case _:
-            return {
-                "error": f"Unknown method: {method}"
-            }
+            return {"error": f"Unknown method: {method}"}
 
 
 # ================================================================
@@ -415,15 +379,23 @@ def rotate_component(
     """
     err = validate_numerics(
         angle=angle,
-        axis_x1=axis_x1, axis_y1=axis_y1, axis_z1=axis_z1,
-        axis_x2=axis_x2, axis_y2=axis_y2, axis_z2=axis_z2,
+        axis_x1=axis_x1,
+        axis_y1=axis_y1,
+        axis_z1=axis_z1,
+        axis_x2=axis_x2,
+        axis_y2=axis_y2,
+        axis_z2=axis_z2,
     )
     if err:
         return err
     return assembly_manager.occurrence_rotate(
         component_index,
-        axis_x1, axis_y1, axis_z1,
-        axis_x2, axis_y2, axis_z2,
+        axis_x1,
+        axis_y1,
+        axis_z1,
+        axis_x2,
+        axis_y2,
+        axis_z2,
         angle,
     )
 
@@ -451,29 +423,17 @@ def add_assembly_constraint(
         return err
     match type:
         case "mate":
-            return assembly_manager.create_mate(
-                mate_type, component1_index, component2_index
-            )
+            return assembly_manager.create_mate(mate_type, component1_index, component2_index)
         case "align":
-            return assembly_manager.add_align_constraint(
-                component1_index, component2_index
-            )
+            return assembly_manager.add_align_constraint(component1_index, component2_index)
         case "planar_align":
-            return assembly_manager.add_planar_align_constraint(
-                component1_index, component2_index
-            )
+            return assembly_manager.add_planar_align_constraint(component1_index, component2_index)
         case "axial_align":
-            return assembly_manager.add_axial_align_constraint(
-                component1_index, component2_index
-            )
+            return assembly_manager.add_axial_align_constraint(component1_index, component2_index)
         case "angle":
-            return assembly_manager.add_angle_constraint(
-                component1_index, component2_index, angle
-            )
+            return assembly_manager.add_angle_constraint(component1_index, component2_index, angle)
         case _:
-            return {
-                "error": f"Unknown type: {type}"
-            }
+            return {"error": f"Unknown type: {type}"}
 
 
 # ================================================================
@@ -503,36 +463,36 @@ def add_assembly_relation(
     match type:
         case "planar":
             return assembly_manager.add_planar_relation(
-                occurrence1_index, occurrence2_index,
-                offset, orientation,
+                occurrence1_index,
+                occurrence2_index,
+                offset,
+                orientation,
             )
         case "axial":
             return assembly_manager.add_axial_relation(
-                occurrence1_index, occurrence2_index,
+                occurrence1_index,
+                occurrence2_index,
                 orientation,
             )
         case "angular":
             return assembly_manager.add_angular_relation(
-                occurrence1_index, occurrence2_index,
+                occurrence1_index,
+                occurrence2_index,
                 angle,
             )
         case "point":
-            return assembly_manager.add_point_relation(
-                occurrence1_index, occurrence2_index
-            )
+            return assembly_manager.add_point_relation(occurrence1_index, occurrence2_index)
         case "tangent":
-            return assembly_manager.add_tangent_relation(
-                occurrence1_index, occurrence2_index
-            )
+            return assembly_manager.add_tangent_relation(occurrence1_index, occurrence2_index)
         case "gear":
             return assembly_manager.add_gear_relation(
-                occurrence1_index, occurrence2_index,
-                ratio1, ratio2,
+                occurrence1_index,
+                occurrence2_index,
+                ratio1,
+                ratio2,
             )
         case _:
-            return {
-                "error": f"Unknown type: {type}"
-            }
+            return {"error": f"Unknown type: {type}"}
 
 
 # ================================================================
@@ -563,57 +523,31 @@ def manage_relation(
         case "list":
             return assembly_manager.get_assembly_relations()
         case "info":
-            return assembly_manager.get_relation_info(
-                relation_index
-            )
+            return assembly_manager.get_relation_info(relation_index)
         case "delete":
-            return assembly_manager.delete_relation(
-                relation_index
-            )
+            return assembly_manager.delete_relation(relation_index)
         case "get_offset":
-            return assembly_manager.get_relation_offset(
-                relation_index
-            )
+            return assembly_manager.get_relation_offset(relation_index)
         case "set_offset":
-            return assembly_manager.set_relation_offset(
-                relation_index, offset
-            )
+            return assembly_manager.set_relation_offset(relation_index, offset)
         case "get_angle":
-            return assembly_manager.get_relation_angle(
-                relation_index
-            )
+            return assembly_manager.get_relation_angle(relation_index)
         case "set_angle":
-            return assembly_manager.set_relation_angle(
-                relation_index, angle
-            )
+            return assembly_manager.set_relation_angle(relation_index, angle)
         case "get_normals":
-            return assembly_manager.get_normals_aligned(
-                relation_index
-            )
+            return assembly_manager.get_normals_aligned(relation_index)
         case "set_normals":
-            return assembly_manager.set_normals_aligned(
-                relation_index, aligned
-            )
+            return assembly_manager.set_normals_aligned(relation_index, aligned)
         case "suppress":
-            return assembly_manager.suppress_relation(
-                relation_index
-            )
+            return assembly_manager.suppress_relation(relation_index)
         case "unsuppress":
-            return assembly_manager.unsuppress_relation(
-                relation_index
-            )
+            return assembly_manager.unsuppress_relation(relation_index)
         case "get_geometry":
-            return assembly_manager.get_relation_geometry(
-                relation_index
-            )
+            return assembly_manager.get_relation_geometry(relation_index)
         case "get_gear_ratio":
-            return assembly_manager.get_gear_ratio(
-                relation_index
-            )
+            return assembly_manager.get_gear_ratio(relation_index)
         case _:
-            return {
-                "error": f"Unknown action: {action}"
-            }
+            return {"error": f"Unknown action: {action}"}
 
 
 # ================================================================
@@ -652,24 +586,20 @@ def assembly_feature(
         return err
     match type:
         case "extruded_cutout":
-            return (
-                assembly_manager.create_assembly_extruded_cutout(
-                    scope_parts or [],
-                    extent_type,
-                    extent_side,
-                    profile_side,
-                    distance,
-                )
+            return assembly_manager.create_assembly_extruded_cutout(
+                scope_parts or [],
+                extent_type,
+                extent_side,
+                profile_side,
+                distance,
             )
         case "revolved_cutout":
-            return (
-                assembly_manager.create_assembly_revolved_cutout(
-                    scope_parts or [],
-                    extent_type,
-                    extent_side,
-                    profile_side,
-                    angle,
-                )
+            return assembly_manager.create_assembly_revolved_cutout(
+                scope_parts or [],
+                extent_type,
+                extent_side,
+                profile_side,
+                angle,
             )
         case "hole":
             return assembly_manager.create_assembly_hole(
@@ -679,24 +609,18 @@ def assembly_feature(
                 depth,
             )
         case "extruded_protrusion":
-            return (
-                assembly_manager
-                .create_assembly_extruded_protrusion(
-                    extent_type,
-                    extent_side,
-                    profile_side,
-                    distance,
-                )
+            return assembly_manager.create_assembly_extruded_protrusion(
+                extent_type,
+                extent_side,
+                profile_side,
+                distance,
             )
         case "revolved_protrusion":
-            return (
-                assembly_manager
-                .create_assembly_revolved_protrusion(
-                    extent_type,
-                    extent_side,
-                    profile_side,
-                    angle,
-                )
+            return assembly_manager.create_assembly_revolved_protrusion(
+                extent_type,
+                extent_side,
+                profile_side,
+                angle,
             )
         case "mirror":
             return assembly_manager.create_assembly_mirror(
@@ -710,23 +634,14 @@ def assembly_feature(
                 pattern_type,
             )
         case "swept_protrusion":
-            return (
-                assembly_manager
-                .create_assembly_swept_protrusion(
-                    num_trace_curves,
-                    num_cross_sections,
-                )
+            return assembly_manager.create_assembly_swept_protrusion(
+                num_trace_curves,
+                num_cross_sections,
             )
         case "recompute":
-            return (
-                assembly_manager.recompute_assembly_features(
-                    options
-                )
-            )
+            return assembly_manager.recompute_assembly_features(options)
         case _:
-            return {
-                "error": f"Unknown type: {type}"
-            }
+            return {"error": f"Unknown type: {type}"}
 
 
 # ================================================================
@@ -752,21 +667,15 @@ def virtual_component(
             return err
     match method:
         case "new":
-            return assembly_manager.add_virtual_component(
-                name, component_type
-            )
+            return assembly_manager.add_virtual_component(name, component_type)
         case "predefined":
-            return assembly_manager.add_virtual_component_predefined(
-                filename
-            )
+            return assembly_manager.add_virtual_component_predefined(filename)
         case "bidm":
             return assembly_manager.add_virtual_component_bidm(
                 doc_number, revision_id, component_type
             )
         case _:
-            return {
-                "error": f"Unknown method: {method}"
-            }
+            return {"error": f"Unknown method: {method}"}
 
 
 # ================================================================
@@ -790,21 +699,15 @@ def structural_frame(
             return err
     match method:
         case "basic":
-            return assembly_manager.add_structural_frame(
-                part_filename, path_indices or []
-            )
+            return assembly_manager.add_structural_frame(part_filename, path_indices or [])
         case "by_orientation":
-            return (
-                assembly_manager.add_structural_frame_by_orientation(
-                    part_filename,
-                    coord_system_name,
-                    path_indices or [],
-                )
+            return assembly_manager.add_structural_frame_by_orientation(
+                part_filename,
+                coord_system_name,
+                path_indices or [],
             )
         case _:
-            return {
-                "error": f"Unknown method: {method}"
-            }
+            return {"error": f"Unknown method: {method}"}
 
 
 # ================================================================
@@ -861,14 +764,14 @@ def wiring(
             )
         case "splice":
             return assembly_manager.add_splice(
-                x, y, z,
+                x,
+                y,
+                z,
                 conductor_indices or [],
                 description,
             )
         case _:
-            return {
-                "error": f"Unknown type: {type}"
-            }
+            return {"error": f"Unknown type: {type}"}
 
 
 # ================================================================

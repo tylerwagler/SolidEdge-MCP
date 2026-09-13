@@ -2,11 +2,12 @@
 
 import contextlib
 import math
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -64,7 +65,7 @@ class SheetMetalMixin:
                 "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_base_tab(self, thickness: float, width: float | None = None) -> dict[str, Any]:
         """
@@ -91,7 +92,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "base_tab", "thickness": thickness}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_flange(self, thickness: float) -> dict[str, Any]:
         """Create lofted flange (sheet metal)"""
@@ -103,7 +104,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "lofted_flange", "thickness": thickness}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_web_network(self) -> dict[str, Any]:
         """Create web network (sheet metal)"""
@@ -115,7 +116,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "web_network"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_base_contour_flange_advanced(
         self, thickness: float, bend_radius: float, relief_type: str = "Default"
@@ -142,7 +143,7 @@ class SheetMetalMixin:
                 "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_base_tab_multi_profile(self, thickness: float) -> dict[str, Any]:
         """Create base tab with multiple profiles"""
@@ -162,7 +163,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "base_tab_multi_profile", "thickness": thickness}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_flange_advanced(self, thickness: float, bend_radius: float) -> dict[str, Any]:
         """Create lofted flange with bend deduction or bend allowance"""
@@ -182,7 +183,7 @@ class SheetMetalMixin:
                 "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_flange_ex(self, thickness: float) -> dict[str, Any]:
         """Create extended lofted flange"""
@@ -195,7 +196,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "lofted_flange_ex", "thickness": thickness}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_emboss(
         self,
@@ -258,7 +259,7 @@ class SheetMetalMixin:
                 "thicken": thicken,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange(
         self,
@@ -384,7 +385,7 @@ class SheetMetalMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_dimple(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -422,7 +423,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "dimple", "depth": depth, "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_etch(self) -> dict[str, Any]:
         """
@@ -452,7 +453,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "etch"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_rib(self, thickness: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -498,7 +499,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lip(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -536,7 +537,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "lip", "depth": depth, "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_drawn_cutout(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -579,7 +580,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_bead(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -616,7 +617,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "bead", "depth": depth, "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_louver(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -653,7 +654,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "louver", "depth": depth, "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_gusset(self, thickness: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -695,7 +696,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _find_cylinder_end_face(self, body: Any, cyl_face: Any) -> Any | None:
         """Find a face adjacent to a cylindrical face by shared edge topology.
@@ -835,7 +836,7 @@ class SheetMetalMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_slot(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -872,7 +873,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "slot", "depth": depth, "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_split(self, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -907,7 +908,7 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "split", "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange_by_match_face(
         self,
@@ -957,7 +958,7 @@ class SheetMetalMixin:
                 "side": side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange_sync(
         self,
@@ -996,7 +997,7 @@ class SheetMetalMixin:
                 "flange_length": flange_length,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange_by_face(
         self,
@@ -1059,7 +1060,7 @@ class SheetMetalMixin:
                 "side": side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange_with_bend_calc(
         self,
@@ -1112,7 +1113,7 @@ class SheetMetalMixin:
                 "bend_deduction": bend_deduction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange_sync_with_bend_calc(
         self,
@@ -1154,7 +1155,7 @@ class SheetMetalMixin:
                 "bend_deduction": bend_deduction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_contour_flange_ex(
         self,
@@ -1221,7 +1222,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_contour_flange_sync(
         self,
@@ -1290,7 +1291,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_contour_flange_sync_with_bend(
         self,
@@ -1362,7 +1363,7 @@ class SheetMetalMixin:
                 "bend_deduction": bend_deduction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hem(
         self,
@@ -1419,7 +1420,7 @@ class SheetMetalMixin:
                 "hem_type": hem_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_jog(
         self,
@@ -1481,7 +1482,7 @@ class SheetMetalMixin:
                 "moving_side": moving_side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_close_corner(
         self,
@@ -1528,7 +1529,7 @@ class SheetMetalMixin:
                 "closure_type": closure_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_multi_edge_flange(
         self,
@@ -1602,7 +1603,7 @@ class SheetMetalMixin:
                 "side": side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_bend_with_calc(
         self,
@@ -1669,7 +1670,7 @@ class SheetMetalMixin:
                 "bend_deduction": bend_deduction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def convert_part_to_sheet_metal(
         self,
@@ -1713,7 +1714,7 @@ class SheetMetalMixin:
                 "or save the part as .psm format.",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_dimple_ex(
         self,
@@ -1770,7 +1771,7 @@ class SheetMetalMixin:
                 "punch_tool_diameter": punch_tool_diameter,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_thread_ex(
         self,
@@ -1845,7 +1846,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_slot_sync(self, width: float, depth: float) -> dict[str, Any]:
         """
@@ -1885,7 +1886,7 @@ class SheetMetalMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_drawn_cutout_ex(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
@@ -1929,7 +1930,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_louver_sync(self, depth: float) -> dict[str, Any]:
         """
@@ -1967,7 +1968,7 @@ class SheetMetalMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange_match_face_with_bend(
         self,
@@ -2032,7 +2033,7 @@ class SheetMetalMixin:
                 "flange_length": flange_length,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_flange_by_face_with_bend(
         self,
@@ -2107,7 +2108,7 @@ class SheetMetalMixin:
                 "flange_length": flange_length,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_contour_flange_v3(
         self,
@@ -2169,7 +2170,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_contour_flange_sync_ex(
         self,
@@ -2247,7 +2248,7 @@ class SheetMetalMixin:
                 "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_bend(
         self,
@@ -2304,7 +2305,7 @@ class SheetMetalMixin:
                 "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_slot_multi_body(
         self, width: float, depth: float, direction: str = "Normal"
@@ -2375,7 +2376,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_slot_sync_multi_body(
         self, width: float, depth: float, direction: str = "Normal"
@@ -2446,4 +2447,4 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -1,10 +1,11 @@
 """Surface feature operations."""
 
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -114,7 +115,7 @@ class SurfacesMixin:
                 "end_caps": end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface(
         self, angle: float = 360, want_end_caps: bool = False
@@ -173,7 +174,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_surface(self, want_end_caps: bool = False) -> dict[str, Any]:
         """
@@ -240,7 +241,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_swept_surface(
         self, path_profile_index: int | None = None, want_end_caps: bool = False
@@ -308,7 +309,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_surface_from_to(
         self, from_plane_index: int, to_plane_index: int
@@ -370,7 +371,7 @@ class SurfacesMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_surface_by_keypoint(self, keypoint_type: str = "End") -> dict[str, Any]:
         """
@@ -414,7 +415,7 @@ class SurfacesMixin:
                 "keypoint_type": keypoint_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_surface_by_curves(
         self, distance: float, direction: str = "Normal"
@@ -500,7 +501,7 @@ class SurfacesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface_sync(
         self, angle: float = 360.0, want_end_caps: bool = False
@@ -559,7 +560,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface_by_keypoint(
         self, keypoint_type: str = "End", want_end_caps: bool = False
@@ -616,7 +617,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_surface_v2(self, want_end_caps: bool = False) -> dict[str, Any]:
         """
@@ -683,7 +684,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_swept_surface_ex(
         self, path_profile_index: int | None = None, want_end_caps: bool = False
@@ -757,7 +758,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_surface_full(
         self,
@@ -874,7 +875,7 @@ class SurfacesMixin:
                 "draft_angle": draft_angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface_full(
         self, angle: float = 360.0, want_end_caps: bool = False
@@ -942,7 +943,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_bounded_surface(
         self,
@@ -1014,7 +1015,7 @@ class SurfacesMixin:
                 "periodic": periodic,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface_full_sync(
         self, angle: float = 360.0, want_end_caps: bool = False
@@ -1082,4 +1083,4 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -85,11 +85,22 @@ def draw(
     Coordinates in meters. Angles in degrees.
     """
     err = validate_numerics(
-        x1=x1, y1=y1, x2=x2, y2=y2, x3=x3, y3=y3,
-        center_x=center_x, center_y=center_y, radius=radius,
-        major_radius=major_radius, minor_radius=minor_radius,
-        start_angle=start_angle, end_angle=end_angle, angle=angle,
-        x=x, y=y,
+        x1=x1,
+        y1=y1,
+        x2=x2,
+        y2=y2,
+        x3=x3,
+        y3=y3,
+        center_x=center_x,
+        center_y=center_y,
+        radius=radius,
+        major_radius=major_radius,
+        minor_radius=minor_radius,
+        start_angle=start_angle,
+        end_angle=end_angle,
+        angle=angle,
+        x=x,
+        y=y,
     )
     if err:
         return err
@@ -101,13 +112,9 @@ def draw(
         case "rectangle":
             return sketch_manager.draw_rectangle(x1, y1, x2, y2)
         case "arc":
-            return sketch_manager.draw_arc(
-                center_x, center_y, radius, start_angle, end_angle
-            )
+            return sketch_manager.draw_arc(center_x, center_y, radius, start_angle, end_angle)
         case "polygon":
-            return sketch_manager.draw_polygon(
-                center_x, center_y, radius, sides
-            )
+            return sketch_manager.draw_polygon(center_x, center_y, radius, sides)
         case "ellipse":
             return sketch_manager.draw_ellipse(
                 center_x, center_y, major_radius, minor_radius, angle
@@ -115,15 +122,11 @@ def draw(
         case "spline":
             return sketch_manager.draw_spline(points or [])
         case "arc_3pt":
-            return sketch_manager.draw_arc_by_3_points(
-                x1, y1, center_x, center_y, x2, y2
-            )
+            return sketch_manager.draw_arc_by_3_points(x1, y1, center_x, center_y, x2, y2)
         case "circle_2pt":
             return sketch_manager.draw_circle_by_2_points(x1, y1, x2, y2)
         case "circle_3pt":
-            return sketch_manager.draw_circle_by_3_points(
-                x1, y1, x2, y2, x3, y3
-            )
+            return sketch_manager.draw_circle_by_3_points(x1, y1, x2, y2, x3, y3)
         case "point":
             return sketch_manager.draw_point(x, y)
         case "construction_line":
@@ -153,8 +156,11 @@ def sketch_modify(
     Distances in meters. angle_degrees in degrees.
     """
     err = validate_numerics(
-        radius=radius, distance=distance, center_x=center_x,
-        center_y=center_y, angle_degrees=angle_degrees,
+        radius=radius,
+        distance=distance,
+        center_x=center_x,
+        center_y=center_y,
+        angle_degrees=angle_degrees,
         scale_factor=scale_factor,
     )
     if err:
@@ -167,13 +173,9 @@ def sketch_modify(
         case "offset":
             return sketch_manager.sketch_offset(distance)
         case "rotate":
-            return sketch_manager.sketch_rotate(
-                center_x, center_y, angle_degrees
-            )
+            return sketch_manager.sketch_rotate(center_x, center_y, angle_degrees)
         case "scale":
-            return sketch_manager.sketch_scale(
-                center_x, center_y, scale_factor
-            )
+            return sketch_manager.sketch_scale(center_x, center_y, scale_factor)
         case "mirror":
             return sketch_manager.sketch_mirror(axis)
         case "paste":
@@ -208,26 +210,29 @@ def sketch_advanced_modify(
     Coordinates and distances in meters.
     """
     err = validate_numerics(
-        axis_x1=axis_x1, axis_y1=axis_y1, axis_x2=axis_x2,
-        axis_y2=axis_y2, offset_side_x=offset_side_x,
-        offset_side_y=offset_side_y, offset_distance=offset_distance,
+        axis_x1=axis_x1,
+        axis_y1=axis_y1,
+        axis_x2=axis_x2,
+        axis_y2=axis_y2,
+        offset_side_x=offset_side_x,
+        offset_side_y=offset_side_y,
+        offset_distance=offset_distance,
         small_tolerance=small_tolerance,
     )
     if err:
         return err
     match action:
         case "mirror_spline":
-            return sketch_manager.mirror_spline(
-                axis_x1, axis_y1, axis_x2, axis_y2, copy
-            )
+            return sketch_manager.mirror_spline(axis_x1, axis_y1, axis_x2, axis_y2, copy)
         case "offset_2d":
-            return sketch_manager.offset_sketch_2d(
-                offset_side_x, offset_side_y, offset_distance
-            )
+            return sketch_manager.offset_sketch_2d(offset_side_x, offset_side_y, offset_distance)
         case "clean":
             return sketch_manager.clean_sketch_geometry(
-                clean_points, clean_splines, clean_identical,
-                clean_small, small_tolerance,
+                clean_points,
+                clean_splines,
+                clean_identical,
+                clean_small,
+                small_tolerance,
             )
         case _:
             return {"error": f"Unknown action: {action}"}
@@ -256,13 +261,15 @@ def sketch_constraint(
     """
     match type:
         case "geometric":
-            return sketch_manager.add_constraint(
-                constraint_type, elements or []
-            )
+            return sketch_manager.add_constraint(constraint_type, elements or [])
         case "keypoint":
             return sketch_manager.add_keypoint_constraint(
-                element1_type, element1_index, keypoint1,
-                element2_type, element2_index, keypoint2,
+                element1_type,
+                element1_index,
+                keypoint1,
+                element2_type,
+                element2_index,
+                keypoint2,
             )
         case _:
             return {"error": f"Unknown constraint type: {type}"}
@@ -299,9 +306,7 @@ def sketch_project(
         case "silhouette":
             return sketch_manager.project_silhouette_edges()
         case "region_faces":
-            return sketch_manager.include_region_faces(
-                face_indices or []
-            )
+            return sketch_manager.include_region_faces(face_indices or [])
         case "chain":
             return sketch_manager.chain_locate(x, y, tolerance)
         case "to_curve":

@@ -33,9 +33,17 @@ def create_ref_plane(
     normal_side: 'Normal' or 'Reverse'.
     """
     err = validate_numerics(
-        distance=distance, angle=angle,
-        x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2,
-        x3=x3, y3=y3, z3=z3,
+        distance=distance,
+        angle=angle,
+        x1=x1,
+        y1=y1,
+        z1=z1,
+        x2=x2,
+        y2=y2,
+        z2=z2,
+        x3=x3,
+        y3=y3,
+        z3=z3,
     )
     if err:
         return err
@@ -45,17 +53,11 @@ def create_ref_plane(
                 parent_plane_index, distance, normal_side
             )
         case "angle":
-            return feature_manager.create_ref_plane_by_angle(
-                parent_plane_index, angle, normal_side
-            )
+            return feature_manager.create_ref_plane_by_angle(parent_plane_index, angle, normal_side)
         case "three_points":
-            return feature_manager.create_ref_plane_by_3_points(
-                x1, y1, z1, x2, y2, z2, x3, y3, z3
-            )
+            return feature_manager.create_ref_plane_by_3_points(x1, y1, z1, x2, y2, z2, x3, y3, z3)
         case "midplane":
-            return feature_manager.create_ref_plane_midplane(
-                plane1_index, plane2_index
-            )
+            return feature_manager.create_ref_plane_midplane(plane1_index, plane2_index)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -86,15 +88,15 @@ def create_ref_plane_on_curve(
     instead of active-sketch curve_end/pivot_plane_index.
     """
     err = validate_numerics(
-        distance=distance, ratio=ratio, distance_along=distance_along,
+        distance=distance,
+        ratio=ratio,
+        distance_along=distance_along,
     )
     if err:
         return err
     match method:
         case "normal_to_curve":
-            return feature_manager.create_ref_plane_normal_to_curve(
-                curve_end, pivot_plane_index
-            )
+            return feature_manager.create_ref_plane_normal_to_curve(curve_end, pivot_plane_index)
         case "normal_at_distance":
             return feature_manager.create_ref_plane_normal_at_distance(
                 distance, curve_end, pivot_plane_index
@@ -105,7 +107,9 @@ def create_ref_plane_on_curve(
             )
         case "normal_at_distance_along":
             return feature_manager.create_ref_plane_normal_at_distance_along(
-                distance_along, curve_end, pivot_plane_index,
+                distance_along,
+                curve_end,
+                pivot_plane_index,
             )
         case "normal_at_keypoint":
             return feature_manager.create_ref_plane_normal_at_keypoint(
@@ -113,18 +117,24 @@ def create_ref_plane_on_curve(
             )
         case "normal_at_distance_v2":
             return feature_manager.create_ref_plane_normal_at_distance_v2(
-                curve_edge_index, orientation_plane_index,
-                distance, normal_side_int,
+                curve_edge_index,
+                orientation_plane_index,
+                distance,
+                normal_side_int,
             )
         case "normal_at_arc_ratio_v2":
             return feature_manager.create_ref_plane_normal_at_arc_ratio_v2(
-                curve_edge_index, orientation_plane_index,
-                ratio, normal_side_int,
+                curve_edge_index,
+                orientation_plane_index,
+                ratio,
+                normal_side_int,
             )
         case "normal_at_distance_along_v2":
             return feature_manager.create_ref_plane_normal_at_distance_along_v2(
-                curve_edge_index, orientation_plane_index,
-                distance_along, normal_side_int,
+                curve_edge_index,
+                orientation_plane_index,
+                distance_along,
+                normal_side_int,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -155,7 +165,9 @@ def create_ref_plane_tangent(
     match method:
         case "parallel_by_tangent":
             return feature_manager.create_ref_plane_parallel_by_tangent(
-                parent_plane_index, face_index, normal_side,
+                parent_plane_index,
+                face_index,
+                normal_side,
             )
         case "tangent_cylinder_angle":
             return feature_manager.create_ref_plane_tangent_cylinder_angle(
@@ -163,15 +175,21 @@ def create_ref_plane_tangent(
             )
         case "tangent_cylinder_keypoint":
             return feature_manager.create_ref_plane_tangent_cylinder_keypoint(
-                face_index, keypoint_type, parent_plane_index,
+                face_index,
+                keypoint_type,
+                parent_plane_index,
             )
         case "tangent_surface_keypoint":
             return feature_manager.create_ref_plane_tangent_surface_keypoint(
-                face_index, keypoint_type, parent_plane_index,
+                face_index,
+                keypoint_type,
+                parent_plane_index,
             )
         case "tangent_parallel":
             return feature_manager.create_ref_plane_tangent_parallel(
-                parent_plane_index, face_index, normal_side_int,
+                parent_plane_index,
+                face_index,
+                normal_side_int,
             )
         case _:
             return {"error": f"Unknown method: {method}"}

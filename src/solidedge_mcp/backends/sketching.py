@@ -6,8 +6,9 @@ Handles creating and manipulating 2D sketches.
 
 import contextlib
 import math
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from .constants import FaceQueryConstants, ProfileValidationConstants
 from .logging import get_logger
@@ -93,7 +94,7 @@ class SketchManager:
             }
         except Exception as e:
             _logger.error(f"Failed to create sketch on plane {plane}: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sketch_on_plane_index(self, plane_index: int) -> dict[str, Any]:
         """
@@ -131,7 +132,7 @@ class SketchManager:
                 "sketch_id": profile_set.Name if hasattr(profile_set, "Name") else "sketch",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_line(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
         """Draw a line in the active sketch"""
@@ -147,7 +148,7 @@ class SketchManager:
 
             return {"status": "created", "type": "line", "start": [x1, y1], "end": [x2, y2]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_circle(self, center_x: float, center_y: float, radius: float) -> dict[str, Any]:
         """Draw a circle in the active sketch"""
@@ -168,7 +169,7 @@ class SketchManager:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_rectangle(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
         """Draw a rectangle in the active sketch"""
@@ -193,7 +194,7 @@ class SketchManager:
                 "lines": 4,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_arc(
         self, center_x: float, center_y: float, radius: float, start_angle: float, end_angle: float
@@ -235,7 +236,7 @@ class SketchManager:
                 "end_angle": end_angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_polygon(
         self, center_x: float, center_y: float, radius: float, sides: int
@@ -274,7 +275,7 @@ class SketchManager:
                 "sides": sides,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_ellipse(
         self,
@@ -319,7 +320,7 @@ class SketchManager:
                 "angle": angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_spline(self, points: list[list[float]]) -> dict[str, Any]:
         """
@@ -363,7 +364,7 @@ class SketchManager:
                 "num_points": len(points),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_arc_by_3_points(
         self,
@@ -401,7 +402,7 @@ class SketchManager:
                 "method": "start_center_end",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_circle_by_2_points(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
         """
@@ -435,7 +436,7 @@ class SketchManager:
                 "method": "2_points",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_circle_by_3_points(
         self, x1: float, y1: float, x2: float, y2: float, x3: float, y3: float
@@ -469,7 +470,7 @@ class SketchManager:
                 "method": "3_points",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def mirror_spline(
         self, axis_x1: float, axis_y1: float, axis_x2: float, axis_y2: float, copy: bool = True
@@ -515,7 +516,7 @@ class SketchManager:
                 "mirrored_count": mirror_count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def hide_profile(self, visible: bool = False) -> dict[str, Any]:
         """
@@ -538,7 +539,7 @@ class SketchManager:
 
             return {"status": "updated", "visible": visible}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_point(self, x: float, y: float) -> dict[str, Any]:
         """
@@ -582,7 +583,7 @@ class SketchManager:
                 "method": "construction_circle",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_axis_of_revolution(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
         """
@@ -619,7 +620,7 @@ class SketchManager:
                 "note": "Axis of revolution set. Close sketch and use create_revolve().",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _get_sketch_element(self, element_type: str, index: int) -> Any:
         """
@@ -735,7 +736,7 @@ class SketchManager:
         except ValueError as e:
             return {"error": str(e)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_keypoint_constraint(
         self,
@@ -785,7 +786,7 @@ class SketchManager:
         except ValueError as e:
             return {"error": str(e)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def close_sketch(self, closed: bool = True) -> dict[str, Any]:
         """Close/finish the active sketch and report whether it validated.
@@ -823,11 +824,7 @@ class SketchManager:
                 validation_code = self.active_profile.End(end_flags)
             except Exception as e:
                 _logger.error(f"Profile.End({end_flags}) raised: {e}")
-                return {
-                    "error": f"Profile validation failed: {e}",
-                    "end_flags": end_flags,
-                    "traceback": traceback.format_exc(),
-                }
+                return error_result(e, context="Profile validation failed", end_flags=end_flags)
 
             # Add to accumulated profiles for loft/sweep operations
             self.accumulated_profiles.append(self.active_profile)
@@ -868,7 +865,7 @@ class SketchManager:
             return result
         except Exception as e:
             _logger.error(f"Failed to close sketch: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sketch_info(self) -> dict[str, Any]:
         """
@@ -910,7 +907,7 @@ class SketchManager:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_active_sketch(self) -> Any | None:
         """Get the active sketch object"""
@@ -969,7 +966,7 @@ class SketchManager:
                 "fillet_count": fillet_count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def sketch_chamfer(self, distance: float) -> dict[str, Any]:
         """
@@ -1010,7 +1007,7 @@ class SketchManager:
                 "chamfer_count": chamfer_count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def sketch_offset(self, distance: float) -> dict[str, Any]:
         """
@@ -1070,7 +1067,7 @@ class SketchManager:
                 "offset_lines": offset_count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def sketch_mirror(self, axis: str = "X") -> dict[str, Any]:
         """
@@ -1134,7 +1131,7 @@ class SketchManager:
                 "mirrored_elements": mirror_count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def draw_construction_line(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
         """
@@ -1167,7 +1164,7 @@ class SketchManager:
                 "end": [x2, y2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def project_edge(self, face_index: int, edge_index: int) -> dict[str, Any]:
         """
@@ -1217,7 +1214,7 @@ class SketchManager:
                 "projected_geometry": str(type(projected).__name__) if projected else "unknown",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def include_edge(self, face_index: int, edge_index: int) -> dict[str, Any]:
         """
@@ -1268,7 +1265,7 @@ class SketchManager:
                 "geometry_2d": str(type(result).__name__) if result else "unknown",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def project_ref_plane(self, plane_index: int) -> dict[str, Any]:
         """
@@ -1303,7 +1300,7 @@ class SketchManager:
                 "projected_geometry": str(type(result).__name__) if result else "unknown",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def offset_sketch_2d(
         self, offset_side_x: float, offset_side_y: float, offset_distance: float
@@ -1336,7 +1333,7 @@ class SketchManager:
                 "offset_distance": offset_distance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def sketch_rotate(
         self, center_x: float, center_y: float, angle_degrees: float
@@ -1422,7 +1419,7 @@ class SketchManager:
                 "elements_rotated": rotated,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def sketch_scale(self, center_x: float, center_y: float, scale_factor: float) -> dict[str, Any]:
         """
@@ -1503,7 +1500,7 @@ class SketchManager:
                 "elements_scaled": scaled,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sketch_matrix(self) -> dict[str, Any]:
         """
@@ -1525,7 +1522,7 @@ class SketchManager:
             else:
                 return {"status": "ok", "matrix": result}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def clean_sketch_geometry(
         self,
@@ -1575,7 +1572,7 @@ class SketchManager:
                 "small_tolerance": small_tolerance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sketch_constraints(self) -> dict[str, Any]:
         """
@@ -1609,7 +1606,7 @@ class SketchManager:
 
             return {"constraints": constraints, "count": len(constraints)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def project_silhouette_edges(self) -> dict[str, Any]:
         """
@@ -1631,7 +1628,7 @@ class SketchManager:
 
             return {"status": "projected", "type": "silhouette_edges"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def include_region_faces(self, face_indices: list[int]) -> dict[str, Any]:
         """
@@ -1678,7 +1675,7 @@ class SketchManager:
                 "face_indices": face_indices,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def sketch_paste(self) -> dict[str, Any]:
         """
@@ -1699,7 +1696,7 @@ class SketchManager:
 
             return {"status": "pasted", "type": "sketch_paste"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_ordered_geometry(self) -> dict[str, Any]:
         """
@@ -1763,7 +1760,7 @@ class SketchManager:
                 "elements": element_list,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def chain_locate(self, x: float, y: float, tolerance: float = 0.001) -> dict[str, Any]:
         """
@@ -1796,7 +1793,7 @@ class SketchManager:
                 "chain_result": str(type(result).__name__) if result else "none",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def convert_to_curve(self) -> dict[str, Any]:
         """
@@ -1822,4 +1819,4 @@ class SketchManager:
                 "curve_result": str(type(result).__name__) if result else "none",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
