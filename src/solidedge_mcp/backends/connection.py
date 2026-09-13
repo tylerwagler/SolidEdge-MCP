@@ -12,6 +12,7 @@ import win32com.client
 
 from solidedge_mcp.backends.errors import error_result, is_disconnected_error
 
+from .comutil import com_get
 from .logging import get_logger
 
 _logger = get_logger(__name__)
@@ -252,19 +253,21 @@ class SolidEdgeConnection:
         try:
             info = {}
 
-            try:
-                install_data = win32com.client.Dispatch("SEInstallDataLib.SEInstallData")
-                with contextlib.suppress(Exception):
-                    info["install_path"] = install_data.GetInstalledPath()
-                with contextlib.suppress(Exception):
-                    info["language"] = install_data.GetInstalledLanguage()
-                with contextlib.suppress(Exception):
-                    info["version"] = install_data.GetInstalledVersion()
-            except Exception:
-                # SEInstallData may not be registered; fall back to Application.Path
-                if self._is_connected and self.application is not None:
-                    with contextlib.suppress(Exception):
-                        info["install_path"] = self.application.Path
+            # SEInstallDataLib.SEInstallData is not registered on Solid Edge
+            # 2026 -- Dispatch raises "Invalid class string" -- and neither
+            # GetInstalledLanguage nor GetInstalledVersion is in any scraped
+            # type library. Application.Path does not exist either, so the
+            # fallback was dead too. These four do work.
+            if self._is_connected and self.application is not None:
+                for key, member in (
+                    ("version", "Version"),
+                    ("name", "Name"),
+                    ("app_data_folder", "AppDataFolder"),
+                    ("registry_path", "RegistryPath"),
+                ):
+                    value = com_get(self.application, member)
+                    if value is not None:
+                        info[key] = value
 
             if not info:
                 return {

@@ -1227,27 +1227,50 @@ class TestGetProcessInfo:
 
 
 class TestGetInstallInfo:
-    def test_fallback_to_app_path(self):
+    """SEInstallData is not registered and Application.Path does not exist.
+
+    Verified on Solid Edge 2026: Dispatch("SEInstallDataLib.SEInstallData")
+    raises "Invalid class string", and neither GetInstalledLanguage nor
+    GetInstalledVersion is in any type library. Version, Name, AppDataFolder
+    and RegistryPath on the Application do work.
+    """
+
+    def _connection(self):
         from solidedge_mcp.backends.connection import SolidEdgeConnection
 
         conn = SolidEdgeConnection()
         conn._is_connected = True
         conn.application = MagicMock()
-        conn.application.Path = "C:\\Program Files\\Solid Edge"
+        conn.application.Version = "226.00.01.04"
+        conn.application.Name = "Solid Edge 2026"
+        conn.application.AppDataFolder = "C:\\Users\\me\\AppData\\Roaming\\Siemens"
+        conn.application.RegistryPath = "Software\\Siemens\\Solid Edge\\Version 226"
+        return conn
 
-        # SEInstallData will fail (not registered in test env),
-        # so it should fall back to Application.Path
+    def test_reads_the_application_properties_that_exist(self):
+        conn = self._connection()
+
         result = conn.get_install_info()
-        assert result["status"] == "success"
-        assert "install_path" in result
 
-    def test_no_connection_no_installdata(self):
+        assert result["status"] == "success"
+        assert result["version"] == "226.00.01.04"
+        assert result["name"] == "Solid Edge 2026"
+        assert "app_data_folder" in result
+        assert "registry_path" in result
+
+    def test_does_not_read_application_path(self):
+        """Application.Path is in no type library and raises."""
+        conn = self._connection()
+        type(conn.application).Path = property(
+            lambda self: (_ for _ in ()).throw(AttributeError("Path"))
+        )
+
+        assert conn.get_install_info()["status"] == "success"
+
+    def test_no_connection(self):
         from solidedge_mcp.backends.connection import SolidEdgeConnection
 
-        conn = SolidEdgeConnection()
-        # Not connected and SEInstallData won't work
-        result = conn.get_install_info()
-        assert "error" in result
+        assert "error" in SolidEdgeConnection().get_install_info()
 
 
 # ============================================================================

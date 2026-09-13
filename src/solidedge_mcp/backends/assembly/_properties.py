@@ -198,23 +198,39 @@ class PropertiesMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            # OLE color: BGR format packed into integer
-            ole_color = red | (green << 8) | (blue << 16)
+            red = max(0, min(255, red))
+            green = max(0, min(255, green))
+            blue = max(0, min(255, blue))
 
-            try:
-                occurrence.SetColor(red, green, blue)
-            except Exception:
-                try:
-                    occurrence.Color = ole_color
-                except Exception:
-                    # Try style-based approach
-                    occurrence.UseOccurrenceColor = True
-                    occurrence.OccurrenceColor = ole_color
+            # Occurrence has no SetColor, no Color, and no
+            # UseOccurrenceColor/OccurrenceColor pair, so all three attempts
+            # raised. FaceStyle is a get/put property, and a component is
+            # coloured by handing it a style whose diffuse colour is wanted,
+            # the same way a part body is.
+            styles = com_get(doc, "FaceStyles")
+            if styles is None:
+                return {
+                    "error": (
+                        "This assembly has no FaceStyles collection, so a component "
+                        "colour cannot be set."
+                    )
+                }
+
+            name = f"MCP {red:02X}{green:02X}{blue:02X}"
+            style = None
+            with contextlib.suppress(Exception):
+                style = styles.Item(name)
+            if style is None:
+                style = styles.Add(name, "")
+            style.SetDiffuse(red / 255.0, green / 255.0, blue / 255.0)
+            occurrence.FaceStyle = style
 
             return {
                 "status": "updated",
                 "component_index": component_index,
                 "color": [red, green, blue],
+                "hex": f"#{red:02x}{green:02x}{blue:02x}",
+                "style": name,
             }
         except Exception as e:
             return error_result(e)

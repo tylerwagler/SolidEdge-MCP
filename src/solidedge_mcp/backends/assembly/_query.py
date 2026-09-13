@@ -527,24 +527,28 @@ class QueryMixin:
             if err:
                 return err
 
+            # Occurrence.Bodies does not exist, so this listed nothing for
+            # every component. Body is a single get-only property, and
+            # GetSimplifiedBodies reports the rest.
             bodies_info = []
-            try:
-                bodies = occurrence.Bodies
-                body_count = com_get(bodies, "Count", 0)
+            candidates = []
+            single = com_get(occurrence, "Body")
+            if single is not None:
+                candidates.append(single)
+            with contextlib.suppress(Exception):
+                count, simplified = occurrence.GetSimplifiedBodies()
+                if simplified:
+                    candidates.extend(list(simplified)[: int(count)])
 
-                for i in range(1, body_count + 1):
-                    body = bodies.Item(i)
-                    body_info: dict[str, Any] = {"index": i - 1}
-
-                    with contextlib.suppress(Exception):
-                        body_info["name"] = body.Name
-
-                    with contextlib.suppress(Exception):
-                        body_info["volume"] = body.Volume
-
-                    bodies_info.append(body_info)
-            except Exception:
-                body_count = 0
+            for index, body in enumerate(candidates):
+                body_info: dict[str, Any] = {"index": index}
+                with contextlib.suppress(Exception):
+                    body_info["name"] = body.Name
+                with contextlib.suppress(Exception):
+                    body_info["volume"] = body.Volume
+                with contextlib.suppress(Exception):
+                    body_info["is_solid"] = bool(body.IsSolid)
+                bodies_info.append(body_info)
 
             return {
                 "component_index": component_index,

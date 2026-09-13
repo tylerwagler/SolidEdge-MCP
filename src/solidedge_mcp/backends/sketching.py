@@ -10,6 +10,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import describe_exception, error_result
 
+from .comutil import com_get
 from .constants import FaceQueryConstants, ProfileValidationConstants
 from .logging import get_logger
 
@@ -89,6 +90,101 @@ def _r8_array(size: int) -> Any:
 def _dispatch_array(items: Any) -> Any:
     """Wrap a sequence of COM objects as a ``SAFEARRAY(VT_DISPATCH)``."""
     return list(items)
+
+
+#: Every 2D collection a profile can hold, for counting and selecting.
+_PROFILE_COLLECTIONS = (
+    "Lines2d",
+    "Circles2d",
+    "Arcs2d",
+    "Ellipses2d",
+    "EllipticalArcs2d",
+    "BSplineCurves2d",
+    "Conics2d",
+)
+
+
+def _xy(obj: Any, member: str) -> tuple[float, float] | None:
+    """Read a pure-[out] 2D accessor such as GetStartPoint as (x, y)."""
+    try:
+        point = getattr(obj, member)()
+        return (float(point[0]), float(point[1]))
+    except Exception:
+        return None
+
+
+def _mirror_across_x(x: float, y: float) -> tuple[float, float]:
+    return (x, -y)
+
+
+def _mirror_across_y(x: float, y: float) -> tuple[float, float]:
+    return (-x, y)
+
+
+def _element_count(profile: Any) -> int:
+    """How much geometry a profile holds, across every 2D collection."""
+    total = 0
+    for name in _PROFILE_COLLECTIONS:
+        collection = com_get(profile, name)
+        total += int(com_get(collection, "Count", 0) or 0)
+    return total
+
+
+def _select_all(profile: Any, doc: Any = None) -> int:
+    """Select every element in a profile. Offset2d acts on the selection.
+
+    The select set has to be emptied first. It is document-wide and survives
+    between calls, so a stale selection from an earlier sketch silently makes
+    Offset2d do nothing at all -- verified on Solid Edge 2026, where offsetting
+    a rectangle works on a clean select set and produces nothing on a dirty
+    one.
+    """
+    select_set = com_get(doc, "SelectSet") if doc is not None else None
+    if select_set is not None:
+        with contextlib.suppress(Exception):
+            select_set.RemoveAll()
+
+    selected = 0
+    for name in _PROFILE_COLLECTIONS:
+        collection = com_get(profile, name)
+        count = int(com_get(collection, "Count", 0) or 0)
+        for i in range(1, count + 1):
+            try:
+                collection.Item(i).Select()
+                selected += 1
+            except Exception:
+                continue
+    return selected
+
+
+def _offset_side_point(profile: Any, distance: float) -> tuple[float, float] | None:
+    """A point saying which side to offset towards.
+
+    Offset2d wants a coordinate, not a sign. Taking the centre of the
+    geometry and stepping out past its extent puts the point outside for a
+    positive distance and at the centre for a negative one.
+    """
+    xs: list[float] = []
+    ys: list[float] = []
+    for name in ("Lines2d", "Arcs2d", "Circles2d"):
+        collection = com_get(profile, name)
+        count = int(com_get(collection, "Count", 0) or 0)
+        for i in range(1, count + 1):
+            element = collection.Item(i)
+            for member in ("GetStartPoint", "GetEndPoint", "GetCenterPoint"):
+                point = _xy(element, member)
+                if point is not None:
+                    xs.append(point[0])
+                    ys.append(point[1])
+    if not xs:
+        return None
+
+    centre_x = (min(xs) + max(xs)) / 2
+    centre_y = (min(ys) + max(ys)) / 2
+    if distance < 0:
+        return (centre_x, centre_y)
+    reach = max(max(xs) - min(xs), max(ys) - min(ys)) or abs(distance)
+    return (centre_x, centre_y + reach)
 
 
 class SketchManager:
@@ -1166,126 +1262,182 @@ class SketchManager:
             return error_result(e)
 
     def sketch_offset(self, distance: float) -> dict[str, Any]:
-        """
-        Create an offset copy of the sketch profile.
+        """Offset the active sketch profile by a distance.
 
-        Offsets all geometry in the active sketch by the given distance.
+        ``Profile.OffsetProfile`` is in no Solid Edge type library, so that
+        call always raised, and the manual fallback read ``line.StartPoint.X``,
+        which Line2d does not have either. Every element failed silently and
+        the result said "created" with a count of zero.
+
+        The real call is ``Profile.Offset2d(offsetSideX, offsetSideY,
+        offsetDistance)``, and it only does anything once the geometry is
+        selected: with nothing selected it returns cleanly and creates nothing.
+        Verified on Solid Edge 2026.
+
+        Solid Edge offsets one connected chain at a time, so a sketch holding
+        two separate shapes offsets neither.
 
         Args:
-            distance: Offset distance in meters (positive = outward)
+            distance: Offset distance in meters. Positive offsets away from
+                the sketch centre, negative towards it.
 
         Returns:
-            Dict with status
+            Dict with status and how many elements the sketch gained.
         """
         try:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}
+            if distance == 0:
+                return {"error": "distance must not be zero; it is in meters"}
 
             profile = self.active_profile
-
-            # Try using the profile offset method
-            try:
-                profile.OffsetProfile(distance)
-                return {"status": "created", "type": "sketch_offset", "distance": distance}
-            except Exception:
-                pass
-
-            # Fallback: manual offset of lines
-            lines = profile.Lines2d
-            if lines.Count == 0:
+            before = _element_count(profile)
+            if not before:
                 return {"error": "No sketch geometry to offset"}
 
-            offset_count = 0
-            for i in range(1, lines.Count + 1):
-                try:
-                    line = lines.Item(i)
-                    x1 = line.StartPoint.X
-                    y1 = line.StartPoint.Y
-                    x2 = line.EndPoint.X
-                    y2 = line.EndPoint.Y
+            side = _offset_side_point(profile, distance)
+            if side is None:
+                return {
+                    "error": (
+                        "The sketch geometry could not be measured, so there is no "
+                        "way to say which side to offset towards."
+                    )
+                }
 
-                    # Calculate normal offset
-                    dx = x2 - x1
-                    dy = y2 - y1
-                    length = math.sqrt(dx * dx + dy * dy)
-                    if length > 0:
-                        nx = -dy / length * distance
-                        ny = dx / length * distance
-                        profile.Lines2d.AddBy2Points(x1 + nx, y1 + ny, x2 + nx, y2 + ny)
-                        offset_count += 1
-                except Exception:
-                    pass
+            document = None
+            with contextlib.suppress(Exception):
+                document = self.doc_manager.get_active_document()
+            selected = _select_all(profile, document)
+            if not selected:
+                return {
+                    "error": (
+                        "None of the sketch geometry could be selected, and "
+                        "Profile.Offset2d only acts on a selection."
+                    )
+                }
+
+            profile.Offset2d(side[0], side[1], abs(distance))
+            after = _element_count(profile)
+
+            if after <= before:
+                return {
+                    "error": (
+                        f"Solid Edge created no offset geometry. It offsets one "
+                        f"connected chain at a time, so a sketch holding separate "
+                        f"shapes offsets none of them; this one has {before} "
+                        f"elements. An offset of {distance} m may also be too "
+                        f"large for the shape to survive."
+                    ),
+                    "distance": distance,
+                    "elements": before,
+                }
 
             return {
                 "status": "created",
                 "type": "sketch_offset",
                 "distance": distance,
-                "offset_lines": offset_count,
+                "elements_created": after - before,
             }
         except Exception as e:
             return error_result(e)
 
     def sketch_mirror(self, axis: str = "X") -> dict[str, Any]:
-        """
-        Mirror sketch geometry about an axis.
+        """Mirror the sketch geometry about the X or Y axis.
 
-        Creates mirrored copies of all sketch elements about the
-        X or Y axis.
+        This read ``line.StartPoint.X`` and ``circle.CenterPoint.X``. Line2d
+        and Circle2d have neither; the accessors are ``GetStartPoint``,
+        ``GetEndPoint`` and ``GetCenterPoint``, all pure [out]. Every element
+        raised inside a bare except, so the result said "created" with a count
+        of zero. Arcs were not handled at all.
 
         Args:
-            axis: 'X' (mirror about X-axis, flip Y) or 'Y' (mirror about Y-axis, flip X)
+            axis: 'X' mirrors about the X axis, flipping Y. 'Y' mirrors about
+                the Y axis, flipping X.
 
         Returns:
-            Dict with status
+            Dict with status and how many elements were mirrored.
         """
         try:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
-            profile = self.active_profile
-            mirror_count = 0
+            axis_upper = axis.upper()
+            if axis_upper not in ("X", "Y"):
+                return {"error": f"Invalid axis: {axis}. Use 'X' or 'Y'."}
 
-            # Mirror lines
+            profile = self.active_profile
+            flip = _mirror_across_x if axis_upper == "X" else _mirror_across_y
+            mirror_count = 0
+            failures: list[str] = []
+
             lines = profile.Lines2d
             for i in range(1, lines.Count + 1):
+                line = lines.Item(i)
+                start = _xy(line, "GetStartPoint")
+                end = _xy(line, "GetEndPoint")
+                if start is None or end is None:
+                    failures.append(f"line {i - 1}: no endpoints")
+                    continue
+                sx, sy = flip(*start)
+                ex, ey = flip(*end)
                 try:
-                    line = lines.Item(i)
-                    x1 = line.StartPoint.X
-                    y1 = line.StartPoint.Y
-                    x2 = line.EndPoint.X
-                    y2 = line.EndPoint.Y
-
-                    if axis.upper() == "X":
-                        profile.Lines2d.AddBy2Points(x1, -y1, x2, -y2)
-                    else:
-                        profile.Lines2d.AddBy2Points(-x1, y1, -x2, y2)
+                    profile.Lines2d.AddBy2Points(sx, sy, ex, ey)
                     mirror_count += 1
-                except Exception:
-                    pass
+                except Exception as exc:
+                    failures.append(f"line {i - 1}: {describe_exception(exc)}")
 
-            # Mirror circles
             circles = profile.Circles2d
             for i in range(1, circles.Count + 1):
+                circle = circles.Item(i)
+                centre = _xy(circle, "GetCenterPoint")
+                radius = com_get(circle, "Radius")
+                if centre is None or radius is None:
+                    failures.append(f"circle {i - 1}: no centre")
+                    continue
+                cx, cy = flip(*centre)
                 try:
-                    circle = circles.Item(i)
-                    cx = circle.CenterPoint.X
-                    cy = circle.CenterPoint.Y
-                    r = circle.Radius
-
-                    if axis.upper() == "X":
-                        profile.Circles2d.AddByCenterRadius(cx, -cy, r)
-                    else:
-                        profile.Circles2d.AddByCenterRadius(-cx, cy, r)
+                    profile.Circles2d.AddByCenterRadius(cx, cy, float(radius))
                     mirror_count += 1
-                except Exception:
-                    pass
+                except Exception as exc:
+                    failures.append(f"circle {i - 1}: {describe_exception(exc)}")
 
-            return {
+            arcs = profile.Arcs2d
+            for i in range(1, arcs.Count + 1):
+                arc = arcs.Item(i)
+                centre = _xy(arc, "GetCenterPoint")
+                start = _xy(arc, "GetStartPoint")
+                end = _xy(arc, "GetEndPoint")
+                if centre is None or start is None or end is None:
+                    failures.append(f"arc {i - 1}: incomplete")
+                    continue
+                cx, cy = flip(*centre)
+                sx, sy = flip(*start)
+                ex, ey = flip(*end)
+                try:
+                    # Mirroring reverses the sweep, so the endpoints swap.
+                    profile.Arcs2d.AddByCenterStartEnd(cx, cy, ex, ey, sx, sy)
+                    mirror_count += 1
+                except Exception as exc:
+                    failures.append(f"arc {i - 1}: {describe_exception(exc)}")
+
+            if not mirror_count:
+                return {
+                    "error": (
+                        "Nothing was mirrored. The sketch needs lines, circles or arcs to mirror."
+                    ),
+                    "axis": axis_upper,
+                    "failures": failures[:5],
+                }
+
+            result: dict[str, Any] = {
                 "status": "created",
                 "type": "sketch_mirror",
-                "axis": axis,
+                "axis": axis_upper,
                 "mirrored_elements": mirror_count,
             }
+            if failures:
+                result["partial_failures"] = failures[:5]
+            return result
         except Exception as e:
             return error_result(e)
 
@@ -1494,166 +1646,157 @@ class SketchManager:
     def sketch_rotate(
         self, center_x: float, center_y: float, angle_degrees: float
     ) -> dict[str, Any]:
-        """
-        Rotate all sketch geometry around a center point.
+        """Rotate every element in the active sketch about a point.
 
-        Transforms line endpoints, circle centers, and arc centers by the
-        rotation angle. No native Profile.Rotate() in the COM API.
+        Solid Edge has no profile-level rotate, so the geometry is read,
+        transformed and rebuilt. This used to read ``line.StartPoint.X`` and
+        ``circle.CenterPoint.X``, neither of which exists, inside a bare
+        except -- and then delete the originals regardless. Rotating a sketch
+        erased it and reported success with a count of zero.
 
         Args:
-            center_x: Rotation center X (meters)
-            center_y: Rotation center Y (meters)
-            angle_degrees: Rotation angle in degrees (CCW positive)
+            center_x: Centre of rotation X, in meters.
+            center_y: Centre of rotation Y, in meters.
+            angle_degrees: Rotation in degrees, counterclockwise.
 
         Returns:
-            Dict with status and count of rotated elements
+            Dict with status and how many elements moved.
         """
-        try:
-            if not self.active_profile:
-                return {"error": "No active sketch. Call create_sketch() first"}
+        angle_rad = math.radians(angle_degrees)
+        cos_a = math.cos(angle_rad)
+        sin_a = math.sin(angle_rad)
 
-            angle_rad = math.radians(angle_degrees)
-            cos_a = math.cos(angle_rad)
-            sin_a = math.sin(angle_rad)
-            cx, cy = center_x, center_y
+        def rotate_point(x: float, y: float) -> tuple[float, float]:
+            dx, dy = x - center_x, y - center_y
+            return (
+                center_x + dx * cos_a - dy * sin_a,
+                center_y + dx * sin_a + dy * cos_a,
+            )
 
-            def rotate_point(x: float, y: float) -> tuple[float, float]:
-                dx, dy = x - cx, y - cy
-                return cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a
-
-            profile = self.active_profile
-            rotated = 0
-
-            # Rotate lines
-            lines = profile.Lines2d
-            original_count = lines.Count
-            new_lines = []
-            for i in range(1, original_count + 1):
-                try:
-                    line = lines.Item(i)
-                    x1, y1 = line.StartPoint.X, line.StartPoint.Y
-                    x2, y2 = line.EndPoint.X, line.EndPoint.Y
-                    rx1, ry1 = rotate_point(x1, y1)
-                    rx2, ry2 = rotate_point(x2, y2)
-                    new_lines.append((rx1, ry1, rx2, ry2))
-                except Exception:
-                    pass
-
-            # Remove old lines and add rotated ones
-            for i in range(original_count, 0, -1):
-                with contextlib.suppress(Exception):
-                    lines.Item(i).Delete()
-            for coords in new_lines:
-                lines.AddBy2Points(*coords)
-                rotated += 1
-
-            # Rotate circles
-            circles = profile.Circles2d
-            original_count = circles.Count
-            new_circles = []
-            for i in range(1, original_count + 1):
-                try:
-                    circle = circles.Item(i)
-                    ccx, ccy = circle.CenterPoint.X, circle.CenterPoint.Y
-                    r = circle.Radius
-                    rx, ry = rotate_point(ccx, ccy)
-                    new_circles.append((rx, ry, r))
-                except Exception:
-                    pass
-
-            for i in range(original_count, 0, -1):
-                with contextlib.suppress(Exception):
-                    circles.Item(i).Delete()
-            for c in new_circles:
-                circles.AddByCenterRadius(*c)
-                rotated += 1
-
-            return {
-                "status": "rotated",
-                "center": [center_x, center_y],
-                "angle_degrees": angle_degrees,
-                "elements_rotated": rotated,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._transform_sketch(
+            rotate_point,
+            radius_scale=1.0,
+            result_type="sketch_rotate",
+            extra={"center": [center_x, center_y], "angle_degrees": angle_degrees},
+        )
 
     def sketch_scale(self, center_x: float, center_y: float, scale_factor: float) -> dict[str, Any]:
-        """
-        Scale all sketch geometry relative to a center point.
+        """Scale every element in the active sketch about a point.
 
-        Transforms line endpoints and circle centers/radii by the scale factor.
+        Same rebuild as :meth:`sketch_rotate`, and it carried the same defect:
+        the coordinate reads raised and the originals were deleted anyway, so
+        scaling a sketch erased it.
 
         Args:
-            center_x: Scale center X (meters)
-            center_y: Scale center Y (meters)
-            scale_factor: Scale factor (>1 enlarges, <1 shrinks)
+            center_x: Centre of scaling X, in meters.
+            center_y: Centre of scaling Y, in meters.
+            scale_factor: Multiplier. Must be positive.
 
         Returns:
-            Dict with status and count of scaled elements
+            Dict with status and how many elements moved.
+        """
+        if scale_factor <= 0:
+            return {"error": f"Scale factor must be positive (got {scale_factor})"}
+
+        def scale_point(x: float, y: float) -> tuple[float, float]:
+            return (
+                center_x + (x - center_x) * scale_factor,
+                center_y + (y - center_y) * scale_factor,
+            )
+
+        return self._transform_sketch(
+            scale_point,
+            radius_scale=scale_factor,
+            result_type="sketch_scale",
+            extra={"center": [center_x, center_y], "scale_factor": scale_factor},
+        )
+
+    def _transform_sketch(
+        self,
+        move: Any,
+        radius_scale: float,
+        result_type: str,
+        extra: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Rebuild every sketch element under a point transform.
+
+        Read everything first, and refuse to delete anything unless all of it
+        was read. The old order -- read, delete, rebuild -- destroyed the
+        sketch whenever a read failed.
         """
         try:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
-            if scale_factor <= 0:
-                return {"error": "Scale factor must be positive"}
-
-            cx, cy = center_x, center_y
-
-            def scale_point(x: float, y: float) -> tuple[float, float]:
-                return cx + (x - cx) * scale_factor, cy + (y - cy) * scale_factor
-
             profile = self.active_profile
-            scaled = 0
+            lines, circles, arcs = profile.Lines2d, profile.Circles2d, profile.Arcs2d
 
-            # Scale lines
-            lines = profile.Lines2d
-            original_count = lines.Count
-            new_lines = []
-            for i in range(1, original_count + 1):
-                try:
-                    line = lines.Item(i)
-                    x1, y1 = line.StartPoint.X, line.StartPoint.Y
-                    x2, y2 = line.EndPoint.X, line.EndPoint.Y
-                    sx1, sy1 = scale_point(x1, y1)
-                    sx2, sy2 = scale_point(x2, y2)
-                    new_lines.append((sx1, sy1, sx2, sy2))
-                except Exception:
-                    pass
+            new_lines: list[tuple[float, float, float, float]] = []
+            new_circles: list[tuple[float, float, float]] = []
+            new_arcs: list[tuple[float, float, float, float, float, float]] = []
+            unreadable: list[str] = []
 
-            for i in range(original_count, 0, -1):
-                with contextlib.suppress(Exception):
-                    lines.Item(i).Delete()
+            for i in range(1, lines.Count + 1):
+                element = lines.Item(i)
+                start = _xy(element, "GetStartPoint")
+                end = _xy(element, "GetEndPoint")
+                if start is None or end is None:
+                    unreadable.append(f"line {i - 1}")
+                    continue
+                new_lines.append((*move(*start), *move(*end)))
+
+            for i in range(1, circles.Count + 1):
+                element = circles.Item(i)
+                centre = _xy(element, "GetCenterPoint")
+                radius = com_get(element, "Radius")
+                if centre is None or radius is None:
+                    unreadable.append(f"circle {i - 1}")
+                    continue
+                new_circles.append((*move(*centre), float(radius) * radius_scale))
+
+            for i in range(1, arcs.Count + 1):
+                element = arcs.Item(i)
+                centre = _xy(element, "GetCenterPoint")
+                start = _xy(element, "GetStartPoint")
+                end = _xy(element, "GetEndPoint")
+                if centre is None or start is None or end is None:
+                    unreadable.append(f"arc {i - 1}")
+                    continue
+                new_arcs.append((*move(*centre), *move(*start), *move(*end)))
+
+            total = len(new_lines) + len(new_circles) + len(new_arcs)
+            if unreadable:
+                # Deleting now would lose whatever could not be read.
+                return {
+                    "error": (
+                        "Some sketch geometry could not be read, so nothing was "
+                        "changed rather than risk deleting it: "
+                        f"{', '.join(unreadable[:5])}."
+                    ),
+                    "readable": total,
+                }
+            if not total:
+                return {"error": "No sketch geometry to transform"}
+
+            for i in range(lines.Count, 0, -1):
+                lines.Item(i).Delete()
+            for i in range(circles.Count, 0, -1):
+                circles.Item(i).Delete()
+            for i in range(arcs.Count, 0, -1):
+                arcs.Item(i).Delete()
+
             for coords in new_lines:
                 lines.AddBy2Points(*coords)
-                scaled += 1
-
-            # Scale circles
-            circles = profile.Circles2d
-            original_count = circles.Count
-            new_circles = []
-            for i in range(1, original_count + 1):
-                try:
-                    circle = circles.Item(i)
-                    ccx, ccy = circle.CenterPoint.X, circle.CenterPoint.Y
-                    r = circle.Radius
-                    sx, sy = scale_point(ccx, ccy)
-                    new_circles.append((sx, sy, r * scale_factor))
-                except Exception:
-                    pass
-
-            for i in range(original_count, 0, -1):
-                with contextlib.suppress(Exception):
-                    circles.Item(i).Delete()
-            for c in new_circles:
-                circles.AddByCenterRadius(*c)
-                scaled += 1
+            for circle in new_circles:
+                circles.AddByCenterRadius(*circle)
+            for arc in new_arcs:
+                arcs.AddByCenterStartEnd(*arc)
 
             return {
-                "status": "scaled",
-                "center": [center_x, center_y],
-                "scale_factor": scale_factor,
-                "elements_scaled": scaled,
+                "status": "transformed",
+                "type": result_type,
+                "elements": total,
+                **extra,
             }
         except Exception as e:
             return error_result(e)
@@ -1905,17 +2048,20 @@ class SketchManager:
                     with contextlib.suppress(Exception):
                         info["type"] = str(type(elem).__name__)
 
-                    with contextlib.suppress(Exception):
-                        info["start_x"] = elem.StartPoint.X
-                        info["start_y"] = elem.StartPoint.Y
+                    # StartPoint, EndPoint and CenterPoint are not properties
+                    # of a 2D element; the accessors are pure-[out] methods,
+                    # so every entry came back holding nothing but an index.
+                    start = _xy(elem, "GetStartPoint")
+                    if start is not None:
+                        info["start_x"], info["start_y"] = start
 
-                    with contextlib.suppress(Exception):
-                        info["end_x"] = elem.EndPoint.X
-                        info["end_y"] = elem.EndPoint.Y
+                    end = _xy(elem, "GetEndPoint")
+                    if end is not None:
+                        info["end_x"], info["end_y"] = end
 
-                    with contextlib.suppress(Exception):
-                        info["center_x"] = elem.CenterPoint.X
-                        info["center_y"] = elem.CenterPoint.Y
+                    centre = _xy(elem, "GetCenterPoint")
+                    if centre is not None:
+                        info["center_x"], info["center_y"] = centre
 
                     with contextlib.suppress(Exception):
                         info["radius"] = elem.Radius

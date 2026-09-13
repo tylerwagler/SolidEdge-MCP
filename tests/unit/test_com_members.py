@@ -83,17 +83,21 @@ UNVERIFIED: frozenset[str] = frozenset(
         # MatTable.ApplyMaterialToDoc and GetMaterialPropValueFromDoc; and
         # Models.AddFiniteRevolvedSurface became
         # doc.Constructions.RevolvedSurfaces.AddFinite.
+        # Last round: Occurrence.Bodies became Body plus
+        # GetSimplifiedBodies; SetColor / UseOccurrenceColor /
+        # OccurrenceColor became Occurrence.FaceStyle;
+        # Profile.OffsetProfile became Offset2d, which acts only on
+        # selected geometry; Feature.Parents has no COM equivalent at all;
+        # and SEInstallData is not registered on Solid Edge 2026, so
+        # GetInstalledLanguage / GetInstalledVersion became
+        # Application.Version / Name / AppDataFolder / RegistryPath.
+        # CenterPoint, StartPoint and EndPoint were read as properties of a
+        # 2D element throughout sketching.py. They are pure-[out] methods:
+        # GetCenterPoint, GetStartPoint, GetEndPoint. sketch_rotate and
+        # sketch_scale deleted the sketch and rebuilt nothing because of it.
         # Each still needs checking against a live install; they are reachable
         # only through interfaces the type libraries do not describe, or they
         # are wrong. Treat a failure here as a real bug until proven otherwise.
-        "Bodies",
-        "CenterPoint",
-        "GetInstalledLanguage",
-        "GetInstalledVersion",
-        "OccurrenceColor",
-        "OffsetProfile",
-        "Parents",
-        "UseOccurrenceColor",
     }
 )
 

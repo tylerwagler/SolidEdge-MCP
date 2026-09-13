@@ -517,38 +517,66 @@ class TestIsSubassembly:
 
 
 class TestGetOccurrenceBodies:
-    def test_success(self, asm_mgr):
-        am, doc = asm_mgr
-        body1 = MagicMock()
-        body1.Name = "Body_1"
-        body1.Volume = 0.001
-        body2 = MagicMock()
-        body2.Name = "Body_2"
-        body2.Volume = 0.002
+    """Occurrence.Bodies does not exist; Body is singular."""
 
-        bodies = MagicMock()
-        bodies.Count = 2
-        bodies.Item.side_effect = lambda i: {1: body1, 2: body2}[i]
-
-        occ = MagicMock()
-        occ.Bodies = bodies
+    def _assembly(self, doc, occurrence):
         occurrences = MagicMock()
         occurrences.Count = 2
-        occurrences.Item.return_value = occ
+        occurrences.Item.return_value = occurrence
         doc.Occurrences = occurrences
 
+    def test_reports_the_single_body(self, asm_mgr):
+        am, doc = asm_mgr
+        body = MagicMock()
+        body.Name = "Body_1"
+        body.Volume = 0.001
+        body.IsSolid = True
+        occ = MagicMock()
+        occ.Body = body
+        del occ.Bodies
+        occ.GetSimplifiedBodies.side_effect = Exception("no simplified bodies")
+        self._assembly(doc, occ)
+
         result = am.get_occurrence_bodies(0)
-        assert result["body_count"] == 2
+
+        assert result["body_count"] == 1
         assert result["bodies"][0]["name"] == "Body_1"
         assert result["bodies"][0]["volume"] == 0.001
-        assert result["bodies"][1]["name"] == "Body_2"
+        assert result["bodies"][0]["is_solid"] is True
+
+    def test_adds_the_simplified_bodies(self, asm_mgr):
+        am, doc = asm_mgr
+        main = MagicMock()
+        main.Name = "Body_1"
+        extra = MagicMock()
+        extra.Name = "Body_2"
+        occ = MagicMock()
+        occ.Body = main
+        del occ.Bodies
+        occ.GetSimplifiedBodies.return_value = (1, (extra,))
+        self._assembly(doc, occ)
+
+        result = am.get_occurrence_bodies(0)
+
+        assert [b["name"] for b in result["bodies"]] == ["Body_1", "Body_2"]
+
+    def test_a_component_with_no_body(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occ.Body = None
+        del occ.Bodies
+        occ.GetSimplifiedBodies.side_effect = Exception("none")
+        self._assembly(doc, occ)
+
+        result = am.get_occurrence_bodies(0)
+
+        assert result["body_count"] == 0
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
         doc.Type = IG_PART_DOCUMENT
 
-        result = am.get_occurrence_bodies(0)
-        assert "error" in result
+        assert "error" in am.get_occurrence_bodies(0)
 
     def test_invalid_index(self, asm_mgr):
         am, doc = asm_mgr
@@ -556,8 +584,7 @@ class TestGetOccurrenceBodies:
         occurrences.Count = 1
         doc.Occurrences = occurrences
 
-        result = am.get_occurrence_bodies(5)
-        assert "error" in result
+        assert "error" in am.get_occurrence_bodies(5)
 
 
 # ============================================================================

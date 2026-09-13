@@ -223,54 +223,91 @@ class TestOffsetSketch2d:
 # ============================================================================
 
 
+def _line2d(x1, y1, x2, y2):
+    """A Line2d as Solid Edge exposes it: pure-[out] accessors, no properties."""
+    line = MagicMock()
+    line.GetStartPoint.return_value = (x1, y1)
+    line.GetEndPoint.return_value = (x2, y2)
+    del line.StartPoint
+    del line.EndPoint
+    return line
+
+
+def _circle2d(cx, cy, radius):
+    circle = MagicMock()
+    circle.GetCenterPoint.return_value = (cx, cy)
+    circle.Radius = radius
+    del circle.CenterPoint
+    return circle
+
+
+def _transformable_profile(lines=(), circles=(), arcs=()):
+    profile = MagicMock()
+    profile.Lines2d = _collection(list(lines))
+    profile.Circles2d = _collection(list(circles))
+    profile.Arcs2d = _collection(list(arcs))
+    return profile
+
+
 class TestSketchRotate:
-    def test_success(self, sketch_mgr):
-        sm, doc = sketch_mgr
-        profile = MagicMock()
+    """Rotating used to erase the sketch.
+
+    The reads went through ``line.StartPoint.X``, which Line2d does not have,
+    inside a bare except, and the delete loop ran regardless. Every line and
+    circle was removed and none re-created, and the result said success.
+    """
+
+    def test_moves_a_line_about_the_origin(self, sketch_mgr):
+        sm, _doc = sketch_mgr
+        profile = _transformable_profile(lines=[_line2d(0.1, 0.0, 0.1, 0.1)])
         sm.active_profile = profile
 
-        lines = MagicMock()
-        lines.Count = 0
-        profile.Lines2d = lines
+        result = sm.sketch_rotate(0.0, 0.0, 90.0)
 
-        circles = MagicMock()
-        circles.Count = 0
-        profile.Circles2d = circles
+        assert result["status"] == "transformed"
+        assert result["elements"] == 1
+        assert result["angle_degrees"] == 90.0
+        (x1, y1, x2, y2), _kw = profile.Lines2d.AddBy2Points.call_args
+        assert (round(x1, 9), round(y1, 9)) == (0.0, 0.1)
+        assert (round(x2, 9), round(y2, 9)) == (-0.1, 0.1)
+
+    def test_moves_a_circle_without_resizing_it(self, sketch_mgr):
+        sm, _doc = sketch_mgr
+        profile = _transformable_profile(circles=[_circle2d(0.05, 0.0, 0.01)])
+        sm.active_profile = profile
+
+        sm.sketch_rotate(0.0, 0.0, 90.0)
+
+        (cx, cy, r), _kw = profile.Circles2d.AddByCenterRadius.call_args
+        assert (round(cx, 9), round(cy, 9)) == (0.0, 0.05)
+        assert r == 0.01
+
+    def test_nothing_is_deleted_when_a_read_fails(self, sketch_mgr):
+        """The bug: the delete ran even though nothing had been read."""
+        sm, _doc = sketch_mgr
+        broken = MagicMock()
+        broken.GetStartPoint.side_effect = Exception("no such member")
+        profile = _transformable_profile(lines=[broken])
+        sm.active_profile = profile
 
         result = sm.sketch_rotate(0.0, 0.0, 90.0)
-        assert result["status"] == "rotated"
-        assert result["angle_degrees"] == 90.0
+
+        assert "error" in result
+        broken.Delete.assert_not_called()
+        profile.Lines2d.AddBy2Points.assert_not_called()
+
+    def test_an_empty_sketch_is_an_error(self, sketch_mgr):
+        sm, _doc = sketch_mgr
+        sm.active_profile = _transformable_profile()
+
+        assert "error" in sm.sketch_rotate(0.0, 0.0, 90.0)
 
     def test_no_active_sketch(self, sketch_mgr):
-        sm, doc = sketch_mgr
+        sm, _doc = sketch_mgr
         sm.active_profile = None
 
         result = sm.sketch_rotate(0.0, 0.0, 45.0)
-        assert "error" in result
         assert "No active sketch" in result["error"]
-
-    def test_with_lines(self, sketch_mgr):
-        sm, doc = sketch_mgr
-        profile = MagicMock()
-        sm.active_profile = profile
-
-        line = MagicMock()
-        line.StartPoint.X = 0.1
-        line.StartPoint.Y = 0.0
-        line.EndPoint.X = 0.1
-        line.EndPoint.Y = 0.1
-        lines = MagicMock()
-        lines.Count = 1
-        lines.Item.return_value = line
-        profile.Lines2d = lines
-
-        circles = MagicMock()
-        circles.Count = 0
-        profile.Circles2d = circles
-
-        result = sm.sketch_rotate(0.0, 0.0, 90.0)
-        assert result["status"] == "rotated"
-        assert result["elements_rotated"] == 1
 
 
 # ============================================================================
@@ -279,52 +316,45 @@ class TestSketchRotate:
 
 
 class TestSketchScale:
-    def test_success(self, sketch_mgr):
-        sm, doc = sketch_mgr
-        profile = MagicMock()
+    """Scaling carried the same erase-the-sketch defect as rotating."""
+
+    def test_scales_a_circle_and_its_radius(self, sketch_mgr):
+        sm, _doc = sketch_mgr
+        profile = _transformable_profile(circles=[_circle2d(0.05, 0.0, 0.01)])
         sm.active_profile = profile
 
-        lines = MagicMock()
-        lines.Count = 0
-        profile.Lines2d = lines
-
-        circles = MagicMock()
-        circles.Count = 0
-        profile.Circles2d = circles
-
         result = sm.sketch_scale(0.0, 0.0, 2.0)
-        assert result["status"] == "scaled"
+
+        assert result["status"] == "transformed"
+        assert result["elements"] == 1
         assert result["scale_factor"] == 2.0
+        (cx, cy, r), _kw = profile.Circles2d.AddByCenterRadius.call_args
+        assert (round(cx, 9), round(cy, 9)) == (0.1, 0.0)
+        assert r == 0.02
+
+    def test_scales_a_line(self, sketch_mgr):
+        sm, _doc = sketch_mgr
+        profile = _transformable_profile(lines=[_line2d(0.0, 0.0, 0.1, 0.0)])
+        sm.active_profile = profile
+
+        sm.sketch_scale(0.0, 0.0, 3.0)
+
+        (x1, y1, x2, y2), _kw = profile.Lines2d.AddBy2Points.call_args
+        assert (round(x1, 9), round(y1, 9), round(x2, 9), round(y2, 9)) == (0.0, 0.0, 0.3, 0.0)
+
+    def test_rejects_a_non_positive_factor(self, sketch_mgr):
+        sm, _doc = sketch_mgr
+        sm.active_profile = _transformable_profile(lines=[_line2d(0, 0, 1, 0)])
+
+        assert "error" in sm.sketch_scale(0.0, 0.0, 0.0)
+        assert "error" in sm.sketch_scale(0.0, 0.0, -2.0)
 
     def test_no_active_sketch(self, sketch_mgr):
-        sm, doc = sketch_mgr
+        sm, _doc = sketch_mgr
         sm.active_profile = None
 
         result = sm.sketch_scale(0.0, 0.0, 2.0)
-        assert "error" in result
         assert "No active sketch" in result["error"]
-
-    def test_with_circles(self, sketch_mgr):
-        sm, doc = sketch_mgr
-        profile = MagicMock()
-        sm.active_profile = profile
-
-        lines = MagicMock()
-        lines.Count = 0
-        profile.Lines2d = lines
-
-        circle = MagicMock()
-        circle.CenterPoint.X = 0.05
-        circle.CenterPoint.Y = 0.0
-        circle.Radius = 0.01
-        circles = MagicMock()
-        circles.Count = 1
-        circles.Item.return_value = circle
-        profile.Circles2d = circles
-
-        result = sm.sketch_scale(0.0, 0.0, 2.0)
-        assert result["status"] == "scaled"
-        assert result["elements_scaled"] == 1
 
 
 # ============================================================================
@@ -621,18 +651,12 @@ class TestGetOrderedGeometry:
         profile = MagicMock()
         sm.active_profile = profile
 
-        elem1 = MagicMock()
-        elem1.StartPoint.X = 0.0
-        elem1.StartPoint.Y = 0.0
-        elem1.EndPoint.X = 0.1
-        elem1.EndPoint.Y = 0.0
+        # 2D elements expose GetStartPoint/GetCenterPoint, never StartPoint.X.
+        elem1 = _line2d(0.0, 0.0, 0.1, 0.0)
         elem1.Length = 0.1
         type(elem1).__name__ = "Line2d"
 
-        elem2 = MagicMock()
-        elem2.CenterPoint.X = 0.05
-        elem2.CenterPoint.Y = 0.05
-        elem2.Radius = 0.02
+        elem2 = _circle2d(0.05, 0.05, 0.02)
         type(elem2).__name__ = "Circle2d"
 
         profile.Lines2d = _collection([elem1])
@@ -655,6 +679,11 @@ class TestGetOrderedGeometry:
         assert set(kwargs) == {"Elements"}
         assert list(kwargs["Elements"]) == [elem1, elem2]
         assert len(result["elements"]) == 2
+        # These used to come back holding nothing but an index.
+        assert result["elements"][0]["start_x"] == 0.0
+        assert result["elements"][0]["end_x"] == 0.1
+        assert result["elements"][1]["center_x"] == 0.05
+        assert result["elements"][1]["radius"] == 0.02
         assert result["elements"][0]["start_x"] == 0.0
         assert result["elements"][0]["end_x"] == 0.1
         assert result["elements"][1]["center_x"] == 0.05

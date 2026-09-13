@@ -646,41 +646,98 @@ class TestSketchChamfer:
 
 
 class TestSketchMirror:
-    def test_mirror_x(self):
+    """Line2d has GetStartPoint, not StartPoint.X.
+
+    Reading the property that does not exist raised inside a bare except, so
+    every element was skipped and the result still said "created" with a count
+    of zero.
+    """
+
+    def _profile(self, lines=(), circles=(), arcs=()):
+        profile = MagicMock()
+        for name, items in (("Lines2d", lines), ("Circles2d", circles), ("Arcs2d", arcs)):
+            collection = MagicMock()
+            collection.Count = len(items)
+            collection.Item.side_effect = lambda i, items=items: items[i - 1]
+            setattr(profile, name, collection)
+        return profile
+
+    def _line(self, x1, y1, x2, y2):
+        line = MagicMock()
+        line.GetStartPoint.return_value = (x1, y1)
+        line.GetEndPoint.return_value = (x2, y2)
+        del line.StartPoint
+        del line.EndPoint
+        return line
+
+    def _manager(self, profile):
         from solidedge_mcp.backends.sketching import SketchManager
 
-        dm = MagicMock()
-        sm = SketchManager(dm)
+        manager = SketchManager(MagicMock())
+        manager.active_profile = profile
+        return manager
 
-        profile = MagicMock()
-        line = MagicMock()
-        line.StartPoint.X = 0.01
-        line.StartPoint.Y = 0.02
-        line.EndPoint.X = 0.03
-        line.EndPoint.Y = 0.04
-        lines = MagicMock()
-        lines.Count = 1
-        lines.Item.return_value = line
-        profile.Lines2d = lines
+    def test_mirror_x_flips_y(self):
+        profile = self._profile(lines=[self._line(0.01, 0.02, 0.03, 0.04)])
+        manager = self._manager(profile)
 
-        circles = MagicMock()
-        circles.Count = 0
-        profile.Circles2d = circles
-        sm.active_profile = profile
+        result = manager.sketch_mirror("X")
 
-        result = sm.sketch_mirror("X")
         assert result["status"] == "created"
         assert result["mirrored_elements"] == 1
         profile.Lines2d.AddBy2Points.assert_called_once_with(0.01, -0.02, 0.03, -0.04)
 
+    def test_mirror_y_flips_x(self):
+        profile = self._profile(lines=[self._line(0.01, 0.02, 0.03, 0.04)])
+        manager = self._manager(profile)
+
+        manager.sketch_mirror("Y")
+
+        profile.Lines2d.AddBy2Points.assert_called_once_with(-0.01, 0.02, -0.03, 0.04)
+
+    def test_mirrors_a_circle(self):
+        circle = MagicMock()
+        circle.GetCenterPoint.return_value = (0.05, 0.02)
+        circle.Radius = 0.01
+        profile = self._profile(circles=[circle])
+        manager = self._manager(profile)
+
+        result = manager.sketch_mirror("X")
+
+        assert result["mirrored_elements"] == 1
+        profile.Circles2d.AddByCenterRadius.assert_called_once_with(0.05, -0.02, 0.01)
+
+    def test_mirrors_an_arc_with_its_ends_swapped(self):
+        """Mirroring reverses the sweep, so start and end change places."""
+        arc = MagicMock()
+        arc.GetCenterPoint.return_value = (0.0, 0.0)
+        arc.GetStartPoint.return_value = (0.01, 0.0)
+        arc.GetEndPoint.return_value = (0.0, 0.01)
+        profile = self._profile(arcs=[arc])
+        manager = self._manager(profile)
+
+        result = manager.sketch_mirror("X")
+
+        assert result["mirrored_elements"] == 1
+        profile.Arcs2d.AddByCenterStartEnd.assert_called_once_with(0.0, 0.0, 0.0, -0.01, 0.01, 0.0)
+
+    def test_an_empty_sketch_is_an_error_not_a_zero_count(self):
+        manager = self._manager(self._profile())
+
+        result = manager.sketch_mirror("X")
+
+        assert "error" in result
+        assert "Nothing was mirrored" in result["error"]
+
+    def test_invalid_axis(self):
+        manager = self._manager(self._profile(lines=[self._line(0, 0, 1, 1)]))
+
+        assert "error" in manager.sketch_mirror("Z")
+
     def test_no_sketch(self):
         from solidedge_mcp.backends.sketching import SketchManager
 
-        dm = MagicMock()
-        sm = SketchManager(dm)
-
-        result = sm.sketch_mirror()
-        assert "error" in result
+        assert "error" in SketchManager(MagicMock()).sketch_mirror()
 
 
 # ============================================================================

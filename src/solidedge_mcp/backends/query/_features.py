@@ -286,61 +286,32 @@ class FeatureQueryMixin:
             return error_result(e)
 
     def get_feature_parents(self, feature_name: str) -> dict[str, Any]:
-        """
-        Get the parent features of a named feature.
+        """Report that a feature's parents are not exposed through COM.
 
-        Reads the .Parents collection from DesignEdgebarFeatures to find
-        which features were used to create the named feature.
+        This read ``feature.Parents``. No Solid Edge interface has a
+        ``Parents`` member, so the read raised and the method returned an
+        empty list with a "not available" note that read like a quirk of the
+        document rather than a call that could never work. Verified against
+        every scraped type library.
 
         Args:
-            feature_name: Name of the feature to inspect
+            feature_name: The feature that was to be inspected.
 
         Returns:
-            Dict with list of parent feature names
+            Dict with an ``unsupported`` error naming what can be read instead.
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            if not hasattr(doc, "DesignEdgebarFeatures"):
-                return {"error": "DesignEdgebarFeatures not available"}
-
-            features = doc.DesignEdgebarFeatures
-            target = None
-            for i in range(1, features.Count + 1):
-                try:
-                    feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
-                        target = feat
-                        break
-                except Exception:
-                    continue
-
-            if target is None:
-                return {"error": f"Feature '{feature_name}' not found"}
-
-            parents = []
-            try:
-                parent_coll = target.Parents
-                if parent_coll and hasattr(parent_coll, "Count"):
-                    for j in range(1, parent_coll.Count + 1):
-                        try:
-                            parent = parent_coll.Item(j)
-                            p_info: dict[str, Any] = {"index": j - 1}
-                            with contextlib.suppress(Exception):
-                                p_info["name"] = parent.Name
-                            parents.append(p_info)
-                        except Exception:
-                            parents.append({"index": j - 1, "name": "unknown"})
-            except Exception as e:
-                return {
-                    "feature_name": feature_name,
-                    "parents": [],
-                    "note": f"Parents collection not available: {e}",
-                }
-
-            return {"feature_name": feature_name, "parents": parents, "count": len(parents)}
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Solid Edge does not expose a feature's parent features through "
+                "COM; no interface has a Parents member. Read the sketches a "
+                "feature was built from with "
+                "solidedge://model/feature/{name}/profiles, and the whole "
+                "Pathfinder tree in order with "
+                "solidedge://model/edgebar-features."
+            ),
+            "unsupported": True,
+            "feature_name": feature_name,
+        }
 
     def get_feature_dimensions(self, feature_name: str) -> dict[str, Any]:
         """
