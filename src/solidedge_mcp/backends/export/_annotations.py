@@ -5,8 +5,10 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..logging import get_logger
 from ._base import NOT_A_DRAFT
+from ._locate import nearest_element, no_element_error
 
 _logger = get_logger(__name__)
 
@@ -20,6 +22,31 @@ _WELD_TYPE_MAP = {
     "spot": 2,  # igDimWeldTopSpot
     "seam": 3,  # igDimWeldTopSeam
 }
+
+
+def _xy(obj: Any, member: str) -> list[float] | None:
+    """Read a pure-[out] 2D accessor such as GetCenterPoint as [x, y]."""
+    try:
+        point = getattr(obj, member)()
+        return [float(point[0]), float(point[1])]
+    except Exception:
+        return None
+
+
+def _dimension_value(dimension: Any) -> float | None:
+    """The measured value of a Dimension, or None if it will not give one.
+
+    Dimensions.Add* returns a Dimension whose default property is its value,
+    so pywin32 hands back a float for most of them.
+    """
+    if isinstance(dimension, int | float):
+        return float(dimension)
+    for member in ("Value", "DimensionValue"):
+        try:
+            return float(getattr(dimension, member))
+        except Exception:
+            continue
+    return None
 
 
 class AnnotationsMixin:
@@ -110,6 +137,134 @@ class AnnotationsMixin:
         except Exception as e:
             return error_result(e)
 
+    # =================================================================
+    # DIMENSION HELPERS
+    #
+    # Every Dimensions.Add* method takes the object being dimensioned. These
+    # turn the coordinates an MCP caller has into that object.
+    # =================================================================
+
+    def _distance_between_points(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> dict[str, Any]:
+        """Dimension the distance between two points, via the elements at them."""
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_draft(doc)
+            if err:
+                return err
+            sheet = doc.ActiveSheet
+
+            first = nearest_element(sheet, x1, y1)
+            if first is None:
+                return no_element_error(x1, y1, "element to dimension from")
+            second = nearest_element(sheet, x2, y2)
+            if second is None:
+                return no_element_error(x2, y2, "element to dimension to")
+
+            # keyPoint=True snaps each end to the element keypoint nearest the
+            # coordinate, which makes this a true point-to-point distance.
+            value = sheet.Dimensions.AddDistanceBetweenObjects(
+                first.obj, x1, y1, 0.0, True, second.obj, x2, y2, 0.0, True
+            )
+
+            return {
+                "status": "created",
+                "type": "distance_dimension",
+                "point1": [x1, y1],
+                "point2": [x2, y2],
+                "value": _dimension_value(value),
+                "attached_to": [first.describe(), second.describe()],
+            }
+        except Exception as e:
+            return error_result(e)
+
+    def _angle_between_points(
+        self, x1: float, y1: float, x2: float, y2: float, x3: float, y3: float
+    ) -> dict[str, Any]:
+        """Dimension the angle between the lines at two of the three points."""
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_draft(doc)
+            if err:
+                return err
+            sheet = doc.ActiveSheet
+
+            first = nearest_element(sheet, x1, y1, kinds=("line",))
+            if first is None:
+                return no_element_error(x1, y1, "line to measure the angle from")
+            second = nearest_element(sheet, x3, y3, kinds=("line",))
+            if second is None:
+                return no_element_error(x3, y3, "line to measure the angle to")
+            if first.identity == second.identity:
+                return {
+                    "error": (
+                        "Both points landed on the same line, so there is no angle "
+                        "to dimension. Give a point on each of the two lines."
+                    ),
+                    "point1": [x1, y1],
+                    "point2": [x3, y3],
+                }
+
+            value = sheet.Dimensions.AddAngleBetweenObjects(
+                first.obj, x1, y1, 0.0, False, second.obj, x3, y3, 0.0, False
+            )
+
+            return {
+                "status": "created",
+                "type": "angular_dimension",
+                "vertex": [x2, y2],
+                "value_radians": _dimension_value(value),
+                "attached_to": [first.describe(), second.describe()],
+            }
+        except Exception as e:
+            return error_result(e)
+
+    def _circular_dimension(
+        self,
+        center_x: float,
+        center_y: float,
+        point_x: float,
+        point_y: float,
+        want: str,
+        result_type: str,
+    ) -> dict[str, Any]:
+        """Dimension the radius or diameter of the curve at the given point."""
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_draft(doc)
+            if err:
+                return err
+            sheet = doc.ActiveSheet
+
+            kinds = ("circle", "arc")
+            hit = nearest_element(sheet, point_x, point_y, kinds=kinds)
+            if hit is None:
+                # A caller may only know the centre; that locates it too.
+                hit = nearest_element(sheet, center_x, center_y, kinds=kinds)
+            if hit is None:
+                return no_element_error(point_x, point_y, "circle or arc")
+
+            dims = sheet.Dimensions
+            if want == "radius":
+                value = dims.AddRadius(hit.obj)
+            elif hit.kind == "circle":
+                value = dims.AddCircularDiameter(hit.obj)
+            else:
+                # An arc has no full circle to place a diameter across.
+                value = dims.AddRadialDiameter(hit.obj)
+
+            return {
+                "status": "created",
+                "type": result_type,
+                "center": [center_x, center_y],
+                "point": [point_x, point_y],
+                "value": _dimension_value(value),
+                "attached_to": hit.describe(),
+            }
+        except Exception as e:
+            return error_result(e)
+
     def add_dimension(
         self,
         x1: float,
@@ -119,43 +274,30 @@ class AnnotationsMixin:
         dim_x: float | None = None,
         dim_y: float | None = None,
     ) -> dict[str, Any]:
-        """
-        Add a linear dimension between two points on the active draft sheet.
+        """Add a linear dimension between two points on the active draft sheet.
 
-        NOT AVAILABLE via COM automation. The ``Dimensions`` collection is
-        object-based, not coordinate-based: ``AddLength(Object)`` dimensions an
-        existing 2D element, and the only coordinate-taking alternative,
+        The ``Dimensions`` collection is object-based:
         ``AddDistanceBetweenObjects(Object1, x1, y1, z1, keyPoint1, Object2,
-        x2, y2, z2, keyPoint2)``, still needs the two objects the points lie
-        on. There is no "dimension between two bare points" API, so this
-        returns an ``unsupported`` error dict without touching COM. The
-        signature is kept so tool dispatch keeps working.
-
-        Use ``add_length_dimension(object_index)`` to dimension an existing
-        line instead.
+        x2, y2, z2, keyPoint2)``. There is no coordinate-only overload, and
+        the ``AddDistanceBetweenPoints`` this once called is in no Solid Edge
+        type library. So each point is resolved to the nearest element on the
+        sheet first, exactly as a mouse pick would, and ``keyPoint`` is set so
+        the dimension snaps to that element's keypoint nearest the coordinate.
+        Verified against Solid Edge 2026.
 
         Args:
-            x1: First point X (meters)
-            y1: First point Y (meters)
-            x2: Second point X (meters)
-            y2: Second point Y (meters)
-            dim_x: Dimension text X position (meters, optional)
-            dim_y: Dimension text Y position (meters, optional)
+            x1: First point X, in meters of sheet space.
+            y1: First point Y, in meters of sheet space.
+            x2: Second point X, in meters of sheet space.
+            y2: Second point Y, in meters of sheet space.
+            dim_x: Ignored. Solid Edge places the dimension text itself.
+            dim_y: Ignored.
 
         Returns:
-            Dict with an ``unsupported`` error
+            Dict with status, the measured value and what each end attached to.
         """
-        _logger.warning("add_dimension is not available via COM automation")
-        del x1, y1, x2, y2, dim_x, dim_y
-        return {
-            "error": (
-                "Dimensions.AddLength takes the 2D object being dimensioned, not a "
-                "pair of coordinates, and this server cannot select the objects two "
-                "bare points lie on. Use add_length_dimension(object_index) for an "
-                "existing line, or the Solid Edge UI."
-            ),
-            "unsupported": True,
-        }
+        del dim_x, dim_y
+        return self._distance_between_points(x1, y1, x2, y2)
 
     def add_balloon(
         self,
@@ -265,42 +407,29 @@ class AnnotationsMixin:
         dim_x: float | None = None,
         dim_y: float | None = None,
     ) -> dict[str, Any]:
-        """
-        Add an angular dimension between three points on the active draft sheet.
+        """Add an angular dimension between two lines on the active draft sheet.
 
-        NOT AVAILABLE via COM automation. ``Dimensions`` has no ``AddAngular``
-        member at all — the angular entry points are ``AddAngle(Object)``,
-        ``AddAngleBetweenObjects(ele1, x1, y1, z1, keyPoint1, ele2, x2, y2, z2,
-        keyPoint2)`` and ``AddAngleBetween3Objects(...)``, all of which take
-        the 2D objects forming the angle rather than bare coordinates. This
-        server cannot select those objects, so it returns an ``unsupported``
-        error dict without touching COM. The signature is kept so tool
-        dispatch keeps working.
+        ``Dimensions`` has no ``AddAngular`` member. The real entry point is
+        ``AddAngleBetweenObjects(ele1, x1, y1, z1, keyPoint1, ele2, ...)``,
+        which takes the two elements forming the angle, so (x1, y1) and
+        (x3, y3) are used to find them. The vertex is implied by where the two
+        elements meet, so (x2, y2) only disambiguates which side is measured.
 
         Args:
-            x1: First ray endpoint X (meters)
-            y1: First ray endpoint Y (meters)
-            x2: Vertex X (meters)
-            y2: Vertex Y (meters)
-            x3: Second ray endpoint X (meters)
-            y3: Second ray endpoint Y (meters)
-            dim_x: Dimension text X position (meters, optional)
-            dim_y: Dimension text Y position (meters, optional)
+            x1: A point on the first line, in meters of sheet space.
+            y1: A point on the first line.
+            x2: The vertex. Recorded in the result; Solid Edge derives it.
+            y2: The vertex Y.
+            x3: A point on the second line.
+            y3: A point on the second line.
+            dim_x: Ignored. Solid Edge places the dimension text itself.
+            dim_y: Ignored.
 
         Returns:
-            Dict with an ``unsupported`` error
+            Dict with status, the measured angle in radians, and both picks.
         """
-        _logger.warning("add_angular_dimension is not available via COM automation")
-        del x1, y1, x2, y2, x3, y3, dim_x, dim_y
-        return {
-            "error": (
-                "Dimensions has no AddAngular method; the angular dimension APIs "
-                "(AddAngle, AddAngleBetweenObjects, AddAngleBetween3Objects) take the "
-                "2D objects forming the angle, which this server cannot select. "
-                "Use the Solid Edge UI."
-            ),
-            "unsupported": True,
-        }
+        del dim_x, dim_y
+        return self._angle_between_points(x1, y1, x2, y2, x3, y3)
 
     def add_radial_dimension(
         self,
@@ -311,44 +440,27 @@ class AnnotationsMixin:
         dim_x: float | None = None,
         dim_y: float | None = None,
     ) -> dict[str, Any]:
-        """
-        Add a radial dimension on the active draft sheet.
+        """Add a radius dimension to the circle or arc at the given point.
+
+        ``Dimensions.AddRadius(Object)`` takes the curve being dimensioned.
+        The ``AddRadial`` this once called is in no Solid Edge type library,
+        so the point on the curve is used to find the circle or arc instead.
 
         Args:
-            center_x: Arc center X (meters)
-            center_y: Arc center Y (meters)
-            point_x: Point on arc X (meters)
-            point_y: Point on arc Y (meters)
-            dim_x: Dimension text X position (meters, optional)
-            dim_y: Dimension text Y position (meters, optional)
+            center_x: Curve center X, in meters of sheet space.
+            center_y: Curve center Y.
+            point_x: A point on the curve, in meters of sheet space.
+            point_y: A point on the curve.
+            dim_x: Ignored. Solid Edge places the dimension text itself.
+            dim_y: Ignored.
 
         Returns:
-            Dict with status
+            Dict with status, the radius, and the curve that was dimensioned.
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            err = self._require_draft(doc)
-            if err:
-                return err
-
-            sheet = doc.ActiveSheet
-            dims = sheet.Dimensions
-
-            text_x = dim_x if dim_x is not None else (center_x + point_x) / 2
-            text_y = dim_y if dim_y is not None else (center_y + point_y) / 2 + 0.02
-
-            dims.AddRadial(center_x, center_y, point_x, point_y, text_x, text_y)
-
-            return {
-                "status": "created",
-                "type": "radial_dimension",
-                "center": [center_x, center_y],
-                "point": [point_x, point_y],
-                "text_position": [text_x, text_y],
-            }
-        except Exception as e:
-            return error_result(e)
+        del dim_x, dim_y
+        return self._circular_dimension(
+            center_x, center_y, point_x, point_y, "radius", "radial_dimension"
+        )
 
     def add_diameter_dimension(
         self,
@@ -359,44 +471,27 @@ class AnnotationsMixin:
         dim_x: float | None = None,
         dim_y: float | None = None,
     ) -> dict[str, Any]:
-        """
-        Add a diameter dimension on the active draft sheet.
+        """Add a diameter dimension to the circle or arc at the given point.
+
+        Circles get ``Dimensions.AddCircularDiameter(Object)`` and arcs get
+        ``AddRadialDiameter(Object)``. The ``AddDiameter`` this once called is
+        in no Solid Edge type library.
 
         Args:
-            center_x: Circle center X (meters)
-            center_y: Circle center Y (meters)
-            point_x: Point on circle X (meters)
-            point_y: Point on circle Y (meters)
-            dim_x: Dimension text X position (meters, optional)
-            dim_y: Dimension text Y position (meters, optional)
+            center_x: Curve center X, in meters of sheet space.
+            center_y: Curve center Y.
+            point_x: A point on the curve, in meters of sheet space.
+            point_y: A point on the curve.
+            dim_x: Ignored. Solid Edge places the dimension text itself.
+            dim_y: Ignored.
 
         Returns:
-            Dict with status
+            Dict with status, the diameter, and the curve that was dimensioned.
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            err = self._require_draft(doc)
-            if err:
-                return err
-
-            sheet = doc.ActiveSheet
-            dims = sheet.Dimensions
-
-            text_x = dim_x if dim_x is not None else center_x + (point_x - center_x) * 1.3
-            text_y = dim_y if dim_y is not None else center_y + (point_y - center_y) * 1.3 + 0.02
-
-            dims.AddDiameter(center_x, center_y, point_x, point_y, text_x, text_y)
-
-            return {
-                "status": "created",
-                "type": "diameter_dimension",
-                "center": [center_x, center_y],
-                "point": [point_x, point_y],
-                "text_position": [text_x, text_y],
-            }
-        except Exception as e:
-            return error_result(e)
+        del dim_x, dim_y
+        return self._circular_dimension(
+            center_x, center_y, point_x, point_y, "diameter", "diameter_dimension"
+        )
 
     def add_ordinate_dimension(
         self,
@@ -407,81 +502,83 @@ class AnnotationsMixin:
         dim_x: float | None = None,
         dim_y: float | None = None,
     ) -> dict[str, Any]:
-        """
-        Add an ordinate dimension on the active draft sheet.
+        """Add an ordinate dimension from a datum origin to a measured point.
 
-        Ordinate dimensions show the distance from an origin to a point
-        along a single axis.
+        Two calls, both object-based:
+        ``AddCoordinateOrigin(Object, x, y, z, keyPoint)`` establishes the
+        datum and ``AddCoordinate(Obj1, ..., Obj2, ...)`` measures to it. The
+        ``AddOrdinate`` this once called is in no Solid Edge type library.
+        Each coordinate is resolved to the nearest element, and ``keyPoint`` is
+        set so both ends snap to real vertices.
 
         Args:
-            origin_x: Datum origin X (meters)
-            origin_y: Datum origin Y (meters)
-            point_x: Measured point X (meters)
-            point_y: Measured point Y (meters)
-            dim_x: Dimension text X position (meters, optional)
-            dim_y: Dimension text Y position (meters, optional)
+            origin_x: Datum origin X, in meters of sheet space.
+            origin_y: Datum origin Y.
+            point_x: Measured point X, in meters of sheet space.
+            point_y: Measured point Y.
+            dim_x: Ignored. Solid Edge places the dimension text itself.
+            dim_y: Ignored.
 
         Returns:
-            Dict with status
+            Dict with status, the measured value, and both picks.
         """
+        del dim_x, dim_y
         try:
             doc = self.doc_manager.get_active_document()
-
             err = self._require_draft(doc)
             if err:
                 return err
-
             sheet = doc.ActiveSheet
+
+            origin_hit = nearest_element(sheet, origin_x, origin_y)
+            if origin_hit is None:
+                return no_element_error(origin_x, origin_y, "element to use as the datum")
+            point_hit = nearest_element(sheet, point_x, point_y)
+            if point_hit is None:
+                return no_element_error(point_x, point_y, "element to measure to")
+
             dims = sheet.Dimensions
-
-            text_x = dim_x if dim_x is not None else point_x
-            text_y = dim_y if dim_y is not None else point_y + 0.02
-
-            dims.AddOrdinate(origin_x, origin_y, point_x, point_y, text_x, text_y)
+            dims.AddCoordinateOrigin(origin_hit.obj, origin_x, origin_y, 0.0, True)
+            value = dims.AddCoordinate(
+                origin_hit.obj,
+                origin_x,
+                origin_y,
+                0.0,
+                True,
+                point_hit.obj,
+                point_x,
+                point_y,
+                0.0,
+                True,
+            )
 
             return {
                 "status": "created",
                 "type": "ordinate_dimension",
                 "origin": [origin_x, origin_y],
                 "point": [point_x, point_y],
-                "text_position": [text_x, text_y],
+                "value": _dimension_value(value),
+                "attached_to": [origin_hit.describe(), point_hit.describe()],
             }
         except Exception as e:
             return error_result(e)
 
     def add_distance_dimension(self, x1: float, y1: float, x2: float, y2: float) -> dict[str, Any]:
-        """
-        Add a distance dimension between two points on the active draft sheet.
+        """Add a distance dimension between two points on the active draft sheet.
 
-        NOT AVAILABLE via COM automation. fwksupp.tlb offers
-        Dimensions.AddDistanceBetweenObjects(Object1, x1, y1, z1, keyPoint1,
-        Object2, x2, y2, z2, keyPoint2), which measures between two drawing
-        *objects* and their keypoints. There is no AddDistanceBetweenPoints and
-        no coordinate-only overload, so a dimension between two bare points
-        cannot be created. Verified against Solid Edge 2026.
+        See :meth:`add_dimension`; this is the same operation reached through
+        ``add_2d_dimension(type='distance')``.
 
         Args:
-            x1: First point X (meters)
-            y1: First point Y (meters)
-            x2: Second point X (meters)
-            y2: Second point Y (meters)
+            x1: First point X, in meters of sheet space.
+            y1: First point Y, in meters of sheet space.
+            x2: Second point X, in meters of sheet space.
+            y2: Second point Y, in meters of sheet space.
 
         Returns:
-            Dict explaining why this is unsupported
+            Dict with status, the measured value and what each end attached to.
         """
-        return {
-            "error": (
-                "A dimension between two bare coordinates cannot be created. "
-                "Solid Edge measures between drawing objects: "
-                "Dimensions.AddDistanceBetweenObjects needs two objects and their "
-                "keypoints, which this server cannot select. Dimension a line with "
-                "add_2d_dimension(type='length'), or place the dimension in the "
-                "Solid Edge UI."
-            ),
-            "unsupported": True,
-            "point1": [x1, y1],
-            "point2": [x2, y2],
-        }
+        return self._distance_between_points(x1, y1, x2, y2)
 
     def add_length_dimension(self, object_index: int) -> dict[str, Any]:
         """
@@ -512,12 +609,13 @@ class AnnotationsMixin:
 
             # AddLength(Object as VT_DISPATCH) dimensions the 2D element
             # itself. It does not take endpoint or text-placement coordinates.
-            dims.AddLength(line)
+            value = dims.AddLength(line)
 
             return {
                 "status": "added",
                 "dimension_type": "length",
                 "object_index": object_index,
+                "value": _dimension_value(value),
             }
         except Exception as e:
             return error_result(e)
@@ -525,18 +623,20 @@ class AnnotationsMixin:
     def add_radius_dimension_2d(
         self, object_index: int, object_type: str = "circle"
     ) -> dict[str, Any]:
-        """
-        Add a radius dimension to a circle or arc on the active draft sheet.
+        """Add a radius dimension to a circle or arc picked out of a collection.
 
-        Gets the object from Circles2d or Arcs2d by index and adds a radius
-        dimension via sheet.Dimensions.AddRadialDimension.
+        The curve comes from ``sheet.Circles2d`` or ``sheet.Arcs2d`` by index
+        and is dimensioned with ``Dimensions.AddRadius(Object)``. The
+        ``AddRadialDimension`` this once called is in no Solid Edge type
+        library, and neither are the ``CenterX``/``CenterY`` accessors it read
+        to place the text; Solid Edge places the text itself.
 
         Args:
-            object_index: 0-based index into Circles2d or Arcs2d collection
-            object_type: 'circle' or 'arc'
+            object_index: 0-based index into Circles2d or Arcs2d.
+            object_type: 'circle' or 'arc', selecting the collection.
 
         Returns:
-            Dict with status and dimension type
+            Dict with status, the radius, and the object dimensioned.
         """
         try:
             doc = self.doc_manager.get_active_document()
@@ -556,26 +656,14 @@ class AnnotationsMixin:
                 return {"error": (f"Invalid index: {object_index}. Count: {collection.Count}")}
 
             obj = collection.Item(object_index + 1)  # COM 1-indexed
-            dims = sheet.Dimensions
-
-            # Get center and radius for dimension placement
-            cx, cy, radius = 0.0, 0.0, 0.0
-            with contextlib.suppress(Exception):
-                cx = obj.CenterX
-                cy = obj.CenterY
-                radius = obj.Radius
-
-            # Place dimension text slightly outside the circle/arc
-            dim_x = cx + radius + 0.01
-            dim_y = cy + 0.01
-
-            dims.AddRadialDimension(obj, dim_x, dim_y, 0.0)
+            value = sheet.Dimensions.AddRadius(obj)
 
             return {
                 "status": "added",
                 "dimension_type": "radius",
                 "object_type": object_type,
                 "object_index": object_index,
+                "value": _dimension_value(value),
             }
         except Exception as e:
             return error_result(e)
@@ -589,38 +677,23 @@ class AnnotationsMixin:
         x3: float,
         y3: float,
     ) -> dict[str, Any]:
-        """
-        Add an angle dimension between three points on the active draft sheet.
+        """Add an angle dimension between two lines on the active draft sheet.
 
-        NOT AVAILABLE via COM automation. ``Dimensions.AddAngle`` takes a
-        single ``Object`` (the 2D element to dimension), not twelve
-        coordinates; the multi-element forms
-        (``AddAngleBetweenObjects``/``AddAngleBetween3Objects``) also take
-        objects. This server cannot select the objects three bare points lie
-        on, so it returns an ``unsupported`` error dict without touching COM.
-        The signature is kept so tool dispatch keeps working.
+        See :meth:`add_angular_dimension`; this is the same operation reached
+        through ``add_2d_dimension(type='angle')``.
 
         Args:
-            x1: First point X (meters) - start of first ray
-            y1: First point Y (meters)
-            x2: Vertex point X (meters) - the corner
-            y2: Vertex point Y (meters)
-            x3: Third point X (meters) - end of second ray
-            y3: Third point Y (meters)
+            x1: A point on the first line, in meters of sheet space.
+            y1: A point on the first line.
+            x2: The vertex. Recorded in the result; Solid Edge derives it.
+            y2: The vertex Y.
+            x3: A point on the second line.
+            y3: A point on the second line.
 
         Returns:
-            Dict with an ``unsupported`` error
+            Dict with status, the measured angle in radians, and both picks.
         """
-        _logger.warning("add_angle_dimension_2d is not available via COM automation")
-        del x1, y1, x2, y2, x3, y3
-        return {
-            "error": (
-                "Dimensions.AddAngle takes the 2D object being dimensioned, not three "
-                "points, and this server cannot select the objects those points lie "
-                "on. Use the Solid Edge UI."
-            ),
-            "unsupported": True,
-        }
+        return self._angle_between_points(x1, y1, x2, y2, x3, y3)
 
     # =================================================================
     # SYMBOL ANNOTATIONS
@@ -809,23 +882,29 @@ class AnnotationsMixin:
 
             sheet = doc.ActiveSheet
 
-            try:
-                fcfs = sheet.FCFs
-                fcf = fcfs.Add(x, y, 0)
-                if tolerance_text:
-                    with contextlib.suppress(Exception):
-                        fcf.Text = tolerance_text
-            except Exception:
-                # Fallback: use a text box with GD&T text
-                text_boxes = sheet.TextBoxes
-                text_box = text_boxes.Add(x, y, 0)
-                text_box.Text = tolerance_text if tolerance_text else "[GD&T]"
+            # draft.tlb names this collection FeatureControlFrames. sheet.FCFs
+            # does not exist, so this always fell through to the text-box
+            # fallback and no real feature control frame was ever created.
+            frames = com_get(sheet, "FeatureControlFrames")
+            if frames is None:
+                return {
+                    "error": (
+                        "This sheet has no FeatureControlFrames collection, so a "
+                        "geometric tolerance cannot be placed. Add it in the Solid "
+                        "Edge UI."
+                    )
+                }
+            frame = frames.Add(x, y, 0)
+            if tolerance_text:
+                with contextlib.suppress(Exception):
+                    frame.Text = tolerance_text
 
             return {
                 "status": "added",
                 "type": "geometric_tolerance",
                 "position": [x, y],
                 "text": tolerance_text,
+                "total_frames": com_get(frames, "Count"),
             }
         except Exception as e:
             return error_result(e)
@@ -855,10 +934,14 @@ class AnnotationsMixin:
             for i in range(1, lines2d.Count + 1):
                 line = lines2d.Item(i)
                 info: dict[str, Any] = {"index": i - 1}
-                with contextlib.suppress(Exception):
-                    info["start"] = [line.StartX, line.StartY]
-                with contextlib.suppress(Exception):
-                    info["end"] = [line.EndX, line.EndY]
+                # Line2d has no StartX/StartY/EndX/EndY. GetStartPoint and
+                # GetEndPoint are pure [out], so pywin32 returns the pair.
+                start = _xy(line, "GetStartPoint")
+                if start is not None:
+                    info["start"] = start
+                end = _xy(line, "GetEndPoint")
+                if end is not None:
+                    info["end"] = end
                 items.append(info)
             return {"count": len(items), "lines": items}
         except Exception as e:
@@ -885,10 +968,13 @@ class AnnotationsMixin:
             for i in range(1, circles2d.Count + 1):
                 circle = circles2d.Item(i)
                 info: dict[str, Any] = {"index": i - 1}
-                with contextlib.suppress(Exception):
-                    info["center"] = [circle.CenterX, circle.CenterY]
+                # Circle2d has no CenterX/CenterY; GetCenterPoint is the accessor.
+                center = _xy(circle, "GetCenterPoint")
+                if center is not None:
+                    info["center"] = center
                 with contextlib.suppress(Exception):
                     info["radius"] = circle.Radius
+                    info["diameter"] = circle.Diameter
                 items.append(info)
             return {"count": len(items), "circles": items}
         except Exception as e:
@@ -915,15 +1001,120 @@ class AnnotationsMixin:
             for i in range(1, arcs2d.Count + 1):
                 arc = arcs2d.Item(i)
                 info: dict[str, Any] = {"index": i - 1}
-                with contextlib.suppress(Exception):
-                    info["center"] = [arc.CenterX, arc.CenterY]
+                # Arc2d has no CenterX/CenterY and no EndAngle. It reports
+                # StartAngle and SweepAngle, both in radians, so the end angle
+                # is their sum.
+                center = _xy(arc, "GetCenterPoint")
+                if center is not None:
+                    info["center"] = center
+                start = _xy(arc, "GetStartPoint")
+                if start is not None:
+                    info["start"] = start
+                end = _xy(arc, "GetEndPoint")
+                if end is not None:
+                    info["end"] = end
                 with contextlib.suppress(Exception):
                     info["radius"] = arc.Radius
                 with contextlib.suppress(Exception):
-                    info["start_angle"] = arc.StartAngle
-                with contextlib.suppress(Exception):
-                    info["end_angle"] = arc.EndAngle
+                    start_angle = float(arc.StartAngle)
+                    sweep = float(arc.SweepAngle)
+                    info["start_angle"] = start_angle
+                    info["sweep_angle"] = sweep
+                    info["end_angle"] = start_angle + sweep
                 items.append(info)
             return {"count": len(items), "arcs": items}
+        except Exception as e:
+            return error_result(e)
+
+    # =================================================================
+    # SHEET 2D GEOMETRY
+    # =================================================================
+
+    def draw_sheet_geometry(
+        self,
+        shape: str,
+        x1: float = 0.0,
+        y1: float = 0.0,
+        x2: float = 0.0,
+        y2: float = 0.0,
+        x3: float = 0.0,
+        y3: float = 0.0,
+        center_x: float = 0.0,
+        center_y: float = 0.0,
+        radius: float = 0.0,
+    ) -> dict[str, Any]:
+        """Draw 2D geometry directly on the active draft sheet.
+
+        The server could already read sheet geometry (query_sheet lines2d,
+        circles2d, arcs2d) and dimension it, but had no way to create any, so
+        those tools only worked on geometry a person had drawn by hand. These
+        are the ``fwksupp.tlb`` collection methods: ``Lines2d.AddBy2Points``,
+        ``Circles2d.AddByCenterRadius``, ``Circles2d.AddBy3Points`` and
+        ``Arcs2d.AddByCenterStartEnd``.
+
+        This is draft annotation geometry on the sheet itself. It is not a
+        part sketch; use manage_sketch and draw for those.
+
+        Args:
+            shape: 'line' | 'rectangle' | 'circle' | 'circle_3point' | 'arc'.
+            x1: First point X, in meters of sheet space.
+            y1: First point Y.
+            x2: Second point X. For a rectangle, the opposite corner.
+            y2: Second point Y.
+            x3: Third point X, for circle_3point.
+            y3: Third point Y.
+            center_x: Center X, for circle and arc.
+            center_y: Center Y, for circle and arc.
+            radius: Radius in meters, for circle.
+
+        Returns:
+            Dict with status and the new collection count.
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
+            sheet = doc.ActiveSheet
+
+            match shape:
+                case "line":
+                    sheet.Lines2d.AddBy2Points(x1, y1, x2, y2)
+                    created, total = 1, sheet.Lines2d.Count
+                case "rectangle":
+                    corners = [
+                        (x1, y1, x2, y1),
+                        (x2, y1, x2, y2),
+                        (x2, y2, x1, y2),
+                        (x1, y2, x1, y1),
+                    ]
+                    for ax, ay, bx, by in corners:
+                        sheet.Lines2d.AddBy2Points(ax, ay, bx, by)
+                    created, total = 4, sheet.Lines2d.Count
+                case "circle":
+                    if radius <= 0:
+                        return {"error": f"radius must be positive (got {radius}); it is in meters"}
+                    sheet.Circles2d.AddByCenterRadius(center_x, center_y, radius)
+                    created, total = 1, sheet.Circles2d.Count
+                case "circle_3point":
+                    sheet.Circles2d.AddBy3Points(x1, y1, x2, y2, x3, y3)
+                    created, total = 1, sheet.Circles2d.Count
+                case "arc":
+                    sheet.Arcs2d.AddByCenterStartEnd(center_x, center_y, x1, y1, x2, y2)
+                    created, total = 1, sheet.Arcs2d.Count
+                case _:
+                    return {
+                        "error": (
+                            f"Unknown shape: {shape}. Use 'line', 'rectangle', "
+                            f"'circle', 'circle_3point' or 'arc'."
+                        )
+                    }
+
+            return {
+                "status": "created",
+                "shape": shape,
+                "elements_created": created,
+                "collection_count": total,
+            }
         except Exception as e:
             return error_result(e)

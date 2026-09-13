@@ -58,28 +58,25 @@ UNVERIFIED: frozenset[str] = frozenset(
         "Y",
         "Z",
         # --- Solid Edge members absent from the scraped libraries ------------
+        # Removed after being fixed against Solid Edge 2026: AddRadial,
+        # AddDiameter, AddOrdinate and AddRadialDimension became
+        # Dimensions.AddRadius / AddCircularDiameter / AddRadialDiameter /
+        # AddCoordinate; StartX, StartY, EndX, EndY, CenterX and CenterY
+        # became GetStartPoint / GetEndPoint / GetCenterPoint; EndAngle
+        # became StartAngle + SweepAngle; and FCFs became
+        # FeatureControlFrames. See tests/unit/test_export_annotations.py.
         # Each still needs checking against a live install; they are reachable
         # only through interfaces the type libraries do not describe, or they
         # are wrong. Treat a failure here as a real bug until proven otherwise.
         "AddAssemblyViewWithConfiguration",
-        "AddDiameter",
         "AddFiniteRevolvedSurface",
-        "AddOrdinate",
         "AddPartViewWithConfiguration",
-        "AddRadial",
-        "AddRadialDimension",
         "AlignToView",
         "ApplyStyle",
         "Bodies",
         "CenterPoint",
-        "CenterX",
-        "CenterY",
         "ConvertToType",
         "DisplayMode",
-        "EndAngle",
-        "EndX",
-        "EndY",
-        "FCFs",
         "ForegroundColor",
         "GetInstalledLanguage",
         "GetInstalledVersion",
@@ -94,8 +91,6 @@ UNVERIFIED: frozenset[str] = frozenset(
         "PrintAllSheets",
         "RemoveAlignment",
         "SetForegroundColor",
-        "StartX",
-        "StartY",
         "SurfaceArea",
         "UseOccurrenceColor",
         "XPosition",

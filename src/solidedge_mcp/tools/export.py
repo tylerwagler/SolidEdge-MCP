@@ -317,13 +317,17 @@ def add_dimension_annotation(
 ) -> dict[str, Any]:
     """Add a dimension annotation to the active draft. All coordinates in meters.
 
+    Solid Edge dimensions attach to a drawing element, so each coordinate is
+    resolved to the nearest element on the sheet, the way a mouse pick would.
+    The sheet needs geometry near the point: draft 2D geometry, or a drawing
+    view of a model. The result reports what each end attached to.
+
+    dimension: (x1,y1)-(x2,y2), a point-to-point distance.
+    angular_dimension: a point on each of two lines, (x1,y1) and (x3,y3);
+        (x2,y2) is the vertex, recorded but derived by Solid Edge.
     radial_dimension/diameter_dimension: center_x/y + point_x/y on the curve.
-    ordinate_dimension: origin_x/y + point_x/y. dim_x/dim_y optionally place
-    the dimension text (None = auto). 'dimension' and 'angular_dimension' are
-    unsupported: the Dimensions APIs take the 2D objects being dimensioned,
-    not bare coordinates, and this server cannot select them. For a length,
-    use add_2d_dimension(type='length', object_index=...); otherwise dimension
-    in the Solid Edge UI.
+    ordinate_dimension: origin_x/y + point_x/y.
+    dim_x/dim_y are ignored; Solid Edge places the dimension text itself.
     """
     match type:
         case "dimension":
@@ -427,12 +431,11 @@ def add_2d_dimension(
 ) -> dict[str, Any]:
     """Add a 2D dimension on the active draft sheet. Meters, in sheet space.
 
-    distance: (x1,y1)-(x2,y2).
+    distance: (x1,y1)-(x2,y2). Each end attaches to the nearest element.
+    angle: a point on each of two lines, (x1,y1) and (x3,y3); (x2,y2) is the
+        vertex, recorded but derived by Solid Edge.
     length: 0-based object_index into the sheet Lines2d collection.
     radius: 0-based object_index into Circles2d or Arcs2d, per object_type.
-    'angle' (unsupported: Dimensions.AddAngle takes the 2D object being
-    dimensioned, not three points, and this server cannot select the objects
-    those points lie on); dimension the angle in the Solid Edge UI.
     """
     match type:
         case "distance":
@@ -748,6 +751,47 @@ def query_sheet(
 
 
 # ================================================================
+# Group 56b: draw_sheet_geometry - 2D geometry on the draft sheet
+# ================================================================
+
+
+def draw_sheet_geometry(
+    shape: Literal["line", "rectangle", "circle", "circle_3point", "arc"],
+    x1: float = 0.0,
+    y1: float = 0.0,
+    x2: float = 0.0,
+    y2: float = 0.0,
+    x3: float = 0.0,
+    y3: float = 0.0,
+    center_x: float = 0.0,
+    center_y: float = 0.0,
+    radius: float = 0.0,
+) -> dict[str, Any]:
+    """Draw 2D geometry on the active draft sheet. Meters, in sheet space.
+
+    Draft annotation geometry, not a part sketch: use manage_sketch and draw
+    for those. Read it back with query_sheet(type='lines2d'|'circles2d'|
+    'arcs2d') and dimension it with add_2d_dimension.
+
+    line: (x1,y1)-(x2,y2). rectangle: (x1,y1) and the opposite corner (x2,y2).
+    circle: center_x/y + radius. circle_3point: (x1,y1), (x2,y2), (x3,y3).
+    arc: center_x/y, start (x1,y1), end (x2,y2), swept counterclockwise.
+    """
+    return export_manager.draw_sheet_geometry(
+        shape=shape,
+        x1=x1,
+        y1=y1,
+        x2=x2,
+        y2=y2,
+        x3=x3,
+        y3=y3,
+        center_x=center_x,
+        center_y=center_y,
+        radius=radius,
+    )
+
+
+# ================================================================
 # Group 57: manage_annotation_data (4 → 1)
 # ================================================================
 
@@ -906,6 +950,7 @@ def register(mcp: Any) -> None:
     register_tool(mcp, manage_sheet, tags=draft_tags, destructive=True)
     register_tool(mcp, print_control, tags=draft_tags)
     register_tool(mcp, query_sheet, tags=draft_tags, read_only=True)
+    register_tool(mcp, draw_sheet_geometry, tags=draft_tags)
     register_tool(mcp, manage_annotation_data, tags=draft_tags)
     register_tool(mcp, add_smart_frame, tags=draft_tags)
     register_tool(mcp, draft_config, tags=draft_tags)
