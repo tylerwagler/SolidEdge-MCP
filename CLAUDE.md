@@ -92,15 +92,20 @@ Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{
 
 Rules: never guess a constant or signature. Look it up, copy the exact value into `constants.py` with a comment naming the enum, and prefer collection-level `Add*` methods.
 
-Three checks enforce this, and all three skip when the dump is absent:
+Four checks enforce this, and all four skip when the dump is absent:
 
 | Check | What it catches |
 |---|---|
 | `tests/unit/test_constants_typelib.py` | A constant whose value disagrees with its enum. Classes that are our own vocabulary go in `LOCAL_GROUPINGS` with a note. |
 | `tests/unit/test_com_members.py` | A COM member name that exists in no type library. A ratchet: new names fail, and fixing one fails until you delete it from `UNVERIFIED`. |
+| `tests/unit/test_com_receivers.py` (`scripts/audit_com_receivers.py`) | A member read off an interface that does not have it, which the name check cannot see because the name is real elsewhere. |
 | `scripts/audit_com_signatures.py` | A call with the wrong number of arguments. Run `--filter <path>` to see the full parameter list for each finding, `--by-file` for counts. |
 
 The signature audit resolves the receiver, so `cutouts = model.ExtrudedCutouts` followed by `cutouts.AddFiniteMulti(...)` is checked against `ExtrudedCutouts` specifically rather than against every interface with that method name.
+
+The receiver audit goes further and infers what a receiver *is* by following declared types: `doc.Models.Item(1).Features` resolves PartDocument to Models to Model to Features. That is what catches the sharpest class of bug here, a real name on the wrong interface, such as `model.RevolvedSurfaces` when RevolvedSurfaces belongs to `Constructions`, or `line.StartPoint.X` when Line2d only has `GetStartPoint()`.
+
+`tests/unit/test_manager_mro.py` covers a different trap: the managers are built from a dozen mixins each, and two mixins defining the same method leaves one silently unreachable.
 
 ### When a COM call cannot be formed
 

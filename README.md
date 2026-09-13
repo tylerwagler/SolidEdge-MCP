@@ -118,14 +118,17 @@ CI runs lint, format, type check, and unit tests on `windows-latest` for every p
 
 ### COM conformance
 
-Unit tests mock COM with objects that answer to any attribute, so a misspelled member or a wrong argument count passes them and only fails against real Solid Edge. Three checks close that gap using the scraped type libraries:
+Unit tests mock COM with objects that answer to any attribute, so a misspelled member or a wrong argument count passes them and only fails against real Solid Edge. Four checks close that gap using the scraped type libraries:
 
 ```bash
 uv run python scripts/audit_com_signatures.py --by-file
 uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.py
+uv run python scripts/audit_com_receivers.py
 ```
 
-`tests/unit/test_constants_typelib.py` verifies every COM enum value in `constants.py`. `tests/unit/test_com_members.py` fails on any COM member name absent from the type libraries. Both skip when the dump is missing, so a fresh clone and CI stay green.
+`tests/unit/test_constants_typelib.py` verifies every COM enum value in `constants.py`. `tests/unit/test_com_members.py` fails on any COM member name absent from the type libraries. `tests/unit/test_com_receivers.py` goes further: it infers what each receiver is by following declared types and fails when a member is read off an interface that does not have it, which is invisible to a name check when the name is real somewhere else. All skip when the dump is missing, so a fresh clone and CI stay green.
+
+`tests/unit/test_manager_mro.py` needs no type library. It fails when two mixins define the same method on a manager, which leaves one of them unreachable.
 
 `scripts/scrape_typelibs.py` regenerates `reference/typelib_dump.json` (gitignored, ~20 MB) from the installed Solid Edge type libraries. `reference/typelib_summary.md` is the committed digest. `scripts/manual/` holds hand-run COM experiments; they are not tests.
 
