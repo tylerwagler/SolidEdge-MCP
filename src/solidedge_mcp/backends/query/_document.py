@@ -3,6 +3,7 @@
 import contextlib
 from typing import Any
 
+from solidedge_mcp.backends.comutil import com_get
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import ModelingModeConstants
@@ -22,7 +23,7 @@ class DocumentQueryMixin:
             properties = {
                 "name": doc.Name if hasattr(doc, "Name") else "Unknown",
                 "path": doc.FullName if hasattr(doc, "FullName") else "Unsaved",
-                "modified": not doc.Saved if hasattr(doc, "Saved") else False,
+                "modified": com_get(doc, "Dirty", False),
                 "read_only": doc.ReadOnly if hasattr(doc, "ReadOnly") else False,
             }
 

@@ -98,7 +98,6 @@ UNVERIFIED: frozenset[str] = frozenset(
         "PoissonsRatio",
         "PrintAllSheets",
         "RemoveAlignment",
-        "Saved",
         "SetForegroundColor",
         "StartX",
         "StartY",
@@ -188,6 +187,7 @@ def test_unverified_list_has_no_stale_entries(typelib_members, referenced_member
         ("Occurrence2", "relation property; OccurrencePart2 does not exist"),
         ("PutMatrix", "Occurrence method; SetMatrix does not exist"),
         ("SetSuppressComponent", "AssemblyDocument owns component suppression"),
+        ("Dirty", "document modified flag; Document.Saved does not exist"),
     ],
 )
 def test_corrected_names_are_real(typelib_members, member, reason):

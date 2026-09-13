@@ -5,6 +5,7 @@ Base class for ExportManager providing constructor and shared helpers.
 import contextlib
 from typing import Any
 
+from ..comutil import com_get as com_get  # re-exported for this package
 from ..constants import DocumentTypeConstants
 from ..logging import get_logger
 
@@ -12,20 +13,6 @@ _logger = get_logger(__name__)
 
 NOT_A_DRAFT_DOCUMENT = "Active document is not a draft document"
 NOT_A_DRAFT = "Active document is not a draft"
-
-
-def com_get(obj: Any, member: str, default: Any = None) -> Any:
-    """Read a COM property, returning ``default`` if it is missing or raises.
-
-    Preferred over ``hasattr(obj, member)`` followed by a read: on a late-bound
-    proxy that probe is a separate ``GetIDsOfNames`` round trip whose failure
-    mode is version dependent, and it reports False for a member that exists
-    but whose getter raises.
-    """
-    try:
-        return getattr(obj, member)
-    except Exception:
-        return default
 
 
 def resolve_view(

@@ -4,6 +4,7 @@ Base class for AssemblyManager providing constructor and shared helpers.
 
 from typing import Any
 
+from ..comutil import com_get as com_get  # re-exported for this package
 from ..constants import DocumentTypeConstants
 from ..logging import get_logger
 
@@ -19,20 +20,6 @@ ASSEMBLY_DOCUMENT_TYPES = frozenset(
 )
 
 NOT_AN_ASSEMBLY = "Active document is not an assembly"
-
-
-def com_get(obj: Any, member: str, default: Any = None) -> Any:
-    """Read a COM property, returning ``default`` if it is missing or raises.
-
-    Preferred over ``hasattr(obj, member)`` followed by a read: on a late-bound
-    proxy that probe is a separate ``GetIDsOfNames`` round trip whose failure
-    mode is version dependent, and it reports False for a member that exists
-    but whose getter raises.
-    """
-    try:
-        return getattr(obj, member)
-    except Exception:
-        return default
 
 
 class AssemblyManagerBase:

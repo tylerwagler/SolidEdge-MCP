@@ -105,22 +105,72 @@ class TestDeleteFacesNoHeal:
 # ============================================================================
 
 
+def _with_features(model, names):
+    """Give a mock body a Features collection, as Solid Edge exposes it."""
+    from unittest.mock import MagicMock
+
+    feats = []
+    for n in names:
+        f = MagicMock()
+        f.Name = n
+        f.Type = 462094706
+        f.Suppress = False
+        f.Visible = True
+        feats.append(f)
+    collection = MagicMock()
+    collection.Count = len(feats)
+    collection.Item.side_effect = lambda i: feats[i - 1]
+    model.Features = collection
+    return feats
+
+
+class TestListFeatures:
+    def test_lists_features_not_bodies(self, feature_mgr, managers):
+        """Regression: this walked doc.Models, so it always returned one entry.
+
+        doc.Models is the list of bodies. A part has one, so the resource
+        reported a single "Design Model" however many features existed.
+        Verified against Solid Edge 2026, where a box with a hole has two.
+        """
+        _, _, _, models, model, _ = managers
+        _with_features(model, ["ExtrudedProtrusion_1", "ExtrudedCutout_1"])
+
+        result = feature_mgr.list_features()
+        assert result["count"] == 2
+        assert [f["name"] for f in result["features"]] == [
+            "ExtrudedProtrusion_1",
+            "ExtrudedCutout_1",
+        ]
+        assert [f["index"] for f in result["features"]] == [0, 1]
+
+    def test_no_features_collection_is_not_an_error(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        del model.Features
+        result = feature_mgr.list_features()
+        assert result == {"features": [], "count": 0}
+
+
 class TestGetFeatureInfo:
     def test_success(self, feature_mgr, managers):
         _, _, _, models, model, _ = managers
-        model.Name = "ExtrudedProtrusion_1"
-        model.Type = 3
-        model.Visible = True
-        model.Suppressed = False
-        result = feature_mgr.get_feature_info(0)
-        assert result["index"] == 0
-        assert result["name"] == "ExtrudedProtrusion_1"
+        _with_features(model, ["ExtrudedProtrusion_1", "ExtrudedCutout_1"])
+
+        result = feature_mgr.get_feature_info(1)
+        assert result["index"] == 1
+        assert result["name"] == "ExtrudedCutout_1"
+        assert result["suppressed"] is False
+        assert result["visible"] is True
 
     def test_invalid_index(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        _with_features(model, ["ExtrudedProtrusion_1"])
         result = feature_mgr.get_feature_info(99)
         assert "error" in result
+        assert "1 feature" in result["error"]
 
     def test_negative_index(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        _with_features(model, ["ExtrudedProtrusion_1"])
         result = feature_mgr.get_feature_info(-1)
         assert "error" in result
 

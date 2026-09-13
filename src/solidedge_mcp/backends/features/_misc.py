@@ -7,6 +7,7 @@ from typing import Any
 import pythoncom
 from win32com.client import VARIANT
 
+from solidedge_mcp.backends.comutil import com_get
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
@@ -15,6 +16,15 @@ from ..constants import (
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
+
+
+def _first_index_of_body(features: list[dict[str, Any]], entry: dict[str, Any]) -> int:
+    """Flat index of the first feature belonging to the same body as ``entry``."""
+    for f in features:
+        if f["body_index"] == entry["body_index"]:
+            return int(f["index"])
+    return 0
+
 
 # constant.tlb > AddBodyTypeConstants. Kept local because backends/constants.py
 # does not carry this enum yet.
@@ -86,53 +96,72 @@ class MiscFeaturesMixin:
             "thickness": thickness,
         }
 
-    def list_features(self) -> dict[str, Any]:
-        """List all features in the active part"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+    def _enumerate_features(self, doc: Any) -> list[dict[str, Any]]:
+        """Flatten Models.Item(n).Features across every body, in tree order.
 
-            features = []
-            for i in range(models.Count):
-                model = models.Item(i + 1)
+        This used to walk ``doc.Models`` itself, which is the list of bodies,
+        not features. A part has one body, so it always reported exactly one
+        entry called "Design Model" no matter how many features existed.
+        """
+        features: list[dict[str, Any]] = []
+        models = doc.Models
+        for m in range(1, models.Count + 1):
+            model = models.Item(m)
+            collection = com_get(model, "Features")
+            if collection is None:
+                continue
+            count = com_get(collection, "Count", 0) or 0
+            for i in range(1, int(count) + 1):
+                feature = collection.Item(i)
                 features.append(
                     {
-                        "index": i,
-                        "name": model.Name if hasattr(model, "Name") else f"Feature {i + 1}",
-                        "type": model.Type if hasattr(model, "Type") else "Unknown",
+                        "index": len(features),
+                        "body_index": m - 1,
+                        "name": com_get(feature, "Name", f"Feature_{len(features) + 1}"),
+                        "type": com_get(feature, "Type", "Unknown"),
                     }
                 )
+        return features
 
+    def list_features(self) -> dict[str, Any]:
+        """List the features of every body in the active part, in tree order.
+
+        Reference planes are not features and do not appear here; read
+        ``solidedge://model/edgebar-features`` for the full Pathfinder tree.
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            features = self._enumerate_features(doc)
             return {"features": features, "count": len(features)}
         except Exception as e:
             return error_result(e)
 
     def get_feature_info(self, feature_index: int) -> dict[str, Any]:
-        """Get detailed information about a specific feature"""
+        """Describe one feature, indexed 0-based into list_features()."""
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
+            features = self._enumerate_features(doc)
 
-            if feature_index < 0 or feature_index >= models.Count:
-                return {"error": f"Invalid feature index: {feature_index}"}
+            if feature_index < 0 or feature_index >= len(features):
+                return {
+                    "error": (
+                        f"Invalid feature index: {feature_index}. "
+                        f"The active part has {len(features)} feature(s)."
+                    )
+                }
 
-            model = models.Item(feature_index + 1)
+            entry = features[feature_index]
+            model = doc.Models.Item(entry["body_index"] + 1)
+            feature = model.Features.Item(feature_index - _first_index_of_body(features, entry) + 1)
 
-            info = {
-                "index": feature_index,
-                "name": model.Name if hasattr(model, "Name") else "Unknown",
-                "type": model.Type if hasattr(model, "Type") else "Unknown",
-            }
-
-            # Try to get additional properties
-            try:
-                if hasattr(model, "Visible"):
-                    info["visible"] = model.Visible
-                if hasattr(model, "Suppressed"):
-                    info["suppressed"] = model.Suppressed
-            except Exception:
-                pass
-
+            info: dict[str, Any] = dict(entry)
+            # Suppress is a read/write VT_BOOL property on part features.
+            suppressed = com_get(feature, "Suppress")
+            if suppressed is not None:
+                info["suppressed"] = bool(suppressed)
+            visible = com_get(feature, "Visible")
+            if visible is not None:
+                info["visible"] = bool(visible)
             return info
         except Exception as e:
             return error_result(e)

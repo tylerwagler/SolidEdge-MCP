@@ -183,17 +183,21 @@ class DocumentManager:
             app = self.connection.get_application()
 
             if save:
+                # Document.Dirty is the real member; Document.Saved does not
+                # exist on any Solid Edge document interface.
                 try:
-                    if not self.active_document.Saved:
+                    if self.active_document.Dirty:
                         self.active_document.Save()
                 except Exception:
                     self.active_document.Save()
             else:
-                # Suppress save dialog: disable alerts, mark saved, then close
+                # Clearing Dirty stops Solid Edge asking to save on close.
+                # Alerts are already off from connect(), but a stale session
+                # may predate that, so keep belt and braces.
                 with contextlib.suppress(Exception):
                     app.DisplayAlerts = False
                 with contextlib.suppress(Exception):
-                    self.active_document.Saved = True
+                    self.active_document.Dirty = False
 
             self.active_document.Close()
             self.active_document = None
@@ -232,7 +236,7 @@ class DocumentManager:
                         "name": doc.Name,
                         "full_path": doc.FullName if doc.FullName else "untitled",
                         "type": self._get_document_type(doc),
-                        "modified": not doc.Saved,
+                        "modified": bool(doc.Dirty),
                         "read_only": doc.ReadOnly,
                     }
                 )
@@ -520,7 +524,7 @@ class DocumentManager:
                             doc.Save()
                     else:
                         with contextlib.suppress(Exception):
-                            doc.Saved = True
+                            doc.Dirty = False
                     doc.Close()
                     closed += 1
                 except Exception as e:
