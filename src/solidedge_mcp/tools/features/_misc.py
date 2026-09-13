@@ -139,6 +139,7 @@ def create_mirror(
     mirror_plane_index: int = 3,
     new_file_name: str = "",
     link_to_original: bool = True,
+    allow_mode_switch: bool = False,
 ) -> dict[str, Any]:
     """Mirror a feature across a reference plane, or save a mirrored part.
 
@@ -157,7 +158,9 @@ def create_mirror(
         }
     match method:
         case "basic":
-            return feature_manager.create_mirror(feature_name, mirror_plane_index)
+            return feature_manager.create_mirror(
+                feature_name, mirror_plane_index, allow_mode_switch=allow_mode_switch
+            )
         case "sync_ex":
             return feature_manager.create_mirror_sync_ex(feature_name, mirror_plane_index)
         case "save_as_part":

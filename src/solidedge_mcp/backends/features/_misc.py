@@ -311,7 +311,9 @@ class MiscFeaturesMixin:
             "type": "local_simplify_enclosure",
         }
 
-    def create_mirror(self, feature_name: str, mirror_plane_index: int) -> dict[str, Any]:
+    def create_mirror(
+        self, feature_name: str, mirror_plane_index: int, allow_mode_switch: bool = False
+    ) -> dict[str, Any]:
         """
         Create a mirror copy of a feature across a reference plane.
 
@@ -366,9 +368,32 @@ class MiscFeaturesMixin:
 
             mirror_plane = ref_planes.Item(mirror_plane_index)
 
-            # Use AddSync which persists the feature tree entry
+            # MirrorCopies.AddSync is synchronous-only: in an ordered part it
+            # raises a bare E_FAIL. Verified against Solid Edge 2026, where the
+            # same call doubles the face count once the mode is switched.
+            err = self._require_synchronous(doc, allow_switch=allow_mode_switch)
+            if err:
+                return err
+
             mc = win32.gencache.EnsureDispatch(model.MirrorCopies)
-            mirror = mc.AddSync(1, [target_feature], mirror_plane, False)
+            try:
+                mirror = mc.AddSync(1, [target_feature], mirror_plane, False)
+            except Exception as exc:
+                # Switching an existing ordered part to synchronous is not
+                # enough: AddSync mirrors synchronous geometry, so a feature
+                # that was built in ordered mode still fails. Verified on
+                # Solid Edge 2026, where the same mirror succeeds when the
+                # part was in synchronous mode before the feature was made.
+                return error_result(
+                    exc,
+                    context=(
+                        "MirrorCopies.AddSync could not mirror "
+                        f"'{feature_name}'. It mirrors synchronous geometry, so the "
+                        "feature must have been created while the part was in "
+                        "synchronous mode. Build the part synchronously from the "
+                        "start, or mirror the sketch and re-create the feature."
+                    ),
+                )
 
             return {
                 "status": "created",
@@ -891,7 +916,10 @@ class MiscFeaturesMixin:
             ref_plane = ref_planes.Item(plane_index)
 
             patterns = model.Patterns
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
+            # A plain sequence, not a VARIANT: Patterns.AddByRectangularEx
+            # rejects VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for
+            # SAFEARRAYS must be sequences", verified against Solid Edge 2026.
+            feature_arr = [target_feature]
             pattern = patterns.AddByRectangularEx(
                 1,
                 feature_arr,

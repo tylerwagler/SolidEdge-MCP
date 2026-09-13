@@ -43,6 +43,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -89,6 +92,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -150,6 +156,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -216,6 +225,17 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
+            if radius <= 0 or height <= 0:
+                # Solid Edge answers a zero dimension with a bare E_INVALIDARG.
+                return {
+                    "error": (
+                        f"radius and height must be positive (got radius={radius}, "
+                        f"height={height}). Both are in meters."
+                    )
+                }
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -261,6 +281,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -311,6 +334,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:
@@ -387,6 +413,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:
@@ -542,6 +571,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:
@@ -606,6 +638,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:

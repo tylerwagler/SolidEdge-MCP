@@ -79,7 +79,11 @@ def create_primitive(
                 plane_index,
             )
         case "cylinder":
-            return feature_manager.create_cylinder(x1, y1, z1, radius, depth, plane_index)
+            # A cylinder's axial length is "height" to most callers; "depth" is
+            # accepted too because that is what the COM parameter is called.
+            return feature_manager.create_cylinder(
+                x1, y1, z1, radius=radius, height=(height or depth), plane_index=plane_index
+            )
         case "sphere":
             return feature_manager.create_sphere(x1, y1, z1, radius, plane_index)
         case _:

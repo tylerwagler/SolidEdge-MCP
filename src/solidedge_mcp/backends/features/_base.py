@@ -12,9 +12,11 @@ from win32com.client import VARIANT
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import (
     FaceQueryConstants,
     LoftSweepConstants,
+    ModelingModeConstants,
 )
 from ..logging import get_logger
 
@@ -270,6 +272,45 @@ class FeatureManagerBase:
             }
 
         return target, None
+
+    def _require_synchronous(self, doc: Any, allow_switch: bool = False) -> dict[str, Any] | None:
+        """Ensure the document is in synchronous mode, or explain why not.
+
+        Several feature APIs are synchronous-only: the Models.Add*ByCenter
+        primitives and MirrorCopies.AddSync among them. In an ordered document
+        they raise a bare 0x80070057 E_INVALIDARG or 0x80004005 E_FAIL with no
+        clue why, which made all five primitives and mirror look broken.
+        Verified against Solid Edge 2026: the identical calls succeed once
+        ModelingMode is switched.
+
+        An empty part is switched automatically, since nothing can be lost.
+        A part that already has features is only switched when the caller asks
+        for it, because ordered and synchronous rebuild differently and that
+        choice belongs to the caller.
+        """
+        mode = com_get(doc, "ModelingMode")
+        if mode is None or mode == ModelingModeConstants.seModelingModeSynchronous:
+            return None
+
+        has_features = bool(com_get(com_get(doc, "Models"), "Count", 0))
+        if has_features and not allow_switch:
+            return {
+                "error": (
+                    "This feature is synchronous-only and the part is in ordered mode "
+                    "with existing features. Switching changes how they rebuild, so it "
+                    "is not done for you: pass allow_mode_switch=true, set the document "
+                    "to synchronous in Solid Edge, or build the shape from a sketch."
+                ),
+                "modeling_mode": "ordered",
+                "unsupported": True,
+            }
+
+        try:
+            doc.ModelingMode = ModelingModeConstants.seModelingModeSynchronous
+        except Exception as exc:
+            return error_result(exc, context="Could not switch to synchronous modeling")
+        _logger.info("Switched the part to synchronous mode for a synchronous-only feature")
+        return None
 
     def _get_feature_by_index(self, index: int) -> tuple[Any | None, dict[str, Any] | None]:
         """Get a feature from DesignEdgebarFeatures by 0-based index."""

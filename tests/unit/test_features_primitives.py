@@ -18,6 +18,9 @@ def managers():
     # Default: active document with models collection
     doc = MagicMock()
     doc_mgr.get_active_document.return_value = doc
+    # Primitives are synchronous-only; an ordered document makes Solid Edge
+    # raise a bare E_INVALIDARG, so the manager refuses before calling COM.
+    doc.ModelingMode = 1  # seModelingModeSynchronous
 
     # Default: model exists (models.Count >= 1)
     models = MagicMock()
@@ -250,3 +253,45 @@ class TestSphereCutout:
         result = feature_mgr.create_sphere_cutout(0, 0, 0, 0.02)
         assert "error" in result
         assert "No base feature" in result["error"]
+
+
+class TestSynchronousGuard:
+    """Primitives are synchronous-only features.
+
+    In an ordered part Solid Edge answers Models.AddBoxByCenter with a bare
+    0x80070057 E_INVALIDARG. Verified against Solid Edge 2026: the identical
+    call succeeds once ModelingMode is switched, so the manager checks the
+    mode instead of letting the call fail without explanation.
+    """
+
+    def test_empty_ordered_part_is_switched_automatically(self, feature_mgr, managers):
+        doc_mgr, _, doc, models, _, _ = managers
+        doc.ModelingMode = 2  # ordered
+        models.Count = 0
+
+        result = feature_mgr.create_box_by_center(0, 0, 0, 0.05, 0.04, 0.03)
+        assert "error" not in result
+        assert doc.ModelingMode == 1
+
+    def test_ordered_part_with_features_is_left_alone(self, feature_mgr, managers):
+        doc_mgr, _, doc, models, model, _ = managers
+        doc.ModelingMode = 2
+        models.Count = 1
+
+        result = feature_mgr.create_box_by_center(0, 0, 0, 0.05, 0.04, 0.03)
+        assert result["unsupported"] is True
+        assert result["modeling_mode"] == "ordered"
+        assert doc.ModelingMode == 2  # untouched
+        model.AddBoxByCenter.assert_not_called()
+
+    def test_already_synchronous_is_untouched(self, feature_mgr, managers):
+        doc_mgr, _, doc, models, _, _ = managers
+        doc.ModelingMode = 1
+        models.Count = 3
+
+        result = feature_mgr.create_box_by_center(0, 0, 0, 0.05, 0.04, 0.03)
+        assert "error" not in result
+
+    def test_cylinder_rejects_a_zero_dimension(self, feature_mgr, managers):
+        result = feature_mgr.create_cylinder(0, 0, 0, radius=0.0, height=0.05)
+        assert "must be positive" in result["error"]
