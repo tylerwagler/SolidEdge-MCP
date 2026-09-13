@@ -655,10 +655,17 @@ class TestDrawArcBy3Points:
         return sm
 
     def test_success(self, sketch_mgr):
+        """A 3-point arc passes through its middle point; it is not a centre.
+
+        Arcs2d has AddByStartAlongEnd and AddByCenterStartEnd. There is no
+        AddByStartCenterEnd, which this used to call, so every 3-point arc
+        raised. Verified against Solid Edge 2026.
+        """
         result = sketch_mgr.draw_arc_by_3_points(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
         assert result["status"] == "created"
-        assert result["method"] == "start_center_end"
-        sketch_mgr.active_profile.Arcs2d.AddByStartCenterEnd.assert_called_once_with(
+        assert result["method"] == "start_along_end"
+        assert result["along"] == [0.05, 0.05]
+        sketch_mgr.active_profile.Arcs2d.AddByStartAlongEnd.assert_called_once_with(
             0.0, 0.0, 0.05, 0.05, 0.1, 0.0
         )
 
@@ -691,7 +698,12 @@ class TestDrawCircleBy2Points:
         assert result["method"] == "2_points"
         assert result["center"] == [0.05, 0.0]
         assert result["radius"] == 0.05
-        sketch_mgr.active_profile.Circles2d.AddBy2Points.assert_called_once_with(0.0, 0.0, 0.1, 0.0)
+        # Circles2d has only AddByCenterRadius and AddBy3Points; AddBy2Points
+        # does not exist, so the centre and radius are derived here.
+        sketch_mgr.active_profile.Circles2d.AddByCenterRadius.assert_called_once_with(
+            0.05, 0.0, 0.05
+        )
+        sketch_mgr.active_profile.Circles2d.AddBy2Points.assert_not_called()
 
     def test_no_sketch(self):
         from solidedge_mcp.backends.sketching import SketchManager

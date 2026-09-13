@@ -65,7 +65,6 @@ UNVERIFIED: frozenset[str] = frozenset(
         "AddAssemblyViewWithConfiguration",
         "AddByChamfer",
         "AddByFillet",
-        "AddByStartCenterEnd",
         "AddDiameter",
         "AddDistanceBetweenPoints",
         "AddFiniteRevolvedSurface",
@@ -188,6 +187,8 @@ def test_unverified_list_has_no_stale_entries(typelib_members, referenced_member
         ("PutMatrix", "Occurrence method; SetMatrix does not exist"),
         ("SetSuppressComponent", "AssemblyDocument owns component suppression"),
         ("Dirty", "document modified flag; Document.Saved does not exist"),
+        ("AddByStartAlongEnd", "3-point arc; AddByStartCenterEnd does not exist"),
+        ("AddPartView", "part drawing view; only the assembly one was wired up"),
     ],
 )
 def test_corrected_names_are_real(typelib_members, member, reason):

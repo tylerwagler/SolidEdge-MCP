@@ -100,8 +100,8 @@ def draw(
     line/construction_line/rectangle/circle_2pt: (x1,y1)-(x2,y2).
     circle: center_x/y + radius. arc: center + radius + start/end_angle.
     polygon: center + radius + sides. ellipse: center + major/minor_radius + angle.
-    spline: points [[x,y],...]. arc_3pt: (x1,y1) start, (center_x,center_y) mid,
-    (x2,y2) end. circle_3pt: three points. point: x,y.
+    spline: points [[x,y],...]. arc_3pt: (x1,y1) start, (x2,y2) a point the arc
+    passes through, (x3,y3) end. circle_3pt: three points. point: x,y.
     """
     err = validate_numerics(
         x1=x1,
@@ -141,7 +141,9 @@ def draw(
         case "spline":
             return sketch_manager.draw_spline(points or [])
         case "arc_3pt":
-            return sketch_manager.draw_arc_by_3_points(x1, y1, center_x, center_y, x2, y2)
+            return sketch_manager.draw_arc_by_3_points(
+                start_x=x1, start_y=y1, along_x=x2, along_y=y2, end_x=x3, end_y=y3
+            )
         case "circle_2pt":
             return sketch_manager.draw_circle_by_2_points(x1, y1, x2, y2)
         case "circle_3pt":

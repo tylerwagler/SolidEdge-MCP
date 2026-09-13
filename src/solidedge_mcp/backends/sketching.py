@@ -18,6 +18,9 @@ from .logging import get_logger
 
 _logger = get_logger(__name__)
 
+#: Orientation argument of Ellipses2d.AddByCenter: 1 sweeps counterclockwise.
+CURVE_COUNTERCLOCKWISE = 1
+
 #: Profile collections that together make up the sketch's 2D geometry.
 _GEOMETRY_2D_COLLECTIONS = (
     "Lines2d",
@@ -333,15 +336,27 @@ class SketchManager:
             # Get Ellipses2d collection
             ellipses = self.active_profile.Ellipses2d
 
-            # Convert angle to radians for axis calculation
+            if major_radius <= 0 or minor_radius <= 0:
+                return {"error": "major_radius and minor_radius must be positive"}
+
+            # fwksupp.tlb: Ellipses2d.AddByCenter(xCenter, yCenter, xMajor,
+            # yMajor, Ratio, Orientation). xMajor/yMajor is a POINT at the end
+            # of the major axis, Ratio is minor/major, and Orientation is the
+            # sweep direction. Passing two radii and an axis vector instead
+            # raised E_FAIL, so no ellipse could ever be drawn.
             angle_rad = math.radians(angle)
+            major_x = center_x + major_radius * math.cos(angle_rad)
+            major_y = center_y + major_radius * math.sin(angle_rad)
+            ratio = minor_radius / major_radius
 
-            # AddByCenter takes 6 params: cx, cy, major_radius, minor_radius, axis_x, axis_y
-            # The axis defines the direction of the major axis
-            axis_x = math.cos(angle_rad)
-            axis_y = math.sin(angle_rad)
-
-            ellipses.AddByCenter(center_x, center_y, major_radius, minor_radius, axis_x, axis_y)
+            ellipses.AddByCenter(
+                center_x,
+                center_y,
+                major_x,
+                major_y,
+                ratio,
+                CURVE_COUNTERCLOCKWISE,
+            )
 
             return {
                 "status": "created",
@@ -402,17 +417,23 @@ class SketchManager:
         self,
         start_x: float,
         start_y: float,
-        center_x: float,
-        center_y: float,
+        along_x: float,
+        along_y: float,
         end_x: float,
         end_y: float,
     ) -> dict[str, Any]:
         """
-        Draw an arc defined by start point, center point, and end point.
+        Draw an arc through three points: start, a point along it, and end.
+
+        fwksupp.tlb Arcs2d offers AddByStartAlongEnd and AddByCenterStartEnd.
+        There is no AddByStartCenterEnd, which is what this used to call, so
+        the arc always raised. The middle point is a point the arc passes
+        through, not the centre: feeding a mid point to a centre-based API
+        fails whenever start and end are not equidistant from it.
 
         Args:
             start_x, start_y: Arc start point (meters)
-            center_x, center_y: Arc center point (meters)
+            along_x, along_y: A point the arc passes through (meters)
             end_x, end_y: Arc end point (meters)
 
         Returns:
@@ -423,15 +444,15 @@ class SketchManager:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
             arcs = self.active_profile.Arcs2d
-            arcs.AddByStartCenterEnd(start_x, start_y, center_x, center_y, end_x, end_y)
+            arcs.AddByStartAlongEnd(start_x, start_y, along_x, along_y, end_x, end_y)
 
             return {
                 "status": "created",
                 "type": "arc",
                 "start": [start_x, start_y],
-                "center": [center_x, center_y],
+                "along": [along_x, along_y],
                 "end": [end_x, end_y],
-                "method": "start_center_end",
+                "method": "start_along_end",
             }
         except Exception as e:
             return error_result(e)
@@ -453,12 +474,18 @@ class SketchManager:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
-            circles = self.active_profile.Circles2d
-            circles.AddBy2Points(x1, y1, x2, y2)
-
             center_x = (x1 + x2) / 2
             center_y = (y1 + y2) / 2
             radius = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) / 2
+
+            if radius <= 0:
+                return {"error": "The two points must differ; they define a diameter."}
+
+            # fwksupp.tlb Circles2d exposes only AddByCenterRadius and
+            # AddBy3Points. AddBy2Points does not exist, so derive the centre
+            # and radius from the diameter endpoints ourselves.
+            circles = self.active_profile.Circles2d
+            circles.AddByCenterRadius(center_x, center_y, radius)
 
             return {
                 "status": "created",
