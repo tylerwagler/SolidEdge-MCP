@@ -112,8 +112,12 @@ class TestNormalCutout:
         sketch_mgr.close_sketch()
 
         result = feature_mgr.create_normal_cutout(0.02)
-        assert result["status"] == "created"
-        assert result["type"] == "normal_cutout"
+
+        # A normal cutout is a sheet metal feature. On an ordinary part the COM
+        # call is accepted but removes no material, so the geometry check must
+        # report that rather than claiming success. Verified against SE 2026.
+        assert "error" in result, f"expected no geometry on a part, got {result}"
+        assert "no geometry" in result["error"].lower()
 
 
 class TestLoftedCutout:

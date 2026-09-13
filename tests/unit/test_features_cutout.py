@@ -160,11 +160,14 @@ class TestNormalCutout:
         assert result["status"] == "created"
         assert result["type"] == "normal_cutout"
         assert result["distance"] == 0.005
+        # Method (igSMFaceCutout=205) is required; without it Solid Edge
+        # raises 0x8002000F Parameter not optional.
         model.NormalCutouts.AddFiniteMulti.assert_called_once_with(
             1,
             (profile,),
-            2,
-            0.005,  # igRight=2
+            2,  # igRight
+            0.005,
+            205,  # igSMFaceCutout
         )
         sketch_mgr.clear_accumulated_profiles.assert_called_once()
 
@@ -189,8 +192,9 @@ class TestNormalCutout:
         model.NormalCutouts.AddFiniteMulti.assert_called_once_with(
             1,
             (profile,),
-            1,
-            0.01,  # igLeft=1
+            1,  # igLeft
+            0.01,
+            205,  # igSMFaceCutout
         )
 
 
@@ -622,12 +626,13 @@ class TestCreateNormalCutoutThroughNext:
 
 
 class TestCreateNormalCutoutByKeypoint:
-    def test_success(self, feature_mgr, managers):
+    def test_reports_unsupported(self, feature_mgr, managers):
+        """AddFiniteByKeyPointMulti needs a KeyPoint object we cannot select."""
         _, _, _, _, model, _ = managers
         result = feature_mgr.create_normal_cutout_by_keypoint("Normal")
-        assert result["status"] == "created"
-        assert result["type"] == "normal_cutout_by_keypoint"
-        model.NormalCutouts.AddFiniteByKeyPointMulti.assert_called_once()
+        assert result["unsupported"] is True
+        assert "KeyPoint" in result["error"]
+        model.NormalCutouts.AddFiniteByKeyPointMulti.assert_not_called()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers

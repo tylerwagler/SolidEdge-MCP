@@ -12,6 +12,7 @@ from ..constants import (
     ExtentTypeConstants,
     KeyPointExtentConstants,
     LoftSweepConstants,
+    NormalCutoutMethodConstants,
 )
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
@@ -263,7 +264,15 @@ class CutoutMixin:
             dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             cutouts = model.NormalCutouts
-            cutouts.AddFiniteMulti(1, (profile,), dir_const, distance)
+            # AddFiniteMulti(NumProfiles, ProfileArray, ProfilePlaneSide, Depth, Method)
+            # Method is required; omitting it raises 0x8002000F Parameter not optional.
+            cutouts.AddFiniteMulti(
+                1,
+                (profile,),
+                dir_const,
+                distance,
+                NormalCutoutMethodConstants.igSMFaceCutout,
+            )
 
             self.sketch_manager.clear_accumulated_profiles()
 
@@ -935,7 +944,19 @@ class CutoutMixin:
             side = direction_map.get(direction, DirectionConstants.igRight)
 
             cutouts = model.NormalCutouts
-            cutouts.AddFiniteByKeyPointMulti(1, (profile,), side, 0)
+            # AddFiniteByKeyPointMulti takes six arguments: NumProfiles,
+            # ProfileArray, ProfilePlaneSide, KeyPointOrTangentFace, KeyPointFlags,
+            # Method. The keypoint object cannot be selected through this API, so
+            # the call can never be formed; say so instead of failing inside COM.
+            del cutouts, side
+            return {
+                "error": (
+                    "Normal cutout to a keypoint needs a KeyPoint or tangent face "
+                    "object, which this server cannot select. Use "
+                    "create_normal_cutout(distance) or the Solid Edge UI."
+                ),
+                "unsupported": True,
+            }
 
             self.sketch_manager.clear_accumulated_profiles()
 

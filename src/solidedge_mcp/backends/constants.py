@@ -220,6 +220,19 @@ class OffsetSideConstants:
     seOffsetRight = 2
 
 
+class NormalCutoutMethodConstants:
+    """Method argument of the NormalCutouts.Add* calls.
+
+    Aliases of constant.tlb > FeaturePropertyConstants. Normal cutouts are a
+    sheet metal feature: on an ordinary part document the call succeeds but
+    removes no material.
+    """
+
+    igSMClearanceCutout = 181
+    igSMMidPlaneCutout = 182
+    igSMFaceCutout = 205
+
+
 class KeyPointExtentConstants:
     """constant.tlb > KeyPointExtentConstants."""
 
