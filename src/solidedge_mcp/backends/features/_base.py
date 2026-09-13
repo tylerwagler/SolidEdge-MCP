@@ -308,19 +308,63 @@ class FeatureManagerBase:
         _logger.info("Switched the part to synchronous mode for a synchronous-only feature")
         return None
 
-    def _get_feature_by_index(self, index: int) -> tuple[Any | None, dict[str, Any] | None]:
-        """Get a feature from DesignEdgebarFeatures by 0-based index."""
-        doc = self.doc_manager.get_active_document()
-        features = doc.DesignEdgebarFeatures
-        com_index = index + 1  # Convert to 1-based
+    def _enumerate_features(self, doc: Any) -> list[dict[str, Any]]:
+        """Flatten Models.Item(n).Features across every body, in tree order.
 
-        if com_index < 1 or com_index > features.Count:
+        This is the one enumeration feature indices refer to. It holds real
+        features only: reference planes and sketches live in
+        ``doc.DesignEdgebarFeatures`` and are not counted here, which is why
+        indexing that collection instead shifted every lookup.
+
+        An earlier version walked ``doc.Models`` itself, which is the list of
+        bodies rather than features, so a part always reported exactly one
+        entry called "Design Model" no matter how many features it had.
+        """
+        features: list[dict[str, Any]] = []
+        models = com_get(doc, "Models")
+        count_models = int(com_get(models, "Count", 0) or 0)
+        for m in range(1, count_models + 1):
+            model = models.Item(m)
+            collection = com_get(model, "Features")
+            if collection is None:
+                continue
+            count = int(com_get(collection, "Count", 0) or 0)
+            for i in range(1, count + 1):
+                feature = collection.Item(i)
+                features.append(
+                    {
+                        "index": len(features),
+                        "body_index": m - 1,
+                        "position_in_body": i,
+                        "name": com_get(feature, "Name", f"Feature_{len(features) + 1}"),
+                        "type": com_get(feature, "Type", "Unknown"),
+                    }
+                )
+        return features
+
+    def _get_feature_by_index(self, index: int) -> tuple[Any | None, dict[str, Any] | None]:
+        """Resolve a 0-based index from list_features to the COM feature.
+
+        It has to walk the same collection list_features reports.
+        ``doc.DesignEdgebarFeatures`` is the whole Pathfinder tree, reference
+        planes and sketches included, so indexing that shifted every lookup by
+        however many planes came first and made delete_feature(0) remove a
+        reference plane.
+        """
+        doc = self.doc_manager.get_active_document()
+        entries = self._enumerate_features(doc)
+
+        if index < 0 or index >= len(entries):
             return None, {
-                "error": f"Invalid feature index: {index}. Feature count: {features.Count}",
+                "error": (
+                    f"Invalid feature index: {index}. The active part has "
+                    f"{len(entries)} feature(s). Read them with list_features."
+                ),
             }
 
-        feat = features.Item(com_index)
-        return feat, None
+        entry = entries[index]
+        model = doc.Models.Item(entry["body_index"] + 1)
+        return model.Features.Item(entry["position_in_body"]), None
 
     def delete_feature(self, index: int) -> dict[str, Any]:
         """Delete a feature by 0-based index."""
@@ -375,10 +419,10 @@ class FeatureManagerBase:
                 return err
             assert target is not None
             name = getattr(feat, "Name", f"Feature_{index}")
-            if after:
-                feat.MoveAfter(target)
-            else:
-                feat.MoveBefore(target)
+            # Every feature type has Reorder(TargetFeature, InsertBefore).
+            # MoveAfter and MoveBefore are in no Solid Edge type library, so
+            # reordering a feature always raised.
+            feat.Reorder(target, not after)
             return {
                 "status": "reordered",
                 "feature_name": name,
@@ -403,22 +447,6 @@ class FeatureManagerBase:
                 "old_name": old_name,
                 "new_name": new_name,
                 "index": index,
-            }
-        except Exception as e:
-            return error_result(e)
-
-    def convert_feature_type(self, feature_name: str, target_type: str) -> dict[str, Any]:
-        """Convert a feature to a different type."""
-        try:
-            feat, err = self._find_feature_by_name(feature_name)
-            if err:
-                return err
-            assert feat is not None
-            feat.ConvertToType(target_type)
-            return {
-                "status": "converted",
-                "feature_name": feature_name,
-                "target_type": target_type,
             }
         except Exception as e:
             return error_result(e)

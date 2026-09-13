@@ -152,18 +152,15 @@ class SurfacesMixin:
 
             v_profiles = [profile]
 
-            # Try collection-level API first (on model), then Models-level
-            if models.Count > 0:
-                model = models.Item(1)
-                rev_surfaces = model.RevolvedSurfaces
-                rev_surfaces.AddFinite(
-                    1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
-                )
-            else:
-                # First feature - use Models method if available
-                models.AddFiniteRevolvedSurface(
-                    1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
-                )
+            # Surfaces live on doc.Constructions. Model has no
+            # RevolvedSurfaces property and Models has no
+            # AddFiniteRevolvedSurface, so both branches raised; the extruded
+            # surface methods in this file already take the right route.
+            del models
+            rev_surfaces = doc.Constructions.RevolvedSurfaces
+            rev_surfaces.AddFinite(
+                1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
+            )
 
             self.sketch_manager.clear_accumulated_profiles()
 
@@ -537,12 +534,14 @@ class SurfacesMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
 
-            model = models.Item(1)
+            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
             angle_rad = math.radians(angle)
 
             v_profiles = [profile]
 
-            rev_surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            rev_surfaces = doc.Constructions.RevolvedSurfaces
             rev_surfaces.AddFiniteSync(
                 1,  # NumberOfProfiles
                 v_profiles,  # ProfileArray
@@ -594,11 +593,13 @@ class SurfacesMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
 
-            model = models.Item(1)
+            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
 
             v_profiles = [profile]
 
-            rev_surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            rev_surfaces = doc.Constructions.RevolvedSurfaces
             rev_surfaces.AddFiniteByKeyPoint(
                 1,  # NumberOfProfiles
                 v_profiles,  # ProfileArray
@@ -914,12 +915,14 @@ class SurfacesMixin:
             models = doc.Models
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
-            model = models.Item(1)
+            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
 
             angle_rad = math.radians(angle)
             profile_array = [profile]
 
-            surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            surfaces = doc.Constructions.RevolvedSurfaces
             surfaces.Add(
                 1,
                 profile_array,
@@ -1051,12 +1054,14 @@ class SurfacesMixin:
             models = doc.Models
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
-            model = models.Item(1)
+            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
 
             angle_rad = math.radians(angle)
             profile_array = [profile]
 
-            surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            surfaces = doc.Constructions.RevolvedSurfaces
             surfaces.AddSync(
                 1,
                 profile_array,

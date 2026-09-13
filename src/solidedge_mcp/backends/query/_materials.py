@@ -5,10 +5,52 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..constants import MatTablePropIndexConstants
 from ..logging import get_logger
 from ._base import QueryManagerBase
 
 _logger = get_logger(__name__)
+
+
+#: MatTable property indices worth naming in a result.
+_PROPERTY_NAMES: dict[int, str] = {
+    MatTablePropIndexConstants.seDensity: "density",
+    MatTablePropIndexConstants.seCoefOfThermalExpansion: "thermal_expansion",
+    MatTablePropIndexConstants.seThermalConductivity: "thermal_conductivity",
+    MatTablePropIndexConstants.seSpecificHeat: "specific_heat",
+    MatTablePropIndexConstants.seModulusElasticity: "modulus_of_elasticity",
+    MatTablePropIndexConstants.sePoissonRatio: "poisson_ratio",
+    MatTablePropIndexConstants.seYieldStress: "yield_stress",
+    MatTablePropIndexConstants.seUltimateStress: "ultimate_stress",
+    MatTablePropIndexConstants.seElongation: "elongation",
+}
+
+
+def _out_pair(result: Any) -> Any:
+    """Pick the list out of a two-out-param return.
+
+    GetMaterialLibraryList returns (names, count) and
+    GetMaterialListFromLibrary returns (count, names), so take whichever
+    element is not the integer.
+    """
+    if not isinstance(result, tuple) or len(result) != 2:
+        return result
+    first, second = result
+    if isinstance(first, int) and not isinstance(second, int):
+        return second
+    return first
+
+
+def _string_tuple(value: Any) -> list[str]:
+    """A COM string array as a plain list of str."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    try:
+        return [str(item) for item in value]
+    except TypeError:
+        return [str(value)]
 
 
 class MaterialsMixin(QueryManagerBase):
@@ -82,187 +124,241 @@ class MaterialsMixin(QueryManagerBase):
         except Exception as e:
             return error_result(e)
 
-    def get_material_list(self) -> dict[str, Any]:
-        """
-        Get the list of available materials from the material table.
+    # =================================================================
+    # MATERIAL HELPERS
+    #
+    # MatTable is not a collection: it has no Count and no Item, and there is
+    # no Material object to read properties off. Everything goes through named
+    # calls on the table itself.
+    # =================================================================
 
-        Uses MatTable.GetMaterialList() via the Solid Edge application object.
+    def _material_table(self) -> Any:
+        """The application material table.
+
+        GetMaterialTable is on Application, not on the document.
+        """
+        app = self.doc_manager.connection.get_application()
+        return app.GetMaterialTable()
+
+    def _current_material(self, mat_table: Any, doc: Any) -> str:
+        """The name of the material applied to a document, or an empty string."""
+        try:
+            return str(mat_table.GetCurrentMaterialName(doc) or "")
+        except Exception:
+            return ""
+
+    def _find_material_library(self, mat_table: Any, material_name: str) -> str | None:
+        """Which library holds a material, searched case-insensitively."""
+        try:
+            libraries = _string_tuple(_out_pair(mat_table.GetMaterialLibraryList()))
+        except Exception:
+            return None
+        wanted = material_name.casefold()
+        for library in libraries:
+            try:
+                names = _string_tuple(_out_pair(mat_table.GetMaterialListFromLibrary(library)))
+            except Exception:
+                continue
+            for name in names:
+                if name.casefold() == wanted:
+                    return library
+        return None
+
+    def _apply_material(
+        self, material_name: str, report_properties: bool = False
+    ) -> dict[str, Any]:
+        """Apply a material by name and confirm the document took it."""
+        try:
+            doc = self.doc_manager.get_active_document()
+            mat_table = self._material_table()
+
+            library = self._find_material_library(mat_table, material_name)
+            if library is None:
+                available = self.get_material_list()
+                return {
+                    "error": f"Material '{material_name}' is in no installed library.",
+                    "available": available.get("materials", [])[:20],
+                }
+
+            mat_table.ApplyMaterialToDoc(doc, material_name, library)
+
+            applied = self._current_material(mat_table, doc)
+            if applied and applied.casefold() != material_name.casefold():
+                return {
+                    "error": (
+                        f"Solid Edge did not apply '{material_name}'; the document "
+                        f"still reports '{applied}'."
+                    )
+                }
+
+            result: dict[str, Any] = {
+                "status": "applied",
+                "material": applied or material_name,
+                "library": library,
+            }
+            if report_properties:
+                with contextlib.suppress(Exception):
+                    result["density"] = mat_table.GetMaterialPropValueFromDoc(
+                        doc, MatTablePropIndexConstants.seDensity
+                    )
+            return result
+        except Exception as e:
+            return error_result(e)
+
+    def get_material_list(self) -> dict[str, Any]:
+        """List every material Solid Edge can apply, by library.
+
+        ``MatTable.GetMaterialList()`` raises E_FAIL on Solid Edge 2026. The
+        pair that works is ``GetMaterialLibraryList()``, which returns
+        (names, count), and ``GetMaterialListFromLibrary(library)``, which
+        returns (count, names) -- the two out-params come back in opposite
+        orders.
 
         Returns:
-            Dict with list of material names
+            Dict with the flat list of names, the per-library breakdown, and
+            a count.
         """
         try:
-            self.doc_manager.get_active_document()
+            mat_table = self._material_table()
+            libraries = _string_tuple(_out_pair(mat_table.GetMaterialLibraryList()))
 
-            # Get MatTable from the application
-            app = self.doc_manager.connection.get_application()
-            mat_table = app.GetMaterialTable()
+            by_library: dict[str, list[str]] = {}
+            materials: list[str] = []
+            for library in libraries:
+                try:
+                    names = _string_tuple(_out_pair(mat_table.GetMaterialListFromLibrary(library)))
+                except Exception as exc:
+                    _logger.warning("Material library %r could not be read: %s", library, exc)
+                    continue
+                by_library[library] = names
+                materials.extend(names)
 
-            result = mat_table.GetMaterialList()
-            # Returns (count, list_of_materials) as out-params
-            if isinstance(result, tuple) and len(result) >= 2:
-                result[0]
-                material_list = result[1]
-            else:
-                material_list = result
+            if not materials:
+                return {
+                    "error": (
+                        "Solid Edge reported no materials. Check that a material "
+                        "library is installed and reachable."
+                    ),
+                    "libraries": libraries,
+                }
 
-            materials = []
-            if material_list is not None:
-                if isinstance(material_list, (list, tuple)):
-                    materials = list(material_list)
-                elif hasattr(material_list, "__iter__"):
-                    materials = [str(m) for m in material_list]
-
-            return {"materials": materials, "count": len(materials)}
+            return {
+                "materials": materials,
+                "count": len(materials),
+                "libraries": by_library,
+            }
         except Exception as e:
             return error_result(e)
 
     def set_material(self, material_name: str) -> dict[str, Any]:
-        """
-        Apply a named material to the active document.
-
-        Uses MatTable.ApplyMaterial(pDocument, bstrMatName).
+        """Apply a named material to the active document.
 
         Args:
-            material_name: Name of the material (from get_material_list)
+            material_name: A name from get_material_list.
 
         Returns:
-            Dict with status
+            Dict with status and the name Solid Edge reports afterwards.
+        """
+        return self._apply_material(material_name)
+
+    def get_material_property(self, material_name: str, property_index: int) -> dict[str, Any]:
+        """Read one property of the material applied to the active document.
+
+        ``MatTable.GetMatPropValue(name, index)`` raises E_FAIL on Solid Edge
+        2026, and so does ``GetMaterialPropValueFromLibrary``. Only
+        ``GetMaterialPropValueFromDoc(document, index)`` works, so the material
+        has to be applied first; naming a different material applies it.
+
+        The indices this used to document (0 = Density, 1 = Thermal
+        Conductivity, ...) were invented. The real ones come from
+        ``MatTablePropIndexConstants`` and start at 3.
+
+        Args:
+            material_name: The material to read. Empty means whatever is
+                already applied.
+            property_index: A MatTablePropIndexConstants value, for example 23
+                for density or 28 for Poisson's ratio.
+
+        Returns:
+            Dict with the value and the property name, when it is a known one.
         """
         try:
             doc = self.doc_manager.get_active_document()
-            app = self.doc_manager.connection.get_application()
-            mat_table = app.GetMaterialTable()
+            mat_table = self._material_table()
 
-            mat_table.ApplyMaterial(doc, material_name)
+            if material_name:
+                applied = self._apply_material(material_name)
+                if "error" in applied:
+                    return applied
 
-            return {"status": "applied", "material": material_name}
-        except Exception as e:
-            return error_result(e)
-
-    def get_material_property(self, material_name: str, property_index: int) -> dict[str, Any]:
-        """
-        Get a specific property value for a material.
-
-        Uses MatTable.GetMatPropValue(bstrMatName, lPropIndex, varPropValue).
-
-        Common property indices:
-            0 = Density, 1 = Thermal Conductivity, 2 = Thermal Expansion,
-            3 = Specific Heat, 4 = Young's Modulus, 5 = Poisson's Ratio,
-            6 = Yield Stress, 7 = Ultimate Stress, 8 = Elongation
-
-        Args:
-            material_name: Name of the material
-            property_index: Property index (see above)
-
-        Returns:
-            Dict with property value
-        """
-        try:
-            app = self.doc_manager.connection.get_application()
-            mat_table = app.GetMaterialTable()
-
-            value = mat_table.GetMatPropValue(material_name, property_index)
-
-            return {"material": material_name, "property_index": property_index, "value": value}
+            value = mat_table.GetMaterialPropValueFromDoc(doc, property_index)
+            result: dict[str, Any] = {
+                "material": material_name or self._current_material(mat_table, doc),
+                "property_index": property_index,
+                "value": value,
+            }
+            name = _PROPERTY_NAMES.get(property_index)
+            if name is not None:
+                result["property"] = name
+            return result
         except Exception as e:
             return error_result(e)
 
     def get_material_library(self) -> dict[str, Any]:
-        """
-        Get the full material library from the active document.
+        """Report the material applied to the active document, in full.
 
-        Iterates the material table to list all available materials
-        with their names and density values.
+        This used to walk ``mat_table.Count`` and ``mat_table.Item(i)`` reading
+        ``Name``, ``Density``, ``YoungsModulus`` and ``PoissonsRatio``. MatTable
+        has none of those, and there is no Material interface at all, so the
+        call raised before it read anything. Solid Edge only reports material
+        properties for the document, through
+        ``GetMaterialPropValueFromDoc``, so this reports the applied material.
+        Use get_material_list for what is available.
 
         Returns:
-            Dict with count and list of material info dicts
+            Dict with the material name and every property Solid Edge gives.
         """
         try:
-            # GetMaterialTable is on Application, not on the document: the
-            # document call raised "'PartDocument' object has no attribute
-            # 'GetMaterialTable'". The other material methods here already
-            # go through the application.
-            app = self.doc_manager.connection.get_application()
-            mat_table = app.GetMaterialTable()
-            materials = []
-            for i in range(1, mat_table.Count + 1):
-                mat = mat_table.Item(i)
-                info: dict[str, Any] = {"index": i - 1}
-                with contextlib.suppress(Exception):
-                    info["name"] = mat.Name
-                with contextlib.suppress(Exception):
-                    info["density"] = mat.Density
-                with contextlib.suppress(Exception):
-                    info["youngs_modulus"] = mat.YoungsModulus
-                with contextlib.suppress(Exception):
-                    info["poissons_ratio"] = mat.PoissonsRatio
-                materials.append(info)
-            return {"count": len(materials), "materials": materials}
+            doc = self.doc_manager.get_active_document()
+            mat_table = self._material_table()
+
+            name = self._current_material(mat_table, doc)
+            properties: dict[str, Any] = {}
+            for index, label in _PROPERTY_NAMES.items():
+                try:
+                    properties[label] = mat_table.GetMaterialPropValueFromDoc(doc, index)
+                except Exception:
+                    continue
+
+            if not name and not properties:
+                return {
+                    "error": (
+                        "No material is applied to the active document, so it has "
+                        "no properties to report. Apply one with "
+                        "manage_material(action='set', material_name=...)."
+                    )
+                }
+
+            return {"material": name, "properties": properties}
         except Exception as e:
             return error_result(e)
 
     def set_material_by_name(self, material_name: str) -> dict[str, Any]:
-        """
-        Look up a material by name in the material table and apply it.
+        """Apply a material, checking the name against the libraries first.
 
-        Searches the material table for the given name and applies it
-        to the active document.
+        ``Document.ApplyStyle`` is not a Solid Edge method, and neither is
+        ``Material.Apply``, so the old three-way fallback could only ever land
+        on ``doc.Material = name``, which does not apply a material either.
+        ``MatTable.ApplyMaterialToDoc(document, name, library)`` is the real
+        route.
 
         Args:
-            material_name: Name of the material to apply
+            material_name: A name from get_material_list.
 
         Returns:
-            Dict with status and material info
+            Dict with status, the library it came from, and its density.
         """
-        try:
-            # GetMaterialTable is on Application, not on the document: the
-            # document call raised "'PartDocument' object has no attribute
-            # 'GetMaterialTable'". The other material methods here already
-            # go through the application.
-            doc = self.doc_manager.get_active_document()
-            app = self.doc_manager.connection.get_application()
-            mat_table = app.GetMaterialTable()
-
-            # Search for the material by name
-            found_mat = None
-            for i in range(1, mat_table.Count + 1):
-                mat = mat_table.Item(i)
-                try:
-                    if mat.Name == material_name:
-                        found_mat = mat
-                        break
-                except Exception:
-                    continue
-
-            if found_mat is None:
-                # Collect available names for error message
-                available = []
-                for i in range(1, mat_table.Count + 1):
-                    with contextlib.suppress(Exception):
-                        available.append(mat_table.Item(i).Name)
-                return {
-                    "error": f"Material '{material_name}' not found",
-                    "available": available[:20],
-                }
-
-            # Apply the material
-            try:
-                doc.ApplyStyle(found_mat)
-            except Exception:
-                # Alternative: try setting via material name property
-                try:
-                    doc.Material = material_name
-                except Exception:
-                    # Another fallback
-                    found_mat.Apply()
-
-            result: dict[str, Any] = {"status": "applied", "material": material_name}
-            with contextlib.suppress(Exception):
-                result["density"] = found_mat.Density
-            return result
-        except Exception as e:
-            return error_result(e)
+        return self._apply_material(material_name, report_properties=True)
 
     # =================================================================
     # LAYER MANAGEMENT

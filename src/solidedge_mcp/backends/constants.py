@@ -595,3 +595,25 @@ class PatternTransformRotateTypeConstants:
 
     sePatternTransformRotateOnCurvePosition = 0
     sePatternTransformRotateOnFeaturePosition = 1
+
+
+class MatTablePropIndexConstants:
+    """Property indices for MatTable.GetMaterialPropValueFromDoc.
+
+    From Program/constant.tlb > MatTablePropIndexConstants. The numbers are
+    not 0..8 as this module once assumed; they start at 3 and jump to 20.
+    """
+
+    seMaterialName = 3
+    seFaceStyle = 20
+    seFillStyle = 21
+    seVSPlusStyle = 22
+    seDensity = 23
+    seCoefOfThermalExpansion = 24
+    seThermalConductivity = 25
+    seSpecificHeat = 26
+    seModulusElasticity = 27
+    sePoissonRatio = 28
+    seYieldStress = 29
+    seUltimateStress = 30
+    seElongation = 31

@@ -1,10 +1,12 @@
 """Physical properties, measurements, and body appearance operations."""
 
+import contextlib
 import math
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..logging import get_logger
 from ._base import QueryManagerBase, r8_array
 
@@ -159,14 +161,9 @@ class PhysicalPropsMixin(QueryManagerBase):
             doc, model = self._get_first_model()
             body = model.Body
 
-            # Try body.SurfaceArea first
-            try:
-                area = body.SurfaceArea
-                return {"surface_area": area, "surface_area_mm2": area * 1e6}
-            except Exception:
-                pass
-
-            # Fallback: sum face areas
+            # Body has no SurfaceArea property, so that attempt always
+            # raised and the sum below was the only path that ever ran.
+            # Face.Area is real, and summing it gives the true area.
             from ..constants import FaceQueryConstants
 
             faces = body.Faces(FaceQueryConstants.igQueryAll)
@@ -177,6 +174,11 @@ class PhysicalPropsMixin(QueryManagerBase):
                     total_area += face.Area
                 except Exception:
                     pass
+
+            if not faces.Count:
+                return {
+                    "error": ("This body reports no faces, so its surface area cannot be measured.")
+                }
 
             return {
                 "surface_area": total_area,
@@ -443,65 +445,96 @@ class PhysicalPropsMixin(QueryManagerBase):
             return error_result(e)
 
     def set_body_color(self, red: int, green: int, blue: int) -> dict[str, Any]:
-        """
-        Set the body color of the active part.
+        """Set the body colour of the active part.
 
-        Sets the foreground color of the body's style to the specified RGB values.
-        Color values are 0-255 for each component.
+        ``Style.SetForegroundColor`` is in no Solid Edge type library, and
+        ``Body.Style`` is None until a style is assigned, so this raised twice
+        over. A body is coloured by assigning it a FaceStyle whose diffuse
+        colour is what you want. Verified on Solid Edge 2026: creating a style
+        with ``doc.FaceStyles.Add(name, "")``, calling ``SetDiffuse``, then
+        assigning ``body.Style`` reads back the colour that was set.
 
         Args:
-            red: Red component (0-255)
-            green: Green component (0-255)
-            blue: Blue component (0-255)
+            red: Red channel, 0-255.
+            green: Green channel, 0-255.
+            blue: Blue channel, 0-255.
 
         Returns:
-            Dict with status and color info
+            Dict with status, the colour, and the style that carries it.
         """
         try:
             doc, model = self._get_first_model()
             body = model.Body
 
-            # Clamp values to 0-255
             red = max(0, min(255, red))
             green = max(0, min(255, green))
             blue = max(0, min(255, blue))
 
-            style = body.Style
-            style.SetForegroundColor(red, green, blue)
+            styles = com_get(doc, "FaceStyles")
+            if styles is None:
+                return {
+                    "error": (
+                        "This document has no FaceStyles collection, so the body "
+                        "colour cannot be set."
+                    )
+                }
+
+            name = f"MCP {red:02X}{green:02X}{blue:02X}"
+            style = None
+            with contextlib.suppress(Exception):
+                style = styles.Item(name)
+            if style is None:
+                style = styles.Add(name, "")
+
+            # SetDiffuse takes 0.0-1.0 per channel, not 0-255.
+            style.SetDiffuse(red / 255.0, green / 255.0, blue / 255.0)
+            body.Style = style
 
             return {
                 "status": "set",
                 "color": {"red": red, "green": green, "blue": blue},
                 "hex": f"#{red:02x}{green:02x}{blue:02x}",
+                "style": name,
             }
         except Exception as e:
             return error_result(e)
 
     def get_body_color(self) -> dict[str, Any]:
-        """
-        Get the current body color.
+        """Read the body colour of the active part.
+
+        ``Style.ForegroundColor`` and ``Body.GetColor`` are in no Solid Edge
+        type library, so both branches raised and this only ever returned
+        "Could not determine body color". ``FaceStyle.GetDiffuse`` is the real
+        accessor and reports each channel as 0.0-1.0.
 
         Returns:
-            Dict with RGB color values
+            Dict with the colour as 0-255 channels and as hex, or an error
+            when the body has no style of its own.
         """
         try:
-            doc, model = self._get_first_model()
+            _doc, model = self._get_first_model()
             body = model.Body
 
-            try:
-                color = body.Style.ForegroundColor
-                # Decompose OLE color
-                red = color & 0xFF
-                green = (color >> 8) & 0xFF
-                blue = (color >> 16) & 0xFF
-                return {"red": red, "green": green, "blue": blue, "ole_color": color}
-            except Exception:
-                # Try alternative
-                try:
-                    r, g, b = body.GetColor()
-                    return {"red": r, "green": g, "blue": b}
-                except Exception:
-                    return {"error": "Could not determine body color"}
+            style = com_get(body, "Style")
+            if style is None:
+                return {
+                    "error": (
+                        "This body has no style of its own, so it is drawn in the "
+                        "document default colour. Set one with "
+                        "manage_appearance(action='set_body_color', ...)."
+                    )
+                }
+
+            diffuse = style.GetDiffuse()
+            red, green, blue = (int(round(float(channel) * 255)) for channel in diffuse[:3])
+
+            return {
+                "red": red,
+                "green": green,
+                "blue": blue,
+                "hex": f"#{red:02x}{green:02x}{blue:02x}",
+                "diffuse": [float(channel) for channel in diffuse[:3]],
+            }
         except Exception as e:
             return error_result(e)
 

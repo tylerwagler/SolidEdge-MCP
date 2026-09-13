@@ -15,14 +15,6 @@ from ..logging import get_logger
 _logger = get_logger(__name__)
 
 
-def _first_index_of_body(features: list[dict[str, Any]], entry: dict[str, Any]) -> int:
-    """Flat index of the first feature belonging to the same body as ``entry``."""
-    for f in features:
-        if f["body_index"] == entry["body_index"]:
-            return int(f["index"])
-    return 0
-
-
 # constant.tlb > AddBodyTypeConstants. Kept local because backends/constants.py
 # does not carry this enum yet.
 _ADD_BODY_TYPES = {
@@ -93,33 +85,6 @@ class MiscFeaturesMixin:
             "thickness": thickness,
         }
 
-    def _enumerate_features(self, doc: Any) -> list[dict[str, Any]]:
-        """Flatten Models.Item(n).Features across every body, in tree order.
-
-        This used to walk ``doc.Models`` itself, which is the list of bodies,
-        not features. A part has one body, so it always reported exactly one
-        entry called "Design Model" no matter how many features existed.
-        """
-        features: list[dict[str, Any]] = []
-        models = doc.Models
-        for m in range(1, models.Count + 1):
-            model = models.Item(m)
-            collection = com_get(model, "Features")
-            if collection is None:
-                continue
-            count = com_get(collection, "Count", 0) or 0
-            for i in range(1, int(count) + 1):
-                feature = collection.Item(i)
-                features.append(
-                    {
-                        "index": len(features),
-                        "body_index": m - 1,
-                        "name": com_get(feature, "Name", f"Feature_{len(features) + 1}"),
-                        "type": com_get(feature, "Type", "Unknown"),
-                    }
-                )
-        return features
-
     def list_features(self) -> dict[str, Any]:
         """List the features of every body in the active part, in tree order.
 
@@ -149,7 +114,9 @@ class MiscFeaturesMixin:
 
             entry = features[feature_index]
             model = doc.Models.Item(entry["body_index"] + 1)
-            feature = model.Features.Item(feature_index - _first_index_of_body(features, entry) + 1)
+            # The entry records its 1-based position in its own body, so the
+            # index no longer has to be recomputed from the flat list.
+            feature = model.Features.Item(entry["position_in_body"])
 
             info: dict[str, Any] = dict(entry)
             # Suppress is a read/write VT_BOOL property on part features.
@@ -772,7 +739,32 @@ class MiscFeaturesMixin:
             if target_feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            target_type_lower = target_type.lower()
+            target_type_lower = target_type.strip().lower()
+            # ConvertToCutoutAllowed and ConvertToProtrusionAllowed are
+            # properties, not methods, so read them rather than call them.
+            # Absent means the feature type does not convert at all.
+            allowed_name = {
+                "cutout": "ConvertToCutoutAllowed",
+                "protrusion": "ConvertToProtrusionAllowed",
+            }.get(target_type_lower)
+            if allowed_name is not None:
+                if not hasattr(target_feature, f"ConvertTo{target_type_lower.capitalize()}"):
+                    return {
+                        "error": (
+                            f"Feature '{feature_name}' cannot become a "
+                            f"{target_type_lower}. Only extruded and revolved "
+                            f"protrusions and cutouts convert."
+                        )
+                    }
+                if getattr(target_feature, allowed_name, True) is False:
+                    return {
+                        "error": (
+                            f"Solid Edge will not convert '{feature_name}' to a "
+                            f"{target_type_lower}. Converting the feature that "
+                            f"creates the material would leave nothing behind."
+                        )
+                    }
+
             if target_type_lower == "cutout":
                 result = target_feature.ConvertToCutout()
                 new_name = None

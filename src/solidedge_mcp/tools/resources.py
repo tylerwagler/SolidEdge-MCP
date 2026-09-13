@@ -227,7 +227,7 @@ def geometry_moments_of_inertia() -> str:
 
 
 def material_list() -> str:
-    """List of available materials."""
+    """Every material Solid Edge can apply, flat and grouped by library."""
     return dumps(query_manager.get_material_list())
 
 
@@ -352,7 +352,13 @@ def drawing_view_info(index: int) -> str:
 
 
 def material_property(name: str, index: int) -> str:
-    """One property of a named material, by 0-based property index."""
+    """One property of a material, by MatTablePropIndexConstants index.
+
+    The indices are not 0-based: 23 is density, 27 modulus of elasticity, 28
+    Poisson's ratio, 29 yield stress, 30 ultimate stress. Naming a material
+    applies it first, because Solid Edge only reports properties for the
+    document; an empty name reads whatever is already applied.
+    """
     return dumps(query_manager.get_material_property(material_name=name, property_index=int(index)))
 
 

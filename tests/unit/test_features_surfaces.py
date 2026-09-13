@@ -124,14 +124,17 @@ class TestCreateExtrudedSurface:
 
 class TestRevolvedSurface:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+        _, sketch_mgr, doc, _, model, _ = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         result = feature_mgr.create_revolved_surface(360)
         assert result["status"] == "created"
         assert result["type"] == "revolved_surface"
         assert result["angle_degrees"] == 360
-        model.RevolvedSurfaces.AddFinite.assert_called_once()
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces.AddFinite.assert_called_once()
+        assert "RevolvedSurfaces" not in str(model.mock_calls)
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -364,7 +367,9 @@ class TestCreateRevolvedSurfaceSync:
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         rev_surfaces = MagicMock()
-        model.RevolvedSurfaces = rev_surfaces
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces = rev_surfaces
 
         result = feature_mgr.create_revolved_surface_sync(360.0)
         assert result["status"] == "created"
@@ -401,7 +406,9 @@ class TestCreateRevolvedSurfaceByKeypoint:
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         rev_surfaces = MagicMock()
-        model.RevolvedSurfaces = rev_surfaces
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces = rev_surfaces
 
         result = feature_mgr.create_revolved_surface_by_keypoint("End")
         assert result["status"] == "created"
@@ -553,17 +560,19 @@ class TestCreateExtrudedSurfaceFull:
 
 class TestCreateRevolvedSurfaceFull:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, profile = managers
+        _, sketch_mgr, doc, _, model, profile = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         surface = MagicMock()
         surface.Name = "RevSurfFull1"
-        model.RevolvedSurfaces.Add.return_value = surface
+        doc.Constructions.RevolvedSurfaces.Add.return_value = surface
 
         result = feature_mgr.create_revolved_surface_full(180.0)
         assert result["status"] == "created"
         assert result["type"] == "revolved_surface_full"
-        model.RevolvedSurfaces.Add.assert_called_once()
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces.Add.assert_called_once()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -582,17 +591,19 @@ class TestCreateRevolvedSurfaceFull:
 
 class TestCreateRevolvedSurfaceFullSync:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, profile = managers
+        _, sketch_mgr, doc, _, model, profile = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         surface = MagicMock()
         surface.Name = "RevSurfFullSync1"
-        model.RevolvedSurfaces.AddSync.return_value = surface
+        doc.Constructions.RevolvedSurfaces.AddSync.return_value = surface
 
         result = feature_mgr.create_revolved_surface_full_sync(180.0)
         assert result["status"] == "created"
         assert result["type"] == "revolved_surface_full_sync"
-        model.RevolvedSurfaces.AddSync.assert_called_once()
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces.AddSync.assert_called_once()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers

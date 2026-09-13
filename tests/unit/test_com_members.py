@@ -74,27 +74,26 @@ UNVERIFIED: frozenset[str] = frozenset(
         # AddAssemblyView; AddPartViewWithConfiguration became
         # AddPartViewByConfiguration; and DraftPrintUtility.PrintAllSheets
         # became AddDocument / AddSheet.
+        # And: MoveAfter/MoveBefore became Feature.Reorder(target,
+        # InsertBefore); ConvertToType became ConvertToCutout /
+        # ConvertToProtrusion; Body.SurfaceArea became the sum of
+        # Face.Area; Style.SetForegroundColor / ForegroundColor became
+        # FaceStyle.SetDiffuse / GetDiffuse; Document.ApplyStyle and the
+        # Material object's YoungsModulus / PoissonsRatio became
+        # MatTable.ApplyMaterialToDoc and GetMaterialPropValueFromDoc; and
+        # Models.AddFiniteRevolvedSurface became
+        # doc.Constructions.RevolvedSurfaces.AddFinite.
         # Each still needs checking against a live install; they are reachable
         # only through interfaces the type libraries do not describe, or they
         # are wrong. Treat a failure here as a real bug until proven otherwise.
-        "AddFiniteRevolvedSurface",
-        "ApplyStyle",
         "Bodies",
         "CenterPoint",
-        "ConvertToType",
-        "ForegroundColor",
         "GetInstalledLanguage",
         "GetInstalledVersion",
-        "MoveAfter",
-        "MoveBefore",
         "OccurrenceColor",
         "OffsetProfile",
         "Parents",
-        "PoissonsRatio",
-        "SetForegroundColor",
-        "SurfaceArea",
         "UseOccurrenceColor",
-        "YoungsModulus",
     }
 )
 

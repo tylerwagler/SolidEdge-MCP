@@ -63,6 +63,8 @@ class TestGetVolume:
 
 
 class TestGetSurfaceArea:
+    """Body has no SurfaceArea property; the faces are summed instead."""
+
     def test_success(self, query_mgr):
         qm, doc = query_mgr
         model = MagicMock()
@@ -71,11 +73,35 @@ class TestGetSurfaceArea:
         models.Item.return_value = model
         doc.Models = models
 
-        model.Body.SurfaceArea = 0.06  # 60000 mm²
+        faces = MagicMock()
+        faces.Count = 2
+        first = MagicMock()
+        first.Area = 0.04
+        second = MagicMock()
+        second.Area = 0.02
+        faces.Item.side_effect = lambda i: {1: first, 2: second}[i]
+        model.Body.Faces.return_value = faces
+        del model.Body.SurfaceArea
 
         result = qm.get_surface_area()
-        assert result["surface_area"] == 0.06
-        assert result["surface_area_mm2"] == 60000.0
+
+        assert result["surface_area"] == pytest.approx(0.06)
+        assert result["surface_area_mm2"] == pytest.approx(60000.0)
+        assert result["face_count"] == 2
+        assert result["method"] == "sum_of_faces"
+
+    def test_a_body_without_faces_is_an_error(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        faces = MagicMock()
+        faces.Count = 0
+        model.Body.Faces.return_value = faces
+
+        assert "error" in qm.get_surface_area()
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -83,8 +109,7 @@ class TestGetSurfaceArea:
         models.Count = 0
         doc.Models = models
 
-        result = qm.get_surface_area()
-        assert "error" in result
+        assert "error" in qm.get_surface_area()
 
 
 # ============================================================================
@@ -294,36 +319,71 @@ class TestMeasureAngle:
 
 
 class TestSetBodyColor:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+    """A body is coloured by assigning it a FaceStyle with a diffuse colour.
 
+    Style.SetForegroundColor is in no Solid Edge type library, and Body.Style
+    is None until something assigns one.
+    """
+
+    def _part(self, doc):
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        style = MagicMock()
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, styles, style
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model, styles, style = self._part(doc)
 
         result = qm.set_body_color(255, 0, 0)
+
         assert result["status"] == "set"
-        assert result["color"]["red"] == 255
-        assert result["color"]["green"] == 0
-        assert result["color"]["blue"] == 0
         assert result["hex"] == "#ff0000"
-        model.Body.Style.SetForegroundColor.assert_called_once_with(255, 0, 0)
+        styles.Add.assert_called_once_with("MCP FF0000", "")
+        # SetDiffuse takes 0.0-1.0, not 0-255.
+        style.SetDiffuse.assert_called_once_with(1.0, 0.0, 0.0)
+        assert model.Body.Style is style
+        style.SetForegroundColor.assert_not_called()
+
+    def test_reuses_a_style_it_already_made(self, query_mgr):
+        qm, doc = query_mgr
+        _model, styles, _style = self._part(doc)
+        existing = MagicMock()
+        styles.Item.side_effect = None
+        styles.Item.return_value = existing
+
+        qm.set_body_color(0, 128, 255)
+
+        styles.Add.assert_not_called()
+        existing.SetDiffuse.assert_called_once()
 
     def test_clamps_values(self, query_mgr):
         qm, doc = query_mgr
+        self._part(doc)
 
+        result = qm.set_body_color(300, -10, 128)
+
+        assert result["color"]["red"] == 255
+        assert result["color"]["green"] == 0
+        assert result["color"]["blue"] == 128
+
+    def test_a_document_without_face_styles(self, query_mgr):
+        qm, doc = query_mgr
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        doc.FaceStyles = None
 
-        result = qm.set_body_color(300, -10, 128)
-        assert result["color"]["red"] == 255
-        assert result["color"]["green"] == 0
-        assert result["color"]["blue"] == 128
+        assert "error" in qm.set_body_color(255, 0, 0)
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -331,8 +391,41 @@ class TestSetBodyColor:
         models.Count = 0
         doc.Models = models
 
-        result = qm.set_body_color(255, 0, 0)
+        assert "error" in qm.set_body_color(255, 0, 0)
+
+
+class TestGetBodyColour:
+    """FaceStyle.GetDiffuse reports 0.0-1.0 per channel."""
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.Style.GetDiffuse.return_value = (1.0, 0.0, 0.5)
+
+        result = qm.get_body_color()
+
+        assert result["red"] == 255
+        assert result["green"] == 0
+        assert result["blue"] == 128
+        assert result["hex"] == "#ff0080"
+
+    def test_a_body_without_a_style_says_so(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.Style = None
+
+        result = qm.get_body_color()
+
         assert "error" in result
+        assert "default colour" in result["error"]
 
 
 # ============================================================================
