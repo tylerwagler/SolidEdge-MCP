@@ -453,9 +453,12 @@ class AnnotationsMixin:
         """
         Add a distance dimension between two points on the active draft sheet.
 
-        Uses sheet.Dimensions.AddDistanceBetweenPoints to measure the distance
-        between two coordinate pairs. The dimension text is placed at the
-        midpoint offset above.
+        NOT AVAILABLE via COM automation. fwksupp.tlb offers
+        Dimensions.AddDistanceBetweenObjects(Object1, x1, y1, z1, keyPoint1,
+        Object2, x2, y2, z2, keyPoint2), which measures between two drawing
+        *objects* and their keypoints. There is no AddDistanceBetweenPoints and
+        no coordinate-only overload, so a dimension between two bare points
+        cannot be created. Verified against Solid Edge 2026.
 
         Args:
             x1: First point X (meters)
@@ -464,32 +467,21 @@ class AnnotationsMixin:
             y2: Second point Y (meters)
 
         Returns:
-            Dict with status and dimension type
+            Dict explaining why this is unsupported
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            err = self._require_draft(doc, NOT_A_DRAFT)
-            if err:
-                return err
-            sheet = doc.ActiveSheet
-            dims = sheet.Dimensions
-
-            # Place dimension text at midpoint, offset above
-            dim_x = (x1 + x2) / 2
-            dim_y = max(y1, y2) + 0.02
-
-            # AddDistanceBetweenPoints(x1, y1, z1, x2, y2, z2, dimX, dimY, dimZ)
-            dims.AddDistanceBetweenPoints(x1, y1, 0.0, x2, y2, 0.0, dim_x, dim_y, 0.0)
-
-            return {
-                "status": "added",
-                "dimension_type": "distance",
-                "point1": [x1, y1],
-                "point2": [x2, y2],
-                "text_position": [dim_x, dim_y],
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "A dimension between two bare coordinates cannot be created. "
+                "Solid Edge measures between drawing objects: "
+                "Dimensions.AddDistanceBetweenObjects needs two objects and their "
+                "keypoints, which this server cannot select. Dimension a line with "
+                "add_2d_dimension(type='length'), or place the dimension in the "
+                "Solid Edge UI."
+            ),
+            "unsupported": True,
+            "point1": [x1, y1],
+            "point2": [x2, y2],
+        }
 
     def add_length_dimension(self, object_index: int) -> dict[str, Any]:
         """

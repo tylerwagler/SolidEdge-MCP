@@ -507,6 +507,13 @@ class TestShowTangentEdges:
         dvs = MagicMock()
         dvs.Count = 1
         dvs.Item.return_value = view
+        # ShowTangentEdges is a ModelMember property; setting it on the view
+        # raised "Property 'Item.ShowTangentEdges' can not be set."
+        member = MagicMock()
+        members = MagicMock()
+        members.Count = 1
+        members.Item.return_value = member
+        view.ModelMembers = members
         del dvs._oleobj_
         sheet.DrawingViews = dvs
         doc.ActiveSheet = sheet
@@ -515,7 +522,7 @@ class TestShowTangentEdges:
         result = em.show_tangent_edges(0, True)
         assert result["status"] == "updated"
         assert result["show_tangent_edges"] is True
-        assert view.ShowTangentEdges is True
+        assert member.ShowTangentEdges is True
 
     def test_hide(self, export_mgr):
         em, doc = export_mgr
@@ -524,6 +531,13 @@ class TestShowTangentEdges:
         dvs = MagicMock()
         dvs.Count = 1
         dvs.Item.return_value = view
+        # ShowTangentEdges is a ModelMember property; setting it on the view
+        # raised "Property 'Item.ShowTangentEdges' can not be set."
+        member = MagicMock()
+        members = MagicMock()
+        members.Count = 1
+        members.Item.return_value = member
+        view.ModelMembers = members
         del dvs._oleobj_
         sheet.DrawingViews = dvs
         doc.ActiveSheet = sheet
@@ -532,7 +546,7 @@ class TestShowTangentEdges:
         result = em.show_tangent_edges(0, False)
         assert result["status"] == "updated"
         assert result["show_tangent_edges"] is False
-        assert view.ShowTangentEdges is False
+        assert member.ShowTangentEdges is False
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr

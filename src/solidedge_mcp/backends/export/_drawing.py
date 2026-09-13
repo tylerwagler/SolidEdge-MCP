@@ -311,10 +311,17 @@ class DrawingMixin:
             if err:
                 return err
 
+            import win32com.client.dynamic as dyn
+
             sheet = doc.ActiveSheet
 
-            # Get the first drawing view on the sheet
+            # sheet.DrawingViews binds to the Part type library's
+            # SketchDrawingViews through the gen_py cache, which does not expose
+            # the members needed here. Force late binding, as _get_drawing_views
+            # and create_drawing do, and fall back if that is not possible.
             dvs = sheet.DrawingViews
+            with contextlib.suppress(Exception):
+                dvs = dyn.Dispatch(dvs._oleobj_)
             if dvs.Count == 0:
                 return {"error": "No drawing views on active sheet. Add a view first."}
 

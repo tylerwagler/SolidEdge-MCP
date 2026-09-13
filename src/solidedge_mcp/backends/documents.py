@@ -11,6 +11,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from .comutil import com_get
 from .constants import DocumentTypeConstants
 from .logging import get_logger
 
@@ -526,12 +527,21 @@ class DocumentManager:
         except Exception as e:
             return error_result(e)
 
-    def close_all_documents(self, save: bool = False) -> dict[str, Any]:
+    def close_all_documents(
+        self, save: bool = False, discard_unsaved: bool = False
+    ) -> dict[str, Any]:
         """
-        Close all open documents.
+        Close every open document, including ones this server did not create.
+
+        Closing everything without saving destroys unsaved work belonging to
+        whoever is at the keyboard, and Solid Edge gives no warning once alerts
+        are suppressed. So when any open document has unsaved changes and
+        ``save`` is False, the call is refused and the documents are named;
+        pass ``discard_unsaved`` to go ahead anyway.
 
         Args:
-            save: If True, save each document before closing
+            save: Save each document before closing.
+            discard_unsaved: Permit throwing away unsaved changes.
 
         Returns:
             Dict with close status and count of closed documents
@@ -543,6 +553,24 @@ class DocumentManager:
 
             if count == 0:
                 return {"status": "no_documents", "closed": 0}
+
+            if not save and not discard_unsaved:
+                unsaved = []
+                for i in range(1, count + 1):
+                    doc = docs.Item(i)
+                    if com_get(doc, "Dirty", False):
+                        unsaved.append(str(com_get(doc, "Name", f"Document {i}")))
+                if unsaved:
+                    return {
+                        "error": (
+                            f"{len(unsaved)} open document(s) have unsaved changes: "
+                            f"{', '.join(unsaved)}. Closing them all would discard that "
+                            "work. Pass save=true to save first, discard_unsaved=true to "
+                            "throw it away, or close_document(scope='active') for just "
+                            "the current one."
+                        ),
+                        "unsaved_documents": unsaved,
+                    }
 
             closed = 0
             errors = []

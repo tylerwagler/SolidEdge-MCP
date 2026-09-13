@@ -636,7 +636,9 @@ class SolidEdgeConnection:
         """
         try:
             app = self._get_app()
-            cmd = app.ActiveCommand
+            # framewrk.tlb exposes GetActiveCommand() as a method; there is
+            # no ActiveCommand property, so this always raised.
+            cmd = app.GetActiveCommand()
             result: dict[str, Any | None] = {"status": "success"}
             if cmd is not None:
                 result["has_active_command"] = True

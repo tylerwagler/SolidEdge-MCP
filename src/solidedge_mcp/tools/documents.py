@@ -73,16 +73,19 @@ def open_document(
 def close_document(
     scope: Literal["active", "all"] = "active",
     save: bool = True,
+    discard_unsaved: bool = False,
 ) -> dict[str, Any]:
     """Close the active document or all documents.
 
-    save=False discards unsaved changes.
+    save=False discards unsaved changes. scope='all' closes every open
+    document, including ones you did not create; if any has unsaved changes it
+    is refused and they are named, unless discard_unsaved=true.
     """
     match scope:
         case "active":
             return doc_manager.close_document(save=save)
         case "all":
-            return doc_manager.close_all_documents(save=save)
+            return doc_manager.close_all_documents(save=save, discard_unsaved=discard_unsaved)
         case _:
             return {"error": f"Unknown scope: {scope}"}
 

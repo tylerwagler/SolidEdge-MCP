@@ -259,7 +259,9 @@ class ViewsMixin:
             with contextlib.suppress(Exception):
                 info["show_hidden_edges"] = view.ShowHiddenEdges
             with contextlib.suppress(Exception):
-                info["show_tangent_edges"] = view.ShowTangentEdges
+                members = com_get(view, "ModelMembers")
+                if members is not None and com_get(members, "Count", 0):
+                    info["show_tangent_edges"] = members.Item(1).ShowTangentEdges
             with contextlib.suppress(Exception):
                 info["type"] = view.Type
 
@@ -370,7 +372,20 @@ class ViewsMixin:
                 return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
 
             view = dvs.Item(view_index + 1)
-            view.ShowTangentEdges = show
+            # draft.tlb puts ShowTangentEdges on ModelMember, not DrawingView.
+            # Setting it on the view raised "Property 'Item.ShowTangentEdges'
+            # can not be set."
+            members = com_get(view, "ModelMembers")
+            count = com_get(members, "Count", 0) or 0
+            if not count:
+                return {
+                    "error": (
+                        "This drawing view has no model members, so tangent edge "
+                        "display cannot be changed."
+                    )
+                }
+            for i in range(1, int(count) + 1):
+                members.Item(i).ShowTangentEdges = show
 
             return {
                 "status": "updated",

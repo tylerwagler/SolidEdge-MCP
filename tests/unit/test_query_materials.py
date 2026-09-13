@@ -173,7 +173,10 @@ class TestGetMaterialLibrary:
         mat_table = MagicMock()
         mat_table.Count = 2
         mat_table.Item.side_effect = lambda i: [None, mat1, mat2][i]
-        doc.GetMaterialTable.return_value = mat_table
+        # GetMaterialTable lives on Application, not the document.
+        qm.doc_manager.connection.get_application.return_value.GetMaterialTable.return_value = (
+            mat_table
+        )
 
         result = qm.get_material_library()
         assert result["count"] == 2
@@ -185,7 +188,10 @@ class TestGetMaterialLibrary:
         qm, doc = query_mgr
         mat_table = MagicMock()
         mat_table.Count = 0
-        doc.GetMaterialTable.return_value = mat_table
+        # GetMaterialTable lives on Application, not the document.
+        qm.doc_manager.connection.get_application.return_value.GetMaterialTable.return_value = (
+            mat_table
+        )
 
         result = qm.get_material_library()
         assert result["count"] == 0
@@ -193,7 +199,8 @@ class TestGetMaterialLibrary:
 
     def test_error(self, query_mgr):
         qm, doc = query_mgr
-        doc.GetMaterialTable.side_effect = Exception("No material table")
+        app = qm.doc_manager.connection.get_application.return_value
+        app.GetMaterialTable.side_effect = Exception("No material table")
 
         result = qm.get_material_library()
         assert "error" in result
@@ -209,7 +216,10 @@ class TestSetMaterialByName:
         mat_table = MagicMock()
         mat_table.Count = 1
         mat_table.Item.return_value = mat
-        doc.GetMaterialTable.return_value = mat_table
+        # GetMaterialTable lives on Application, not the document.
+        qm.doc_manager.connection.get_application.return_value.GetMaterialTable.return_value = (
+            mat_table
+        )
 
         result = qm.set_material_by_name("Steel")
         assert result["status"] == "applied"
@@ -223,7 +233,10 @@ class TestSetMaterialByName:
         mat_table = MagicMock()
         mat_table.Count = 1
         mat_table.Item.return_value = mat
-        doc.GetMaterialTable.return_value = mat_table
+        # GetMaterialTable lives on Application, not the document.
+        qm.doc_manager.connection.get_application.return_value.GetMaterialTable.return_value = (
+            mat_table
+        )
 
         result = qm.set_material_by_name("Titanium")
         assert "error" in result
@@ -231,7 +244,9 @@ class TestSetMaterialByName:
 
     def test_error(self, query_mgr):
         qm, doc = query_mgr
-        doc.GetMaterialTable.side_effect = Exception("COM error")
+        qm.doc_manager.connection.get_application.return_value.GetMaterialTable.side_effect = (
+            Exception("COM error")
+        )
 
         result = qm.set_material_by_name("Steel")
         assert "error" in result

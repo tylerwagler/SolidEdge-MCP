@@ -1308,6 +1308,9 @@ class TestCloseAllDocuments:
         doc1.Name = "doc1.par"
         doc2 = MagicMock()
         doc2.Name = "doc2.par"
+        # Saved documents: closing all of them needs no discard flag.
+        doc1.Dirty = False
+        doc2.Dirty = False
         app.Documents.Count = 2
         app.Documents.Item.side_effect = lambda i: {2: doc2, 1: doc1}[i]
 

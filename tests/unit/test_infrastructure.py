@@ -304,3 +304,49 @@ class TestOverwritePromptRefusal:
         result = dm.save_document(str(target))
         assert result["status"] == "saved"
         dm.active_document.SaveAs.assert_called_once_with(str(target))
+
+
+class TestCloseAllGuard:
+    """Closing every document without saving destroys other people's work.
+
+    This is not hypothetical: a sweep of mine used scope="all" in a cleanup
+    block and closed three unsaved scratch parts that it had not created.
+    """
+
+    def _manager(self, names_dirty):
+        conn = MagicMock()
+        app = MagicMock()
+        conn.get_application.return_value = app
+        docs = MagicMock()
+        docs.Count = len(names_dirty)
+        made = []
+        for name, dirty in names_dirty:
+            d = MagicMock()
+            d.Name = name
+            d.Dirty = dirty
+            made.append(d)
+        docs.Item.side_effect = lambda i: made[i - 1]
+        app.Documents = docs
+        return DocumentManager(conn), made
+
+    def test_refuses_when_any_document_is_unsaved(self):
+        dm, docs = self._manager([("Part1", True), ("Part2", False)])
+
+        result = dm.close_all_documents(save=False)
+        assert result["unsaved_documents"] == ["Part1"]
+        assert "discard_unsaved=true" in result["error"]
+        for d in docs:
+            d.Close.assert_not_called()
+
+    def test_discard_unsaved_allows_it(self):
+        dm, docs = self._manager([("Part1", True)])
+
+        result = dm.close_all_documents(save=False, discard_unsaved=True)
+        assert result["closed"] == 1
+        docs[0].Close.assert_called_once()
+
+    def test_all_saved_needs_no_flag(self):
+        dm, docs = self._manager([("Part1", False), ("Part2", False)])
+
+        result = dm.close_all_documents(save=False)
+        assert result["closed"] == 2

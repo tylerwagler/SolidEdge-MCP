@@ -179,9 +179,12 @@ class MaterialsMixin(QueryManagerBase):
             Dict with count and list of material info dicts
         """
         try:
-            doc = self.doc_manager.get_active_document()
-
-            mat_table = doc.GetMaterialTable()
+            # GetMaterialTable is on Application, not on the document: the
+            # document call raised "'PartDocument' object has no attribute
+            # 'GetMaterialTable'". The other material methods here already
+            # go through the application.
+            app = self.doc_manager.connection.get_application()
+            mat_table = app.GetMaterialTable()
             materials = []
             for i in range(1, mat_table.Count + 1):
                 mat = mat_table.Item(i)
@@ -213,9 +216,13 @@ class MaterialsMixin(QueryManagerBase):
             Dict with status and material info
         """
         try:
+            # GetMaterialTable is on Application, not on the document: the
+            # document call raised "'PartDocument' object has no attribute
+            # 'GetMaterialTable'". The other material methods here already
+            # go through the application.
             doc = self.doc_manager.get_active_document()
-
-            mat_table = doc.GetMaterialTable()
+            app = self.doc_manager.connection.get_application()
+            mat_table = app.GetMaterialTable()
 
             # Search for the material by name
             found_mat = None

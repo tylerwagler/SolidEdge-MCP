@@ -504,6 +504,8 @@ class TestCreatePartsList:
         dvs = MagicMock()
         dvs.Count = 1
         dvs.Item.return_value = dv
+        # Skip the late-binding branch, as the other drawing-view tests do.
+        del dvs._oleobj_
         sheet.DrawingViews = dvs
 
         parts_lists = MagicMock()
@@ -523,6 +525,8 @@ class TestCreatePartsList:
         sheet = MagicMock()
         dvs = MagicMock()
         dvs.Count = 0
+        # Skip the late-binding branch, as the other drawing-view tests do.
+        del dvs._oleobj_
         sheet.DrawingViews = dvs
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
@@ -545,6 +549,8 @@ class TestCreatePartsList:
         dvs = MagicMock()
         dvs.Count = 1
         dvs.Item.return_value = dv
+        # Skip the late-binding branch, as the other drawing-view tests do.
+        del dvs._oleobj_
         sheet.DrawingViews = dvs
 
         parts_lists = MagicMock()

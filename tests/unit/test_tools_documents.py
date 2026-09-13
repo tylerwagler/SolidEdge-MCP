@@ -102,7 +102,12 @@ class TestCloseDocument:
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = close_document(scope=disc, save=False)
-        getattr(mock_mgr, method).assert_called_once_with(save=False)
+        if method == "close_all_documents":
+            # scope="all" closes documents the caller may not own, so the
+            # discard flag is forwarded and defaults to refusing.
+            getattr(mock_mgr, method).assert_called_once_with(save=False, discard_unsaved=False)
+        else:
+            getattr(mock_mgr, method).assert_called_once_with(save=False)
         assert result == {"status": "ok"}
 
     def test_unknown(self, mock_mgr):

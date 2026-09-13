@@ -61,12 +61,10 @@ UNVERIFIED: frozenset[str] = frozenset(
         # Each still needs checking against a live install; they are reachable
         # only through interfaces the type libraries do not describe, or they
         # are wrong. Treat a failure here as a real bug until proven otherwise.
-        "ActiveCommand",
         "AddAssemblyViewWithConfiguration",
         "AddByChamfer",
         "AddByFillet",
         "AddDiameter",
-        "AddDistanceBetweenPoints",
         "AddFiniteRevolvedSurface",
         "AddOrdinate",
         "AddPartViewWithConfiguration",
@@ -189,6 +187,9 @@ def test_unverified_list_has_no_stale_entries(typelib_members, referenced_member
         ("Dirty", "document modified flag; Document.Saved does not exist"),
         ("AddByStartAlongEnd", "3-point arc; AddByStartCenterEnd does not exist"),
         ("AddPartView", "part drawing view; only the assembly one was wired up"),
+        ("GetActiveCommand", "a method; Application.ActiveCommand does not exist"),
+        ("AddDistanceBetweenObjects", "dimensions measure between objects, not points"),
+        ("ModelMembers", "ShowTangentEdges lives on the member, not the view"),
     ],
 )
 def test_corrected_names_are_real(typelib_members, member, reason):

@@ -327,7 +327,9 @@ class TestGetActiveCommand:
         cmd = MagicMock()
         cmd.Name = "ExtrudeProtrusion"
         cmd.ID = 42
-        conn.application.ActiveCommand = cmd
+        # framewrk.tlb has GetActiveCommand() as a method; there is no
+        # ActiveCommand property, so the old read always raised.
+        conn.application.GetActiveCommand.return_value = cmd
 
         result = conn.get_active_command()
         assert result["status"] == "success"
@@ -336,7 +338,7 @@ class TestGetActiveCommand:
         assert result["id"] == 42
 
     def test_no_command(self, conn):
-        conn.application.ActiveCommand = None
+        conn.application.GetActiveCommand.return_value = None
 
         result = conn.get_active_command()
         assert result["status"] == "success"

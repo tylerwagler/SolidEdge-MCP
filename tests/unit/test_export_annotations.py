@@ -217,7 +217,13 @@ class TestAddOrdinateDimension:
 
 
 class TestAddDistanceDimension:
-    def test_success(self, export_mgr):
+    def test_reports_unsupported_without_calling_com(self, export_mgr):
+        """Solid Edge dimensions measure between objects, not bare points.
+
+        Dimensions.AddDistanceBetweenObjects takes two objects and their
+        keypoints; there is no AddDistanceBetweenPoints and no coordinate-only
+        overload. Verified against Solid Edge 2026.
+        """
         em, doc = export_mgr
         sheet = MagicMock()
         dims = MagicMock()
@@ -225,11 +231,11 @@ class TestAddDistanceDimension:
         doc.ActiveSheet = sheet
 
         result = em.add_distance_dimension(0.0, 0.0, 0.1, 0.05)
-        assert result["status"] == "added"
-        assert result["dimension_type"] == "distance"
+        assert result["unsupported"] is True
+        assert "AddDistanceBetweenObjects" in result["error"]
         assert result["point1"] == [0.0, 0.0]
-        assert result["point2"] == [0.1, 0.05]
-        dims.AddDistanceBetweenPoints.assert_called_once()
+        dims.AddDistanceBetweenPoints.assert_not_called()
+        dims.AddDistanceBetweenObjects.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
