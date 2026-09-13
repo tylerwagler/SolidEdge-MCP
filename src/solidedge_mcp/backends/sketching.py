@@ -8,12 +8,40 @@ import contextlib
 import math
 from typing import Any
 
+import pythoncom
+from win32com.client import VARIANT
+
 from solidedge_mcp.backends.errors import error_result
 
 from .constants import FaceQueryConstants, ProfileValidationConstants
 from .logging import get_logger
 
 _logger = get_logger(__name__)
+
+#: Profile collections that together make up the sketch's 2D geometry.
+_GEOMETRY_2D_COLLECTIONS = (
+    "Lines2d",
+    "Arcs2d",
+    "Circles2d",
+    "Ellipses2d",
+    "EllipticalArcs2d",
+    "BSplineCurves2d",
+    "Conics2d",
+)
+
+
+def _r8_array(size: int) -> Any:
+    """Buffer for a COM ``SAFEARRAY(VT_R8)*`` ``[in, out]`` parameter.
+
+    A plain list, not a VARIANT: see the note on
+    ``solidedge_mcp.backends.query._base.r8_array``.
+    """
+    return [0.0] * size
+
+
+def _dispatch_array(items: Any) -> Any:
+    """Wrap a sequence of COM objects as a ``SAFEARRAY(VT_DISPATCH)``."""
+    return VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, list(items))
 
 
 class SketchManager:
@@ -23,6 +51,7 @@ class SketchManager:
         self.doc_manager = document_manager
         self.active_sketch: Any | None = None
         self.active_profile: Any | None = None
+        self.active_plane_index: int | None = None  # 1-based RefPlanes index
         self.active_refaxis: Any | None = None  # Reference axis for revolve operations
         self.accumulated_profiles: list[Any] = []  # For loft/sweep multi-profile operations
         self._last_document_handle: Any | None = None  # Track which document we're working with
@@ -32,6 +61,7 @@ class SketchManager:
         _logger.debug("Clearing sketch state")
         self.active_sketch = None
         self.active_profile = None
+        self.active_plane_index = None
         self.active_refaxis = None
         self.accumulated_profiles.clear()
         self._last_document_handle = None
@@ -84,6 +114,7 @@ class SketchManager:
 
             self.active_sketch = profile_set
             self.active_profile = profile
+            self.active_plane_index = plane_index
             self.active_refaxis = None  # Clear any previous axis
 
             _logger.info(f"Sketch created on plane: {plane}")
@@ -124,6 +155,7 @@ class SketchManager:
 
             self.active_sketch = profile_set
             self.active_profile = profile
+            self.active_plane_index = plane_index
             self.active_refaxis = None
 
             return {
@@ -1513,6 +1545,10 @@ class SketchManager:
 
         Returns the transformation matrix from sketch 2D space to model 3D space.
 
+        Part.tlb Profile.GetMatrix(Matrix SAFEARRAY(VT_R8)* [in,out]) - the
+        caller supplies the 4x4 (16 element) buffer and reads the filled matrix
+        back out of the return value.
+
         Returns:
             Dict with matrix elements
         """
@@ -1520,7 +1556,7 @@ class SketchManager:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
-            result = self.active_profile.GetMatrix()
+            result = self.active_profile.GetMatrix(_r8_array(16))
 
             if isinstance(result, tuple):
                 return {"status": "ok", "matrix": list(result)}
@@ -1617,30 +1653,40 @@ class SketchManager:
         """
         Project silhouette edges of the body onto the active sketch.
 
-        Projects the visible outline (silhouette) of the 3D body onto the
-        active sketch plane. Useful for creating profiles that follow the
-        outer contour of existing geometry.
+        Part.tlb Profile.ProjectSilhouetteEdges(
+            FaceToProject VT_DISPATCH [in],
+            Geometry2dCount VT_I4* [out],
+            Geometry2d SAFEARRAY(VT_DISPATCH)* [in,out])
+
+        The first argument is the specific face whose silhouette is projected.
+        This server has no way to pick that face, and there is no meaningful
+        default, so the call is refused rather than guessed at.
 
         Returns:
-            Dict with status
+            Dict with an unsupported error
         """
-        try:
-            profile = self.active_profile
-            if not profile:
-                return {"error": "No active sketch profile"}
+        profile = self.active_profile
+        if not profile:
+            return {"error": "No active sketch profile"}
 
-            profile.ProjectSilhouetteEdges()
-
-            return {"status": "projected", "type": "silhouette_edges"}
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Projecting silhouette edges needs the specific Face to project, "
+                "which this server cannot select. Use include_region_faces() with "
+                "a face index, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def include_region_faces(self, face_indices: list[int]) -> dict[str, Any]:
         """
         Include faces as regions in the active sketch.
 
-        Uses Profile.IncludeRegionFaces to include the specified faces as
-        sketch regions, allowing them to be used for feature operations.
+        Part.tlb Profile.IncludeRegionFaces(
+            NumberOfRegionFaces VT_I4 [in],
+            RegionFaces SAFEARRAY(VT_DISPATCH)* [in])
+
+        Both arguments are required; the count must precede the array.
 
         Args:
             face_indices: List of 0-based face indices to include
@@ -1671,7 +1717,7 @@ class SketchManager:
                     return {"error": f"Invalid face index: {fi}. Count: {faces.Count}"}
                 face_list.append(faces.Item(fi + 1))
 
-            profile.IncludeRegionFaces(face_list)
+            profile.IncludeRegionFaces(len(face_list), _dispatch_array(face_list))
 
             return {
                 "status": "included",
@@ -1707,9 +1753,12 @@ class SketchManager:
         """
         Get the ordered geometry elements from the active sketch.
 
-        Uses Profile.OrderedGeometry() to retrieve geometry elements in
-        their ordered sequence. Returns information about each element
-        including type and available coordinate data.
+        Part.tlb Profile.OrderedGeometry(
+            NumElements VT_I4* [out],
+            Elements SAFEARRAY(VT_DISPATCH)* [in,out])
+
+        NumElements precedes the buffer, so Elements is passed by keyword; the
+        buffer is pre-sized from the profile's own 2D geometry collections.
 
         Returns:
             Dict with status, element count, and element details
@@ -1718,7 +1767,8 @@ class SketchManager:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
-            result = self.active_profile.OrderedGeometry()
+            buffer = self._collect_geometry_2d(self.active_profile)
+            result = self.active_profile.OrderedGeometry(Elements=_dispatch_array(buffer))
 
             # OrderedGeometry returns (NumElements, Elements) as out params
             if isinstance(result, tuple) and len(result) == 2:
@@ -1771,13 +1821,14 @@ class SketchManager:
         """
         Find a chain of connected sketch elements at a location.
 
-        Uses Profile.ChainLocate to find connected geometry elements
-        starting from the specified point within the given tolerance.
+        Part.tlb Profile.ChainLocate(x VT_R8 [in], y VT_R8 [in]) - the API takes
+        the point only; ``tolerance`` is echoed back for the caller but is not
+        passed to Solid Edge, which uses its own locate tolerance.
 
         Args:
             x: X coordinate to search near (meters)
             y: Y coordinate to search near (meters)
-            tolerance: Search tolerance in meters (default 1mm)
+            tolerance: Reported back only; Solid Edge uses its own tolerance
 
         Returns:
             Dict with status and chain info
@@ -1787,7 +1838,7 @@ class SketchManager:
             if not profile:
                 return {"error": "No active sketch profile"}
 
-            result = profile.ChainLocate(x, y, tolerance)
+            result = profile.ChainLocate(x, y)
 
             return {
                 "status": "located",
@@ -1804,9 +1855,14 @@ class SketchManager:
         """
         Convert sketch geometry to a curve.
 
-        Uses Profile.ConvertToCurve to convert the active sketch geometry
-        into a single curve representation. Useful for creating path curves
-        for sweep operations.
+        Part.tlb Profile.ConvertToCurve(
+            NumberOfElements VT_I4 [in],
+            ElementArray SAFEARRAY(VT_DISPATCH)* [in],
+            NumConvertedElements VT_VARIANT* [out,optional],
+            ConvertedElements VT_VARIANT* [in,out,optional])
+
+        The count and element array are required; they are gathered from the
+        active profile's own 2D geometry collections.
 
         Returns:
             Dict with status
@@ -1816,12 +1872,58 @@ class SketchManager:
             if not profile:
                 return {"error": "No active sketch profile"}
 
-            result = profile.ConvertToCurve()
+            elements = self._collect_geometry_2d(profile)
+            if not elements:
+                return {"error": "Active sketch has no 2D geometry to convert"}
+
+            result = profile.ConvertToCurve(len(elements), _dispatch_array(elements))
 
             return {
                 "status": "converted",
                 "type": "curve",
+                "element_count": len(elements),
                 "curve_result": str(type(result).__name__) if result else "none",
             }
         except Exception as e:
             return error_result(e)
+
+    @staticmethod
+    def _collect_geometry_2d(profile: Any) -> list[Any]:
+        """Gather every 2D element of a profile across its geometry collections.
+
+        Profile has no single "all geometry" collection, so the individual
+        Lines2d/Arcs2d/... collections are concatenated.
+        """
+        elements: list[Any] = []
+        for coll_name in _GEOMETRY_2D_COLLECTIONS:
+            try:
+                collection = getattr(profile, coll_name)
+                for i in range(1, collection.Count + 1):
+                    with contextlib.suppress(Exception):
+                        elements.append(collection.Item(i))
+            except Exception:
+                continue
+        return elements
+
+    def get_active_plane_index(self) -> int | None:
+        """Return the 1-based reference plane index of the open sketch.
+
+        1=Top/XY, 2=Right/YZ, 3=Front/XZ, 4+ user-created planes. Returns None
+        when no sketch is open or the plane cannot be resolved.
+        """
+        if self.active_profile is None:
+            return None
+        if self.active_plane_index is not None:
+            return self.active_plane_index
+
+        # Fall back to matching the profile's plane against the document's
+        # RefPlanes collection by name.
+        try:
+            plane_name = self.active_profile.Plane.Name
+            ref_planes = self.doc_manager.get_active_document().RefPlanes
+            for i in range(1, ref_planes.Count + 1):
+                if ref_planes.Item(i).Name == plane_name:
+                    return i
+        except Exception:
+            return None
+        return None

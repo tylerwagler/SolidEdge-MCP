@@ -7,6 +7,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -37,8 +38,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -60,9 +62,7 @@ class PlacementMixin:
             return {
                 "status": "added",
                 "file_path": file_path,
-                "name": (
-                    occurrence.Name if hasattr(occurrence, "Name") else os.path.basename(file_path)
-                ),
+                "name": com_get(occurrence, "Name", os.path.basename(file_path)),
                 "position": position,
                 "index": occurrences.Count - 1,
             }
@@ -104,8 +104,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             ax_rad = math.radians(angle_x)
@@ -119,9 +120,7 @@ class PlacementMixin:
             return {
                 "status": "added",
                 "file_path": file_path,
-                "name": occurrence.Name
-                if hasattr(occurrence, "Name")
-                else os.path.basename(file_path),
+                "name": com_get(occurrence, "Name", os.path.basename(file_path)),
                 "origin": [origin_x, origin_y, origin_z],
                 "angles_degrees": [angle_x, angle_y, angle_z],
                 "index": occurrences.Count - 1,
@@ -160,8 +159,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddFamilyByFilename(file_path, family_member_name)
@@ -170,7 +170,7 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": file_path,
                 "family_member": family_member_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
@@ -214,8 +214,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddFamilyByFilename(file_path, family_member_name)
@@ -230,7 +231,7 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": file_path,
                 "family_member": family_member_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "origin": [origin_x, origin_y, origin_z],
                 "angles_degrees": [angle_x, angle_y, angle_z],
                 "index": occurrences.Count - 1,
@@ -269,8 +270,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddFamilyWithMatrix(family_file_path, matrix, member_name)
@@ -282,7 +284,7 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": family_file_path,
                 "family_member": member_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "position": position,
                 "matrix": matrix,
                 "index": occurrences.Count - 1,
@@ -315,8 +317,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddByTemplate(file_path, template_name)
@@ -325,7 +328,7 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": file_path,
                 "template_name": template_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
@@ -360,8 +363,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddAsAdjustablePart(file_path)
@@ -370,7 +374,7 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": file_path,
                 "adjustable": True,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
@@ -399,8 +403,9 @@ class PlacementMixin:
             _logger.info(f"Reordering occurrence {component_index} to {target_index}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -416,7 +421,11 @@ class PlacementMixin:
                 }
 
             occurrence = occurrences.Item(component_index + 1)
-            occurrences.ReorderOccurrence(occurrence, target_index + 1)
+            target = occurrences.Item(target_index + 1)
+            # ReorderOccurrence(OccurrenceToReorder as VT_DISPATCH,
+            #     TargetOccurrence as VT_DISPATCH, AfterTarget as VT_BOOL).
+            # The second argument is the target occurrence, not its index.
+            occurrences.ReorderOccurrence(occurrence, target, True)
 
             return {
                 "status": "reordered",

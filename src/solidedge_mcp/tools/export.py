@@ -289,10 +289,13 @@ def add_dimension_annotation(
 ) -> dict[str, Any]:
     """Add a dimension annotation to the active draft. All coordinates in meters.
 
-    dimension: between (x1,y1) and (x2,y2). angular_dimension: three points
-    (x1,y1)-(x2,y2)-(x3,y3). radial_dimension/diameter_dimension: center_x/y +
-    point_x/y on the curve. ordinate_dimension: origin_x/y + point_x/y.
-    dim_x/dim_y optionally place the dimension text (None = auto).
+    radial_dimension/diameter_dimension: center_x/y + point_x/y on the curve.
+    ordinate_dimension: origin_x/y + point_x/y. dim_x/dim_y optionally place
+    the dimension text (None = auto). 'dimension' and 'angular_dimension' are
+    unsupported: the Dimensions APIs take the 2D objects being dimensioned,
+    not bare coordinates, and this server cannot select them. For a length,
+    use add_2d_dimension(type='length', object_index=...); otherwise dimension
+    in the Solid Edge UI.
     """
     match type:
         case "dimension":
@@ -392,9 +395,12 @@ def add_2d_dimension(
 ) -> dict[str, Any]:
     """Add a 2D dimension on the active draft sheet. Meters, in sheet space.
 
-    distance: (x1,y1)-(x2,y2). angle: three points (x1,y1)-(x2,y2)-(x3,y3).
+    distance: (x1,y1)-(x2,y2).
     length: 0-based object_index into the sheet Lines2d collection.
     radius: 0-based object_index into Circles2d or Arcs2d, per object_type.
+    'angle' (unsupported: Dimensions.AddAngle takes the 2D object being
+    dimensioned, not three points, and this server cannot select the objects
+    those points lie on); dimension the angle in the Solid Edge UI.
     """
     match type:
         case "distance":

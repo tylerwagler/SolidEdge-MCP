@@ -10,6 +10,11 @@ from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
+# constant.tlb > FeaturePropertyConstants.igInside. The BoxFeatures cutout calls
+# take a ProfileSide argument the protrusion calls do not have; a box cutout
+# removes the material inside its profile.
+_IG_INSIDE = 4
+
 
 @verify_geometry_on_creators
 class PrimitiveMixin:
@@ -292,10 +297,11 @@ class PrimitiveMixin:
         """
         Create a box-shaped cutout (boolean subtract) by two opposite corners.
 
-        Uses BoxFeatures.AddCutoutByTwoPoints with same params as AddBoxByTwoPoints.
         Requires an existing base feature to cut from.
-        Type library: AddCutoutByTwoPoints(6x VT_R8, dAngle, dDepth, pPlane,
-        ExtentSide, vbKeyPointExtent, pKeyPointObj, pKeyPointFlags).
+        Full signature: AddCutoutByTwoPoints(x1, y1, Z1, x2, y2, Z2, dAngle,
+        dDepth, pPlane, ProfileSide, ExtentSide, vbKeyPointExtent, pKeyPointObj,
+        pKeyPointFlags) - note the ProfileSide argument, which the protrusion
+        call AddByTwoPoints does not have.
 
         Args:
             x1, y1, z1: First corner coordinates (meters)
@@ -335,6 +341,7 @@ class PrimitiveMixin:
                 0,  # dAngle
                 depth,  # dDepth
                 top_plane,  # pPlane
+                _IG_INSIDE,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj
@@ -366,6 +373,9 @@ class PrimitiveMixin:
 
         Removes a rectangular volume centered at the given point.
         Requires an existing base feature.
+        Full signature: AddCutoutByCenter(x, y, z, dWidth, dHeight, dAngle,
+        dDepth, pPlane, ProfileSide, ExtentSide, vbKeyPointExtent, pKeyPointObj,
+        pKeyPointFlags).
 
         Args:
             center_x, center_y, center_z: Center point coordinates (meters)
@@ -403,6 +413,7 @@ class PrimitiveMixin:
                 0,  # dAngle
                 height,  # dDepth
                 top_plane,  # pPlane
+                _IG_INSIDE,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj
@@ -437,6 +448,9 @@ class PrimitiveMixin:
 
         Removes a rectangular volume defined by three corner points.
         Requires an existing base feature.
+        Full signature: AddCutoutByThreePoints(x1, y1, Z1, x2, y2, Z2, x3, y3,
+        z3, dDepth, pPlane, ProfileSide, ExtentSide, vbKeyPointExtent,
+        pKeyPointObj, pKeyPointFlags).
 
         Args:
             x1, y1, z1: First corner point (meters)
@@ -484,6 +498,7 @@ class PrimitiveMixin:
                 z3,
                 depth,  # dDepth
                 top_plane,  # pPlane
+                _IG_INSIDE,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj

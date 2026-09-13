@@ -10,6 +10,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -18,6 +24,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -46,7 +53,7 @@ class TestAddDraftSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_draft_sheet()
         assert "error" in result
@@ -117,7 +124,7 @@ class TestAddAssemblyDrawingView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_assembly_drawing_view()
         assert "error" in result
@@ -167,7 +174,7 @@ class TestGetSheetInfo:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_info()
         assert "error" in result
@@ -204,7 +211,7 @@ class TestActivateSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.activate_sheet(0)
         assert "error" in result
@@ -232,7 +239,7 @@ class TestRenameSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.rename_sheet(0, "New Name")
         assert "error" in result
@@ -277,7 +284,7 @@ class TestDeleteSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.delete_sheet(0)
         assert "error" in result
@@ -314,7 +321,7 @@ class TestGetSheetDimensions:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_dimensions()
         assert "error" in result
@@ -353,7 +360,7 @@ class TestGetSheetBalloons:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_balloons()
         assert "error" in result
@@ -393,7 +400,7 @@ class TestGetSheetTextBoxes:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_text_boxes()
         assert "error" in result
@@ -429,7 +436,7 @@ class TestGetSheetDrawingObjects:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_drawing_objects()
         assert "error" in result
@@ -467,7 +474,7 @@ class TestGetSheetSections:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_sections()
         assert "error" in result
@@ -526,7 +533,7 @@ class TestCreatePartsList:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.create_parts_list()
         assert "error" in result
@@ -575,7 +582,7 @@ class TestGetDrawingViewCount:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_drawing_view_count()
         assert "error" in result
@@ -619,7 +626,7 @@ class TestGetDrawingViewScale:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_drawing_view_scale(0)
         assert "error" in result

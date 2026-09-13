@@ -7,6 +7,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -40,8 +41,9 @@ class RelationsMixin:
             )
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Relations3d"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -112,8 +114,9 @@ class RelationsMixin:
 
         Returns (occ1, occ2, error_dict). If error_dict is not None, caller should return it.
         """
-        if not hasattr(doc, "Relations3d"):
-            return None, None, {"error": "Active document is not an assembly"}
+        err = self._require_assembly(doc)
+        if err:
+            return None, None, err
 
         occurrences = doc.Occurrences
 
@@ -147,8 +150,9 @@ class RelationsMixin:
 
         Returns (relation, error_dict). If error_dict is not None, caller should return it.
         """
-        if not hasattr(doc, "Relations3d"):
-            return None, {"error": "Active document is not an assembly"}
+        err = self._require_assembly(doc)
+        if err:
+            return None, err
 
         relations = doc.Relations3d
 
@@ -173,8 +177,9 @@ class RelationsMixin:
             _logger.info(f"Deleting relation at index {relation_index}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Relations3d"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             relations = doc.Relations3d
 
@@ -209,8 +214,9 @@ class RelationsMixin:
             _logger.info(f"Getting relation info at index {relation_index}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Relations3d"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             relations = doc.Relations3d
 
@@ -265,46 +271,35 @@ class RelationsMixin:
         """
         Add a planar relation between two assembly components.
 
-        Uses Relations3d.AddPlanar(Occurrence1, Occurrence2, Offset, OrientationType).
+        NOT AVAILABLE via COM automation. The real signature is
+        ``Relations3d.AddPlanar(Plane1, Plane2, NormalsAligned,
+        ConstrainingPoint1, ConstrainingPoint2)``: ``Plane1``/``Plane2`` are
+        planar Faces or reference planes on the two parts, not the
+        occurrences themselves, and the constraining points are 3-element
+        arrays picked on those faces. This server cannot select a face, so
+        the call can never be formed; it returns an ``unsupported`` error
+        dict without touching COM. The signature is kept so tool dispatch
+        keeps working.
 
         Args:
             occurrence1_index: 0-based index of first component
             occurrence2_index: 0-based index of second component
             offset: Offset distance in meters (default 0.0)
-            orientation: "Align" (1), "Antialign" (2), or "NotSpecified" (0)
+            orientation: "Align", "Antialign", or "NotSpecified"
 
         Returns:
-            Dict with status and relation info
+            Dict with an ``unsupported`` error
         """
-        try:
-            _logger.info(
-                "Adding planar relation: occ1=%d, occ2=%d, offset=%s",
-                occurrence1_index,
-                occurrence2_index,
-                offset,
-            )
-            doc = self.doc_manager.get_active_document()
-            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
-            if err:
-                return err
-
-            orient_map = {"Align": 1, "Antialign": 2, "NotSpecified": 0}
-            orient_val = orient_map.get(orientation, 0)
-
-            relations = doc.Relations3d
-            relations.AddPlanar(occ1, occ2, offset, orient_val)
-
-            return {
-                "status": "created",
-                "relation_type": "Planar",
-                "occurrence1_index": occurrence1_index,
-                "occurrence2_index": occurrence2_index,
-                "offset": offset,
-                "orientation": orientation,
-            }
-        except Exception as e:
-            _logger.error(f"Failed to add planar relation: {e}")
-            return error_result(e)
+        _logger.warning("add_planar_relation is not available via COM automation")
+        del occurrence1_index, occurrence2_index, offset, orientation
+        return {
+            "error": (
+                "Planar relations need two planar faces (Relations3d.AddPlanar takes "
+                "Plane1, Plane2, NormalsAligned, ConstrainingPoint1, ConstrainingPoint2), "
+                "which this server cannot select. Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def add_axial_relation(
         self,
@@ -315,7 +310,14 @@ class RelationsMixin:
         """
         Add an axial relation between two assembly components.
 
-        Uses Relations3d.AddAxial(Occurrence1, Occurrence2, OrientationType).
+        Uses ``Relations3d.AddAxial(Axis1, Axis2, NormalsAligned)``.
+
+        WARNING: the argument count is right but the argument *kinds* are
+        probably not. ``Axis1``/``Axis2`` are cylindrical faces or reference
+        axes on the two parts; this passes the occurrences themselves, which
+        Solid Edge is likely to reject with a type mismatch. Unlike the other
+        relation types the call is left in place because it is at least
+        well-formed, but it is unverified against live Solid Edge.
 
         Args:
             occurrence1_index: 0-based index of first component
@@ -336,11 +338,12 @@ class RelationsMixin:
             if err:
                 return err
 
-            orient_map = {"Align": 1, "Antialign": 2, "NotSpecified": 0}
-            orient_val = orient_map.get(orientation, 0)
+            # NormalsAligned is VT_BOOL, not an orientation enum: passing the
+            # old 0/1/2 codes made "Antialign" (2) coerce to True.
+            normals_aligned = orientation == "Align"
 
             relations = doc.Relations3d
-            relations.AddAxial(occ1, occ2, orient_val)
+            relations.AddAxial(occ1, occ2, normals_aligned)
 
             return {
                 "status": "created",
@@ -362,43 +365,34 @@ class RelationsMixin:
         """
         Add an angular relation between two assembly components.
 
-        Uses Relations3d.AddAngular(Occurrence1, Occurrence2, AngleInRadians).
+        NOT AVAILABLE via COM automation. The real signature is
+        ``Relations3d.AddAngular(Element1, Element2, ReverseElement1Direction,
+        ReverseElement2Direction, MeasureElement1, MeasureElement2, Angle,
+        MeasureToPositiveSide, MeasureFromPositiveSide, MeasureCCW)`` — ten
+        arguments, four of them Faces or Edges on the two parts (the elements
+        being constrained plus the two elements the angle is measured
+        against). This server cannot select geometry, so it returns an
+        ``unsupported`` error dict without touching COM. The signature is kept
+        so tool dispatch keeps working.
 
         Args:
             occurrence1_index: 0-based index of first component
             occurrence2_index: 0-based index of second component
-            angle: Angle in degrees (converted to radians for COM)
+            angle: Angle in degrees
 
         Returns:
-            Dict with status and relation info
+            Dict with an ``unsupported`` error
         """
-        try:
-            _logger.info(
-                "Adding angular relation: occ1=%d, occ2=%d, angle=%s",
-                occurrence1_index,
-                occurrence2_index,
-                angle,
-            )
-            doc = self.doc_manager.get_active_document()
-            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
-            if err:
-                return err
-
-            angle_rad = math.radians(angle)
-
-            relations = doc.Relations3d
-            relations.AddAngular(occ1, occ2, angle_rad)
-
-            return {
-                "status": "created",
-                "relation_type": "Angular",
-                "occurrence1_index": occurrence1_index,
-                "occurrence2_index": occurrence2_index,
-                "angle_degrees": angle,
-            }
-        except Exception as e:
-            _logger.error(f"Failed to add angular relation: {e}")
-            return error_result(e)
+        _logger.warning("add_angular_relation is not available via COM automation")
+        del occurrence1_index, occurrence2_index, angle
+        return {
+            "error": (
+                "Angular relations need four Face/Edge elements (the two constrained "
+                "elements plus the two measurement elements Relations3d.AddAngular "
+                "requires), which this server cannot select. Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def add_point_relation(
         self,
@@ -408,38 +402,33 @@ class RelationsMixin:
         """
         Add a point (connect) relation between two assembly components.
 
-        Uses Relations3d.AddPoint(Occurrence1, Occurrence2).
+        NOT AVAILABLE via COM automation. The real signature is
+        ``Relations3d.AddPoint(PointGeometry, PointKeyPoint, ConnectGeometry,
+        [ConnectKeyPoint])``: the two geometry arguments are Faces, Edges or
+        Vertices on the parts and the keypoint arguments say which point of
+        that geometry to connect (``Relation3dGeometryConstants``). This
+        server cannot select geometry, so it returns an ``unsupported`` error
+        dict without touching COM. The signature is kept so tool dispatch
+        keeps working.
 
         Args:
             occurrence1_index: 0-based index of first component
             occurrence2_index: 0-based index of second component
 
         Returns:
-            Dict with status and relation info
+            Dict with an ``unsupported`` error
         """
-        try:
-            _logger.info(
-                "Adding point relation: occ1=%d, occ2=%d",
-                occurrence1_index,
-                occurrence2_index,
-            )
-            doc = self.doc_manager.get_active_document()
-            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
-            if err:
-                return err
-
-            relations = doc.Relations3d
-            relations.AddPoint(occ1, occ2)
-
-            return {
-                "status": "created",
-                "relation_type": "Point",
-                "occurrence1_index": occurrence1_index,
-                "occurrence2_index": occurrence2_index,
-            }
-        except Exception as e:
-            _logger.error(f"Failed to add point relation: {e}")
-            return error_result(e)
+        _logger.warning("add_point_relation is not available via COM automation")
+        del occurrence1_index, occurrence2_index
+        return {
+            "error": (
+                "Point (connect) relations need a geometry element and a keypoint on "
+                "each part (Relations3d.AddPoint takes PointGeometry, PointKeyPoint, "
+                "ConnectGeometry, ConnectKeyPoint), which this server cannot select. "
+                "Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def add_tangent_relation(
         self,
@@ -449,38 +438,33 @@ class RelationsMixin:
         """
         Add a tangent relation between two assembly components.
 
-        Uses Relations3d.AddTangent(Occurrence1, Occurrence2).
+        NOT AVAILABLE via COM automation. The real signature is
+        ``Relations3d.AddTangent(Element1, Element2, ConstrainingPoint1,
+        ConstrainingPoint2, Offset, IsHalfSpacePositive)``: the elements are
+        the two Faces being made tangent and the constraining points are
+        3-element arrays picked on them. This server cannot select a face, so
+        it returns an ``unsupported`` error dict without touching COM. The
+        signature is kept so tool dispatch keeps working.
 
         Args:
             occurrence1_index: 0-based index of first component
             occurrence2_index: 0-based index of second component
 
         Returns:
-            Dict with status and relation info
+            Dict with an ``unsupported`` error
         """
-        try:
-            _logger.info(
-                "Adding tangent relation: occ1=%d, occ2=%d",
-                occurrence1_index,
-                occurrence2_index,
-            )
-            doc = self.doc_manager.get_active_document()
-            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
-            if err:
-                return err
-
-            relations = doc.Relations3d
-            relations.AddTangent(occ1, occ2)
-
-            return {
-                "status": "created",
-                "relation_type": "Tangent",
-                "occurrence1_index": occurrence1_index,
-                "occurrence2_index": occurrence2_index,
-            }
-        except Exception as e:
-            _logger.error(f"Failed to add tangent relation: {e}")
-            return error_result(e)
+        _logger.warning("add_tangent_relation is not available via COM automation")
+        del occurrence1_index, occurrence2_index
+        return {
+            "error": (
+                "Tangent relations need the two Faces being made tangent plus a "
+                "constraining point on each (Relations3d.AddTangent takes Element1, "
+                "Element2, ConstrainingPoint1, ConstrainingPoint2, Offset, "
+                "IsHalfSpacePositive), which this server cannot select. "
+                "Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def add_gear_relation(
         self,
@@ -492,7 +476,13 @@ class RelationsMixin:
         """
         Add a gear relation between two assembly components.
 
-        Uses Relations3d.AddGear(Occurrence1, Occurrence2, Ratio1, Ratio2).
+        NOT AVAILABLE via COM automation. The real signature is
+        ``Relations3d.AddGear(Element1, Element2, GearType, RatioType,
+        GearRatio1, GearRatio2, Flip)``: ``Element1``/``Element2`` are the
+        rotational Faces or axes the gear couples, not the occurrences. This
+        server cannot select geometry, so it returns an ``unsupported`` error
+        dict without touching COM. The signature is kept so tool dispatch
+        keeps working.
 
         Args:
             occurrence1_index: 0-based index of first component
@@ -501,35 +491,19 @@ class RelationsMixin:
             ratio2: Gear ratio value for second component (default 1.0)
 
         Returns:
-            Dict with status and relation info
+            Dict with an ``unsupported`` error
         """
-        try:
-            _logger.info(
-                "Adding gear relation: occ1=%d, occ2=%d, ratio=%s:%s",
-                occurrence1_index,
-                occurrence2_index,
-                ratio1,
-                ratio2,
-            )
-            doc = self.doc_manager.get_active_document()
-            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
-            if err:
-                return err
-
-            relations = doc.Relations3d
-            relations.AddGear(occ1, occ2, ratio1, ratio2)
-
-            return {
-                "status": "created",
-                "relation_type": "Gear",
-                "occurrence1_index": occurrence1_index,
-                "occurrence2_index": occurrence2_index,
-                "ratio1": ratio1,
-                "ratio2": ratio2,
-            }
-        except Exception as e:
-            _logger.error(f"Failed to add gear relation: {e}")
-            return error_result(e)
+        _logger.warning("add_gear_relation is not available via COM automation")
+        del occurrence1_index, occurrence2_index, ratio1, ratio2
+        return {
+            "error": (
+                "Gear relations need the two rotational Face/axis elements being "
+                "coupled (Relations3d.AddGear takes Element1, Element2, GearType, "
+                "RatioType, GearRatio1, GearRatio2, Flip), which this server cannot "
+                "select. Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def get_relation_offset(self, relation_index: int) -> dict[str, Any]:
         """
@@ -786,11 +760,11 @@ class RelationsMixin:
 
             with contextlib.suppress(Exception):
                 occ1 = rel.Occurrence1
-                info["occurrence1_name"] = occ1.Name if hasattr(occ1, "Name") else str(occ1)
+                info["occurrence1_name"] = com_get(occ1, "Name", str(occ1))
 
             with contextlib.suppress(Exception):
                 occ2 = rel.Occurrence2
-                info["occurrence2_name"] = occ2.Name if hasattr(occ2, "Name") else str(occ2)
+                info["occurrence2_name"] = com_get(occ2, "Name", str(occ2))
 
             with contextlib.suppress(Exception):
                 info["offset"] = rel.Offset

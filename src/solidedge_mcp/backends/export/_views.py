@@ -7,6 +7,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..constants import DrawingViewOrientationConstants, FoldTypeConstants, RenderModeConstants
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -422,10 +423,13 @@ class ViewsMixin:
             parent_view = dvs.Item(parent_view_index + 1)
 
             try:
-                dvs.AddByDetailEnvelope(parent_view, center_x, center_y, radius, x, y, scale)
+                # AddByDetailEnvelope(From, x1, y1, Radius, Scale, x2, y2) --
+                # Scale comes before the placement point, not after it.
+                dvs.AddByDetailEnvelope(parent_view, center_x, center_y, radius, scale, x, y)
             except Exception:
-                # Fallback: try AddDetailView
-                dvs.AddDetailView(parent_view, center_x, center_y, radius, x, y, scale)
+                # Fallback: AddDetailView(From, x1, y1, Radius, Scale, x2, y2,
+                # Independent)
+                dvs.AddDetailView(parent_view, center_x, center_y, radius, scale, x, y, False)
 
             return {
                 "status": "added",
@@ -484,11 +488,11 @@ class ViewsMixin:
 
             parent_view = dvs.Item(parent_view_index + 1)
 
-            try:
-                dvs.AddByAuxiliaryFold(parent_view, fold_const, x, y)
-            except Exception:
-                # Fallback: try AddByFold
-                dvs.AddByFold(parent_view, fold_const, x, y)
+            # AddByFold(From, foldDir, x, y) is the fold-direction entry point.
+            # AddByAuxiliaryFold(From, x1, y1, x2, y2, x3, y3) is a different
+            # method that wants a fold line picked on the parent view, so it was
+            # never callable with these arguments.
+            dvs.AddByFold(parent_view, fold_const, x, y)
 
             return {
                 "status": "added",
@@ -501,7 +505,7 @@ class ViewsMixin:
         except Exception as e:
             return error_result(e)
 
-    def add_draft_view(self, x: float, y: float) -> dict[str, Any]:
+    def add_draft_view(self, x: float, y: float, scale: float = 1.0) -> dict[str, Any]:
         """
         Add an empty draft (sketch) view to the active sheet.
 
@@ -511,6 +515,7 @@ class ViewsMixin:
         Args:
             x: View X position on sheet (meters)
             y: View Y position on sheet (meters)
+            scale: View scale factor (default 1.0)
 
         Returns:
             Dict with status
@@ -518,7 +523,8 @@ class ViewsMixin:
         try:
             dvs = self._get_drawing_views()
 
-            dvs.AddDraftView(x, y)
+            # AddDraftView(Scale, x1, y1) - the scale comes first.
+            dvs.AddDraftView(scale, x, y)
 
             return {
                 "status": "added",
@@ -702,10 +708,9 @@ class ViewsMixin:
 
             view = dvs.Item(view_index + 1)
 
-            if not hasattr(view, "CuttingPlanes"):
+            cutting_planes = com_get(view, "CuttingPlanes")
+            if cutting_planes is None:
                 return {"count": 0, "section_cuts": [], "note": "No CuttingPlanes on this view"}
-
-            cutting_planes = view.CuttingPlanes
             items = []
             for i in range(1, cutting_planes.Count + 1):
                 cp = cutting_planes.Item(i)
@@ -781,10 +786,9 @@ class ViewsMixin:
 
             view = dvs.Item(view_index + 1)
 
-            if not hasattr(view, "CuttingPlanes"):
+            cutting_planes = com_get(view, "CuttingPlanes")
+            if cutting_planes is None:
                 return {"error": "Drawing view does not support CuttingPlanes"}
-
-            cutting_planes = view.CuttingPlanes
 
             # CuttingPlanes.Add() returns a new CuttingPlane object
             cutting_plane = cutting_planes.Add()
@@ -842,10 +846,9 @@ class ViewsMixin:
 
             view = dvs.Item(view_index + 1)
 
-            if not hasattr(view, "Dimensions"):
+            dims = com_get(view, "Dimensions")
+            if dims is None:
                 return {"count": 0, "dimensions": [], "note": "No Dimensions on this view"}
-
-            dims = view.Dimensions
 
             dim_type_names = {
                 1: "Linear",
@@ -910,8 +913,9 @@ class ViewsMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             doc.UpdateAll(force_update)
             return {"status": "updated_all", "force_update": force_update}

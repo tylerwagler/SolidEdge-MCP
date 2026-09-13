@@ -7,6 +7,8 @@ Uses unittest.mock to simulate COM objects.
 from unittest.mock import MagicMock
 
 import pytest
+import pythoncom
+from win32com.client import VARIANT
 
 
 @pytest.fixture
@@ -368,6 +370,15 @@ class TestGetFeatureDimensions:
         assert result["dimensions"][0]["name"] == "Depth"
         assert result["dimensions"][1]["value"] == 0.1
 
+        # GetDimensions(NumDimensions [out], Dimensions SAFEARRAY(DISPATCH)
+        # [in,out]) - the buffer must be supplied, by keyword because the
+        # count precedes it.
+        feat.GetDimensions.assert_called_once()
+        args, kwargs = feat.GetDimensions.call_args
+        assert args == ()
+        assert set(kwargs) == {"Dimensions"}
+        assert kwargs["Dimensions"].varianttype == (pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH)
+
     def test_feature_not_found(self, query_mgr):
         """Test when feature doesn't exist."""
         qm, doc = query_mgr
@@ -466,7 +477,23 @@ class TestSetDirection1Extent:
         assert result["status"] == "updated"
         assert result["extent_type"] == 13
         assert result["distance"] == 0.05
-        feat.ApplyDirection1Extent.assert_called_once_with(13, 0.05, None)
+        assert result["extent_side"] == 2  # DirectionConstants.igRight
+        # ApplyDirection1Extent(ExtentType, ExtentSide, FiniteDepth,
+        #                       KeyPointOrTangentFace, KeyPointFlags)
+        feat.ApplyDirection1Extent.assert_called_once_with(13, 2, 0.05, None, 0)
+
+    def test_extent_side_is_passed_through(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        qm.set_direction1_extent("Extrude 1", 13, 0.05, extent_side=3)
+        feat.ApplyDirection1Extent.assert_called_once_with(13, 3, 0.05, None, 0)
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr
@@ -551,7 +578,9 @@ class TestSetDirection2Extent:
         result = qm.set_direction2_extent("Extrude 1", 16, 0.0)
         assert result["status"] == "updated"
         assert result["extent_type"] == 16
-        feat.ApplyDirection2Extent.assert_called_once_with(16, 0.0, None)
+        # ApplyDirection2Extent(ExtentType, ExtentSide, FiniteDepth,
+        #                       KeyPointOrTangentFace, KeyPointFlags)
+        feat.ApplyDirection2Extent.assert_called_once_with(16, 2, 0.0, None, 0)
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr
@@ -634,12 +663,34 @@ class TestSetThinWallOptions:
         features.Item.return_value = feat
         doc.DesignEdgebarFeatures = features
 
-        result = qm.set_thin_wall_options("Extrude 1", 1, 0.002, 0.003)
+        result = qm.set_thin_wall_options("Extrude 1", 0.002, 1)
         assert result["status"] == "updated"
-        assert result["wall_type"] == 1
-        assert result["thickness1"] == 0.002
-        assert result["thickness2"] == 0.003
-        feat.SetThinWallOptions.assert_called_once_with(1, 0.002, 0.003)
+        assert result["thickness"] == 0.002
+        assert result["thickness_side"] == 1
+        assert result["thin_wall"] is True
+        # SetThinWallOptions(ThinWall, AddEndCaps, RemoveInsideMaterial,
+        #                    Thickness, ThicknessSide)
+        feat.SetThinWallOptions.assert_called_once_with(True, False, False, 0.002, 1)
+
+    def test_flags_are_passed_through(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        qm.set_thin_wall_options(
+            "Extrude 1",
+            0.004,
+            2,
+            thin_wall=False,
+            add_end_caps=True,
+            remove_inside_material=True,
+        )
+        feat.SetThinWallOptions.assert_called_once_with(False, True, True, 0.004, 2)
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr
@@ -651,14 +702,14 @@ class TestSetThinWallOptions:
         features.Item.return_value = feat
         doc.DesignEdgebarFeatures = features
 
-        result = qm.set_thin_wall_options("NonExistent", 1, 0.002)
+        result = qm.set_thin_wall_options("NonExistent", 0.002, 1)
         assert "error" in result
 
     def test_exception(self, query_mgr):
         qm, doc = query_mgr
         doc.DesignEdgebarFeatures = None
 
-        result = qm.set_thin_wall_options("test", 1, 0.002)
+        result = qm.set_thin_wall_options("test", 0.002, 1)
         assert "error" in result
 
 
@@ -720,10 +771,50 @@ class TestSetFromFaceOffset:
         features.Item.return_value = feat
         doc.DesignEdgebarFeatures = features
 
+        from_face = MagicMock()
+        feat.GetFromFaceOffsetData.return_value = (from_face, 2, 0.005)
+
         result = qm.set_from_face_offset("Extrude 1", 0.01)
         assert result["status"] == "updated"
         assert result["offset"] == 0.01
-        feat.SetFromFaceOffsetData.assert_called_once_with(0.01)
+        assert result["offset_side"] == 2
+        # SetFromFaceOffsetData(FromFaceOrPlane, FromFaceOffsetSide,
+        #                       FromFaceOffsetDistance) - the face already on
+        # the feature is reused, since this server cannot select one.
+        feat.SetFromFaceOffsetData.assert_called_once_with(from_face, 2, 0.01)
+
+    def test_explicit_offset_side_overrides(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        from_face = MagicMock()
+        feat.GetFromFaceOffsetData.return_value = (from_face, 2, 0.005)
+
+        qm.set_from_face_offset("Extrude 1", 0.01, offset_side=1)
+        feat.SetFromFaceOffsetData.assert_called_once_with(from_face, 1, 0.01)
+
+    def test_no_from_face_is_unsupported(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        feat.GetFromFaceOffsetData.return_value = (None, 44, 0.0)
+
+        result = qm.set_from_face_offset("Extrude 1", 0.01)
+        assert result["unsupported"] is True
+        assert "cannot select" in result["error"]
+        feat.SetFromFaceOffsetData.assert_not_called()
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr
@@ -1041,7 +1132,36 @@ class TestSetBodyArray:
         result = qm.set_body_array("Extrude 1", [0, 1])
         assert result["status"] == "updated"
         assert result["body_count"] == 2
+        assert result["multi_body_cut"] is True
+
+        # SetBodyArray(MultiBodyCut, NumberOfBodies, BodyArray)
         feat.SetBodyArray.assert_called_once()
+        args, kwargs = feat.SetBodyArray.call_args
+        assert kwargs == {}
+        assert len(args) == 3
+        assert args[0] is True
+        assert args[1] == 2
+        assert isinstance(args[2], VARIANT)
+        assert args[2].varianttype == pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH
+        assert list(args[2].value) == [model.Body, model.Body]
+
+    def test_multi_body_cut_flag_is_passed(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = MagicMock()
+        doc.Models = models
+
+        qm.set_body_array("Extrude 1", [0], multi_body_cut=False)
+        assert feat.SetBodyArray.call_args[0][0] is False
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr

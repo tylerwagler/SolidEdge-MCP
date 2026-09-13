@@ -6,8 +6,20 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
+from ._base import NOT_A_DRAFT
 
 _logger = get_logger(__name__)
+
+# WeldSymbol.TopType values, from Program/constant.tlb > DimWeldTypeConstants.
+# The previous 0..4 map was invented: 0 is igDimWeldTypeNone, so every weld
+# symbol came out with the wrong glyph.
+_WELD_TYPE_MAP = {
+    "fillet": 1,  # igDimWeldTopFillet
+    "groove": 5,  # igDimWeldTopVGroove
+    "plug": 6,  # igDimWeldTopSlot
+    "spot": 2,  # igDimWeldTopSpot
+    "seam": 3,  # igDimWeldTopSeam
+}
 
 
 class AnnotationsMixin:
@@ -33,8 +45,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
 
@@ -74,8 +87,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
 
@@ -108,6 +122,18 @@ class AnnotationsMixin:
         """
         Add a linear dimension between two points on the active draft sheet.
 
+        NOT AVAILABLE via COM automation. The ``Dimensions`` collection is
+        object-based, not coordinate-based: ``AddLength(Object)`` dimensions an
+        existing 2D element, and the only coordinate-taking alternative,
+        ``AddDistanceBetweenObjects(Object1, x1, y1, z1, keyPoint1, Object2,
+        x2, y2, z2, keyPoint2)``, still needs the two objects the points lie
+        on. There is no "dimension between two bare points" API, so this
+        returns an ``unsupported`` error dict without touching COM. The
+        signature is kept so tool dispatch keeps working.
+
+        Use ``add_length_dimension(object_index)`` to dimension an existing
+        line instead.
+
         Args:
             x1: First point X (meters)
             y1: First point Y (meters)
@@ -117,34 +143,19 @@ class AnnotationsMixin:
             dim_y: Dimension text Y position (meters, optional)
 
         Returns:
-            Dict with status
+            Dict with an ``unsupported`` error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
-
-            sheet = doc.ActiveSheet
-
-            # Default dimension text position to midpoint offset
-            if dim_x is None:
-                dim_x = (x1 + x2) / 2
-            if dim_y is None:
-                dim_y = max(y1, y2) + 0.02  # 20mm above
-
-            dimensions = sheet.Dimensions
-            dimensions.AddLength(x1, y1, 0, x2, y2, 0, dim_x, dim_y, 0)
-
-            return {
-                "status": "added",
-                "type": "dimension",
-                "point1": [x1, y1],
-                "point2": [x2, y2],
-                "text_position": [dim_x, dim_y],
-            }
-        except Exception as e:
-            return error_result(e)
+        _logger.warning("add_dimension is not available via COM automation")
+        del x1, y1, x2, y2, dim_x, dim_y
+        return {
+            "error": (
+                "Dimensions.AddLength takes the 2D object being dimensioned, not a "
+                "pair of coordinates, and this server cannot select the objects two "
+                "bare points lie on. Use add_length_dimension(object_index) for an "
+                "existing line, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def add_balloon(
         self,
@@ -172,24 +183,26 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
 
             balloons = sheet.Balloons
 
+            # Balloons.Add(x1, y1, z1) places the balloon; it takes three
+            # arguments, not the six of Leaders.Add. Extra leader vertices go on
+            # afterwards via Balloon.AddVertex(x, y, z).
+            balloon = balloons.Add(x, y, 0)
+
             if leader_x is not None and leader_y is not None:
-                balloon = balloons.Add(leader_x, leader_y, 0, x, y, 0)
-            else:
-                balloon = balloons.Add(x, y, 0, x + 0.02, y + 0.02, 0)
+                with contextlib.suppress(Exception):
+                    balloon.AddVertex(leader_x, leader_y, 0)
 
             if text:
-                try:
+                with contextlib.suppress(Exception):
                     balloon.BalloonText = text
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        balloon.Text = text
 
             return {"status": "added", "type": "balloon", "position": [x, y], "text": text}
         except Exception as e:
@@ -213,8 +226,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
 
@@ -254,8 +268,14 @@ class AnnotationsMixin:
         """
         Add an angular dimension between three points on the active draft sheet.
 
-        The angle is measured at the vertex (x2, y2) between the rays to
-        (x1, y1) and (x3, y3).
+        NOT AVAILABLE via COM automation. ``Dimensions`` has no ``AddAngular``
+        member at all — the angular entry points are ``AddAngle(Object)``,
+        ``AddAngleBetweenObjects(ele1, x1, y1, z1, keyPoint1, ele2, x2, y2, z2,
+        keyPoint2)`` and ``AddAngleBetween3Objects(...)``, all of which take
+        the 2D objects forming the angle rather than bare coordinates. This
+        server cannot select those objects, so it returns an ``unsupported``
+        error dict without touching COM. The signature is kept so tool
+        dispatch keeps working.
 
         Args:
             x1: First ray endpoint X (meters)
@@ -268,30 +288,19 @@ class AnnotationsMixin:
             dim_y: Dimension text Y position (meters, optional)
 
         Returns:
-            Dict with status and dimension info
+            Dict with an ``unsupported`` error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
-
-            sheet = doc.ActiveSheet
-            dims = sheet.Dimensions
-
-            text_x = dim_x if dim_x is not None else (x1 + x3) / 2
-            text_y = dim_y if dim_y is not None else (y1 + y3) / 2 + 0.02
-
-            dims.AddAngular(x1, y1, x2, y2, x3, y3, text_x, text_y)
-
-            return {
-                "status": "created",
-                "type": "angular_dimension",
-                "vertex": [x2, y2],
-                "text_position": [text_x, text_y],
-            }
-        except Exception as e:
-            return error_result(e)
+        _logger.warning("add_angular_dimension is not available via COM automation")
+        del x1, y1, x2, y2, x3, y3, dim_x, dim_y
+        return {
+            "error": (
+                "Dimensions has no AddAngular method; the angular dimension APIs "
+                "(AddAngle, AddAngleBetweenObjects, AddAngleBetween3Objects) take the "
+                "2D objects forming the angle, which this server cannot select. "
+                "Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def add_radial_dimension(
         self,
@@ -319,8 +328,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
             dims = sheet.Dimensions
@@ -366,8 +376,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
             dims = sheet.Dimensions
@@ -416,8 +427,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
             dims = sheet.Dimensions
@@ -456,8 +468,9 @@ class AnnotationsMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             dims = sheet.Dimensions
 
@@ -493,8 +506,9 @@ class AnnotationsMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             lines2d = sheet.Lines2d
 
@@ -504,14 +518,9 @@ class AnnotationsMixin:
             line = lines2d.Item(object_index + 1)  # COM is 1-indexed
             dims = sheet.Dimensions
 
-            # Get line endpoints for dimension text placement
-            x1, y1, x2, y2 = 0.0, 0.0, 0.0, 0.0
-            with contextlib.suppress(Exception):
-                x1, y1, x2, y2 = line.StartX, line.StartY, line.EndX, line.EndY
-            dim_x = (x1 + x2) / 2
-            dim_y = max(y1, y2) + 0.02
-
-            dims.AddLength(x1, y1, 0.0, x2, y2, 0.0, dim_x, dim_y, 0.0)
+            # AddLength(Object as VT_DISPATCH) dimensions the 2D element
+            # itself. It does not take endpoint or text-placement coordinates.
+            dims.AddLength(line)
 
             return {
                 "status": "added",
@@ -539,8 +548,9 @@ class AnnotationsMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             if object_type == "circle":
@@ -590,8 +600,13 @@ class AnnotationsMixin:
         """
         Add an angle dimension between three points on the active draft sheet.
 
-        Uses sheet.Dimensions.AddAngle to measure the angle at the vertex
-        (x2, y2).
+        NOT AVAILABLE via COM automation. ``Dimensions.AddAngle`` takes a
+        single ``Object`` (the 2D element to dimension), not twelve
+        coordinates; the multi-element forms
+        (``AddAngleBetweenObjects``/``AddAngleBetween3Objects``) also take
+        objects. This server cannot select the objects three bare points lie
+        on, so it returns an ``unsupported`` error dict without touching COM.
+        The signature is kept so tool dispatch keeps working.
 
         Args:
             x1: First point X (meters) - start of first ray
@@ -602,29 +617,18 @@ class AnnotationsMixin:
             y3: Third point Y (meters)
 
         Returns:
-            Dict with status and dimension type
+            Dict with an ``unsupported`` error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
-            sheet = doc.ActiveSheet
-            dims = sheet.Dimensions
-
-            # Place dimension text at the vertex with offset
-            dim_x = x2 + 0.02
-            dim_y = y2 + 0.02
-
-            dims.AddAngle(x1, y1, 0.0, x2, y2, 0.0, x3, y3, 0.0, dim_x, dim_y, 0.0)
-
-            return {
-                "status": "added",
-                "dimension_type": "angle",
-                "vertex": [x2, y2],
-                "text_position": [dim_x, dim_y],
-            }
-        except Exception as e:
-            return error_result(e)
+        _logger.warning("add_angle_dimension_2d is not available via COM automation")
+        del x1, y1, x2, y2, x3, y3
+        return {
+            "error": (
+                "Dimensions.AddAngle takes the 2D object being dimensioned, not three "
+                "points, and this server cannot select the objects those points lie "
+                "on. Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     # =================================================================
     # SYMBOL ANNOTATIONS
@@ -644,8 +648,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
             center_marks = sheet.CenterMarks
@@ -675,8 +680,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
             centerlines = sheet.CenterLines
@@ -708,8 +714,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             type_map = {"machined": 1, "any": 0, "prohibited": 2}
             type_value = type_map.get(symbol_type.lower())
@@ -753,20 +760,24 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
-            type_map = {"fillet": 0, "groove": 1, "plug": 2, "spot": 3, "seam": 4}
-            type_value = type_map.get(weld_type.lower())
+            type_value = _WELD_TYPE_MAP.get(weld_type.lower())
             if type_value is None:
-                valid = ", ".join(type_map.keys())
+                valid = ", ".join(_WELD_TYPE_MAP.keys())
                 return {"error": f"Invalid weld_type: '{weld_type}'. Valid: {valid}"}
 
             sheet = doc.ActiveSheet
 
             try:
                 ws = sheet.WeldSymbols
-                ws.Add(x, y, 0, type_value)
+                # WeldSymbols.Add(x1, y1, z1) only places the symbol; the weld
+                # type is the WeldSymbol.TopType property, not a fourth argument.
+                symbol = ws.Add(x, y, 0)
+                with contextlib.suppress(Exception):
+                    symbol.TopType = type_value
             except Exception:
                 # Fallback: use a leader with weld designation text
                 leaders = sheet.Leaders
@@ -800,8 +811,9 @@ class AnnotationsMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
 
@@ -842,8 +854,9 @@ class AnnotationsMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             lines2d = sheet.Lines2d
             items = []
@@ -871,8 +884,9 @@ class AnnotationsMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             circles2d = sheet.Circles2d
             items = []
@@ -900,8 +914,9 @@ class AnnotationsMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             arcs2d = sheet.Arcs2d
             items = []

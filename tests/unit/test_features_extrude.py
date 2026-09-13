@@ -192,7 +192,8 @@ class TestCreateExtrudeThroughNext:
         assert result["status"] == "created"
         assert result["type"] == "extrude_through_next"
         assert result["direction"] == "Normal"
-        protrusions.AddThroughNext.assert_called_once_with(profile, 2)
+        # AddThroughNext(Profile, ProfileSide, ProfilePlaneSide)
+        protrusions.AddThroughNext.assert_called_once_with(profile, 2, 2)
 
     def test_reverse_direction(self, feature_mgr, managers):
         _, _, _, _, model, profile = managers
@@ -201,7 +202,7 @@ class TestCreateExtrudeThroughNext:
 
         result = feature_mgr.create_extrude_through_next("Reverse")
         assert result["status"] == "created"
-        protrusions.AddThroughNext.assert_called_once_with(profile, 1)
+        protrusions.AddThroughNext.assert_called_once_with(profile, 1, 1)
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -238,7 +239,8 @@ class TestCreateExtrudeFromTo:
         assert result["type"] == "extrude_from_to"
         assert result["from_plane_index"] == 1
         assert result["to_plane_index"] == 4
-        protrusions.AddFromTo.assert_called_once_with(profile, from_plane, to_plane)
+        # AddFromTo(Profile, ProfileSide, FromFaceOrRefPlane, ToFaceOrRefPlane)
+        protrusions.AddFromTo.assert_called_once_with(profile, 2, from_plane, to_plane)
 
     def test_invalid_from_plane(self, feature_mgr, managers):
         _, _, doc, _, _, _ = managers
@@ -361,24 +363,29 @@ class TestCreateExtrudeFromToV2:
 
 
 class TestCreateExtrudeByKeypoint:
-    def test_success(self, feature_mgr, managers):
+    """AddFiniteByKeyPoint needs a KeyPoint object the server cannot select."""
+
+    def test_reports_unsupported_without_calling_com(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
         result = feature_mgr.create_extrude_by_keypoint("Normal")
-        assert result["status"] == "created"
-        assert result["type"] == "extrude_by_keypoint"
-        model.ExtrudedProtrusions.AddFiniteByKeyPoint.assert_called_once()
+        assert result["unsupported"] is True
+        assert "KeyPoint" in result["error"]
+        assert result["direction"] == "Normal"
+        model.ExtrudedProtrusions.AddFiniteByKeyPoint.assert_not_called()
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
+    def test_no_profile_still_unsupported(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
         sketch_mgr.get_active_sketch.return_value = None
         result = feature_mgr.create_extrude_by_keypoint()
-        assert "error" in result
+        assert result["unsupported"] is True
+        model.ExtrudedProtrusions.AddFiniteByKeyPoint.assert_not_called()
 
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
+    def test_no_model_still_unsupported(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
         models.Count = 0
         result = feature_mgr.create_extrude_by_keypoint()
-        assert "error" in result
+        assert result["unsupported"] is True
+        model.ExtrudedProtrusions.AddFiniteByKeyPoint.assert_not_called()
 
 
 # ============================================================================
@@ -445,3 +452,82 @@ class TestCreateExtrudeThroughNextSingle:
         result = feature_mgr.create_extrude_through_next_single("Reverse")
         assert result["status"] == "created"
         assert result["direction"] == "Reverse"
+
+
+# ============================================================================
+# EXTRUDE THIN WALL / INFINITE (full-parameter Models.* overloads)
+# ============================================================================
+
+# Shared expected tail/blocks for the 35- and 40-argument Models overloads.
+# Values come from constant.tlb: igFinite=13, igThroughAll=16, igNone=44,
+# igTangentNormal=1, seOffsetNone=44, seTreatmentNone=44, seDraftNone=44,
+# seTreatmentCrownByOffset=3, seTreatmentCrownSideInside=4,
+# seTreatmentCrownCurvatureInside=4, igInside=4, igRight=2.
+_TREATMENT_BLOCK = (44, 44, 0.0, 3, 4, 4, 0.0, 0.0)
+
+
+class TestCreateExtrudeThinWall:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_extrude_thin_wall(0.05, 0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "extrude_thin_wall"
+
+        expected = (
+            (1, (profile,), 2)
+            # first extent: finite, 50 mm
+            + (13, 2, 0.05, None, 1, None, 44, 0.0)
+            + _TREATMENT_BLOCK
+            # second extent: none
+            + (44, 2, 0.0, None, 1, None, 44, 0.0)
+            + _TREATMENT_BLOCK
+            # thin wall: ThinWall, AddEndCaps, RemoveInsideMaterial,
+            # Thickness, ThicknessSide
+            + (True, False, True, 0.002, 4)
+        )
+        assert len(expected) == 40
+        models.AddExtrudedProtrusionWithThinWall.assert_called_once_with(*expected)
+
+    def test_reverse_direction(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_extrude_thin_wall(0.05, 0.002, direction="Reverse")
+        assert result["direction"] == "Reverse"
+        args = models.AddExtrudedProtrusionWithThinWall.call_args[0]
+        assert args[2] == 1  # ProfileSide igLeft
+        assert args[4] == 1  # ExtentSide1 igLeft
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude_thin_wall(0.05, 0.002)
+        assert "error" in result
+        models.AddExtrudedProtrusionWithThinWall.assert_not_called()
+
+
+class TestCreateExtrudeInfinite:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_extrude_infinite()
+        assert result["status"] == "created"
+        assert result["type"] == "extrude_infinite"
+
+        expected = (
+            (1, (profile,), 2)
+            # first extent: through all
+            + (16, 2, 0.0, None, 1, None, 44, 0.0)
+            + _TREATMENT_BLOCK
+            # second extent: none
+            + (44, 2, 0.0, None, 1, None, 44, 0.0)
+            + _TREATMENT_BLOCK
+        )
+        assert len(expected) == 35
+        models.AddExtrudedProtrusion.assert_called_once_with(*expected)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude_infinite()
+        assert "error" in result
+        models.AddExtrudedProtrusion.assert_not_called()

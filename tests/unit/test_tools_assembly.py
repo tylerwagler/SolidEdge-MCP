@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import solidedge_mcp.tools.assembly as assembly_tools
+from solidedge_mcp.backends.assembly import AssemblyManager
 from solidedge_mcp.tools.assembly import (
     add_assembly_component,
     add_assembly_constraint,
@@ -21,6 +22,7 @@ from solidedge_mcp.tools.assembly import (
     virtual_component,
     wiring,
 )
+from tests.unit.test_tools_features import backend_call_violations
 from tests.unit.test_tools_query import assert_literal_discriminators
 
 
@@ -527,3 +529,17 @@ class TestWiring:
 
 def test_assembly_discriminators_match_their_cases():
     assert assert_literal_discriminators(assembly_tools) == 13
+
+
+# === Tool/backend signature agreement ===
+
+
+class TestBackendSignatureAgreement:
+    """Every assembly tool must be able to supply its backend's required params."""
+
+    def test_no_backend_call_violations(self):
+        violations = backend_call_violations(
+            "solidedge_mcp.tools.assembly",
+            {"assembly_manager": AssemblyManager},
+        )
+        assert violations == []

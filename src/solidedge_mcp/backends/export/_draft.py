@@ -6,6 +6,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
+from ._base import NOT_A_DRAFT, com_get
 
 _logger = get_logger(__name__)
 
@@ -38,8 +39,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             smart_frames = sheet.SmartFrames2d
@@ -85,8 +87,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             smart_frames = sheet.SmartFrames2d
@@ -131,8 +134,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             symbols = sheet.Symbols
@@ -160,8 +164,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             symbols = sheet.Symbols
@@ -197,13 +202,12 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "PMI"):
+            pmi = com_get(doc, "PMI")
+            if pmi is None:
                 return {
                     "has_pmi": False,
                     "error": "PMI not available on this document",
                 }
-
-            pmi = doc.PMI
 
             result: dict[str, Any] = {"has_pmi": True}
 
@@ -255,10 +259,9 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "PMI"):
+            pmi = com_get(doc, "PMI")
+            if pmi is None:
                 return {"error": "PMI not available on this document"}
-
-            pmi = doc.PMI
 
             with contextlib.suppress(Exception):
                 pmi.Show = show
@@ -294,8 +297,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             value = doc.GetGlobalParameter(parameter)
             return {"status": "success", "parameter": parameter, "value": value}
@@ -317,8 +321,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             doc.SetGlobalParameter(parameter, value)
             return {"status": "set", "parameter": parameter, "value": value}
@@ -340,10 +345,14 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
-            result = doc.GetSymbolFileOrigin()
+            # GetSymbolFileOrigin(pxOrigin as VT_R8*, pyOrigin as VT_R8*).
+            # Both parameters are declared [in]; pywin32 requires them to be
+            # supplied and hands the filled values back as the return value.
+            result = doc.GetSymbolFileOrigin(0.0, 0.0)
             return {
                 "status": "success",
                 "x": result[0],
@@ -367,8 +376,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             doc.SetSymbolFileOrigin(x, y)
             return {"status": "set", "x": x, "y": y}
@@ -395,10 +405,9 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Models"):
+            models = com_get(doc, "Models")
+            if models is None:
                 return {"error": "Active document does not have a Models collection"}
-
-            models = doc.Models
             if models.Count == 0:
                 return {"error": "No models in document"}
 
@@ -497,8 +506,8 @@ class DraftMixin:
             doc = self.doc_manager.get_active_document()
 
             # Try DraftPrintUtility first (more control)
-            if hasattr(doc, "DraftPrintUtility"):
-                dpu = doc.DraftPrintUtility
+            dpu = com_get(doc, "DraftPrintUtility")
+            if dpu is not None:
                 with contextlib.suppress(Exception):
                     dpu.Copies = copies
                 with contextlib.suppress(Exception):
@@ -507,14 +516,14 @@ class DraftMixin:
                 return {"status": "printed", "copies": copies, "all_sheets": all_sheets}
 
             # Fall back to simple PrintOut
-            if hasattr(doc, "PrintOut"):
+            try:
+                doc.PrintOut(Copies=copies)
+            except Exception:
                 try:
-                    doc.PrintOut(Copies=copies)
-                except Exception:
                     doc.PrintOut()
-                return {"status": "printed", "copies": copies}
-
-            return {"error": "Active document does not support printing"}
+                except Exception:
+                    return {"error": "Active document does not support printing"}
+            return {"status": "printed", "copies": copies}
         except Exception as e:
             return error_result(e)
 
@@ -533,10 +542,9 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DraftPrintUtility"):
+            dpu = com_get(doc, "DraftPrintUtility")
+            if dpu is None:
                 return {"error": "Active document does not have DraftPrintUtility"}
-
-            dpu = doc.DraftPrintUtility
             dpu.Printer = printer_name
 
             return {"status": "set", "printer": printer_name}
@@ -555,10 +563,9 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DraftPrintUtility"):
+            dpu = com_get(doc, "DraftPrintUtility")
+            if dpu is None:
                 return {"error": "Active document does not have DraftPrintUtility"}
-
-            dpu = doc.DraftPrintUtility
             printer_name = dpu.Printer
 
             return {"printer": printer_name}
@@ -584,10 +591,9 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DraftPrintUtility"):
+            dpu = com_get(doc, "DraftPrintUtility")
+            if dpu is None:
                 return {"error": "Active document does not have DraftPrintUtility"}
-
-            dpu = doc.DraftPrintUtility
 
             with contextlib.suppress(Exception):
                 dpu.PaperWidth = width

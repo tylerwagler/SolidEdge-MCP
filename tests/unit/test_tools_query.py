@@ -334,8 +334,52 @@ class TestEditFeatureExtent:
             distance=0.05,
         )
         mock_mgr.set_direction1_extent.assert_called_once_with(
-            "Extrude1", ExtentTypeConstants.igFinite, 0.05
+            "Extrude1", ExtentTypeConstants.igFinite, 0.05, DirectionConstants.igRight
         )
+
+    @pytest.mark.parametrize(
+        "name, constant",
+        [
+            ("left", DirectionConstants.igLeft),
+            ("right", DirectionConstants.igRight),
+            ("symmetric", DirectionConstants.igSymmetric),
+        ],
+    )
+    def test_extent_side_names_map_to_com_constants(self, mock_mgr, name, constant):
+        mock_mgr.set_direction1_extent.return_value = {"status": "ok"}
+        edit_feature_extent(
+            property="set_direction1",
+            feature_name="Extrude1",
+            extent_type="finite",
+            distance=0.05,
+            extent_side=name,
+        )
+        mock_mgr.set_direction1_extent.assert_called_once_with(
+            "Extrude1", ExtentTypeConstants.igFinite, 0.05, constant
+        )
+
+    def test_set_thin_wall_maps_to_the_com_argument_order(self, mock_mgr):
+        mock_mgr.set_thin_wall_options.return_value = {"status": "ok"}
+        edit_feature_extent(
+            property="set_thin_wall",
+            feature_name="Extrude1",
+            thickness=0.002,
+            thickness_side="left",
+            add_end_caps=True,
+        )
+        mock_mgr.set_thin_wall_options.assert_called_once_with(
+            "Extrude1", 0.002, DirectionConstants.igLeft, True, True, False
+        )
+
+    def test_set_body_array_passes_the_multi_body_flag(self, mock_mgr):
+        mock_mgr.set_body_array.return_value = {"status": "ok"}
+        edit_feature_extent(
+            property="set_body_array",
+            feature_name="Cut1",
+            body_indices=[0, 2],
+            multi_body_cut=False,
+        )
+        mock_mgr.set_body_array.assert_called_once_with("Cut1", [0, 2], False)
 
     @pytest.mark.parametrize(
         "name, constant",
@@ -350,7 +394,9 @@ class TestEditFeatureExtent:
         edit_feature_extent(
             property="set_direction2", feature_name="Cut1", extent_type=name, distance=0.01
         )
-        mock_mgr.set_direction2_extent.assert_called_once_with("Cut1", constant, 0.01)
+        mock_mgr.set_direction2_extent.assert_called_once_with(
+            "Cut1", constant, 0.01, DirectionConstants.igRight
+        )
 
     @pytest.mark.parametrize(
         "name, constant",
@@ -475,6 +521,9 @@ class TestQueryBody:
             ("point_inside", "is_point_inside_body"),
             ("user_physical_properties", "get_user_physical_properties"),
             ("facet_data", "get_body_facet_data"),
+            ("faces", "get_body_faces"),
+            ("edges", "get_body_edges"),
+            ("spatial_context", "get_spatial_context"),
         ],
     )
     def test_dispatch(self, mock_mgr, disc, method):
@@ -486,6 +535,41 @@ class TestQueryBody:
     def test_unknown(self, mock_mgr):
         result = query_body(property="bogus")
         assert "error" in result
+
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("faces", "get_body_faces"),
+            ("edges", "get_body_edges"),
+            ("shells", "get_body_shells"),
+            ("vertices", "get_body_vertices"),
+        ],
+    )
+    def test_paged_properties_forward_offset_and_limit(self, mock_mgr, disc, method):
+        getattr(mock_mgr, method).return_value = {"total": 0, "items": []}
+        query_body(property=disc, offset=400, limit=50)
+        getattr(mock_mgr, method).assert_called_once_with(400, 50)
+
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("faces", "get_body_faces"),
+            ("edges", "get_body_edges"),
+            ("shells", "get_body_shells"),
+            ("vertices", "get_body_vertices"),
+        ],
+    )
+    def test_paged_properties_default_to_the_shared_page_limit(self, mock_mgr, disc, method):
+        from solidedge_mcp.backends.query import DEFAULT_PAGE_LIMIT
+
+        getattr(mock_mgr, method).return_value = {"total": 0, "items": []}
+        query_body(property=disc)
+        getattr(mock_mgr, method).assert_called_once_with(0, DEFAULT_PAGE_LIMIT)
+
+    def test_spatial_context_takes_no_arguments(self, mock_mgr):
+        mock_mgr.get_spatial_context.return_value = {"body_count": 0}
+        query_body(property="spatial_context", offset=10, limit=5)
+        mock_mgr.get_spatial_context.assert_called_once_with()
 
 
 # === query_bspline ===

@@ -1,6 +1,6 @@
 """MCP Resources — read-only data endpoints for Solid Edge.
 
-52 read-only endpoints (37 static + 15 templates) exposed as MCP Resources
+53 read-only endpoints (38 static + 15 templates) exposed as MCP Resources
 rather than tools, keeping the LLM action space to things that change the model.
 Every resource returns a JSON string.
 """
@@ -23,7 +23,7 @@ RESOURCE_TAGS = {"query"}
 
 
 # ===================================================================
-# Tier 1: Static resources (no parameters) — 37
+# Tier 1: Static resources (no parameters) — 38
 # ===================================================================
 
 # --- Application (4) ---
@@ -125,7 +125,7 @@ def model_camera() -> str:
     return json.dumps(view_manager.get_camera())
 
 
-# --- Geometry (12) ---
+# --- Geometry (13) ---
 
 
 def geometry_bodies() -> str:
@@ -154,13 +154,29 @@ def geometry_vertex_count() -> str:
 
 
 def geometry_faces() -> str:
-    """All faces on the body with geometry info; 0-based face indices."""
+    """First page of faces on the body (0-based indices).
+
+    Paged: at most the default limit of faces is returned. The JSON carries
+    total/offset/limit/truncated; when truncated is true, use the query_body
+    tool with property="faces" and an offset to read the rest.
+    """
     return json.dumps(query_manager.get_body_faces())
 
 
 def geometry_edges() -> str:
-    """Edge information from the model body; 0-based indices."""
+    """First page of the body's face-to-edge mapping (0-based indices).
+
+    Paged: see solidedge://geometry/faces. When truncated is true, page with
+    the query_body tool using property="edges" and an offset.
+    """
     return json.dumps(query_manager.get_body_edges())
+
+
+def geometry_spatial_context() -> str:
+    """Where the geometry sits: body count, bounding box with center, whether
+    it is centered on the origin, the open sketch's plane, and the static
+    plane-to-world-axis map (1=Top/XY +Z, 2=Right/YZ +X, 3=Front/XZ +Y)."""
+    return json.dumps(query_manager.get_spatial_context())
 
 
 def geometry_body_color() -> str:
@@ -333,7 +349,7 @@ def geometry_mass_properties(density: float) -> str:
 # Registration
 # ===================================================================
 
-#: URI -> handler, in registration order. 37 static + 15 templates = 52.
+#: URI -> handler, in registration order. 38 static + 15 templates = 53.
 RESOURCES: tuple[tuple[str, Any], ...] = (
     # Application
     ("solidedge://app/info", app_info),
@@ -369,6 +385,7 @@ RESOURCES: tuple[tuple[str, Any], ...] = (
     ("solidedge://geometry/volume", geometry_volume),
     ("solidedge://geometry/center-of-gravity", geometry_center_of_gravity),
     ("solidedge://geometry/moments-of-inertia", geometry_moments_of_inertia),
+    ("solidedge://spatial-context", geometry_spatial_context),
     # Material
     ("solidedge://material/list", material_list),
     ("solidedge://material/table", material_table),
@@ -404,6 +421,6 @@ RESOURCES: tuple[tuple[str, Any], ...] = (
 
 
 def register(mcp: Any) -> None:
-    """Register read-only MCP resources (37 static + 15 templates)."""
+    """Register read-only MCP resources (38 static + 15 templates)."""
     for uri, fn in RESOURCES:
         register_resource(mcp, uri, fn, tags=RESOURCE_TAGS)

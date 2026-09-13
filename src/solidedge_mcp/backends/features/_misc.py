@@ -10,12 +10,31 @@ from win32com.client import VARIANT
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
-    DirectionConstants,
     FaceQueryConstants,
 )
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
+
+# constant.tlb > AddBodyTypeConstants. Kept local because backends/constants.py
+# does not carry this enum yet.
+_ADD_BODY_TYPES = {
+    "Solid": 1,  # igPartType
+    "Part": 1,  # igPartType
+    "SheetMetal": 2,  # igSheetMetalType
+    "Construction": 5,  # igConstructionPartType
+}
+
+# constant.tlb > PatternTypeConstants: seSmartPattern = 0, seFastPattern = 1.
+# NOTE: backends/constants.py has a class of the same name holding different,
+# unverified values (igRectangularPattern = 1, ...), so the real value is
+# defined locally rather than imported.
+_SE_SMART_PATTERN = 0
+
+# assembly.tlb > PatternOffsetTypeConstants: sePatternFitOffset = 0,
+# sePatternFillOffset = 1, sePatternFixedOffset = 2, sePatternChordLengthOffset = 3.
+# backends/constants.py's PatternOffsetTypeConstants holds different values.
+_SE_PATTERN_FIXED_OFFSET = 2
 
 
 class MiscFeaturesMixin:
@@ -118,24 +137,40 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
-    def add_body(self, body_type: str = "Solid") -> dict[str, Any]:
+    def add_body(self, body_type: str = "Solid", body_name: str = "") -> dict[str, Any]:
         """
         Add a body to the part.
 
+        Uses Models.AddBody(igBodyType, BodyName).
+
         Args:
-            body_type: Type of body - 'Solid', 'Surface', 'Construction'
+            body_type: 'Solid' (or 'Part'), 'SheetMetal', 'Construction'
+            body_name: Name for the new body (defaults to 'Body')
 
         Returns:
             Dict with status and body info
         """
         try:
+            ig_body_type = _ADD_BODY_TYPES.get(body_type)
+            if ig_body_type is None:
+                return {
+                    "error": f"Unknown body_type: {body_type}. "
+                    f"Use one of {sorted(_ADD_BODY_TYPES)}."
+                }
+
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
-            # AddBody
-            models.AddBody()
+            name = body_name or "Body"
+            # Models.AddBody(igBodyType: AddBodyTypeConstants, BodyName: BSTR)
+            models.AddBody(ig_body_type, name)
 
-            return {"status": "created", "type": "body", "body_type": body_type}
+            return {
+                "status": "created",
+                "type": "body",
+                "body_type": body_type,
+                "body_name": name,
+            }
         except Exception as e:
             return error_result(e)
 
@@ -143,76 +178,109 @@ class MiscFeaturesMixin:
         """
         Thicken a surface to create a solid.
 
+        NOT AVAILABLE via COM automation. Models.AddThickenFeature takes
+        (Side, offsetDistance, NumberOfFaces, Faces) - the Faces argument is a
+        SAFEARRAY of the surface faces to thicken, and this server has no way to
+        select the faces of a construction/surface body. The call is never made.
+
         Args:
             thickness: Thickness (meters)
             direction: 'Both', 'Inside', or 'Outside'
 
         Returns:
-            Dict with status and thicken info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            # AddThickenFeature
-            models.AddThickenFeature(Thickness=thickness)
-
-            return {
-                "status": "created",
-                "type": "thicken",
-                "thickness": thickness,
-                "direction": direction,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Thicken is not available through this server: "
+                "Models.AddThickenFeature(Side, offsetDistance, NumberOfFaces, "
+                "Faces) requires the surface faces to thicken, which cannot be "
+                "selected through this API. Thicken the surface in the Solid "
+                "Edge UI."
+            ),
+            "unsupported": True,
+            "type": "thicken",
+            "thickness": thickness,
+            "direction": direction,
+        }
 
     def auto_simplify(self) -> dict[str, Any]:
-        """Auto-simplify the model"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        """
+        Auto-simplify the model.
 
-            models.AddAutoSimplify()
-
-            return {"status": "created", "type": "auto_simplify"}
-        except Exception as e:
-            return error_result(e)
+        NOT AVAILABLE via COM automation. Models.AddAutoSimplify(numInputs,
+        Occurrences, vbRemoveInternals, BodyName) needs an array of assembly
+        occurrences, which a part document cannot supply. The call is never made.
+        """
+        return {
+            "error": (
+                "Auto-simplify is not available through this server: "
+                "Models.AddAutoSimplify(numInputs, Occurrences, "
+                "vbRemoveInternals, BodyName) requires an array of assembly "
+                "occurrences that this server cannot select. Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "auto_simplify",
+        }
 
     def simplify_enclosure(self) -> dict[str, Any]:
-        """Create simplified enclosure"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        """
+        Create a simplified enclosure.
 
-            models.AddSimplifyEnclosure()
-
-            return {"status": "created", "type": "simplify_enclosure"}
-        except Exception as e:
-            return error_result(e)
+        NOT AVAILABLE via COM automation. Models.AddSimplifyEnclosure(numInputs,
+        Occurrences, RefPlane, EncloseType, BodyName) needs an array of assembly
+        occurrences, which this server cannot select. The call is never made.
+        """
+        return {
+            "error": (
+                "Simplify enclosure is not available through this server: "
+                "Models.AddSimplifyEnclosure(numInputs, Occurrences, RefPlane, "
+                "EncloseType, BodyName) requires an array of assembly "
+                "occurrences that this server cannot select. Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "simplify_enclosure",
+        }
 
     def simplify_duplicate(self) -> dict[str, Any]:
-        """Create simplified duplicate"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        """
+        Create a simplified duplicate.
 
-            models.AddSimplifyDuplicate()
-
-            return {"status": "created", "type": "simplify_duplicate"}
-        except Exception as e:
-            return error_result(e)
+        NOT AVAILABLE via COM automation. Models.AddSimplifyDuplicate(NumBodies,
+        Bodies, FromOccurrence, numOccurrences, ToOccurrences, Name) needs body
+        and occurrence objects this server cannot select. The call is never made.
+        """
+        return {
+            "error": (
+                "Simplify duplicate is not available through this server: "
+                "Models.AddSimplifyDuplicate(NumBodies, Bodies, FromOccurrence, "
+                "numOccurrences, ToOccurrences, Name) requires body and assembly "
+                "occurrence objects that this server cannot select. Use the "
+                "Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "simplify_duplicate",
+        }
 
     def local_simplify_enclosure(self) -> dict[str, Any]:
-        """Create local simplified enclosure"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        """
+        Create a local simplified enclosure.
 
-            models.AddLocalSimplifyEnclosure()
-
-            return {"status": "created", "type": "local_simplify_enclosure"}
-        except Exception as e:
-            return error_result(e)
+        NOT AVAILABLE via COM automation.
+        Models.AddLocalSimplifyEnclosure(numInputs, TopologyProxies, RefPlane,
+        EncloseType, BodyName) needs topology proxy objects (a user selection),
+        which this server cannot obtain. The call is never made.
+        """
+        return {
+            "error": (
+                "Local simplify enclosure is not available through this server: "
+                "Models.AddLocalSimplifyEnclosure(numInputs, TopologyProxies, "
+                "RefPlane, EncloseType, BodyName) requires topology proxy "
+                "objects from a user selection. Use the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "local_simplify_enclosure",
+        }
 
     def create_mirror(self, feature_name: str, mirror_plane_index: int) -> dict[str, Any]:
         """
@@ -290,126 +358,144 @@ class MiscFeaturesMixin:
         """
         Delete faces from the model body.
 
-        Uses model.DeleteFaces collection to remove specified faces.
-        Useful for creating openings or removing geometry.
+        NOT AVAILABLE via COM automation. DeleteFaces.Add takes a single
+        argument, FaceSetToDelete (VT_DISPATCH) - a FaceSet object. No
+        collection in the Part type library hands out a FaceSet, so this server
+        cannot build the argument. The call is never made.
 
         Args:
             face_indices: List of 0-based face indices to delete
 
         Returns:
-            Dict with status and deletion info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "No features exist to delete faces from"}
-
-            model = models.Item(1)
-            body = model.Body
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if faces.Count == 0:
-                return {"error": "No faces on body"}
-
-            face_objs = []
-            for idx in face_indices:
-                if idx < 0 or idx >= faces.Count:
-                    return {"error": f"Invalid face index: {idx}. Body has {faces.Count} faces."}
-                face_objs.append(faces.Item(idx + 1))
-
-            delete_faces = model.DeleteFaces
-            delete_faces.Add(len(face_objs), face_objs)
-
-            return {
-                "status": "created",
-                "type": "delete_faces",
-                "face_count": len(face_indices),
-                "face_indices": face_indices,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Delete faces is not available through this server: "
+                "DeleteFaces.Add(FaceSetToDelete) takes one FaceSet object, and "
+                "the Solid Edge Part API exposes no way to build a FaceSet from "
+                "face indices. Delete the faces in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "delete_faces",
+            "face_indices": list(face_indices),
+        }
 
     def delete_faces_no_heal(self, face_indices: list[int]) -> dict[str, Any]:
         """
         Delete faces from the model body without healing.
 
-        Unlike delete_faces which attempts to heal/close resulting gaps,
-        this removes faces leaving the gap open. Useful when you need
-        to create deliberate openings.
+        NOT AVAILABLE via COM automation. DeleteFaces.AddNoHeal takes a single
+        FaceSetToDelete (VT_DISPATCH) argument, which this server cannot build.
+        The call is never made.
 
         Args:
             face_indices: List of 0-based face indices to delete
 
         Returns:
-            Dict with status and deletion info
+            Dict with an unsupported error
+        """
+        return {
+            "error": (
+                "Delete faces (no heal) is not available through this server: "
+                "DeleteFaces.AddNoHeal(FaceSetToDelete) takes one FaceSet "
+                "object, and the Solid Edge Part API exposes no way to build a "
+                "FaceSet from face indices. Delete the faces in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "delete_faces_no_heal",
+            "face_indices": list(face_indices),
+        }
+
+    def add_body_by_mesh(self) -> dict[str, Any]:
+        """
+        Add a body from mesh facets.
+
+        NOT AVAILABLE via COM automation.
+        Models.AddBodyByMeshFacets(NumberOfVertices, VertextPostionsOfFacets)
+        needs an explicit array of facet vertex coordinates, which this server
+        has no source for. The call is never made.
+        """
+        return {
+            "error": (
+                "Add body by mesh is not available through this server: "
+                "Models.AddBodyByMeshFacets(NumberOfVertices, "
+                "VertextPostionsOfFacets) requires an array of facet vertex "
+                "coordinates. Import the mesh through the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "body_by_mesh",
+        }
+
+    def add_body_feature(self, import_file_name: str = "") -> dict[str, Any]:
+        """
+        Add a body feature by importing a body from a file.
+
+        Uses Models.AddBodyFeature(ImportFileName).
+
+        Args:
+            import_file_name: Full path of the file to import the body from
+
+        Returns:
+            Dict with status and body info
+        """
+        if not import_file_name:
+            return {
+                "error": (
+                    "Models.AddBodyFeature(ImportFileName) needs the path of the "
+                    "file to import the body from; pass import_file_name."
+                )
+            }
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            # Models.AddBodyFeature(ImportFileName: BSTR)
+            models.AddBodyFeature(import_file_name)
+
+            return {
+                "status": "created",
+                "type": "body_feature",
+                "import_file_name": import_file_name,
+            }
+        except Exception as e:
+            return error_result(e)
+
+    def add_by_construction(self, construction_index: int = 0) -> dict[str, Any]:
+        """
+        Add a body from an existing construction (surface) body.
+
+        Uses Models.AddByConstruction(ConstructionSolid).
+
+        Args:
+            construction_index: 0-based index into doc.Constructions
+
+        Returns:
+            Dict with status and body info
         """
         try:
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
-            if models.Count == 0:
-                return {"error": "No features exist to delete faces from"}
+            constructions = doc.Constructions
+            if constructions.Count == 0:
+                return {"error": "No construction bodies exist in the active document."}
+            if construction_index < 0 or construction_index >= constructions.Count:
+                return {
+                    "error": f"Invalid construction_index: {construction_index}. "
+                    f"Document has {constructions.Count} constructions."
+                }
 
-            model = models.Item(1)
-            body = model.Body
+            construction = constructions.Item(construction_index + 1)
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if faces.Count == 0:
-                return {"error": "No faces on body"}
-
-            face_objs = []
-            for idx in face_indices:
-                if idx < 0 or idx >= faces.Count:
-                    return {"error": f"Invalid face index: {idx}. Body has {faces.Count} faces."}
-                face_objs.append(faces.Item(idx + 1))
-
-            delete_faces = model.DeleteFaces
-            delete_faces.AddNoHeal(len(face_objs), face_objs)
+            # Models.AddByConstruction(ConstructionSolid: VT_DISPATCH)
+            models.AddByConstruction(construction)
 
             return {
                 "status": "created",
-                "type": "delete_faces_no_heal",
-                "face_count": len(face_indices),
-                "face_indices": face_indices,
+                "type": "construction_body",
+                "construction_index": construction_index,
             }
-        except Exception as e:
-            return error_result(e)
-
-    def add_body_by_mesh(self) -> dict[str, Any]:
-        """Add body by mesh facets"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            models.AddBodyByMeshFacets()
-
-            return {"status": "created", "type": "body_by_mesh"}
-        except Exception as e:
-            return error_result(e)
-
-    def add_body_feature(self) -> dict[str, Any]:
-        """Add body feature"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            models.AddBodyFeature()
-
-            return {"status": "created", "type": "body_feature"}
-        except Exception as e:
-            return error_result(e)
-
-    def add_by_construction(self) -> dict[str, Any]:
-        """Add construction body"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            models.AddByConstruction()
-
-            return {"status": "created", "type": "construction_body"}
         except Exception as e:
             return error_result(e)
 
@@ -669,89 +755,61 @@ class MiscFeaturesMixin:
         """
         Create a synchronous thicken feature.
 
-        Uses Thickens.AddSync to thicken a surface body into a solid
-        in synchronous modeling mode.
+        NOT AVAILABLE via COM automation. Thickens.AddSync takes
+        (Side, dOffsetDistance, Faces, Loop): the Faces argument is a SAFEARRAY
+        of the surface faces to thicken and Loop is the bounding loop, neither of
+        which this server can select. The call is never made.
 
         Args:
             thickness: Thicken thickness in meters
             direction: 'Both', 'Normal', or 'Reverse'
 
         Returns:
-            Dict with status and thicken info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            direction_map = {
-                "Both": DirectionConstants.igBoth,
-                "Normal": DirectionConstants.igRight,
-                "Reverse": DirectionConstants.igLeft,
-            }
-            side = direction_map.get(direction, DirectionConstants.igBoth)
-
-            thickens = model.Thickens
-            thickens.AddSync(thickness, side)
-
-            return {
-                "status": "created",
-                "type": "thicken_sync",
-                "thickness": thickness,
-                "direction": direction,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Synchronous thicken is not available through this server: "
+                "Thickens.AddSync(Side, dOffsetDistance, Faces, Loop) requires "
+                "the surface faces and bounding loop to thicken, which cannot be "
+                "selected through this API. Thicken the surface in the Solid "
+                "Edge UI."
+            ),
+            "unsupported": True,
+            "type": "thicken_sync",
+            "thickness": thickness,
+            "direction": direction,
+        }
 
     def create_mirror_sync_ex(self, feature_name: str, mirror_plane_index: int) -> dict[str, Any]:
         """
         Create a synchronous mirror copy using the extended AddSyncEx method.
 
-        Looks up the feature by name from DesignEdgebarFeatures and mirrors
-        it across the specified reference plane.
+        NOT AVAILABLE via COM automation. MirrorCopies.AddSyncEx takes
+        (NumberOfFeatures, FeatureArray, MirrorPlane, MirrorOption,
+        MirrorFeatures) where MirrorFeatures is an [in,out] SAFEARRAY that late
+        binding cannot supply byref. The call is never made; use create_mirror
+        (MirrorCopies.AddSync), which has a usable signature.
 
         Args:
             feature_name: Name of the feature to mirror (from list_features)
             mirror_plane_index: 1-based index of the mirror plane
 
         Returns:
-            Dict with status and mirror info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            ref_planes = doc.RefPlanes
-            if mirror_plane_index < 1 or mirror_plane_index > ref_planes.Count:
-                return {
-                    "error": f"Invalid plane index: {mirror_plane_index}. Count: {ref_planes.Count}"
-                }
-
-            mirror_plane = ref_planes.Item(mirror_plane_index)
-
-            mc = model.MirrorCopies
-            mirror = mc.AddSyncEx(1, [target_feature], mirror_plane, False)
-
-            return {
-                "status": "created",
-                "type": "mirror_sync_ex",
-                "feature": feature_name,
-                "mirror_plane": mirror_plane_index,
-                "name": mirror.Name if hasattr(mirror, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "MirrorCopies.AddSyncEx is not usable through COM late binding: "
+                "it needs an [in,out] SAFEARRAY (MirrorFeatures) that cannot be "
+                "passed byref. Use create_mirror (method='basic', "
+                "MirrorCopies.AddSync) instead, or mirror in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "mirror_sync_ex",
+            "feature": feature_name,
+            "mirror_plane": mirror_plane_index,
+        }
 
     def create_pattern_rectangular_ex(
         self,
@@ -760,12 +818,16 @@ class MiscFeaturesMixin:
         y_count: int,
         x_spacing: float,
         y_spacing: float,
+        plane_index: int = 1,
+        rectangle_angle: float = 0.0,
     ) -> dict[str, Any]:
         """
         Create a rectangular pattern using the extended AddByRectangularEx method.
 
-        The Ex variant may use different marshaling than the original
-        AddByRectangular, potentially avoiding SAFEARRAY issues.
+        Full signature: AddByRectangularEx(NumberOfFeatures, FeatureArray,
+        ReferencePlane, XDirectionCount, YDirectionCount, XDirectionSpacing,
+        YDirectionSpacing, RectangleAngle, PatternMethod, ReferenceIndex,
+        PatternType).
 
         Args:
             feature_name: Name of the feature to pattern
@@ -773,6 +835,8 @@ class MiscFeaturesMixin:
             y_count: Number of instances in Y direction
             x_spacing: Spacing between instances in X (meters)
             y_spacing: Spacing between instances in Y (meters)
+            plane_index: 1-based reference plane the pattern is laid out on
+            rectangle_angle: Rotation of the pattern grid in degrees
 
         Returns:
             Dict with status and pattern info
@@ -789,10 +853,28 @@ class MiscFeaturesMixin:
             if error:
                 return error
 
+            ref_planes = doc.RefPlanes
+            if plane_index < 1 or plane_index > ref_planes.Count:
+                return {
+                    "error": f"Invalid plane_index: {plane_index}. "
+                    f"Document has {ref_planes.Count} reference planes."
+                }
+            ref_plane = ref_planes.Item(plane_index)
+
             patterns = model.Patterns
             feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
             pattern = patterns.AddByRectangularEx(
-                1, feature_arr, x_count, x_spacing, y_count, y_spacing
+                1,
+                feature_arr,
+                ref_plane,
+                x_count,
+                y_count,
+                x_spacing,
+                y_spacing,
+                math.radians(rectangle_angle),
+                _SE_PATTERN_FIXED_OFFSET,
+                0,
+                _SE_SMART_PATTERN,
             )
 
             return {
@@ -803,6 +885,7 @@ class MiscFeaturesMixin:
                 "y_count": y_count,
                 "x_spacing": x_spacing,
                 "y_spacing": y_spacing,
+                "plane_index": plane_index,
                 "name": pattern.Name if hasattr(pattern, "Name") else None,
             }
         except Exception as e:
@@ -818,8 +901,12 @@ class MiscFeaturesMixin:
         """
         Create a circular pattern using the extended AddByCircularEx method.
 
-        The Ex variant may use different marshaling than the original
-        AddByCircular, potentially avoiding SAFEARRAY issues.
+        NOT AVAILABLE via COM automation. AddByCircularEx takes
+        (NumberOfFeatures, FeatureArray, ReferencePlane, RadialCount,
+        AngleSpacing, AxisPoint, PatternMethod, CurveDirection, ArcPattern,
+        PatternType). AxisPoint is a SAFEARRAY of doubles - a point on the
+        rotation axis - not the cylindrical face this tool is given, and there
+        is no way to derive one from the other here. The call is never made.
 
         Args:
             feature_name: Name of the feature to pattern
@@ -828,84 +915,52 @@ class MiscFeaturesMixin:
             axis_face_index: 0-based index of the cylindrical face to use as axis
 
         Returns:
-            Dict with status and pattern info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if axis_face_index < 0 or axis_face_index >= faces.Count:
-                return {
-                    "error": f"Invalid axis_face_index: {axis_face_index}. Count: {faces.Count}"
-                }
-
-            axis_face = faces.Item(axis_face_index + 1)
-            angle_rad = math.radians(angle)
-
-            patterns = model.Patterns
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
-            pattern = patterns.AddByCircularEx(1, feature_arr, count, angle_rad, axis_face)
-
-            return {
-                "status": "created",
-                "type": "pattern_circular_ex",
-                "feature": feature_name,
-                "count": count,
-                "angle": angle,
-                "axis_face_index": axis_face_index,
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Circular feature patterns are not available through this "
+                "server: Patterns.AddByCircularEx needs a reference plane and an "
+                "AxisPoint coordinate array, which cannot be derived from a face "
+                "index. Use create_pattern(method='rectangular_ex') or pattern "
+                "the feature in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "pattern_circular_ex",
+            "feature": feature_name,
+            "count": count,
+            "angle": angle,
+            "axis_face_index": axis_face_index,
+        }
 
     def create_pattern_duplicate(self, feature_name: str) -> dict[str, Any]:
         """
         Create a duplicate pattern of a feature.
 
-        Uses Patterns.AddDuplicate to create an exact copy of the
-        specified feature in the feature tree.
+        NOT AVAILABLE via COM automation. Patterns.AddDuplicate takes
+        (NumberOfFeatures, FeatureArray, FromReference, NumberOfInstanceRefs,
+        InstanceRefsArray, PatternType): FromReference and InstanceRefsArray are
+        the placement references the copies land on, which this server cannot
+        select. The call is never made.
 
         Args:
             feature_name: Name of the feature to duplicate
 
         Returns:
-            Dict with status and pattern info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            patterns = model.Patterns
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
-            pattern = patterns.AddDuplicate(1, feature_arr)
-
-            return {
-                "status": "created",
-                "type": "pattern_duplicate",
-                "feature": feature_name,
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Duplicate patterns are not available through this server: "
+                "Patterns.AddDuplicate needs a FromReference object and an array "
+                "of instance references (a user selection) that cannot be built "
+                "here. Use create_pattern(method='rectangular_ex') or duplicate "
+                "the feature in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "pattern_duplicate",
+            "feature": feature_name,
+        }
 
     def create_pattern_by_fill(
         self,
@@ -915,10 +970,11 @@ class MiscFeaturesMixin:
         y_spacing: float,
     ) -> dict[str, Any]:
         """
-        Create a fill pattern of a feature within a face region.
+        Create a fill pattern of a feature within a region.
 
-        Uses Patterns.AddByFill to fill a face region with patterned
-        copies of the specified feature.
+        NOT AVAILABLE via COM automation. Patterns.AddByFill takes twelve
+        arguments and its region is a RegionProfileArray - closed sketch region
+        profiles - not the body face this tool is given. The call is never made.
 
         Args:
             feature_name: Name of the feature to pattern
@@ -927,46 +983,23 @@ class MiscFeaturesMixin:
             y_spacing: Spacing in Y direction (meters)
 
         Returns:
-            Dict with status and pattern info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if fill_region_face_index < 0 or fill_region_face_index >= faces.Count:
-                return {
-                    "error": f"Invalid fill_region_face_index: {fill_region_face_index}. "
-                    f"Count: {faces.Count}"
-                }
-
-            fill_face = faces.Item(fill_region_face_index + 1)
-
-            patterns = model.Patterns
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
-            pattern = patterns.AddByFill(1, feature_arr, fill_face, x_spacing, y_spacing)
-
-            return {
-                "status": "created",
-                "type": "pattern_by_fill",
-                "feature": feature_name,
-                "fill_region_face_index": fill_region_face_index,
-                "x_spacing": x_spacing,
-                "y_spacing": y_spacing,
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Fill patterns are not available through this server: "
+                "Patterns.AddByFill needs an array of region profiles (closed "
+                "sketch regions), not a body face index. Use "
+                "create_pattern(method='rectangular_ex') or fill-pattern the "
+                "feature in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "pattern_by_fill",
+            "feature": feature_name,
+            "fill_region_face_index": fill_region_face_index,
+            "x_spacing": x_spacing,
+            "y_spacing": y_spacing,
+        }
 
     def create_pattern_by_table(
         self,
@@ -977,8 +1010,10 @@ class MiscFeaturesMixin:
         """
         Create a table-driven pattern of a feature.
 
-        Uses Patterns.AddPatternByTable to place copies of the feature
-        at specific X/Y offset locations.
+        NOT AVAILABLE via COM automation. Patterns.AddPatternByTable takes
+        fourteen arguments and is driven by an Excel workbook
+        (InputExcelPath) plus KeyPoint objects for the from/to point options;
+        it never accepts plain X/Y offset arrays. The call is never made.
 
         Args:
             feature_name: Name of the feature to pattern
@@ -986,47 +1021,22 @@ class MiscFeaturesMixin:
             y_offsets: List of Y offsets in meters (must match length of x_offsets)
 
         Returns:
-            Dict with status and pattern info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            if len(x_offsets) != len(y_offsets):
-                return {
-                    "error": f"x_offsets and y_offsets must have same length. "
-                    f"Got {len(x_offsets)} and {len(y_offsets)}."
-                }
-
-            if len(x_offsets) == 0:
-                return {"error": "At least one offset pair is required."}
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            patterns = model.Patterns
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
-            x_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, x_offsets)
-            y_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, y_offsets)
-
-            pattern = patterns.AddPatternByTable(1, feature_arr, len(x_offsets), x_arr, y_arr)
-
-            return {
-                "status": "created",
-                "type": "pattern_by_table",
-                "feature": feature_name,
-                "point_count": len(x_offsets),
-                "x_offsets": x_offsets,
-                "y_offsets": y_offsets,
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Table-driven patterns are not available through this server: "
+                "Patterns.AddPatternByTable is driven by an Excel file path and "
+                "KeyPoint objects, not X/Y offset lists. Use "
+                "create_pattern(method='rectangular_ex') or build the table "
+                "pattern in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "pattern_by_table",
+            "feature": feature_name,
+            "x_offsets": list(x_offsets),
+            "y_offsets": list(y_offsets),
+        }
 
     def create_pattern_by_table_sync(
         self,
@@ -1037,7 +1047,10 @@ class MiscFeaturesMixin:
         """
         Create a synchronous table-driven pattern of a feature.
 
-        Uses Patterns.AddPatternByTableSync.
+        NOT AVAILABLE via COM automation. Patterns.AddPatternByTableSync takes
+        thirteen arguments and is driven by an Excel workbook (InputExcelPath)
+        plus KeyPoint objects; it never accepts plain X/Y offset arrays. The
+        call is never made.
 
         Args:
             feature_name: Name of the feature to pattern
@@ -1045,45 +1058,22 @@ class MiscFeaturesMixin:
             y_offsets: List of Y offsets in meters
 
         Returns:
-            Dict with status and pattern info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            if len(x_offsets) != len(y_offsets):
-                return {
-                    "error": f"x_offsets and y_offsets must have same length. "
-                    f"Got {len(x_offsets)} and {len(y_offsets)}."
-                }
-
-            if len(x_offsets) == 0:
-                return {"error": "At least one offset pair is required."}
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            patterns = model.Patterns
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
-            x_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, x_offsets)
-            y_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, y_offsets)
-
-            pattern = patterns.AddPatternByTableSync(1, feature_arr, len(x_offsets), x_arr, y_arr)
-
-            return {
-                "status": "created",
-                "type": "pattern_by_table_sync",
-                "feature": feature_name,
-                "point_count": len(x_offsets),
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Synchronous table-driven patterns are not available through "
+                "this server: Patterns.AddPatternByTableSync is driven by an "
+                "Excel file path and KeyPoint objects, not X/Y offset lists. Use "
+                "create_pattern(method='rectangular_ex') or build the table "
+                "pattern in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "pattern_by_table_sync",
+            "feature": feature_name,
+            "x_offsets": list(x_offsets),
+            "y_offsets": list(y_offsets),
+        }
 
     def create_pattern_by_fill_ex(
         self,
@@ -1094,9 +1084,11 @@ class MiscFeaturesMixin:
         stagger_offset: float = 0.0,
     ) -> dict[str, Any]:
         """
-        Create an extended fill pattern of a feature within a face region.
+        Create an extended fill pattern of a feature within a region.
 
-        Uses Patterns.AddByFillEx.
+        NOT AVAILABLE via COM automation. Patterns.AddByFillEx takes fifteen
+        arguments and its region is a RegionProfileArray - closed sketch region
+        profiles - not the body face this tool is given. The call is never made.
 
         Args:
             feature_name: Name of the feature to pattern
@@ -1106,59 +1098,24 @@ class MiscFeaturesMixin:
             stagger_offset: Stagger offset for pattern rows in meters
 
         Returns:
-            Dict with status and pattern info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if fill_region_face_index < 0 or fill_region_face_index >= faces.Count:
-                return {
-                    "error": f"Invalid fill_region_face_index: "
-                    f"{fill_region_face_index}. "
-                    f"Body has {faces.Count} faces."
-                }
-
-            face = faces.Item(fill_region_face_index + 1)
-
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
-            region_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [face])
-
-            patterns = model.Patterns
-            pattern = patterns.AddByFillEx(
-                1,
-                feature_arr,
-                1,
-                region_arr,
-                0,
-                x_spacing,
-                y_spacing,
-                stagger_offset,
-                0.0,
-                False,
-            )
-
-            return {
-                "status": "created",
-                "type": "pattern_by_fill_ex",
-                "feature": feature_name,
-                "fill_region_face_index": fill_region_face_index,
-                "x_spacing": x_spacing,
-                "y_spacing": y_spacing,
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Fill patterns are not available through this server: "
+                "Patterns.AddByFillEx needs an array of region profiles (closed "
+                "sketch regions), not a body face index. Use "
+                "create_pattern(method='rectangular_ex') or fill-pattern the "
+                "feature in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "pattern_by_fill_ex",
+            "feature": feature_name,
+            "fill_region_face_index": fill_region_face_index,
+            "x_spacing": x_spacing,
+            "y_spacing": y_spacing,
+            "stagger_offset": stagger_offset,
+        }
 
     def create_pattern_by_curve_ex(
         self,
@@ -1170,7 +1127,10 @@ class MiscFeaturesMixin:
         """
         Create a pattern along a curve using the extended API.
 
-        Uses Patterns.AddByCurveEx.
+        NOT AVAILABLE via COM automation. Patterns.AddByCurveEx takes 23
+        required arguments, among them AnchorPointForCurves1 - a KeyPoint on the
+        curve - plus a second curve set and a transform plane/surface. None of
+        those can be selected here. The call is never made.
 
         Args:
             feature_name: Name of the feature to pattern
@@ -1179,60 +1139,24 @@ class MiscFeaturesMixin:
             spacing: Spacing between occurrences in meters
 
         Returns:
-            Dict with status and pattern info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists."}
-
-            model = models.Item(1)
-
-            target_feature, error = self._find_feature_by_name(feature_name)
-            if error:
-                return error
-
-            body = model.Body
-            edges = body.Edges(FaceQueryConstants.igQueryAll)
-            if curve_edge_index < 0 or curve_edge_index >= edges.Count:
-                return {
-                    "error": f"Invalid curve_edge_index: "
-                    f"{curve_edge_index}. "
-                    f"Body has {edges.Count} edges."
-                }
-
-            edge = edges.Item(curve_edge_index + 1)
-
-            feature_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [target_feature])
-            curve_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [edge])
-
-            patterns = model.Patterns
-            pattern = patterns.AddByCurveEx(
-                1,
-                feature_arr,
-                0,
-                1,
-                curve_arr,
-                None,
-                0,
-                0.0,
-                0,
-                count,
-                spacing,
-            )
-
-            return {
-                "status": "created",
-                "type": "pattern_by_curve_ex",
-                "feature": feature_name,
-                "curve_edge_index": curve_edge_index,
-                "count": count,
-                "spacing": spacing,
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Curve patterns are not available through this server: "
+                "Patterns.AddByCurveEx requires 23 arguments including an anchor "
+                "KeyPoint on the curve and a transform plane or surface, which "
+                "this server cannot select. Use "
+                "create_pattern(method='rectangular_ex') or pattern along the "
+                "curve in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "pattern_by_curve_ex",
+            "feature": feature_name,
+            "curve_edge_index": curve_edge_index,
+            "count": count,
+            "spacing": spacing,
+        }
 
     def save_as_mirror_part(
         self,

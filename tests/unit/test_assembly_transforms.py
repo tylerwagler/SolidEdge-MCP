@@ -11,6 +11,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -19,6 +25,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -31,6 +38,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -65,7 +73,7 @@ class TestSetComponentTransform:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.set_component_transform(0, 0, 0, 0, 0, 0, 0)
         assert "error" in result
@@ -102,7 +110,7 @@ class TestSetComponentOrigin:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.set_component_origin(0, 0, 0, 0)
         assert "error" in result
@@ -138,7 +146,7 @@ class TestOccurrenceMove:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.occurrence_move(0, 0.1, 0.0, 0.0)
         assert "error" in result
@@ -180,7 +188,7 @@ class TestOccurrenceRotate:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.occurrence_rotate(0, 0, 0, 0, 0, 0, 1, 45)
         assert "error" in result
@@ -223,7 +231,7 @@ class TestMirrorComponent:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.mirror_component(0, 1)
         assert "error" in result
@@ -279,7 +287,7 @@ class TestPutTransformEuler:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.put_transform_euler(0, 0, 0, 0, 0, 0, 0)
         assert "error" in result
@@ -315,7 +323,7 @@ class TestPutOrigin:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.put_origin(0, 0, 0, 0)
         assert "error" in result
@@ -327,4 +335,85 @@ class TestPutOrigin:
         doc.Occurrences = occurrences
 
         result = am.put_origin(5, 0, 0, 0)
+        assert "error" in result
+
+
+# ============================================================================
+# UPDATE COMPONENT POSITION (Occurrence.GetMatrix / PutMatrix)
+# ============================================================================
+
+
+#: A recognisable 4x4 row-major transform: identity rotation, translated to
+#: (9, 8, 7). Returned by the mocked GetMatrix so the test can prove the
+#: rotation block survives and only the translation row is rewritten.
+CURRENT_MATRIX = [
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    9.0, 8.0, 7.0, 1.0,
+]  # fmt: skip
+
+
+class TestUpdateComponentPosition:
+    """GetMatrix takes an [in, out] array; PutMatrix takes (Matrix, Replace)."""
+
+    @pytest.fixture
+    def occ_mgr(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        # Verified on SE 2026: Occurrence.GetMatrix takes a plain 16-element
+        # list for its [in,out] SAFEARRAY(VT_R8) parameter and returns the
+        # filled matrix; the list passed in is NOT updated in place, so the
+        # backend reads the return value and the mock must supply a real one.
+        occ.GetMatrix.return_value = list(CURRENT_MATRIX)
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+        return am, doc, occ
+
+    def test_get_matrix_is_given_its_inout_array(self, occ_mgr):
+        am, doc, occ = occ_mgr
+
+        result = am.update_component_position(0, 0.1, 0.2, 0.3)
+
+        assert result["status"] == "position_updated"
+        # GetMatrix(Matrix as SAFEARRAY(VT_R8)*) is [in, out]: calling it with
+        # no argument raises "Parameter not optional" (0x8002000F). The buffer
+        # is a plain list of 16 floats -- a VARIANT wrapper is rejected with
+        # "Objects for SAFEARRAYS must be sequences".
+        assert occ.GetMatrix.call_count == 1
+        assert not occ.GetMatrix.call_args.kwargs
+        assert occ.GetMatrix.call_args.args == ([0.0] * 16,)
+        (buffer,) = occ.GetMatrix.call_args.args
+        assert isinstance(buffer, list)
+        assert all(isinstance(v, float) for v in buffer)
+
+    def test_put_matrix_gets_matrix_and_replace_flag(self, occ_mgr):
+        am, doc, occ = occ_mgr
+
+        am.update_component_position(0, 0.1, 0.2, 0.3)
+
+        # PutMatrix(Matrix as SAFEARRAY(VT_R8)*, Replace as VT_BOOL).
+        # The matrix GetMatrix returned flows through with only the row-major
+        # translation slots (12, 13, 14) rewritten.
+        expected = list(CURRENT_MATRIX)
+        expected[12], expected[13], expected[14] = 0.1, 0.2, 0.3
+        occ.PutMatrix.assert_called_once_with(expected, True)
+
+    def test_com_failure_is_reported(self, occ_mgr):
+        am, doc, occ = occ_mgr
+        occ.PutMatrix.side_effect = Exception("grounded")
+
+        result = am.update_component_position(0, 0.1, 0.2, 0.3)
+
+        assert "error" in result
+
+    def test_invalid_index(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        doc.Occurrences = occurrences
+
+        result = am.update_component_position(5, 0, 0, 0)
         assert "error" in result

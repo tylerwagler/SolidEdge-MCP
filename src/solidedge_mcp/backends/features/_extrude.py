@@ -4,13 +4,28 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import DirectionConstants
+from ..constants import (
+    DirectionConstants,
+    DraftSideConstants,
+    ExtentTypeConstants,
+    KeyPointExtentConstants,
+    OffsetSideConstants,
+    TreatmentCrownCurvatureSideConstants,
+    TreatmentCrownSideConstants,
+    TreatmentCrownTypeConstants,
+    TreatmentTypeConstants,
+)
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
 _EXTRUDE_OPERATIONS = ("Add", "Cut", "Intersect")
+
+# constant.tlb > FeaturePropertyConstants.igInside. Used as ThicknessSide of a
+# thin-wall feature (the wall grows inside the profile). Not yet exposed by
+# backends/constants.py.
+_IG_INSIDE = 4
 
 
 @verify_geometry_on_creators
@@ -146,6 +161,18 @@ class ExtrudeMixin:
         """
         Create a thin-walled extrusion.
 
+        Type library: Models.AddExtrudedProtrusionWithThinWall takes forty
+        required arguments -- NumberOfProfiles, ProfileArray, ProfileSide, then
+        the first extent (ExtentType1, ExtentSide1, FiniteDepth1,
+        KeyPointOrTangentFace1, KeyPointFlags1, FromFaceOrRefPlane,
+        FromFaceOffsetSide, FromFaceOffsetDistance) and its treatment block
+        (TreatmentType1, TreatmentDraftSide1, TreatmentDraftAngle1,
+        TreatmentCrownType1, TreatmentCrownSide1, TreatmentCrownCurvatureSide1,
+        TreatmentCrownRadiusOrOffset1, TreatmentCrownTakeOffAngle1), the same
+        two blocks again for the second extent (ending in ToFaceOrRefPlane,
+        ToFaceOffsetSide, ToFaceOffsetDistance), and finally ThinWall,
+        AddEndCaps, RemoveInsideMaterial, Thickness, ThicknessSide.
+
         Args:
             distance: Extrusion distance (meters)
             wall_thickness: Wall thickness (meters)
@@ -171,13 +198,49 @@ class ExtrudeMixin:
             }
             dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
-            # AddExtrudedProtrusionWithThinWall
             models.AddExtrudedProtrusionWithThinWall(
-                NumberOfProfiles=1,
-                ProfileArray=(profile,),
-                ProfilePlaneSide=dir_const,
-                ExtrusionDistance=distance,
-                WallThickness=wall_thickness,
+                1,  # NumberOfProfiles
+                (profile,),  # ProfileArray
+                dir_const,  # ProfileSide
+                ExtentTypeConstants.igFinite,  # ExtentType1
+                dir_const,  # ExtentSide1
+                distance,  # FiniteDepth1
+                None,  # KeyPointOrTangentFace1
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags1
+                None,  # FromFaceOrRefPlane
+                OffsetSideConstants.seOffsetNone,  # FromFaceOffsetSide
+                0.0,  # FromFaceOffsetDistance
+                TreatmentTypeConstants.seTreatmentNone,  # TreatmentType1
+                DraftSideConstants.seDraftNone,  # TreatmentDraftSide1
+                0.0,  # TreatmentDraftAngle1
+                TreatmentCrownTypeConstants.seTreatmentCrownByOffset,  # TreatmentCrownType1
+                TreatmentCrownSideConstants.seTreatmentCrownSideInside,  # TreatmentCrownSide1
+                # TreatmentCrownCurvatureSide1
+                TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
+                0.0,  # TreatmentCrownRadiusOrOffset1
+                0.0,  # TreatmentCrownTakeOffAngle1
+                ExtentTypeConstants.igNone,  # ExtentType2 (single-sided)
+                dir_const,  # ExtentSide2
+                0.0,  # FiniteDepth2
+                None,  # KeyPointOrTangentFace2
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags2
+                None,  # ToFaceOrRefPlane
+                OffsetSideConstants.seOffsetNone,  # ToFaceOffsetSide
+                0.0,  # ToFaceOffsetDistance
+                TreatmentTypeConstants.seTreatmentNone,  # TreatmentType2
+                DraftSideConstants.seDraftNone,  # TreatmentDraftSide2
+                0.0,  # TreatmentDraftAngle2
+                TreatmentCrownTypeConstants.seTreatmentCrownByOffset,  # TreatmentCrownType2
+                TreatmentCrownSideConstants.seTreatmentCrownSideInside,  # TreatmentCrownSide2
+                # TreatmentCrownCurvatureSide2
+                TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
+                0.0,  # TreatmentCrownRadiusOrOffset2
+                0.0,  # TreatmentCrownTakeOffAngle2
+                True,  # ThinWall
+                False,  # AddEndCaps
+                True,  # RemoveInsideMaterial
+                wall_thickness,  # Thickness
+                _IG_INSIDE,  # ThicknessSide
             )
 
             return {
@@ -193,6 +256,14 @@ class ExtrudeMixin:
     def create_extrude_infinite(self, direction: str = "Normal") -> dict[str, Any]:
         """
         Create an infinite extrusion (extends through all).
+
+        Type library: Models.AddExtrudedProtrusion takes thirty-five required
+        arguments -- NumberOfProfiles, ProfileArray, ProfileSide, then two
+        extent blocks (ExtentType, ExtentSide, FiniteDepth,
+        KeyPointOrTangentFace, KeyPointFlags, From/ToFaceOrRefPlane, offset
+        side and distance) each followed by its eight treatment parameters.
+        The first extent is igThroughAll, which is what makes this the
+        "infinite" variant; the second extent is igNone.
 
         Args:
             direction: 'Normal', 'Reverse', or 'Symmetric'
@@ -216,9 +287,44 @@ class ExtrudeMixin:
             }
             dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
-            # AddExtrudedProtrusion (infinite)
             models.AddExtrudedProtrusion(
-                NumberOfProfiles=1, ProfileArray=(profile,), ProfilePlaneSide=dir_const
+                1,  # NumberOfProfiles
+                (profile,),  # ProfileArray
+                dir_const,  # ProfileSide
+                ExtentTypeConstants.igThroughAll,  # ExtentType1
+                dir_const,  # ExtentSide1
+                0.0,  # FiniteDepth1 (unused for through-all)
+                None,  # KeyPointOrTangentFace1
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags1
+                None,  # FromFaceOrRefPlane
+                OffsetSideConstants.seOffsetNone,  # FromFaceOffsetSide
+                0.0,  # FromFaceOffsetDistance
+                TreatmentTypeConstants.seTreatmentNone,  # TreatmentType1
+                DraftSideConstants.seDraftNone,  # TreatmentDraftSide1
+                0.0,  # TreatmentDraftAngle1
+                TreatmentCrownTypeConstants.seTreatmentCrownByOffset,  # TreatmentCrownType1
+                TreatmentCrownSideConstants.seTreatmentCrownSideInside,  # TreatmentCrownSide1
+                # TreatmentCrownCurvatureSide1
+                TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
+                0.0,  # TreatmentCrownRadiusOrOffset1
+                0.0,  # TreatmentCrownTakeOffAngle1
+                ExtentTypeConstants.igNone,  # ExtentType2
+                dir_const,  # ExtentSide2
+                0.0,  # FiniteDepth2
+                None,  # KeyPointOrTangentFace2
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags2
+                None,  # ToFaceOrRefPlane
+                OffsetSideConstants.seOffsetNone,  # ToFaceOffsetSide
+                0.0,  # ToFaceOffsetDistance
+                TreatmentTypeConstants.seTreatmentNone,  # TreatmentType2
+                DraftSideConstants.seDraftNone,  # TreatmentDraftSide2
+                0.0,  # TreatmentDraftAngle2
+                TreatmentCrownTypeConstants.seTreatmentCrownByOffset,  # TreatmentCrownType2
+                TreatmentCrownSideConstants.seTreatmentCrownSideInside,  # TreatmentCrownSide2
+                # TreatmentCrownCurvatureSide2
+                TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
+                0.0,  # TreatmentCrownRadiusOrOffset2
+                0.0,  # TreatmentCrownTakeOffAngle2
             )
 
             return {"status": "created", "type": "extrude_infinite", "direction": direction}
@@ -229,8 +335,9 @@ class ExtrudeMixin:
         """
         Create an extrusion that extends to the next face encountered.
 
-        Uses ExtrudedProtrusions.AddThroughNext(Profile, ProfilePlaneSide) on the
-        collection. Extrudes from the sketch plane until it meets the first face.
+        Type library: ExtrudedProtrusions.AddThroughNext(Profile, ProfileSide,
+        ProfilePlaneSide) -- three required arguments. Extrudes from the sketch
+        plane until it meets the first face.
 
         Args:
             direction: 'Normal' or 'Reverse'
@@ -258,7 +365,11 @@ class ExtrudeMixin:
             dir_const = direction_map.get(direction, DirectionConstants.igRight)
 
             protrusions = model.ExtrudedProtrusions
-            protrusions.AddThroughNext(profile, dir_const)
+            protrusions.AddThroughNext(
+                profile,  # Profile
+                dir_const,  # ProfileSide
+                dir_const,  # ProfilePlaneSide
+            )
 
             self.sketch_manager.clear_accumulated_profiles()
 
@@ -270,8 +381,9 @@ class ExtrudeMixin:
         """
         Create an extrusion between two reference planes.
 
-        Uses ExtrudedProtrusions.AddFromTo(Profile, FromFaceOrRefPlane, ToFaceOrRefPlane)
-        on the collection. Extrudes from one plane to another.
+        Type library: ExtrudedProtrusions.AddFromTo(Profile, ProfileSide,
+        FromFaceOrRefPlane, ToFaceOrRefPlane) -- four required arguments.
+        Extrudes from one plane to another.
 
         Args:
             from_plane_index: 1-based index of the starting reference plane
@@ -309,7 +421,12 @@ class ExtrudeMixin:
             to_plane = ref_planes.Item(to_plane_index)
 
             protrusions = model.ExtrudedProtrusions
-            protrusions.AddFromTo(profile, from_plane, to_plane)
+            protrusions.AddFromTo(
+                profile,  # Profile
+                DirectionConstants.igRight,  # ProfileSide
+                from_plane,  # FromFaceOrRefPlane
+                to_plane,  # ToFaceOrRefPlane
+            )
 
             self.sketch_manager.clear_accumulated_profiles()
 
@@ -425,42 +542,27 @@ class ExtrudeMixin:
         """
         Create an extrusion up to a keypoint extent.
 
-        Uses ExtrudedProtrusions.AddFiniteByKeyPoint(Profile, PlaneSide).
-        Extrudes to the nearest keypoint on adjacent geometry.
+        Type library: ExtrudedProtrusions.AddFiniteByKeyPoint(Profile,
+        ProfileSide, ProfilePlaneSide, KeyPointOrTangentFace, KeyPointFlags) --
+        five required arguments. The KeyPoint (or tangent face) is a selected
+        model object that this server has no way to pick, so the call can never
+        be formed; report that instead of failing inside COM.
 
         Args:
             direction: 'Normal' or 'Reverse'
 
         Returns:
-            Dict with status and extrusion info
+            Dict with an explanatory error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            direction_map = {
-                "Normal": DirectionConstants.igRight,
-                "Reverse": DirectionConstants.igLeft,
-            }
-            side = direction_map.get(direction, DirectionConstants.igRight)
-
-            protrusions = model.ExtrudedProtrusions
-            protrusions.AddFiniteByKeyPoint(profile, side)
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {"status": "created", "type": "extrude_by_keypoint", "direction": direction}
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Extruding to a keypoint needs a KeyPoint or tangent face object, "
+                "which this server cannot select. Use create_extrude(distance), "
+                "create_extrude_from_to(...) or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "direction": direction,
+        }
 
     def create_extrude_from_to_single(
         self, from_plane_index: int, to_plane_index: int

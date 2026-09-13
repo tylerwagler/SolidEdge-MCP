@@ -7,6 +7,45 @@ Uses unittest.mock to simulate COM objects.
 from unittest.mock import MagicMock
 
 import pytest
+from win32com.client import VARIANT
+
+# --- COM argument assertions -------------------------------------------------
+# Verified against Solid Edge 2026: an [in,out] SAFEARRAY parameter (e.g.
+# Body.GetRange) takes a PLAIN PYTHON LIST and returns the filled values in the
+# result tuple. Wrapping it in VARIANT(VT_ARRAY | VT_R8, ...), with or without
+# VT_BYREF, raises "Objects for SAFEARRAYS must be sequences (of sequences), or
+# a buffer object". So the buffers below are plain lists, not VARIANTs.
+#
+# A plain list loses the SAFEARRAY element type, and in Python
+# 0.0 == 0 == False, so an r8/i4/bool buffer of the same length would compare
+# equal. Normalise a buffer to (element type names, values) to keep the
+# assertions strict about both the element type and the exact buffer size.
+# A VARIANT is still normalised (distinguishably) so that regressing a buffer
+# back to the VARIANT form fails loudly rather than silently matching.
+
+
+def _shape(arg):
+    if isinstance(arg, VARIANT):
+        return ("VARIANT", arg.varianttype, list(arg.value))
+    if isinstance(arg, list):
+        return (tuple(type(v).__name__ for v in arg), tuple(arg))
+    return arg
+
+
+def buffer_shape(fill, size):
+    """Expected shape of an [in,out] SAFEARRAY buffer: ``size`` copies of ``fill``."""
+    return _shape([fill] * size)
+
+
+#: SAFEARRAY(VT_R8) buffer of three doubles, e.g. a root point or a normal.
+R8_3 = buffer_shape(0.0, 3)
+
+
+def call_shape(mock_method):
+    """(positional_args, keyword_args) of the single call, buffers normalised."""
+    assert mock_method.call_count == 1, mock_method.call_args_list
+    args, kwargs = mock_method.call_args
+    return tuple(_shape(a) for a in args), {k: _shape(v) for k, v in kwargs.items()}
 
 
 @pytest.fixture
@@ -94,9 +133,181 @@ class TestGetBodyFaces:
         model.Body.Faces.return_value = faces
 
         result = qm.get_body_faces()
-        assert result["count"] == 2
-        assert result["faces"][0]["area"] == 0.01
-        assert result["faces"][0]["edge_count"] == 4
+        assert result["total"] == 2
+        assert result["offset"] == 0
+        assert result["truncated"] is False
+        assert result["items"][0]["area"] == 0.01
+        assert result["items"][0]["edge_count"] == 4
+
+    def test_geometry_form_is_mapped(self, query_mgr):
+        # Verified on SE 2026: Geometry.Type carries the documented
+        # GNTTypePropertyConstants value and wins over Face.GeometryForm, which
+        # is a bare VT_I4 returning unrelated small integers (9 for a plane).
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        face = MagicMock()
+        face.Area = 0.01
+        face.Edges.Count = 4
+        face.Geometry.Type = -1909484335  # GNTTypePropertyConstants.igPlane
+        face.GeometryForm = 9  # what SE 2026 actually reports for a plane
+
+        faces = MagicMock()
+        faces.Count = 1
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+
+        result = qm.get_body_faces()
+        assert result["items"][0]["geometry"] == "plane"
+
+    def test_geometry_form_is_the_fallback(self, query_mgr):
+        # When Geometry.Type is unreadable, GeometryForm is still consulted.
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        face = MagicMock()
+        face.Area = 0.01
+        face.Edges.Count = 4
+        del face.Geometry  # accessing it now raises AttributeError
+        face.GeometryForm = -114972029  # GNTTypePropertyConstants.igCylinder
+
+        faces = MagicMock()
+        faces.Count = 1
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+
+        result = qm.get_body_faces()
+        assert result["items"][0]["geometry"] == "cylinder"
+
+    def test_unknown_geometry_form(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        face = MagicMock()
+        face.Area = 0.01
+        face.Edges.Count = 4
+        face.Geometry.Type = 999  # not a GNTTypePropertyConstants value
+        face.GeometryForm = 999
+
+        faces = MagicMock()
+        faces.Count = 1
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+
+        assert qm.get_body_faces()["items"][0]["geometry"] == "unknown"
+
+
+class TestGetBodyFacesPaging:
+    """offset/limit bound the walk and report whether more entities follow."""
+
+    @staticmethod
+    def _faces(doc, count):
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        def make(i):
+            face = MagicMock()
+            face.Area = float(i)
+            face.Edges.Count = 4
+            face.GeometryForm = -1909484335
+            return face
+
+        built = {i: make(i) for i in range(1, count + 1)}
+        faces = MagicMock()
+        faces.Count = count
+        faces.Item.side_effect = lambda i: built[i]
+        model.Body.Faces.return_value = faces
+        return faces
+
+    def test_first_page_is_truncated(self, query_mgr):
+        qm, doc = query_mgr
+        self._faces(doc, 10)
+
+        result = qm.get_body_faces(offset=0, limit=3)
+        assert result["total"] == 10
+        assert result["offset"] == 0
+        assert result["limit"] == 3
+        assert [item["index"] for item in result["items"]] == [0, 1, 2]
+        assert result["truncated"] is True
+
+    def test_middle_page(self, query_mgr):
+        qm, doc = query_mgr
+        self._faces(doc, 10)
+
+        result = qm.get_body_faces(offset=3, limit=3)
+        assert [item["index"] for item in result["items"]] == [3, 4, 5]
+        assert result["truncated"] is True
+
+    def test_last_page_is_not_truncated(self, query_mgr):
+        qm, doc = query_mgr
+        self._faces(doc, 10)
+
+        result = qm.get_body_faces(offset=8, limit=5)
+        assert [item["index"] for item in result["items"]] == [8, 9]
+        assert result["truncated"] is False
+
+    def test_limit_larger_than_total_returns_everything(self, query_mgr):
+        qm, doc = query_mgr
+        self._faces(doc, 4)
+
+        result = qm.get_body_faces(offset=0, limit=1000)
+        assert len(result["items"]) == 4
+        assert result["truncated"] is False
+
+    def test_offset_past_the_end_is_empty(self, query_mgr):
+        qm, doc = query_mgr
+        faces = self._faces(doc, 4)
+
+        result = qm.get_body_faces(offset=99, limit=10)
+        assert result["items"] == []
+        assert result["total"] == 4
+        assert result["offset"] == 4  # clamped to the end
+        assert result["truncated"] is False
+        faces.Item.assert_not_called()
+
+    def test_negative_offset_and_limit_are_clamped(self, query_mgr):
+        qm, doc = query_mgr
+        self._faces(doc, 4)
+
+        result = qm.get_body_faces(offset=-5, limit=-1)
+        assert result["offset"] == 0
+        assert result["limit"] == 0
+        assert result["items"] == []
+        assert result["truncated"] is True
+
+    def test_limit_is_capped_at_the_maximum(self, query_mgr):
+        from solidedge_mcp.backends.query import MAX_PAGE_LIMIT
+
+        qm, doc = query_mgr
+        self._faces(doc, 2)
+
+        result = qm.get_body_faces(offset=0, limit=MAX_PAGE_LIMIT + 5000)
+        assert result["limit"] == MAX_PAGE_LIMIT
+
+    def test_only_the_page_is_walked(self, query_mgr):
+        qm, doc = query_mgr
+        faces = self._faces(doc, 500)
+
+        qm.get_body_faces(offset=0, limit=5)
+        assert faces.Item.call_count == 5
 
 
 class TestGetBodyEdges:
@@ -118,8 +329,54 @@ class TestGetBodyEdges:
         model.Body.Faces.return_value = faces
 
         result = qm.get_body_edges()
-        assert result["total_face_count"] == 1
-        assert result["total_edge_references"] == 4
+        assert result["total"] == 1
+        assert result["page_edge_references"] == 4
+        assert result["items"] == [{"face_index": 0, "edge_count": 4}]
+        assert result["truncated"] is False
+
+    def test_paging_bounds_the_walk(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        face = MagicMock()
+        face.Edges.Count = 4
+
+        faces = MagicMock()
+        faces.Count = 50
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+
+        result = qm.get_body_edges(offset=10, limit=2)
+        assert result["total"] == 50
+        assert result["offset"] == 10
+        assert result["limit"] == 2
+        assert [i["face_index"] for i in result["items"]] == [10, 11]
+        assert result["page_edge_references"] == 8
+        assert result["truncated"] is True
+        assert faces.Item.call_count == 2
+
+    def test_offset_past_the_end_is_empty(self, query_mgr):
+        qm, doc = query_mgr
+
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        faces = MagicMock()
+        faces.Count = 3
+        model.Body.Faces.return_value = faces
+
+        result = qm.get_body_edges(offset=99)
+        assert result["items"] == []
+        assert result["truncated"] is False
+        faces.Item.assert_not_called()
 
 
 class TestGetFaceInfo:
@@ -327,9 +584,10 @@ class TestGetBodyVertices:
         body.Vertices = vertices
 
         result = qm.get_body_vertices()
-        assert result["vertex_count"] == 2
-        assert result["vertices"][0]["point"] == [0.0, 0.0, 0.0]
-        assert result["vertices"][1]["point"] == [0.1, 0.0, 0.0]
+        assert result["total"] == 2
+        assert result["items"][0]["point"] == [0.0, 0.0, 0.0]
+        assert result["items"][1]["point"] == [0.1, 0.0, 0.0]
+        assert result["truncated"] is False
 
     def test_empty(self, query_mgr):
         qm, doc = query_mgr
@@ -340,8 +598,40 @@ class TestGetBodyVertices:
         body.Vertices = vertices
 
         result = qm.get_body_vertices()
-        assert result["vertex_count"] == 0
-        assert result["vertices"] == []
+        assert result["total"] == 0
+        assert result["items"] == []
+        assert result["truncated"] is False
+
+    def test_paging_bounds_the_walk(self, query_mgr):
+        qm, doc = query_mgr
+        _model, body = _setup_body(doc)
+
+        vertex = MagicMock()
+        vertex.GetPointData.return_value = ((0.0, 0.0, 0.0),)
+        vertices = MagicMock()
+        vertices.Count = 100
+        vertices.Item.return_value = vertex
+        body.Vertices = vertices
+
+        result = qm.get_body_vertices(offset=5, limit=2)
+        assert result["total"] == 100
+        assert [i["index"] for i in result["items"]] == [5, 6]
+        assert result["truncated"] is True
+        assert vertices.Item.call_count == 2
+
+    def test_offset_past_the_end_is_empty(self, query_mgr):
+        qm, doc = query_mgr
+        _model, body = _setup_body(doc)
+
+        vertices = MagicMock()
+        vertices.Count = 2
+        body.Vertices = vertices
+
+        result = qm.get_body_vertices(offset=50)
+        assert result["items"] == []
+        assert result["offset"] == 2
+        assert result["truncated"] is False
+        vertices.Item.assert_not_called()
 
     def test_error_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -915,10 +1205,11 @@ class TestGetBodyShells:
         body.Shells = shells
 
         result = qm.get_body_shells()
-        assert result["shell_count"] == 2
-        assert result["shells"][0]["is_closed"] is True
-        assert result["shells"][0]["volume"] == 0.001
-        assert result["shells"][1]["is_closed"] is False
+        assert result["total"] == 2
+        assert result["items"][0]["is_closed"] is True
+        assert result["items"][0]["volume"] == 0.001
+        assert result["items"][1]["is_closed"] is False
+        assert result["truncated"] is False
 
     def test_empty(self, query_mgr):
         qm, doc = query_mgr
@@ -929,8 +1220,24 @@ class TestGetBodyShells:
         body.Shells = shells
 
         result = qm.get_body_shells()
-        assert result["shell_count"] == 0
-        assert result["shells"] == []
+        assert result["total"] == 0
+        assert result["items"] == []
+        assert result["truncated"] is False
+
+    def test_paging_bounds_the_walk(self, query_mgr):
+        qm, doc = query_mgr
+        _model, body = _setup_body(doc)
+
+        shells = MagicMock()
+        shells.Count = 7
+        shells.Item.return_value = MagicMock()
+        body.Shells = shells
+
+        result = qm.get_body_shells(offset=2, limit=3)
+        assert result["total"] == 7
+        assert [i["index"] for i in result["items"]] == [2, 3, 4]
+        assert result["truncated"] is True
+        assert shells.Item.call_count == 3
 
     def test_error_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -998,7 +1305,16 @@ class TestGetBSplineSurfaceInfo:
         doc.Models = models
 
         geom = MagicMock()
-        geom.GetBSplineInfo.return_value = (4, 4, 8, 8, 12, 12, True, False)
+        # (Order, NumPoles, NumKnots, Rational, Closed, Periodic, Planar)
+        geom.GetBSplineInfo.return_value = (
+            (4, 4),
+            (8, 8),
+            (12, 12),
+            True,
+            (False, False),
+            (False, True),
+            False,
+        )
 
         face = MagicMock()
         face.Geometry = geom
@@ -1012,6 +1328,23 @@ class TestGetBSplineSurfaceInfo:
         assert result["num_poles"] == [8, 8]
         assert result["num_knots"] == [12, 12]
         assert result["rational"] is True
+        assert result["closed"] == [False, False]
+        assert result["periodic"] == [False, True]
+        assert result["planar"] is False
+
+        # BSplineSurface.GetBSplineInfo: Rational sits between the [in,out]
+        # arrays, so the five buffers are passed by keyword. Verified on SE
+        # 2026: each [in,out] SAFEARRAY buffer is a plain list, not a VARIANT.
+        assert call_shape(geom.GetBSplineInfo) == (
+            (),
+            {
+                "Order": buffer_shape(0, 2),
+                "NumPoles": buffer_shape(0, 2),
+                "NumKnots": buffer_shape(0, 2),
+                "Closed": buffer_shape(False, 2),
+                "Periodic": buffer_shape(False, 2),
+            },
+        )
 
     def test_not_bspline(self, query_mgr):
         qm, doc = query_mgr
@@ -1215,4 +1548,192 @@ class TestSetFaceColor:
         model.Body.Faces.return_value = faces
 
         result = qm.set_face_color(5, 0, 0, 255)
+        assert "error" in result
+
+
+# ============================================================================
+# COM CALL SIGNATURES
+#
+# Each of these calls was previously made with the wrong number of arguments.
+# The expected argument list comes from reference/typelib_dump.json; see
+# scripts/audit_com_signatures.py.
+# ============================================================================
+
+
+def _face_with_geometry(doc, geom):
+    model = MagicMock()
+    models = MagicMock()
+    models.Count = 1
+    models.Item.return_value = model
+    doc.Models = models
+
+    face = MagicMock()
+    face.Geometry = geom
+    faces = MagicMock()
+    faces.Count = 1
+    faces.Item.return_value = face
+    model.Body.Faces.return_value = faces
+    return face
+
+
+def _edge_with_geometry(doc, geom):
+    face = _face_with_geometry(doc, MagicMock())
+    edge = MagicMock()
+    edge.Geometry = geom
+    edges = MagicMock()
+    edges.Count = 1
+    edges.Item.return_value = edge
+    face.Edges = edges
+    return edge
+
+
+class TestSurfaceGeometrySignatures:
+    """geometry.tlb surface data getters take their [in,out] buffers.
+
+    Verified on SE 2026: each buffer is a plain Python list; a VARIANT wrapper
+    is rejected with "Objects for SAFEARRAYS must be sequences".
+    """
+
+    def test_plane_data_takes_two_r8_arrays(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        geom.GetPlaneData.return_value = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        _face_with_geometry(doc, geom)
+
+        assert qm.get_face_geometry(0)["geometry_type"] == "Plane"
+        assert call_shape(geom.GetPlaneData) == ((R8_3, R8_3), {})
+
+    def test_cylinder_data_takes_two_r8_arrays(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        geom.GetPlaneData.side_effect = Exception("not a plane")
+        geom.GetCylinderData.return_value = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.05)
+        _face_with_geometry(doc, geom)
+
+        assert qm.get_face_geometry(0)["geometry_type"] == "Cylinder"
+        assert call_shape(geom.GetCylinderData) == ((R8_3, R8_3), {})
+
+    def test_cone_data_takes_two_r8_arrays(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        geom.GetPlaneData.side_effect = Exception("no")
+        geom.GetCylinderData.side_effect = Exception("no")
+        geom.GetConeData.return_value = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.05, 0.3, True)
+        _face_with_geometry(doc, geom)
+
+        assert qm.get_face_geometry(0)["geometry_type"] == "Cone"
+        assert call_shape(geom.GetConeData) == ((R8_3, R8_3), {})
+
+    def test_sphere_data_takes_one_r8_array(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        for name in ("GetPlaneData", "GetCylinderData", "GetConeData"):
+            getattr(geom, name).side_effect = Exception("no")
+        geom.GetSphereData.return_value = ((0.0, 0.0, 0.0), 0.05)
+        _face_with_geometry(doc, geom)
+
+        assert qm.get_face_geometry(0)["geometry_type"] == "Sphere"
+        assert call_shape(geom.GetSphereData) == ((R8_3,), {})
+
+    def test_torus_data_takes_two_r8_arrays(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        for name in ("GetPlaneData", "GetCylinderData", "GetConeData", "GetSphereData"):
+            getattr(geom, name).side_effect = Exception("no")
+        geom.GetTorusData.return_value = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.1, 0.01)
+        _face_with_geometry(doc, geom)
+
+        assert qm.get_face_geometry(0)["geometry_type"] == "Torus"
+        assert call_shape(geom.GetTorusData) == ((R8_3, R8_3), {})
+
+    def test_bspline_surface_info_passes_buffers_by_keyword(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        for name in (
+            "GetPlaneData",
+            "GetCylinderData",
+            "GetConeData",
+            "GetSphereData",
+            "GetTorusData",
+        ):
+            getattr(geom, name).side_effect = Exception("no")
+        geom.GetBSplineInfo.return_value = ((4, 4), (8, 8), (12, 12), True, (0, 0), (0, 0), False)
+        _face_with_geometry(doc, geom)
+
+        assert qm.get_face_geometry(0)["geometry_type"] == "BSplineSurface"
+        args, kwargs = call_shape(geom.GetBSplineInfo)
+        assert args == ()
+        assert set(kwargs) == {"Order", "NumPoles", "NumKnots", "Closed", "Periodic"}
+
+
+class TestCurveGeometrySignatures:
+    """geometry.tlb curve data getters take their [in,out] buffers.
+
+    Verified on SE 2026: each buffer is a plain Python list, not a VARIANT.
+    """
+
+    def test_circle_data_takes_two_r8_arrays(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        geom.GetCircleData.return_value = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.05)
+        _edge_with_geometry(doc, geom)
+
+        assert qm.get_edge_geometry(0, 0)["geometry_type"] == "Circle"
+        assert call_shape(geom.GetCircleData) == ((R8_3, R8_3), {})
+
+    def test_ellipse_data_takes_three_r8_arrays(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        geom.GetCircleData.side_effect = Exception("no")
+        geom.GetEllipseData.return_value = (
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0),
+            (1.0, 0.0, 0.0),
+            0.5,
+        )
+        _edge_with_geometry(doc, geom)
+
+        assert qm.get_edge_geometry(0, 0)["geometry_type"] == "Ellipse"
+        assert call_shape(geom.GetEllipseData) == ((R8_3, R8_3, R8_3), {})
+
+    def test_bspline_curve_info_passes_plane_vector_by_keyword(self, query_mgr):
+        qm, doc = query_mgr
+        geom = MagicMock()
+        geom.GetBSplineInfo.return_value = (4, 10, 14, True, False, False, True, (0.0, 0.0, 1.0))
+        _edge_with_geometry(doc, geom)
+
+        result = qm.get_bspline_curve_info(0, 0)
+        assert result["order"] == 4
+        assert call_shape(geom.GetBSplineInfo) == ((), {"PlaneVector": R8_3})
+
+
+class TestBodyCallSignatures:
+    def test_extreme_point_passes_only_the_direction(self, query_mgr):
+        qm, doc = query_mgr
+        _model, body = _setup_body(doc)
+        body.GetExtremePoint.return_value = (0.1, 0.2, 0.3)
+
+        result = qm.get_body_extreme_point(1.0, 0.0, 0.0)
+        assert result["extreme_point"] == [0.1, 0.2, 0.3]
+        body.GetExtremePoint.assert_called_once_with(1.0, 0.0, 0.0)
+
+    def test_facet_data_passes_tolerance_and_points_buffer(self, query_mgr):
+        qm, doc = query_mgr
+        _model, body = _setup_body(doc)
+        body.GetFacetData.return_value = (12, [0.0] * 36)
+
+        result = qm.get_body_facet_data(0.001)
+        assert result["facet_count"] == 12
+        assert result["point_count"] == 12
+        args, kwargs = call_shape(body.GetFacetData)
+        assert args == ()
+        # Verified on SE 2026: Points is a plain one-element list, not a VARIANT.
+        assert kwargs == {"Tolerance": 0.001, "Points": buffer_shape(0.0, 1)}
+
+    def test_facet_data_reports_com_failure(self, query_mgr):
+        qm, doc = query_mgr
+        _model, body = _setup_body(doc)
+        body.GetFacetData.side_effect = Exception("Parameter not optional")
+
+        result = qm.get_body_facet_data()
         assert "error" in result

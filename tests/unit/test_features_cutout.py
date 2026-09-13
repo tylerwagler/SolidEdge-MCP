@@ -489,24 +489,29 @@ class TestCreateExtrudedCutoutFromToV2:
 
 
 class TestCreateExtrudedCutoutByKeypoint:
-    def test_success(self, feature_mgr, managers):
+    """AddFiniteByKeyPointMulti needs a KeyPoint object the server cannot select."""
+
+    def test_reports_unsupported_without_calling_com(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
         result = feature_mgr.create_extruded_cutout_by_keypoint("Normal")
-        assert result["status"] == "created"
-        assert result["type"] == "extruded_cutout_by_keypoint"
-        model.ExtrudedCutouts.AddFiniteByKeyPointMulti.assert_called_once()
+        assert result["unsupported"] is True
+        assert "KeyPoint" in result["error"]
+        assert result["direction"] == "Normal"
+        model.ExtrudedCutouts.AddFiniteByKeyPointMulti.assert_not_called()
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
+    def test_no_profile_still_unsupported(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
         sketch_mgr.get_active_sketch.return_value = None
         result = feature_mgr.create_extruded_cutout_by_keypoint()
-        assert "error" in result
+        assert result["unsupported"] is True
+        model.ExtrudedCutouts.AddFiniteByKeyPointMulti.assert_not_called()
 
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
+    def test_no_model_still_unsupported(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
         models.Count = 0
         result = feature_mgr.create_extruded_cutout_by_keypoint()
-        assert "error" in result
+        assert result["unsupported"] is True
+        model.ExtrudedCutouts.AddFiniteByKeyPointMulti.assert_not_called()
 
 
 # ============================================================================
@@ -543,26 +548,29 @@ class TestCreateRevolvedCutoutSync:
 
 
 class TestCreateRevolvedCutoutByKeypoint:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
-        refaxis = MagicMock()
-        sketch_mgr.get_active_refaxis.return_value = refaxis
-        result = feature_mgr.create_revolved_cutout_by_keypoint()
-        assert result["status"] == "created"
-        assert result["type"] == "revolved_cutout_by_keypoint"
-        model.RevolvedCutouts.AddFiniteByKeyPointMulti.assert_called_once()
+    """AddFiniteByKeyPointMulti needs a KeyPoint object the server cannot select."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
+    def test_reports_unsupported_without_calling_com(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = MagicMock()
+        result = feature_mgr.create_revolved_cutout_by_keypoint()
+        assert result["unsupported"] is True
+        assert "KeyPoint" in result["error"]
+        model.RevolvedCutouts.AddFiniteByKeyPointMulti.assert_not_called()
+
+    def test_no_profile_still_unsupported(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
         sketch_mgr.get_active_sketch.return_value = None
         result = feature_mgr.create_revolved_cutout_by_keypoint()
-        assert "error" in result
+        assert result["unsupported"] is True
+        model.RevolvedCutouts.AddFiniteByKeyPointMulti.assert_not_called()
 
-    def test_no_refaxis(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
+    def test_no_refaxis_still_unsupported(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, _ = managers
         sketch_mgr.get_active_refaxis.return_value = None
         result = feature_mgr.create_revolved_cutout_by_keypoint()
-        assert "error" in result
+        assert result["unsupported"] is True
+        model.RevolvedCutouts.AddFiniteByKeyPointMulti.assert_not_called()
 
 
 # ============================================================================
@@ -661,7 +669,19 @@ class TestCreateLoftedCutoutFull:
         assert result["status"] == "created"
         assert result["type"] == "lofted_cutout_full"
         assert result["num_profiles"] == 2
-        model.LoftedCutouts.Add.assert_called_once()
+        # LoftedCutouts.Add(NumSections, CrossSections, CrossSectionTypes,
+        #   Origins, SegmentMaps, MaterialSide, StartExtentType,
+        #   StartExtentDistance, StartSurfaceOrRefPlane, EndExtentType,
+        #   EndExtentDistance, EndSurfaceOrRefPlane, StartTangentType,
+        #   StartTangentMagnitude, EndTangentType, EndTangentMagnitude)
+        assert model.LoftedCutouts.Add.call_count == 1
+        args = model.LoftedCutouts.Add.call_args[0]
+        assert len(args) == 16
+        assert args[0] == 2
+        assert list(args[1].value) == [p1, p2]
+        assert list(args[2].value) == [48, 48]  # igProfileBasedCrossSection
+        assert len(args[3].value) == 2  # per-profile origins
+        assert args[5:] == (2, 44, 0.0, None, 44, 0.0, None, 44, 0.0, 44, 0.0)
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -690,7 +710,22 @@ class TestCreateSweptCutoutMultiBody:
         result = feature_mgr.create_swept_cutout_multi_body()
         assert result["status"] == "created"
         assert result["type"] == "swept_cutout_multi_body"
-        model.SweptCutouts.AddMultiBody.assert_called_once()
+        # SweptCutouts.AddMultiBody(NumCurves, TraceCurves, TraceCurveTypes,
+        #   NumSections, CrossSections, CrossSectionTypes, Origins, SegmentMaps,
+        #   MaterialSide, StartExtentType, StartExtentDistance,
+        #   StartSurfaceOrRefPlane, EndExtentType, EndExtentDistance,
+        #   EndSurfaceOrRefPlane, NumberOfBodies, BodyArray)
+        assert model.SweptCutouts.AddMultiBody.call_count == 1
+        args = model.SweptCutouts.AddMultiBody.call_args[0]
+        assert len(args) == 17
+        assert args[0] == 1
+        assert list(args[1].value) == [path]
+        assert list(args[2].value) == [48]
+        assert args[3] == 1
+        assert list(args[4].value) == [cs]
+        assert list(args[5].value) == [48]
+        assert args[8:16] == (2, 44, 0.0, None, 44, 0.0, None, 1)
+        assert list(args[16].value) == [model.Body]
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -713,16 +748,30 @@ class TestCreateSweptCutoutMultiBody:
 
 class TestCreateHelixFromTo:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, doc, _, model, _ = managers
+        _, sketch_mgr, doc, _, model, profile = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         ref_planes = MagicMock()
         ref_planes.Count = 3
+        from_plane, to_plane = MagicMock(), MagicMock()
+        ref_planes.Item.side_effect = lambda i: {1: from_plane, 2: to_plane}[i]
         doc.RefPlanes = ref_planes
         result = feature_mgr.create_helix_from_to(1, 2, 0.005)
         assert result["status"] == "created"
         assert result["type"] == "helix_from_to"
-        model.HelixProtrusions.AddFromTo.assert_called_once()
+        # HelixProtrusions.AddFromTo(HelixAxis, AxisStart, NumCrossSections,
+        #   CrossSectionArray, ProfileSide, Height, Pitch, NumberOfTurns,
+        #   HelixDir, FromPlane, ToPlane)
+        assert model.HelixProtrusions.AddFromTo.call_count == 1
+        args = model.HelixProtrusions.AddFromTo.call_args[0]
+        assert len(args) == 11
+        assert args[0] is refaxis
+        assert args[1] == 29  # igStart
+        assert args[2] == 1
+        # Verified on SE 2026: the helix APIs take a plain list here; a
+        # VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper is rejected.
+        assert args[3] == [profile]
+        assert args[4:] == (2, 0.0, 0.005, 0.0, 2, from_plane, to_plane)
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -744,16 +793,44 @@ class TestCreateHelixFromTo:
 
 class TestCreateHelixFromToThinWall:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, doc, _, model, _ = managers
+        _, sketch_mgr, doc, _, model, profile = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         ref_planes = MagicMock()
         ref_planes.Count = 3
+        from_plane, to_plane = MagicMock(), MagicMock()
+        ref_planes.Item.side_effect = lambda i: {1: from_plane, 2: to_plane}[i]
         doc.RefPlanes = ref_planes
         result = feature_mgr.create_helix_from_to_thin_wall(1, 2, 0.005, 0.001)
         assert result["status"] == "created"
         assert result["type"] == "helix_from_to_thin_wall"
-        model.HelixProtrusions.AddFromToWithThinWall.assert_called_once()
+        # AddFromToWithThinWall(HelixAxis, AxisStart, NumCrossSections,
+        #   CrossSectionArray, ProfileSide, Height, Pitch, NumberOfTurns,
+        #   HelixDir, FromPlane, ToPlane, ThinWall, AddEndCaps,
+        #   RemoveInsideMaterial, Thickness, ThicknessSide)
+        assert model.HelixProtrusions.AddFromToWithThinWall.call_count == 1
+        args = model.HelixProtrusions.AddFromToWithThinWall.call_args[0]
+        assert len(args) == 16
+        assert args[0] is refaxis
+        assert args[1] == 29  # igStart
+        assert args[2] == 1
+        # Verified on SE 2026: the helix APIs take a plain list here; a
+        # VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper is rejected.
+        assert args[3] == [profile]
+        assert args[4:] == (
+            2,
+            0.0,
+            0.005,
+            0.0,
+            2,
+            from_plane,
+            to_plane,
+            True,
+            False,
+            True,
+            0.001,
+            4,  # igInside
+        )
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -803,16 +880,28 @@ class TestCreateHelixCutoutSync:
 
 class TestCreateHelixCutoutFromTo:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, doc, _, model, _ = managers
+        _, sketch_mgr, doc, _, model, profile = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         ref_planes = MagicMock()
         ref_planes.Count = 3
+        from_plane, to_plane = MagicMock(), MagicMock()
+        ref_planes.Item.side_effect = lambda i: {1: from_plane, 2: to_plane}[i]
         doc.RefPlanes = ref_planes
         result = feature_mgr.create_helix_cutout_from_to(1, 2, 0.005)
         assert result["status"] == "created"
         assert result["type"] == "helix_cutout_from_to"
-        model.HelixCutouts.AddFromTo.assert_called_once()
+        # HelixCutouts.AddFromTo(HelixAxis, AxisStart, NumCrossSections,
+        #   CrossSectionArray, ProfileSide, Height, Pitch, NumberOfTurns,
+        #   HelixDir, FromPlane, ToPlane)
+        assert model.HelixCutouts.AddFromTo.call_count == 1
+        args = model.HelixCutouts.AddFromTo.call_args[0]
+        assert len(args) == 11
+        assert args[0] is refaxis
+        assert args[1] == 29  # igStart
+        assert args[2] == 1
+        assert list(args[3].value) == [profile]
+        assert args[4:] == (2, 0.0, 0.005, 0.0, 2, from_plane, to_plane)
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers

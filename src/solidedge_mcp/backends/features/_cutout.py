@@ -19,6 +19,10 @@ from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
+# constant.tlb > FeaturePropertyConstants.igStart. Names the end of the helix
+# axis the helix grows from. Not yet exposed by backends/constants.py.
+_IG_START = 29
+
 
 @verify_geometry_on_creators
 class CutoutMixin:
@@ -674,45 +678,28 @@ class CutoutMixin:
         """
         Create an extruded cutout up to a keypoint extent.
 
-        Uses ExtrudedCutouts.AddFiniteByKeyPointMulti(NumProfiles, ProfileArray, PlaneSide).
+        Type library: ExtrudedCutouts.AddFiniteByKeyPointMulti(NumberOfProfiles,
+        ProfileArray, ProfilePlaneSide, KeyPointOrTangentFace, KeyPointFlags) --
+        five required arguments. The KeyPoint (or tangent face) is a selected
+        model object that this server has no way to pick, so the call can never
+        be formed; report that instead of failing inside COM.
 
         Args:
             direction: 'Normal' or 'Reverse'
 
         Returns:
-            Dict with status and cutout info
+            Dict with an explanatory error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            direction_map = {
-                "Normal": DirectionConstants.igRight,
-                "Reverse": DirectionConstants.igLeft,
-            }
-            side = direction_map.get(direction, DirectionConstants.igRight)
-
-            cutouts = model.ExtrudedCutouts
-            cutouts.AddFiniteByKeyPointMulti(1, (profile,), side)
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "extruded_cutout_by_keypoint",
-                "direction": direction,
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "An extruded cutout to a keypoint needs a KeyPoint or tangent face "
+                "object, which this server cannot select. Use "
+                "create_extruded_cutout(distance), create_extruded_cutout_from_to(...) "
+                "or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "direction": direction,
+        }
 
     def create_revolved_cutout_sync(self, angle: float = 360.0) -> dict[str, Any]:
         """
@@ -769,45 +756,23 @@ class CutoutMixin:
         """
         Create a revolved cutout up to a keypoint extent.
 
-        Uses RevolvedCutouts.AddFiniteByKeyPointMulti(NumProfiles, ProfileArray,
-        RefAxis, PlaneSide).
+        Type library: RevolvedCutouts.AddFiniteByKeyPointMulti(NumberOfProfiles,
+        ProfileArray, RefAxis, KeyPointOrTangentFace, KeyPointFlags,
+        [ProfilePlaneSide]) -- five required arguments. The KeyPoint (or tangent
+        face) is a selected model object that this server has no way to pick, so
+        the call can never be formed; report that instead of failing inside COM.
 
         Returns:
-            Dict with status and cutout info
+            Dict with an explanatory error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-            refaxis = self.sketch_manager.get_active_refaxis()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-            if not refaxis:
-                return {
-                    "error": "No axis of revolution set. "
-                    "Use set_axis_of_revolution() before "
-                    "closing the sketch."
-                }
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            cutouts = model.RevolvedCutouts
-            cutouts.AddFiniteByKeyPointMulti(
-                1,  # NumProfiles
-                (profile,),  # ProfileArray
-                refaxis,  # RefAxis
-                DirectionConstants.igRight,  # PlaneSide
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {"status": "created", "type": "revolved_cutout_by_keypoint"}
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "A revolved cutout to a keypoint needs a KeyPoint or tangent face "
+                "object, which this server cannot select. Use "
+                "create_revolved_cutout(angle) or the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def create_normal_cutout_from_to(
         self, from_plane_index: int, to_plane_index: int
@@ -972,9 +937,13 @@ class CutoutMixin:
         """
         Create a lofted cutout with guide curves support.
 
-        Uses LoftedCutouts.Add(NumCrossSections, CrossSectionArray, CrossSectionTypes,
-        Origins, SegmentMaps, PlaneSide, StartExtent, ..., EndExtent, ...).
-        Provides the full API with all extent and treatment parameters.
+        Type library: LoftedCutouts.Add(NumSections, CrossSections,
+        CrossSectionTypes, Origins, SegmentMaps, MaterialSide, StartExtentType,
+        StartExtentDistance, StartSurfaceOrRefPlane, EndExtentType,
+        EndExtentDistance, EndSurfaceOrRefPlane, StartTangentType,
+        StartTangentMagnitude, EndTangentType, EndTangentMagnitude,
+        [NumGuideCurves, GuideCurves]) -- sixteen required arguments; the four
+        tangency ones were previously missing.
 
         Args:
             profile_indices: Optional list of profile indices to use from
@@ -1013,18 +982,22 @@ class CutoutMixin:
 
             lc = model.LoftedCutouts
             lc.Add(
-                len(profiles),
-                v_profiles,
-                v_types,
-                v_origins,
-                v_seg,
-                DirectionConstants.igRight,
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,
+                len(profiles),  # NumSections
+                v_profiles,  # CrossSections
+                v_types,  # CrossSectionTypes
+                v_origins,  # Origins
+                v_seg,  # SegmentMaps
+                DirectionConstants.igRight,  # MaterialSide
+                ExtentTypeConstants.igNone,  # StartExtentType
+                0.0,  # StartExtentDistance
+                None,  # StartSurfaceOrRefPlane
+                ExtentTypeConstants.igNone,  # EndExtentType
+                0.0,  # EndExtentDistance
+                None,  # EndSurfaceOrRefPlane
+                ExtentTypeConstants.igNone,  # StartTangentType
+                0.0,  # StartTangentMagnitude
+                ExtentTypeConstants.igNone,  # EndTangentType
+                0.0,  # EndTangentMagnitude
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -1045,8 +1018,13 @@ class CutoutMixin:
         """
         Create a swept cutout that supports multi-body operations.
 
-        Uses SweptCutouts.AddMultiBody with the same parameters as SweptCutouts.Add.
-        Allows the cutout to span across multiple bodies in the part.
+        Type library: SweptCutouts.AddMultiBody(NumCurves, TraceCurves,
+        TraceCurveTypes, NumSections, CrossSections, CrossSectionTypes, Origins,
+        SegmentMaps, MaterialSide, StartExtentType, StartExtentDistance,
+        StartSurfaceOrRefPlane, EndExtentType, EndExtentDistance,
+        EndSurfaceOrRefPlane, NumberOfBodies, BodyArray) -- seventeen required
+        arguments; it is SweptCutouts.Add plus the trailing body list, which was
+        previously missing.
 
         Args:
             path_profile_index: Index of the path profile in accumulated profiles
@@ -1095,23 +1073,27 @@ class CutoutMixin:
             )
             v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
 
+            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [model.Body])
+
             swept_cutouts = model.SweptCutouts
             swept_cutouts.AddMultiBody(
-                1,
-                v_paths,
-                v_path_types,
-                len(cross_sections),
-                v_sections,
-                v_section_types,
-                v_origins,
-                v_seg,
-                DirectionConstants.igRight,
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,
+                1,  # NumCurves
+                v_paths,  # TraceCurves
+                v_path_types,  # TraceCurveTypes
+                len(cross_sections),  # NumSections
+                v_sections,  # CrossSections
+                v_section_types,  # CrossSectionTypes
+                v_origins,  # Origins
+                v_seg,  # SegmentMaps
+                DirectionConstants.igRight,  # MaterialSide
+                ExtentTypeConstants.igNone,  # StartExtentType
+                0.0,  # StartExtentDistance
+                None,  # StartSurfaceOrRefPlane
+                ExtentTypeConstants.igNone,  # EndExtentType
+                0.0,  # EndExtentDistance
+                None,  # EndSurfaceOrRefPlane
+                1,  # NumberOfBodies
+                body_arr,  # BodyArray
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -1207,8 +1189,12 @@ class CutoutMixin:
         """
         Create a helical cutout between two reference planes.
 
-        Uses HelixCutouts.AddFromTo(HelixAxis, AxisStart, NumCrossSections,
-        CrossSectionArray, ProfileSide, FromFace, ToFace, Pitch, HelixDir).
+        Type library: HelixCutouts.AddFromTo(HelixAxis, AxisStart,
+        NumCrossSections, CrossSectionArray, ProfileSide, Height, Pitch,
+        NumberOfTurns, HelixDir, FromPlane, ToPlane, [6 optional taper/pitch
+        parameters]) -- eleven required arguments. Height and NumberOfTurns are
+        driven by the from/to planes, so they are passed as 0.0, matching the
+        AddFromToSync call below.
 
         Args:
             from_plane_index: 1-based index of the starting reference plane
@@ -1258,14 +1244,16 @@ class CutoutMixin:
             helix_cutouts = model.HelixCutouts
             helix_cutouts.AddFromTo(
                 refaxis,  # HelixAxis
-                DirectionConstants.igRight,  # AxisStart
+                _IG_START,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
-                from_plane,  # FromFace
-                to_plane,  # ToFace
+                0.0,  # Height (driven by the from/to planes)
                 pitch,  # Pitch
+                0.0,  # NumberOfTurns (driven by the from/to planes)
                 DirectionConstants.igRight,  # HelixDir
+                from_plane,  # FromPlane
+                to_plane,  # ToPlane
             )
 
             self.sketch_manager.clear_accumulated_profiles()

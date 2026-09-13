@@ -10,6 +10,7 @@ from ..constants import (
     ExtentTypeConstants,
 )
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -55,7 +56,7 @@ class AssemblyFeaturesMixin:
 
             # Get source position
             try:
-                base_matrix = list(source.GetMatrix())
+                base_matrix = self._get_occurrence_matrix(source)
             except Exception:
                 base_matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
@@ -67,7 +68,7 @@ class AssemblyFeaturesMixin:
                 matrix = list(base_matrix)
                 matrix[dir_idx] = base_matrix[dir_idx] + (spacing * i)
                 occ = occurrences.AddWithMatrix(file_path, matrix)
-                placed.append(occ.Name if hasattr(occ, "Name") else f"copy_{i}")
+                placed.append(com_get(occ, "Name", f"copy_{i}"))
 
             return {
                 "status": "pattern_created",
@@ -321,7 +322,12 @@ class AssemblyFeaturesMixin:
             if not profiles:
                 return {"error": "No profiles available. Create and close a sketch first."}
 
-            protrusions = af.ExtrudedProtrusions
+            # AssemblyFeatures exposes AssemblyFeaturesExtrudedProtrusions; the
+            # bare ExtrudedProtrusions name belongs to Part.tlb, whose Add takes
+            # 35 arguments. Add here is (nNumProfiles, pProfiles, ExtentType,
+            # pExtentSide, profileSide, pdDistance, pKeyPoint, pKeyPointFlags,
+            # pFromSurfOrPlane, pToSurfOrPlane).
+            protrusions = af.AssemblyFeaturesExtrudedProtrusions
             protrusions.Add(
                 len(profiles),
                 profiles,
@@ -373,7 +379,10 @@ class AssemblyFeaturesMixin:
             if not profiles:
                 return {"error": "No profiles available. Create and close a sketch first."}
 
-            protrusions = af.RevolvedProtrusions
+            # AssemblyFeaturesRevolvedProtrusions.Add(nNumProfiles, pProfiles,
+            #     pRefAxis, ExtentType, ExtentSide, profileSide, pdAngle,
+            #     KeyPointOrTangentFace, KeyPointFlags, pFromSurface, pToSurface)
+            protrusions = af.AssemblyFeaturesRevolvedProtrusions
             protrusions.Add(
                 len(profiles),
                 profiles,

@@ -11,6 +11,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -19,6 +25,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -31,6 +38,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -87,7 +95,7 @@ class TestAddComponentWithTransform:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         import unittest.mock
 
@@ -141,7 +149,7 @@ class TestAddFamilyMember:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=True):
@@ -190,7 +198,7 @@ class TestAddFamilyWithTransform:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=True):
@@ -283,7 +291,7 @@ class TestAddByTemplate:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=True):
@@ -321,7 +329,7 @@ class TestAddAdjustablePart:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=True):
@@ -332,17 +340,18 @@ class TestAddAdjustablePart:
 class TestReorderOccurrence:
     def test_success(self, asm_mgr):
         am, doc = asm_mgr
-        occ = MagicMock()
+        occ, target = MagicMock(), MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 3
-        occurrences.Item.return_value = occ
+        occurrences.Item.side_effect = lambda i: {1: occ, 3: target}[i]
         doc.Occurrences = occurrences
 
         result = am.reorder_occurrence(0, 2)
         assert result["status"] == "reordered"
         assert result["component_index"] == 0
         assert result["target_index"] == 2
-        occurrences.ReorderOccurrence.assert_called_once_with(occ, 3)
+        # ReorderOccurrence(OccurrenceToReorder, TargetOccurrence, AfterTarget)
+        occurrences.ReorderOccurrence.assert_called_once_with(occ, target, True)
 
     def test_invalid_component_index(self, asm_mgr):
         am, doc = asm_mgr

@@ -11,6 +11,7 @@ to dispatch to the correct backend method via match/case.
 from typing import Any, Literal
 
 from solidedge_mcp.backends.constants import DirectionConstants, ExtentTypeConstants
+from solidedge_mcp.backends.query import DEFAULT_PAGE_LIMIT
 from solidedge_mcp.managers import query_manager
 from solidedge_mcp.tools._registry import register_tool
 
@@ -268,6 +269,13 @@ _OFFSET_SIDE_CONSTANTS: dict[str, int] = {
     "right": DirectionConstants.igRight,
 }
 
+#: constant.tlb > FeaturePropertyConstants, the ExtentSide/ThicknessSide slot.
+_SIDE_CONSTANTS: dict[str, int] = {
+    "left": DirectionConstants.igLeft,
+    "right": DirectionConstants.igRight,
+    "symmetric": DirectionConstants.igSymmetric,
+}
+
 
 def edit_feature_extent(
     property: Literal[
@@ -289,11 +297,15 @@ def edit_feature_extent(
     feature_name: str = "",
     extent_type: Literal["finite", "through_all", "none"] = "finite",
     distance: float = 0.0,
-    wall_type: int = 0,
-    thickness1: float = 0.0,
-    thickness2: float = 0.0,
+    extent_side: Literal["left", "right", "symmetric"] = "right",
+    thickness: float = 0.0,
+    thickness_side: Literal["left", "right", "symmetric"] = "right",
+    thin_wall: bool = True,
+    add_end_caps: bool = False,
+    remove_inside_material: bool = False,
     offset: float = 0.0,
     body_indices: list[int] | None = None,
+    multi_body_cut: bool = True,
     offset_side: Literal["left", "right"] = "left",
     treatment_type: int = 0,
     draft_side: int = 0,
@@ -306,9 +318,12 @@ def edit_feature_extent(
 ) -> dict[str, Any]:
     """Get/set extent data on the named feature. Meters; angles in degrees.
 
-    set_direction1/2: extent_type + distance (finite only).
-    set_thin_wall: wall_type + thickness1/2. set_from_face: offset.
-    set_body_array: 0-based body_indices. set_to_face: offset_side + distance.
+    set_direction1/2: extent_type + distance (finite only) + extent_side.
+    set_thin_wall: thickness + thickness_side, plus thin_wall / add_end_caps /
+    remove_inside_material. set_from_face: offset (reuses the face already on
+    the feature; a feature with no from-face cannot be edited here).
+    set_body_array: 0-based body_indices + multi_body_cut.
+    set_to_face: offset_side + distance.
     apply_direction1_treatment: treatment_type, draft_side, draft_angle,
     crown_* (raw FeaturePropertyConstants ints).
     """
@@ -317,22 +332,30 @@ def edit_feature_extent(
             return query_manager.get_direction1_extent(feature_name)
         case "set_direction1":
             return query_manager.set_direction1_extent(
-                feature_name, _EXTENT_TYPE_CONSTANTS[extent_type], distance
+                feature_name,
+                _EXTENT_TYPE_CONSTANTS[extent_type],
+                distance,
+                _SIDE_CONSTANTS[extent_side],
             )
         case "get_direction2":
             return query_manager.get_direction2_extent(feature_name)
         case "set_direction2":
             return query_manager.set_direction2_extent(
-                feature_name, _EXTENT_TYPE_CONSTANTS[extent_type], distance
+                feature_name,
+                _EXTENT_TYPE_CONSTANTS[extent_type],
+                distance,
+                _SIDE_CONSTANTS[extent_side],
             )
         case "get_thin_wall":
             return query_manager.get_thin_wall_options(feature_name)
         case "set_thin_wall":
             return query_manager.set_thin_wall_options(
                 feature_name,
-                wall_type,
-                thickness1,
-                thickness2,
+                thickness,
+                _SIDE_CONSTANTS[thickness_side],
+                thin_wall,
+                add_end_caps,
+                remove_inside_material,
             )
         case "get_from_face":
             return query_manager.get_from_face_offset(feature_name)
@@ -341,7 +364,7 @@ def edit_feature_extent(
         case "get_body_array":
             return query_manager.get_body_array(feature_name)
         case "set_body_array":
-            return query_manager.set_body_array(feature_name, body_indices or [])
+            return query_manager.set_body_array(feature_name, body_indices or [], multi_body_cut)
         case "get_to_face":
             return query_manager.get_to_face_offset(feature_name)
         case "set_to_face":
@@ -463,6 +486,9 @@ def query_body(
         "point_inside",
         "user_physical_properties",
         "facet_data",
+        "faces",
+        "edges",
+        "spatial_context",
     ],
     direction_x: float = 0.0,
     direction_y: float = 0.0,
@@ -475,6 +501,8 @@ def query_body(
     z: float = 0.0,
     shell_index: int = 0,
     tolerance: float = 0.0,
+    offset: int = 0,
+    limit: int = DEFAULT_PAGE_LIMIT,
 ) -> dict[str, Any]:
     """Read body-level topology (read-only). Meters.
 
@@ -482,6 +510,14 @@ def query_body(
     faces_by_ray: ray from origin_x/y/z along direction_x/y/z.
     shell_info: 0-based shell_index. point_inside: x,y,z.
     facet_data: tessellate at tolerance (0 = default).
+    spatial_context: body count, bounding box with center, whether the body
+    sits on the origin, the open sketch's plane, and the plane-to-axis map.
+
+    faces / edges / vertices / shells are PAGED: they walk the collection one
+    COM call per entity, so they return at most `limit` items starting at the
+    0-based `offset` (default 200, hard ceiling 2000). The reply is
+    {total, offset, limit, items, truncated}; keep raising `offset` by `limit`
+    while `truncated` is true.
     """
     match property:
         case "extreme_point":
@@ -495,10 +531,16 @@ def query_body(
                 direction_y,
                 direction_z,
             )
+        case "faces":
+            return query_manager.get_body_faces(offset, limit)
+        case "edges":
+            return query_manager.get_body_edges(offset, limit)
         case "shells":
-            return query_manager.get_body_shells()
+            return query_manager.get_body_shells(offset, limit)
         case "vertices":
-            return query_manager.get_body_vertices()
+            return query_manager.get_body_vertices(offset, limit)
+        case "spatial_context":
+            return query_manager.get_spatial_context()
         case "shell_info":
             return query_manager.get_shell_info(shell_index)
         case "point_inside":

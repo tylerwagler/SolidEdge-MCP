@@ -8,6 +8,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..constants import DrawingViewOrientationConstants
 from ..logging import get_logger
+from ._base import NOT_A_DRAFT, com_get
 
 _logger = get_logger(__name__)
 
@@ -110,7 +111,7 @@ class DrawingMixin:
             return {
                 "status": "created",
                 "type": "drawing",
-                "draft_name": draft_doc.Name if hasattr(draft_doc, "Name") else "Draft",
+                "draft_name": com_get(draft_doc, "Name", "Draft"),
                 "model_link": source_path,
                 "views_requested": views,
                 "views_added": views_added,
@@ -141,11 +142,12 @@ class DrawingMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             # Get model link
-            if not hasattr(doc, "ModelLinks") or doc.ModelLinks.Count == 0:
+            if not com_get(com_get(doc, "ModelLinks"), "Count", 0):
                 return {
                     "error": "No model link found. Create a drawing with create_drawing() first."
                 }
@@ -209,8 +211,9 @@ class DrawingMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
 
@@ -222,10 +225,10 @@ class DrawingMixin:
             dv = dvs.Item(1)
 
             # Get PartsLists collection
-            parts_lists = sheet.PartsLists if hasattr(sheet, "PartsLists") else None
+            parts_lists = com_get(sheet, "PartsLists")
             if parts_lists is None:
                 # Try from document level
-                parts_lists = doc.PartsLists if hasattr(doc, "PartsLists") else None
+                parts_lists = com_get(doc, "PartsLists")
 
             if parts_lists is None:
                 return {"error": "PartsLists collection not available"}
@@ -271,10 +274,11 @@ class DrawingMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
-            if not hasattr(doc, "ModelLinks") or doc.ModelLinks.Count == 0:
+            if not com_get(com_get(doc, "ModelLinks"), "Count", 0):
                 return {
                     "error": "No model link found. Create a drawing with create_drawing() first."
                 }
@@ -362,10 +366,11 @@ class DrawingMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
-            if not hasattr(doc, "ModelLinks") or doc.ModelLinks.Count == 0:
+            if not com_get(com_get(doc, "ModelLinks"), "Count", 0):
                 return {
                     "error": "No model link found. Create a drawing with create_drawing() first."
                 }
@@ -425,8 +430,11 @@ class DrawingMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document. Create a drawing first."}
+            err = self._require_draft(
+                doc, "Active document is not a draft document. Create a drawing first."
+            )
+            if err:
+                return err
 
             sheets = doc.Sheets
 
@@ -437,7 +445,7 @@ class DrawingMixin:
                 "status": "added",
                 "sheet_number": sheets.Count,
                 "total_sheets": sheets.Count,
-                "name": sheet.Name if hasattr(sheet, "Name") else f"Sheet {sheets.Count}",
+                "name": com_get(sheet, "Name", f"Sheet {sheets.Count}"),
             }
         except Exception as e:
             return error_result(e)
@@ -452,8 +460,9 @@ class DrawingMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheet = doc.ActiveSheet
             sheets = doc.Sheets
@@ -502,8 +511,9 @@ class DrawingMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheets = doc.Sheets
             if sheet_index < 0 or sheet_index >= sheets.Count:
@@ -530,8 +540,9 @@ class DrawingMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheets = doc.Sheets
             if sheet_index < 0 or sheet_index >= sheets.Count:
@@ -563,8 +574,9 @@ class DrawingMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             sheets = doc.Sheets
             if sheets.Count <= 1:
@@ -597,8 +609,9 @@ class DrawingMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             dims = sheet.Dimensions
             items = []
@@ -628,8 +641,9 @@ class DrawingMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             balloons = sheet.Balloons
             items = []
@@ -659,8 +673,9 @@ class DrawingMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             text_boxes = sheet.TextBoxes
             items = []
@@ -692,8 +707,9 @@ class DrawingMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             drawing_objects = sheet.DrawingObjects
             items = []
@@ -721,8 +737,9 @@ class DrawingMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
             sections = sheet.Sections
             items = []

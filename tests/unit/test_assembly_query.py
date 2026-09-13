@@ -12,6 +12,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -20,6 +26,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -32,6 +39,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -148,7 +156,7 @@ class TestGetBom:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_bom()
         assert "error" in result
@@ -233,7 +241,7 @@ class TestGetDocumentTree:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_document_tree()
         assert "error" in result
@@ -272,7 +280,7 @@ class TestGetComponentDisplayName:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_component_display_name(0)
         assert "error" in result
@@ -317,7 +325,7 @@ class TestGetOccurrenceDocument:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_occurrence_document(0)
         assert "error" in result
@@ -382,7 +390,7 @@ class TestGetSubOccurrences:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_sub_occurrences(0)
         assert "error" in result
@@ -396,7 +404,7 @@ class TestGetSubOccurrences:
 class TestCheckInterference:
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.check_interference()
         assert "error" in result
@@ -464,7 +472,7 @@ class TestIsSubassembly:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.is_subassembly(0)
         assert "error" in result
@@ -504,7 +512,7 @@ class TestGetOccurrenceBodies:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_occurrence_bodies(0)
         assert "error" in result
@@ -540,7 +548,7 @@ class TestGetOccurrenceStyle:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_occurrence_style(0)
         assert "error" in result
@@ -573,11 +581,12 @@ class TestGetFaceStyle:
         result = am.get_face_style(0)
         assert result["component_index"] == 0
         assert result["face_style"] == "Aluminum"
-        occ.GetFaceStyle2.assert_called_once()
+        # GetFaceStyle2(vbHonourPrefs as VT_BOOL)
+        occ.GetFaceStyle2.assert_called_once_with(True)
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_face_style(0)
         assert "error" in result
@@ -619,7 +628,7 @@ class TestGetOccurrence:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_occurrence(1)
         assert "error" in result

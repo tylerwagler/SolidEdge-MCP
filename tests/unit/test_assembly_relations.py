@@ -15,6 +15,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -23,6 +29,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -35,6 +42,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -72,7 +80,7 @@ class TestGetAssemblyRelations:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_assembly_relations()
         assert "error" in result
@@ -110,7 +118,7 @@ class TestDeleteRelation:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.delete_relation(0)
         assert "error" in result
@@ -149,7 +157,7 @@ class TestGetRelationInfo:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_relation_info(0)
         assert "error" in result
@@ -170,36 +178,31 @@ class TestGetRelationInfo:
 
 
 class TestAddPlanarRelation:
-    def test_success(self, asm_mgr):
+    """AddPlanar needs Face/Edge geometry this server cannot select."""
+
+    def test_unsupported_does_not_call_com(self, asm_mgr):
         am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
         doc.Occurrences = occurrences
         relations = MagicMock()
         doc.Relations3d = relations
 
         result = am.add_planar_relation(0, 1, 0.01, "Align")
-        assert result["status"] == "created"
-        assert result["relation_type"] == "Planar"
-        assert result["offset"] == 0.01
-        relations.AddPlanar.assert_called_once_with(occ1, occ2, 0.01, 1)
 
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        del doc.Relations3d
-        result = am.add_planar_relation(0, 1)
-        assert "error" in result
+        assert result["unsupported"] is True
+        assert "planar faces" in result["error"].lower()
+        relations.AddPlanar.assert_not_called()
+        occurrences.Item.assert_not_called()
 
-    def test_invalid_index(self, asm_mgr):
+    def test_unsupported_even_without_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-        doc.Relations3d = MagicMock()
-        result = am.add_planar_relation(0, 5)
-        assert "error" in result
+        doc.Type = IG_PART_DOCUMENT
+
+        result = am.add_planar_relation(0, 1, 0.01, "Align")
+
+        assert result["unsupported"] is True
+        doc.Relations3d.AddPlanar.assert_not_called()
 
 
 # ============================================================================
@@ -222,11 +225,12 @@ class TestAddAxialRelation:
         assert result["status"] == "created"
         assert result["relation_type"] == "Axial"
         assert result["orientation"] == "Antialign"
-        relations.AddAxial.assert_called_once_with(occ1, occ2, 2)
+        # NormalsAligned is VT_BOOL: "Antialign" must not become a truthy 2
+        relations.AddAxial.assert_called_once_with(occ1, occ2, False)
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.add_axial_relation(0, 1)
         assert "error" in result
 
@@ -246,38 +250,31 @@ class TestAddAxialRelation:
 
 
 class TestAddAngularRelation:
-    def test_success(self, asm_mgr):
-        import math
+    """AddAngular needs Face/Edge geometry this server cannot select."""
 
+    def test_unsupported_does_not_call_com(self, asm_mgr):
         am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
         doc.Occurrences = occurrences
         relations = MagicMock()
         doc.Relations3d = relations
 
         result = am.add_angular_relation(0, 1, 45.0)
-        assert result["status"] == "created"
-        assert result["relation_type"] == "Angular"
-        assert result["angle_degrees"] == 45.0
-        relations.AddAngular.assert_called_once_with(occ1, occ2, pytest.approx(math.radians(45.0)))
 
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        del doc.Relations3d
-        result = am.add_angular_relation(0, 1, 30.0)
-        assert "error" in result
+        assert result["unsupported"] is True
+        assert "measurement elements" in result["error"].lower()
+        relations.AddAngular.assert_not_called()
+        occurrences.Item.assert_not_called()
 
-    def test_invalid_index(self, asm_mgr):
+    def test_unsupported_even_without_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-        doc.Relations3d = MagicMock()
-        result = am.add_angular_relation(0, 5)
-        assert "error" in result
+        doc.Type = IG_PART_DOCUMENT
+
+        result = am.add_angular_relation(0, 1, 45.0)
+
+        assert result["unsupported"] is True
+        doc.Relations3d.AddAngular.assert_not_called()
 
 
 # ============================================================================
@@ -286,35 +283,31 @@ class TestAddAngularRelation:
 
 
 class TestAddPointRelation:
-    def test_success(self, asm_mgr):
+    """AddPoint needs Face/Edge geometry this server cannot select."""
+
+    def test_unsupported_does_not_call_com(self, asm_mgr):
         am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
         doc.Occurrences = occurrences
         relations = MagicMock()
         doc.Relations3d = relations
 
         result = am.add_point_relation(0, 1)
-        assert result["status"] == "created"
-        assert result["relation_type"] == "Point"
-        relations.AddPoint.assert_called_once_with(occ1, occ2)
 
-    def test_not_assembly(self, asm_mgr):
+        assert result["unsupported"] is True
+        assert "keypoint" in result["error"].lower()
+        relations.AddPoint.assert_not_called()
+        occurrences.Item.assert_not_called()
+
+    def test_unsupported_even_without_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
+
         result = am.add_point_relation(0, 1)
-        assert "error" in result
 
-    def test_invalid_index(self, asm_mgr):
-        am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-        doc.Relations3d = MagicMock()
-        result = am.add_point_relation(0, 5)
-        assert "error" in result
+        assert result["unsupported"] is True
+        doc.Relations3d.AddPoint.assert_not_called()
 
 
 # ============================================================================
@@ -323,35 +316,31 @@ class TestAddPointRelation:
 
 
 class TestAddTangentRelation:
-    def test_success(self, asm_mgr):
+    """AddTangent needs Face/Edge geometry this server cannot select."""
+
+    def test_unsupported_does_not_call_com(self, asm_mgr):
         am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
         doc.Occurrences = occurrences
         relations = MagicMock()
         doc.Relations3d = relations
 
         result = am.add_tangent_relation(0, 1)
-        assert result["status"] == "created"
-        assert result["relation_type"] == "Tangent"
-        relations.AddTangent.assert_called_once_with(occ1, occ2)
 
-    def test_not_assembly(self, asm_mgr):
+        assert result["unsupported"] is True
+        assert "tangent" in result["error"].lower()
+        relations.AddTangent.assert_not_called()
+        occurrences.Item.assert_not_called()
+
+    def test_unsupported_even_without_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
+
         result = am.add_tangent_relation(0, 1)
-        assert "error" in result
 
-    def test_invalid_index(self, asm_mgr):
-        am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-        doc.Relations3d = MagicMock()
-        result = am.add_tangent_relation(0, 5)
-        assert "error" in result
+        assert result["unsupported"] is True
+        doc.Relations3d.AddTangent.assert_not_called()
 
 
 # ============================================================================
@@ -360,37 +349,31 @@ class TestAddTangentRelation:
 
 
 class TestAddGearRelation:
-    def test_success(self, asm_mgr):
+    """AddGear needs Face/Edge geometry this server cannot select."""
+
+    def test_unsupported_does_not_call_com(self, asm_mgr):
         am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
         doc.Occurrences = occurrences
         relations = MagicMock()
         doc.Relations3d = relations
 
-        result = am.add_gear_relation(0, 1, 2.0, 3.0)
-        assert result["status"] == "created"
-        assert result["relation_type"] == "Gear"
-        assert result["ratio1"] == 2.0
-        assert result["ratio2"] == 3.0
-        relations.AddGear.assert_called_once_with(occ1, occ2, 2.0, 3.0)
+        result = am.add_gear_relation(0, 1, 2.0, 1.0)
 
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        del doc.Relations3d
-        result = am.add_gear_relation(0, 1)
-        assert "error" in result
+        assert result["unsupported"] is True
+        assert "geartype" in result["error"].lower()
+        relations.AddGear.assert_not_called()
+        occurrences.Item.assert_not_called()
 
-    def test_invalid_index(self, asm_mgr):
+    def test_unsupported_even_without_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-        doc.Relations3d = MagicMock()
-        result = am.add_gear_relation(0, 5)
-        assert "error" in result
+        doc.Type = IG_PART_DOCUMENT
+
+        result = am.add_gear_relation(0, 1, 2.0, 1.0)
+
+        assert result["unsupported"] is True
+        doc.Relations3d.AddGear.assert_not_called()
 
 
 # ============================================================================
@@ -414,7 +397,7 @@ class TestGetRelationOffset:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_relation_offset(0)
         assert "error" in result
 
@@ -448,7 +431,7 @@ class TestSetRelationOffset:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.set_relation_offset(0, 0.01)
         assert "error" in result
 
@@ -485,7 +468,7 @@ class TestGetRelationAngle:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_relation_angle(0)
         assert "error" in result
 
@@ -521,7 +504,7 @@ class TestSetRelationAngle:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.set_relation_angle(0, 30.0)
         assert "error" in result
 
@@ -555,7 +538,7 @@ class TestGetNormalsAligned:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_normals_aligned(0)
         assert "error" in result
 
@@ -589,7 +572,7 @@ class TestSetNormalsAligned:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.set_normals_aligned(0, True)
         assert "error" in result
 
@@ -623,7 +606,7 @@ class TestSuppressRelation:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.suppress_relation(0)
         assert "error" in result
 
@@ -657,7 +640,7 @@ class TestUnsuppressRelation:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.unsuppress_relation(0)
         assert "error" in result
 
@@ -704,7 +687,7 @@ class TestGetRelationGeometry:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_relation_geometry(0)
         assert "error" in result
 
@@ -740,7 +723,7 @@ class TestGetGearRatio:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Relations3d
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_gear_ratio(0)
         assert "error" in result
 
@@ -751,3 +734,73 @@ class TestGetGearRatio:
         doc.Relations3d = relations
         result = am.get_gear_ratio(5)
         assert "error" in result
+
+
+# ============================================================================
+# DOCUMENT-TYPE GUARD (replaces the old hasattr probe)
+# ============================================================================
+
+
+class TestAssemblyDocumentGuard:
+    """The guard reads Document.Type instead of probing for a member.
+
+    hasattr on a late-bound COM proxy also returns False when the member
+    exists but its getter raises, which reported unrelated COM failures as
+    "Active document is not an assembly".
+    """
+
+    def test_weldment_assembly_is_accepted(self, asm_mgr):
+        am, doc = asm_mgr
+        doc.Type = DocumentTypeConstants.igWeldmentAssemblyDocument
+        relations = MagicMock()
+        relations.Count = 0
+        doc.Relations3d = relations
+
+        result = am.get_assembly_relations()
+        assert result["count"] == 0
+
+    def test_part_document_is_rejected(self, asm_mgr):
+        am, doc = asm_mgr
+        doc.Type = IG_PART_DOCUMENT
+
+        result = am.get_assembly_relations()
+        assert result["error"] == "Active document is not an assembly"
+
+    def test_raising_type_getter_is_rejected(self, asm_mgr):
+        am, doc = asm_mgr
+        type(doc).Type = property(lambda self: (_ for _ in ()).throw(Exception("gone")))
+        try:
+            result = am.get_assembly_relations()
+            assert result["error"] == "Active document is not an assembly"
+        finally:
+            del type(doc).Type
+
+    def test_raising_relations_getter_surfaces_the_real_error(self, asm_mgr):
+        am, doc = asm_mgr
+        type(doc).Relations3d = property(
+            lambda self: (_ for _ in ()).throw(Exception("Relations3d exploded"))
+        )
+        try:
+            result = am.get_assembly_relations()
+            # The old hasattr probe swallowed this as "not an assembly".
+            assert "error" in result
+            assert result["error"] != "Active document is not an assembly"
+        finally:
+            del type(doc).Relations3d
+
+
+class TestAddAxialRelationOrientation:
+    """AddAxial's third argument is NormalsAligned (VT_BOOL), not an enum."""
+
+    def test_align_is_true(self, asm_mgr):
+        am, doc = asm_mgr
+        occ1, occ2 = MagicMock(), MagicMock()
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
+        doc.Occurrences = occurrences
+        relations = MagicMock()
+        doc.Relations3d = relations
+
+        am.add_axial_relation(0, 1, "Align")
+        relations.AddAxial.assert_called_once_with(occ1, occ2, True)

@@ -7,6 +7,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -27,8 +28,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             components = []
@@ -37,7 +39,7 @@ class QueryMixin:
                 occurrence = occurrences.Item(i)
                 comp = {
                     "index": i - 1,
-                    "name": occurrence.Name if hasattr(occurrence, "Name") else f"Component {i}",
+                    "name": com_get(occurrence, "Name", f"Component {i}"),
                 }
 
                 # Get file path
@@ -94,7 +96,7 @@ class QueryMixin:
 
             info = {
                 "index": component_index,
-                "name": occurrence.Name if hasattr(occurrence, "Name") else "Unknown",
+                "name": com_get(occurrence, "Name", "Unknown"),
             }
 
             # File path
@@ -112,11 +114,8 @@ class QueryMixin:
                 pass
 
             # Full 4x4 matrix
-            try:
-                matrix = occurrence.GetMatrix()
-                info["matrix"] = list(matrix)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                info["matrix"] = self._get_occurrence_matrix(occurrence)
 
             # Visibility
             with contextlib.suppress(Exception):
@@ -149,8 +148,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -177,11 +177,8 @@ class QueryMixin:
                 pass
 
             # Try GetMatrix (full 4x4)
-            try:
-                matrix = occurrence.GetMatrix()
-                result["matrix"] = list(matrix)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                result["matrix"] = self._get_occurrence_matrix(occurrence)
 
             return result
         except Exception as e:
@@ -202,8 +199,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -250,8 +248,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -271,9 +270,7 @@ class QueryMixin:
                 # Fallback: check if it has SubOccurrences
                 try:
                     sub_occs = occurrence.SubOccurrences
-                    result["is_subassembly"] = (
-                        sub_occs.Count > 0 if hasattr(sub_occs, "Count") else False
-                    )
+                    result["is_subassembly"] = com_get(sub_occs, "Count", 0) > 0
                 except Exception:
                     result["is_subassembly"] = False
 
@@ -300,8 +297,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -343,8 +341,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -394,8 +393,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -410,7 +410,7 @@ class QueryMixin:
             children = []
             try:
                 sub_occs = occurrence.SubOccurrences
-                if sub_occs and hasattr(sub_occs, "Count"):
+                if sub_occs and com_get(sub_occs, "Count", 0):
                     for j in range(1, sub_occs.Count + 1):
                         try:
                             child = sub_occs.Item(j)
@@ -448,8 +448,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -477,7 +478,7 @@ class QueryMixin:
                 children = []
                 try:
                     sub_occs = occ.SubOccurrences
-                    if sub_occs and hasattr(sub_occs, "Count") and sub_occs.Count > 0:
+                    if sub_occs and com_get(sub_occs, "Count", 0) > 0:
                         item["type"] = "assembly"
                         for j in range(1, sub_occs.Count + 1):
                             try:
@@ -505,7 +506,7 @@ class QueryMixin:
             return {
                 "bom": bom,
                 "top_level_count": len(bom),
-                "document": doc.Name if hasattr(doc, "Name") else "Unknown",
+                "document": com_get(doc, "Name", "Unknown"),
             }
         except Exception as e:
             return error_result(e)
@@ -531,7 +532,7 @@ class QueryMixin:
             bodies_info = []
             try:
                 bodies = occurrence.Bodies
-                body_count = bodies.Count if hasattr(bodies, "Count") else 0
+                body_count = com_get(bodies, "Count", 0)
 
                 for i in range(1, body_count + 1):
                     body = bodies.Item(i)
@@ -607,7 +608,8 @@ class QueryMixin:
             result: dict[str, Any] = {"component_index": component_index}
 
             try:
-                face_style = occurrence.GetFaceStyle2()
+                # GetFaceStyle2(vbHonourPrefs as VT_BOOL)
+                face_style = occurrence.GetFaceStyle2(True)
                 result["face_style"] = str(face_style) if face_style is not None else None
             except Exception:
                 result["face_style"] = None
@@ -634,8 +636,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occurrence = occurrences.GetOccurrence(internal_id)
@@ -666,11 +669,8 @@ class QueryMixin:
                 pass
 
             # Full 4x4 matrix
-            try:
-                mat = occurrence.GetMatrix()
-                info["matrix"] = list(mat)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                info["matrix"] = self._get_occurrence_matrix(occurrence)
 
             # Visibility
             with contextlib.suppress(Exception):
@@ -703,8 +703,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -773,8 +774,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             bom_counts: dict[str, dict[str, Any]] = {}
@@ -784,14 +786,14 @@ class QueryMixin:
 
                 # Skip items excluded from BOM
                 try:
-                    if hasattr(occurrence, "IncludeInBom") and not occurrence.IncludeInBom:
+                    if not com_get(occurrence, "IncludeInBom", True):
                         continue
                 except Exception:
                     pass
 
                 # Skip pattern items (counted as part of pattern source)
                 try:
-                    if hasattr(occurrence, "IsPatternItem") and occurrence.IsPatternItem:
+                    if com_get(occurrence, "IsPatternItem", False):
                         continue
                 except Exception:
                     pass
@@ -802,9 +804,7 @@ class QueryMixin:
                 except Exception:
                     file_path = f"Unknown_{i}"
 
-                name = (
-                    occurrence.Name if hasattr(occurrence, "Name") else os.path.basename(file_path)
-                )
+                name = com_get(occurrence, "Name", os.path.basename(file_path))
 
                 if file_path in bom_counts:
                     bom_counts[file_path]["quantity"] += 1
@@ -834,8 +834,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Relations3d"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             relations = doc.Relations3d
             relation_list = []
@@ -895,8 +896,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             def traverse_occurrence(occ: Any, depth: int = 0) -> dict[str, Any]:
                 """Recursively build tree from an occurrence."""
@@ -916,13 +918,13 @@ class QueryMixin:
                     node["visible"] = occ.Visible
 
                 with contextlib.suppress(Exception):
-                    node["suppressed"] = occ.IsSuppressed if hasattr(occ, "IsSuppressed") else False
+                    node["suppressed"] = com_get(occ, "IsSuppressed", False)
 
                 # Recurse into sub-occurrences
                 children = []
                 try:
                     sub_occs = occ.SubOccurrences
-                    if sub_occs and hasattr(sub_occs, "Count"):
+                    if sub_occs and com_get(sub_occs, "Count", 0):
                         for j in range(1, sub_occs.Count + 1):
                             try:
                                 child = sub_occs.Item(j)
@@ -950,7 +952,7 @@ class QueryMixin:
             return {
                 "tree": tree,
                 "top_level_count": len(tree),
-                "document": doc.Name if hasattr(doc, "Name") else "Unknown",
+                "document": com_get(doc, "Name", "Unknown"),
             }
         except Exception as e:
             return error_result(e)
@@ -965,8 +967,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             return {"count": doc.Occurrences.Count}
         except Exception as e:

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import solidedge_mcp.tools.export as export_tools
+from solidedge_mcp.backends.export import ExportManager, ViewModel
 from solidedge_mcp.tools.export import (
     add_2d_dimension,
     add_annotation,
@@ -25,6 +26,7 @@ from solidedge_mcp.tools.export import (
     query_sheet,
     set_camera,
 )
+from tests.unit.test_tools_features import backend_call_violations
 from tests.unit.test_tools_query import assert_literal_discriminators
 
 
@@ -535,3 +537,17 @@ class TestCreateTable:
 
 def test_export_discriminators_match_their_cases():
     assert assert_literal_discriminators(export_tools) == 16
+
+
+# === Tool/backend signature agreement ===
+
+
+class TestBackendSignatureAgreement:
+    """Every export tool must be able to supply its backend's required params."""
+
+    def test_no_backend_call_violations(self):
+        violations = backend_call_violations(
+            "solidedge_mcp.tools.export",
+            {"export_manager": ExportManager, "view_manager": ViewModel},
+        )
+        assert violations == []

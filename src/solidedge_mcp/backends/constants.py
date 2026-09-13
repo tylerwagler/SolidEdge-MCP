@@ -220,6 +220,169 @@ class OffsetSideConstants:
     seOffsetRight = 2
 
 
+class AddBodyTypeConstants:
+    """constant.tlb > AddBodyTypeConstants."""
+
+    igPartType = 1
+    igSheetMetalType = 2
+    igSubdivisionType = 3
+    igSubdivisionControlCageType = 4
+    igConstructionPartType = 5
+    igConstructionSheetMetalType = 6
+    igConstructionSubdivisionType = 7
+
+
+class DrawnCutoutFeatureConstants:
+    """constant.tlb > DrawnCutoutFeatureConstants."""
+
+    seDrawnCutoutDepthLeft = 1
+    seDrawnCutoutDepthRight = 2
+    seDrawnCutoutMaterialInside = 3
+    seDrawnCutoutMaterialOutside = 4
+    seDrawnCutoutProfileLeft = 5
+    seDrawnCutoutProfileRight = 6
+    seDrawnCutoutRoundEdges = 7
+    seDrawnCutoutNoRoundEdges = 8
+    seDrawnCutoutRoundCorners = 9
+    seDrawnCutoutNoRoundCorners = 10
+
+
+class LouverFeatureConstants:
+    """constant.tlb > LouverFeatureConstants."""
+
+    seLouverDepthDirectionLeft = 1
+    seLouverDepthDirectionRight = 2
+    seLouverDimensionOffset = 3
+    seLouverDimensionFull = 4
+    seLouverFormedEnd = 5
+    seLouverLancedEnd = 6
+    seLouverHeightNormal = 7
+    seLouverHeightReverseNormal = 8
+    seLouverRound = 9
+    seLouverNoRound = 10
+
+
+class GNTTypePropertyConstants:
+    """geometry.tlb > GNTTypePropertyConstants.
+
+    Values of Face.GeometryForm and Edge.GeometryForm. Reading that one
+    property is what makes paged face queries cheap: the alternative is
+    re-querying Body.Faces() once per geometry type.
+    """
+
+    igBody = 167551091
+    igShell = 167551088
+    igFace = 167551075
+    igLoop = 167551097
+    igEdgeUse = 167551099
+    igEdge = 167551093
+    igVertex = 167551101
+    igBSplineSurface = 1465959633
+    igCylinder = -114972029
+    igCone = -114972031
+    igPlane = -1909484335
+    igMesh = -2071771273
+    igSphere = -114972027
+    igTorus = -114972025
+    igBSplineCurve = 167551103
+    igCircle = 167551105
+    igEllipse = 167551107
+    igLine = 167551109
+    igPLine = 434530178
+    igParamBSplineCurve = -1811952078
+    igCurveBody = -1020639371
+    igCurvePath = -1020639369
+    igCurve = -1020639367
+    igCurveVertex = -1020639365
+    igShells = 167551078
+    igFaces = 167551073
+    igLoops = 167551080
+    igEdgeUses = 167551095
+    igEdges = 167551084
+    igVertices = 167551086
+
+
+class SeGradientType:
+    """constant.tlb > SeGradientType."""
+
+    seGradientTypeHorizontal = 1
+    seGradientTypeVertical = 2
+    seGradientTypeDiagonalUp = 3
+    seGradientTypeDiagonalDown = 4
+    seGradientTypeSquareSpot = 5
+    seGradientTypeCircularSpot = 6
+    seGradientTypeCustom = 7
+
+
+class DimWeldTypeConstants:
+    """constant.tlb > DimWeldTypeConstants (top-symbol values).
+
+    The full enum also carries igDimWeldBottom* and modifier values; add them
+    from the type library if a caller needs them.
+    """
+
+    igDimWeldTypeNone = 0
+    igDimWeldTopFillet = 1
+    igDimWeldTopSpot = 2
+    igDimWeldTopSeam = 3
+    igDimWeldTopBevel = 4
+    igDimWeldTopVGroove = 5
+    igDimWeldTopSlot = 6
+    igDimWeldTopSquare = 7
+    igDimWeldTopUGroove = 8
+    igDimWeldTopFlangeEdge = 9
+    igDimWeldTopFlangeCorner = 10
+    igDimWeldTopBacking = 11
+    igDimWeldTopJGroove = 12
+    igDimWeldTopFlareV = 13
+    igDimWeldTopFlareBevel = 14
+    igDimWeldTopSurfacing = 15
+    igDimWeldTopSteepFlankedBevel = 16
+    igDimWeldTopSteepFlankedV = 17
+    igDimWeldTopEdgeWeld = 18
+    igDimWeldTopSurfaceJoint = 19
+    igDimWeldTopInclinedJoint = 20
+    igDimWeldTopFoldJoint = 21
+    igDimWeldTopSingleVButt = 43
+    igDimWeldTopSingleBevelButt = 44
+    igDimWeldTopCompoundSquareGroove = 54
+    igDimWeldTopCompoundJGroove = 55
+    igDimWeldTopCompoundBevel = 56
+    igDimWeldTopCompoundFlareBevel = 57
+    igDimWeldTopMeltThrough = 62
+    igDimWeldTopKeyhole = 65
+    igDimWeldTopScarf = 67
+    igDimWeldTopContinuationFillet = 70
+    igDimWeldTopGroove = 73
+    igDimWeldTopHYWeld = 75
+    igDimWeldTopSingleUButt = 78
+    igDimWeldTopPermRemBacking = 80
+    igDimWeldTopConsumableInsert = 82
+    igDimWeldTopCompoundFlareBevelDashed = 84
+
+
+class AxisEndConstants:
+    """Which end of an axis a helix grows from.
+
+    Aliases of constant.tlb > FeaturePropertyConstants. Used for the AxisStart
+    argument of the helix APIs, whose declared type is FeaturePropertyConstants.
+    """
+
+    igStart = 29
+    igEnd = 30
+
+
+class ThicknessSideConstants:
+    """Which side of the profile a thin wall is offset to.
+
+    Aliases of constant.tlb > FeaturePropertyConstants. Used for the
+    ThicknessSide argument of the thin-wall APIs.
+    """
+
+    igInside = 4
+    igOutside = 5
+
+
 class NormalCutoutMethodConstants:
     """Method argument of the NormalCutouts.Add* calls.
 
@@ -381,39 +544,39 @@ class AssemblyFeaturePropertyConstants:
 
 
 class PatternTypeConstants:
-    """Pattern type constants (from type library)"""
+    """constant.tlb > PatternTypeConstants."""
 
-    igRectangularPattern = 1
-    igCircularPattern = 2
-    igCurvePattern = 3
+    seSmartPattern = 0
+    seFastPattern = 1
 
 
 class PatternCurveAnchorSideConstants:
-    """Pattern curve anchor side constants (from type library)"""
+    """constant.tlb > PatternCurveAnchorSideConstants."""
 
-    igPatternAnchorLeft = 0
-    igPatternAnchorRight = 1
-    igPatternAnchorCenter = 2
+    sePatternCurveLeftSide = 1
+    sePatternCurveRightSide = 2
 
 
 class PatternOffsetTypeConstants:
-    """Pattern offset type constants (from type library)"""
+    """assembly.tlb > PatternOffsetTypeConstants."""
 
-    igPatternOffsetDistance = 0
-    igPatternOffsetPercentage = 1
+    sePatternFitOffset = 0
+    sePatternFillOffset = 1
+    sePatternFixedOffset = 2
+    sePatternChordLengthOffset = 3
 
 
 class PatternTransformTypeConstants:
-    """Pattern transform type constants (from type library)"""
+    """constant.tlb > PatternTransformTypeConstants."""
 
-    igPatternTransformNone = 0
-    igPatternTransformScale = 1
-    igPatternTransformMirror = 2
+    sePatternTransformLinear = 0
+    sePatternTransformFullRotation = 1
+    sePatternTransformProjectedRotation = 2
+    sePatternTransformFullRotationFromSurface = 3
 
 
 class PatternTransformRotateTypeConstants:
-    """Pattern transform rotate type constants (from type library)"""
+    """constant.tlb > PatternTransformRotateTypeConstants."""
 
-    igPatternRotateNone = 0
-    igPatternRotateAboutCurve = 1
-    igPatternRotateAboutPoint = 2
+    sePatternTransformRotateOnCurvePosition = 0
+    sePatternTransformRotateOnFeaturePosition = 1

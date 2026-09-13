@@ -180,11 +180,12 @@ def create_sheet_metal_base(
     """Create the base feature of a sheet metal part from the active sketch.
 
     All dimensions in meters. thickness applies to every type.
-    width: flange (defaults to 0.0) and tab. bend_radius: flange and
+    width: flange (defaults to 0.0), tab, and contour_advanced, where it is
+    the flange projection distance and must be > 0. bend_radius: flange and
     contour_advanced (defaults to 0.001). relief_type is accepted for
     contour_advanced but the COM call does not currently consume it.
     """
-    err = validate_numerics(thickness=thickness)
+    err = validate_numerics(thickness=thickness, width=width)
     if err:
         return err
     match type:
@@ -197,6 +198,7 @@ def create_sheet_metal_base(
                 thickness,
                 bend_radius or 0.001,
                 relief_type,
+                width or 0.0,
             )
         case "tab_multi_profile":
             return feature_manager.create_base_tab_multi_profile(thickness)
@@ -213,6 +215,9 @@ def create_lofted_flange(
 
     Dimensions in meters. bend_radius applies to 'advanced' only, which uses
     bend deduction/allowance; 'basic' and 'ex' take thickness alone.
+    Every method is unsupported: Models.AddLoftedFlange* needs cross-section
+    profiles with a per-section origin, origin reference and vertex map that
+    cannot be built here. Create the lofted flange in the Solid Edge UI.
     """
     err = validate_numerics(thickness=thickness, bend_radius=bend_radius)
     if err:
@@ -266,9 +271,10 @@ def create_slot(
 ) -> dict[str, Any]:
     """Create a slot from the active sketch profile.
 
-    width and depth in meters. 'basic' uses width alone (as the slot depth);
-    every other method uses both width and depth. direction is ignored by
-    'sync'.
+    width and depth in meters. 'basic' (unsupported), 'ex' (unsupported) and
+    'sync' (unsupported) need a KeyPointOrTangentFace plus From/To extent
+    faces that cannot be selected here; use 'multi_body' or
+    'sync_multi_body' (width + depth + direction), or an extruded cutout.
     """
     err = validate_numerics(width=width, depth=depth)
     if err:
@@ -366,17 +372,23 @@ def create_dimple(
 def create_louver(
     method: Literal["basic", "sync"] = "basic",
     depth: float = 0.0,
+    height: float = 0.0,
+    direction: Literal["Normal", "Reverse"] = "Normal",
 ) -> dict[str, Any]:
     """Create a louver from the active sketch profile (sheet metal).
 
-    depth in meters. 'sync' uses the synchronous modeling overload.
+    depth and height in meters; Louvers.Add requires a positive height, so
+    'basic' fails without it. direction is the side the material is formed
+    toward. 'sync' (unsupported: Louvers.AddSync needs a target face plus
+    origin and orientation coordinate arrays that cannot be supplied here);
+    use 'basic'.
     """
-    err = validate_numerics(depth=depth)
+    err = validate_numerics(depth=depth, height=height)
     if err:
         return err
     match method:
         case "basic":
-            return feature_manager.create_louver(depth)
+            return feature_manager.create_louver(depth, direction, height)
         case "sync":
             return feature_manager.create_louver_sync(depth)
         case _:
@@ -447,6 +459,9 @@ def create_stamped(
     """Create a stamped feature from the active sketch: a bead or a gusset.
 
     depth in meters (the gusset uses it as the material thickness).
+    'bead' (unsupported: Beads.Add needs a full bead cross-section - type,
+    height, width, taper angle, form/punch/die radii, end condition - that
+    this tool cannot supply); use 'gusset', or add the bead in the UI.
     """
     err = validate_numerics(depth=depth)
     if err:
@@ -496,8 +511,10 @@ def create_reinforcement(
     """Create a reinforcement from the active sketch: a rib or a lip.
 
     thickness in meters (the lip uses it as the lip depth). direction is the
-    side material is added to; 'Symmetric' is accepted by 'rib' only and is
-    treated as 'Normal' by 'lip'.
+    side material is added to; 'Symmetric' is accepted by 'rib' only.
+    'lip' (unsupported: Lips.Add needs the body edges to run the lip along
+    plus a side face and a cap face, which cannot be selected here); use
+    'rib', or add the lip in the Solid Edge UI.
     """
     err = validate_numerics(thickness=thickness)
     if err:
@@ -511,17 +528,28 @@ def create_reinforcement(
             return {"error": f"Unknown type: {type}"}
 
 
-def create_web_network() -> dict[str, Any]:
+def create_web_network(
+    thickness: float = 0.0,
+    depth: float = 0.0,
+    direction: Literal["Normal", "Reverse", "Symmetric"] = "Normal",
+) -> dict[str, Any]:
     """Create a web network from the active sketch (sheet metal / plastic part).
 
-    Takes no parameters; the web geometry comes from the open sketch profile.
+    The web geometry comes from the open sketch profiles. thickness (the web
+    thickness, required and must be > 0) and depth (the finite web depth) are
+    in meters; direction is the side material is added to.
     """
-    return feature_manager.create_web_network()
+    err = validate_numerics(thickness=thickness, depth=depth)
+    if err:
+        return err
+    return feature_manager.create_web_network(thickness, depth, direction)
 
 
 def create_split() -> dict[str, Any]:
     """Split the solid body with the active sketch profile.
 
-    Takes no parameters; the cutting geometry comes from the active profile.
+    Unsupported: Splits.Add needs target bodies plus tool surfaces or planes
+    to cut with, which cannot be selected here. Split the body in the Solid
+    Edge UI.
     """
     return feature_manager.create_split()

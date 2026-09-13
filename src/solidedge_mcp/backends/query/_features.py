@@ -5,9 +5,16 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..constants import DirectionConstants, OffsetSideConstants
 from ..logging import get_logger
+from ._base import dispatch_array
 
 _logger = get_logger(__name__)
+
+#: Part.tlb takes ``KeyPointFlags`` (constant.tlb > KeyPointExtentConstants) on
+#: every ApplyDirection*Extent overload. There is no "no keypoint" member; 0 is
+#: the null value Solid Edge uses when the extent is not keypoint-driven.
+_NO_KEYPOINT_FLAGS = 0
 
 
 class FeatureQueryMixin:
@@ -368,8 +375,12 @@ class FeatureQueryMixin:
 
             dimensions = []
             try:
-                # GetDimensions returns (count, dim_array) as out-params
-                result = target_feature.GetDimensions()
+                # Part.tlb <feature>.GetDimensions(
+                #   NumDimensions VT_I4* [out],
+                #   Dimensions SAFEARRAY(VT_DISPATCH)* [in,out])
+                # NumDimensions precedes the buffer, so Dimensions goes in by
+                # keyword; Solid Edge resizes the array it is handed.
+                result = target_feature.GetDimensions(Dimensions=dispatch_array([]))
                 if result is not None:
                     # result may be a tuple (count, array) or just an array
                     if isinstance(result, tuple) and len(result) >= 2:
@@ -485,18 +496,31 @@ class FeatureQueryMixin:
             return error_result(e)
 
     def set_direction1_extent(
-        self, feature_name: str, extent_type: int, distance: float = 0.0
+        self,
+        feature_name: str,
+        extent_type: int,
+        distance: float = 0.0,
+        extent_side: int = DirectionConstants.igRight,
     ) -> dict[str, Any]:
         """
         Set Direction 1 extent on a named feature.
 
-        Calls feature.ApplyDirection1Extent(extent_type, distance, None).
-        Common extent types: igFinite=13, igThroughAll=16, igNone=44.
+        Part.tlb <feature>.ApplyDirection1Extent(
+            ExtentType FeaturePropertyConstants [in],
+            ExtentSide FeaturePropertyConstants [in],
+            FiniteDepth/Angle VT_R8 [in],
+            KeyPointOrTangentFace VT_DISPATCH [in],
+            KeyPointFlags KeyPointExtentConstants [in])
+
+        All five arguments are required. The keypoint slots are only used by
+        keypoint-driven extents; this server cannot select a KeyPoint, so it
+        passes None/0 and supports the distance-driven extents.
 
         Args:
             feature_name: Name of the feature in the design tree
             extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
             distance: Extent distance in meters (used when extent_type is Finite)
+            extent_side: Side constant (1=Left/Reverse, 2=Right/Normal, 3=Symmetric)
 
         Returns:
             Dict with status
@@ -506,12 +530,15 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.ApplyDirection1Extent(extent_type, distance, None)
+            feature.ApplyDirection1Extent(
+                extent_type, extent_side, distance, None, _NO_KEYPOINT_FLAGS
+            )
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "extent_type": extent_type,
+                "extent_side": extent_side,
                 "distance": distance,
             }
         except Exception as e:
@@ -553,18 +580,30 @@ class FeatureQueryMixin:
             return error_result(e)
 
     def set_direction2_extent(
-        self, feature_name: str, extent_type: int, distance: float = 0.0
+        self,
+        feature_name: str,
+        extent_type: int,
+        distance: float = 0.0,
+        extent_side: int = DirectionConstants.igRight,
     ) -> dict[str, Any]:
         """
         Set Direction 2 extent on a named feature.
 
-        Calls feature.ApplyDirection2Extent(extent_type, distance, None).
-        Common extent types: igFinite=13, igThroughAll=16, igNone=44.
+        Part.tlb <feature>.ApplyDirection2Extent(
+            ExtentType FeaturePropertyConstants [in],
+            ExtentSide FeaturePropertyConstants [in],
+            FiniteDepth/Angle VT_R8 [in],
+            KeyPointOrTangentFace VT_DISPATCH [in],
+            KeyPointFlags KeyPointExtentConstants [in])
+
+        All five arguments are required; see set_direction1_extent for why the
+        keypoint slots are None/0.
 
         Args:
             feature_name: Name of the feature in the design tree
             extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
             distance: Extent distance in meters (used when extent_type is Finite)
+            extent_side: Side constant (1=Left/Reverse, 2=Right/Normal, 3=Symmetric)
 
         Returns:
             Dict with status
@@ -574,12 +613,15 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.ApplyDirection2Extent(extent_type, distance, None)
+            feature.ApplyDirection2Extent(
+                extent_type, extent_side, distance, None, _NO_KEYPOINT_FLAGS
+            )
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "extent_type": extent_type,
+                "extent_side": extent_side,
                 "distance": distance,
             }
         except Exception as e:
@@ -626,20 +668,31 @@ class FeatureQueryMixin:
     def set_thin_wall_options(
         self,
         feature_name: str,
-        wall_type: int,
-        thickness1: float,
-        thickness2: float = 0.0,
+        thickness: float,
+        thickness_side: int = DirectionConstants.igRight,
+        thin_wall: bool = True,
+        add_end_caps: bool = False,
+        remove_inside_material: bool = False,
     ) -> dict[str, Any]:
         """
         Set thin wall options on a named feature.
 
-        Calls feature.SetThinWallOptions(wall_type, thickness1, thickness2).
+        Part.tlb <feature>.SetThinWallOptions(
+            ThinWall VT_BOOL [in], AddEndCaps VT_BOOL [in],
+            RemoveInsideMaterial VT_BOOL [in], Thickness VT_R8 [in],
+            ThicknessSide FeaturePropertyConstants [in])
+
+        All five arguments are required. The older three-argument call was
+        passing (thickness_side, thickness, 0.0) into the three leading
+        booleans, which is why it never took effect.
 
         Args:
             feature_name: Name of the feature in the design tree
-            wall_type: Thin wall type constant
-            thickness1: First wall thickness in meters
-            thickness2: Second wall thickness in meters (default 0.0)
+            thickness: Wall thickness in meters
+            thickness_side: Side constant (1=Left, 2=Right, 3=Symmetric)
+            thin_wall: Enable (True) or disable (False) the thin wall
+            add_end_caps: Cap the open ends of the thin wall
+            remove_inside_material: Hollow out the interior
 
         Returns:
             Dict with status
@@ -649,14 +702,18 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.SetThinWallOptions(wall_type, thickness1, thickness2)
+            feature.SetThinWallOptions(
+                thin_wall, add_end_caps, remove_inside_material, thickness, thickness_side
+            )
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
-                "wall_type": wall_type,
-                "thickness1": thickness1,
-                "thickness2": thickness2,
+                "thin_wall": thin_wall,
+                "add_end_caps": add_end_caps,
+                "remove_inside_material": remove_inside_material,
+                "thickness": thickness,
+                "thickness_side": thickness_side,
             }
         except Exception as e:
             return error_result(e)
@@ -699,15 +756,27 @@ class FeatureQueryMixin:
         except Exception as e:
             return error_result(e)
 
-    def set_from_face_offset(self, feature_name: str, offset: float) -> dict[str, Any]:
+    def set_from_face_offset(
+        self, feature_name: str, offset: float, offset_side: int | None = None
+    ) -> dict[str, Any]:
         """
         Set the 'from face' offset on a named feature.
 
-        Calls feature.SetFromFaceOffsetData(offset).
+        Part.tlb <feature>.SetFromFaceOffsetData(
+            FromFaceOrPlane VT_DISPATCH [in],
+            FromFaceOffsetSide OffsetSideConstants [in],
+            FromFaceOffsetDistance VT_R8 [in])
+
+        All three arguments are required. This server cannot select a Face or
+        reference plane, so the face already attached to the feature is read
+        back with GetFromFaceOffsetData() and re-applied with the new offset.
+        A feature with no from-face cannot be edited here.
 
         Args:
             feature_name: Name of the feature in the design tree
             offset: Offset distance in meters
+            offset_side: OffsetSideConstants (1=Left, 2=Right, 44=None);
+                None keeps the side already on the feature
 
         Returns:
             Dict with status
@@ -717,12 +786,32 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.SetFromFaceOffsetData(offset)
+            # GetFromFaceOffsetData(FromFaceOrPlane [out], FromFaceOffsetSide
+            # [out], FromFaceOffsetDistance [out]) - no arguments to pass.
+            current = feature.GetFromFaceOffsetData()
+            from_face = current[0] if isinstance(current, tuple) and current else None
+            if from_face is None:
+                return {
+                    "error": (
+                        f"Feature '{feature_name}' has no from-face to offset. "
+                        "SetFromFaceOffsetData needs a Face or reference plane "
+                        "object, which this server cannot select. Create the "
+                        "from-to extent in the Solid Edge UI first."
+                    ),
+                    "unsupported": True,
+                }
+
+            side = offset_side
+            if side is None:
+                side = current[1] if len(current) > 1 else OffsetSideConstants.seOffsetNone
+
+            feature.SetFromFaceOffsetData(from_face, side, offset)
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "offset": offset,
+                "offset_side": side,
             }
         except Exception as e:
             return error_result(e)
@@ -839,16 +928,23 @@ class FeatureQueryMixin:
         except Exception as e:
             return error_result(e)
 
-    def set_body_array(self, feature_name: str, body_indices: list[int]) -> dict[str, Any]:
+    def set_body_array(
+        self, feature_name: str, body_indices: list[int], multi_body_cut: bool = True
+    ) -> dict[str, Any]:
         """
         Set the body array on a named feature.
 
-        Resolves body objects from the model by index (0-based) and calls
-        feature.SetBodyArray(body_array).
+        Part.tlb <feature>.SetBodyArray(
+            MultiBodyCut VT_BOOL [in], NumberOfBodies VT_I4 [in],
+            BodyArray SAFEARRAY(VT_DISPATCH)* [in])
+
+        All three arguments are required; the earlier single-argument call left
+        the body list in the MultiBodyCut slot.
 
         Args:
             feature_name: Name of the feature in the design tree
             body_indices: List of 0-based body indices from the Models collection
+            multi_body_cut: Whether the feature cuts across multiple bodies
 
         Returns:
             Dict with status
@@ -868,13 +964,14 @@ class FeatureQueryMixin:
                 model = models.Item(com_idx)
                 body_array.append(model.Body)
 
-            feature.SetBodyArray(body_array)
+            feature.SetBodyArray(multi_body_cut, len(body_array), dispatch_array(body_array))
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "body_indices": body_indices,
                 "body_count": len(body_array),
+                "multi_body_cut": multi_body_cut,
             }
         except Exception as e:
             return error_result(e)

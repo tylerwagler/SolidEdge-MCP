@@ -723,3 +723,163 @@ class TestCreateBend:
         result = feature_mgr.create_bend()
         assert "error" in result
         assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# SHEET METAL BASE FEATURES
+# ============================================================================
+
+
+class TestCreateBaseFlange:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, _, profile = managers
+
+        result = feature_mgr.create_base_flange(0.02, 0.001, 0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "base_flange"
+        assert result["width"] == 0.02
+        # AddBaseContourFlange(pProfile, varThicknessSide, varExtentType,
+        # varProjectionSide, varProjectionDistance, varRadius);
+        # igRight = 2, igFinite = 13
+        models.AddBaseContourFlange.assert_called_once_with(profile, 2, 13, 2, 0.02, 0.002)
+
+    def test_default_bend_radius_is_twice_thickness(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_base_flange(0.02, 0.001)
+        assert result["bend_radius"] == 0.002
+        models.AddBaseContourFlange.assert_called_once_with(profile, 2, 13, 2, 0.02, 0.002)
+
+    def test_width_required(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_base_flange(0.0, 0.001)
+        assert "error" in result
+        assert "projection distance" in result["error"]
+        models.AddBaseContourFlange.assert_not_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_base_flange(0.02, 0.001)
+        assert "error" in result
+        models.AddBaseContourFlange.assert_not_called()
+
+
+class TestCreateBaseTab:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_base_tab(0.001)
+        assert result["status"] == "created"
+        assert result["type"] == "base_tab"
+        # AddBaseTab(Profile, ExtentSide); igRight = 2
+        models.AddBaseTab.assert_called_once_with(profile, 2)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_base_tab(0.001)
+        assert "error" in result
+        models.AddBaseTab.assert_not_called()
+
+
+class TestCreateBaseTabMultiProfile:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        p1, p2 = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+
+        result = feature_mgr.create_base_tab_multi_profile(0.001)
+        assert result["status"] == "created"
+        assert result["profile_count"] == 2
+        # AddBaseTabWithMultipleProfiles(NumberOfProfiles, ProfileArray,
+        # ExtentSide); igRight = 2
+        args = models.AddBaseTabWithMultipleProfiles.call_args.args
+        assert len(args) == 3
+        assert args[0] == 2
+        assert args[2] == 2
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = []
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_base_tab_multi_profile(0.001)
+        assert "error" in result
+        models.AddBaseTabWithMultipleProfiles.assert_not_called()
+
+
+class TestCreateBaseContourFlangeAdvanced:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_base_contour_flange_advanced(0.001, 0.002, width=0.03)
+        assert result["status"] == "created"
+        assert result["width"] == 0.03
+        call = models.AddBaseContourFlangeByBendDeductionOrBendAllowance
+        call.assert_called_once_with(profile, 2, 13, 2, 0.03, 0.002)
+
+    def test_width_required(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_base_contour_flange_advanced(0.001, 0.002)
+        assert "error" in result
+        assert "projection distance" in result["error"]
+        models.AddBaseContourFlangeByBendDeductionOrBendAllowance.assert_not_called()
+
+
+class TestCreateWebNetwork:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        p1 = MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [p1]
+
+        result = feature_mgr.create_web_network(thickness=0.002, depth=0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "web_network"
+        assert result["profile_count"] == 1
+        # AddWebNetwork(nNumProfiles, aProfiles, dThickness, WebDirection,
+        # dFiniteDepth, TreatmentType); igRight = 2, seTreatmentNone = 44
+        args = models.AddWebNetwork.call_args.args
+        assert len(args) == 6
+        assert args[0] == 1
+        assert args[2:] == (0.002, 2, 0.01, 44)
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_thickness_required(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_web_network()
+        assert "error" in result
+        assert "thickness" in result["error"]
+        models.AddWebNetwork.assert_not_called()
+
+    def test_no_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = []
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_web_network(thickness=0.002)
+        assert "error" in result
+        models.AddWebNetwork.assert_not_called()
+
+
+class TestLoftedFlangesUnsupported:
+    """Every AddLoftedFlange* overload needs cross-section profiles."""
+
+    def test_basic(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_lofted_flange(0.001)
+        assert result["unsupported"] is True
+        assert result["thickness"] == 0.001
+        models.AddLoftedFlange.assert_not_called()
+
+    def test_advanced(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_lofted_flange_advanced(0.001, 0.002)
+        assert result["unsupported"] is True
+        assert result["bend_radius"] == 0.002
+        models.AddLoftedFlangeByBendDeductionOrBendAllowance.assert_not_called()
+
+    def test_ex(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_lofted_flange_ex(0.001)
+        assert result["unsupported"] is True
+        models.AddLoftedFlangeEx.assert_not_called()

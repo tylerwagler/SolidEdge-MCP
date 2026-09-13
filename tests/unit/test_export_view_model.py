@@ -10,6 +10,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def view_mgr():
@@ -18,6 +24,7 @@ def view_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
 
     window = MagicMock()
@@ -317,4 +324,46 @@ class TestTransformScreenToModel:
         dm.get_active_document.return_value = doc
         vm = ViewModel(dm)
         result = vm.transform_screen_to_model(0, 0)
+        assert "error" in result
+
+
+# ============================================================================
+# SET VIEW BACKGROUND (ViewStyle.SetGradientBackground)
+# ============================================================================
+
+
+class TestSetViewBackground:
+    """The background lives on ViewStyle; View has no SetBackgroundColor."""
+
+    def test_uses_view_style_gradient(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        style = MagicMock()
+        view_obj.ViewStyle = style
+
+        result = vm.set_view_background(255, 128, 64)
+
+        assert result["status"] == "updated"
+        assert result["color"] == [255, 128, 64]
+        ole_color = 255 | (128 << 8) | (64 << 16)
+        # SetGradientBackground(eType, crColor1, crColor2, [x], [y]);
+        # 2 is seGradientTypeVertical. Both stops match for a flat background.
+        style.SetGradientBackground.assert_called_once_with(2, ole_color, ole_color)
+        view_obj.SetBackgroundColor.assert_not_called()
+
+    def test_no_view_style(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        type(view_obj).ViewStyle = property(
+            lambda self: (_ for _ in ()).throw(Exception("no ViewStyle"))
+        )
+        try:
+            result = vm.set_view_background(0, 0, 0)
+            assert "error" in result
+        finally:
+            del type(view_obj).ViewStyle
+
+    def test_no_window(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        doc.Windows.Count = 0
+
+        result = vm.set_view_background(0, 0, 0)
         assert "error" in result

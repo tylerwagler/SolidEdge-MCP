@@ -137,7 +137,9 @@ def manage_component(
 ) -> dict[str, Any]:
     """Modify one assembly component (0-based component_index).
 
-    delete removes it. replace: new_file_path. suppress: suppress flag.
+    delete removes it. replace: new_file_path. suppress: suppress flag
+    (suppress=False is unsupported - COM offers no way back to the
+    SuppressComponent object; unsuppress in the Solid Edge UI).
     reorder: target_index. swap_family: new_member_name. ground: ground flag.
     pattern: linear copies via count, spacing (meters), direction X/Y/Z.
     mirror: plane_index is 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
@@ -490,8 +492,11 @@ def add_assembly_relation(
 ) -> dict[str, Any]:
     """Add a Relations3d relation between two occurrences (0-based indices).
 
-    planar: offset (meters) + orientation. axial: orientation.
-    angular: angle (degrees). gear: ratio1/ratio2. point/tangent: no extras.
+    axial: orientation - the only supported type. 'planar', 'angular',
+    'point', 'tangent' and 'gear' are unsupported: Relations3d.AddPlanar /
+    AddAngular / AddPoint / AddTangent / AddGear all take the specific Face,
+    Edge or KeyPoint elements being constrained, which this server cannot
+    select. Add those relations in the Solid Edge UI.
     """
     err = validate_numerics(offset=offset, angle=angle, ratio1=ratio1, ratio2=ratio2)
     if err:
@@ -633,11 +638,11 @@ def assembly_feature(
     Cutouts/hole: scope_parts = 0-based occurrence indices to cut.
     extruded_*: extent_type/extent_side/profile_side + distance (meters).
     revolved_*: angle (degrees). hole: depth (meters).
-    mirror: feature_indices (0-based) + 1-based plane_index
-    (1=Top/XY, 2=Right/YZ, 3=Front/XZ) + mirror_type (raw COM int, 1=copy).
-    pattern: feature_indices + pattern_type.
     swept_protrusion: num_trace_curves/num_cross_sections.
     recompute: options (raw COM flags, 0=default).
+    'mirror'/'pattern' unsupported: AssemblyFeaturesMirrors.Add and
+    AssemblyFeaturesPatterns.Add return E_ACCESSDENIED on SE 2025/2026.
+    Mirror or pattern in the part document, or use manage_component.
     """
     err = validate_numerics(distance=distance, angle=angle, depth=depth)
     if err:

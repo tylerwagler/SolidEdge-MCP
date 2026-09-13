@@ -173,3 +173,228 @@ class TestCreateBoundedSurface:
 
         result = feature_mgr.create_bounded_surface()
         assert "error" in result
+
+
+# ============================================================================
+# BASE HELIX (Models.AddFiniteBaseHelix* -- full parameter lists)
+# ============================================================================
+
+
+class TestCreateHelix:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+
+        result = feature_mgr.create_helix(0.005, 0.05)
+        assert result["status"] == "created"
+        assert result["type"] == "helix"
+        assert result["revolutions"] == 10.0
+        # AddFiniteBaseHelix(HelixAxis, AxisStart, NumCrossSections,
+        #   CrossSectionArray, ProfileSide, Height, Pitch, NumberOfTurns,
+        #   HelixDir)
+        assert models.AddFiniteBaseHelix.call_count == 1
+        args = models.AddFiniteBaseHelix.call_args[0]
+        assert len(args) == 9
+        assert args[0] is refaxis
+        assert args[1] == 29  # igStart
+        assert args[2] == 1
+        # Verified on SE 2026: the helix APIs take a plain list here; a
+        # VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper is rejected.
+        assert args[3] == [profile]
+        assert args[4:] == (2, 0.05, 0.005, 10.0, 2)
+
+    def test_left_hand(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = MagicMock()
+        result = feature_mgr.create_helix(0.005, 0.05, 4.0, direction="Left")
+        assert result["status"] == "created"
+        args = models.AddFiniteBaseHelix.call_args[0]
+        assert args[7] == 4.0  # NumberOfTurns
+        assert args[8] == 1  # HelixDir igLeft
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix(0.005, 0.05)
+        assert "axis of revolution" in result["error"]
+        models.AddFiniteBaseHelix.assert_not_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_helix(0.005, 0.05)
+        assert "error" in result
+        models.AddFiniteBaseHelix.assert_not_called()
+
+
+class TestCreateHelixSync:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+
+        result = feature_mgr.create_helix_sync(0.005, 0.05)
+        assert result["status"] == "created"
+        assert models.AddFiniteBaseHelixSync.call_count == 1
+        args = models.AddFiniteBaseHelixSync.call_args[0]
+        assert len(args) == 9
+        assert args[0] is refaxis
+        assert args[1] == 29
+        assert args[2] == 1
+        # Verified on SE 2026: the helix APIs take a plain list here; a
+        # VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper is rejected.
+        assert args[3] == [profile]
+        assert args[4:] == (2, 0.05, 0.005, 10.0, 2)
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_sync(0.005, 0.05)
+        assert "axis of revolution" in result["error"]
+        models.AddFiniteBaseHelixSync.assert_not_called()
+
+
+class TestCreateHelixThinWall:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+
+        result = feature_mgr.create_helix_thin_wall(0.005, 0.05, 0.001)
+        assert result["status"] == "created"
+        # ... plus ThinWall, AddEndCaps, RemoveInsideMaterial, Thickness,
+        # ThicknessSide
+        assert models.AddFiniteBaseHelixWithThinWall.call_count == 1
+        args = models.AddFiniteBaseHelixWithThinWall.call_args[0]
+        assert len(args) == 14
+        assert args[0] is refaxis
+        assert args[1] == 29
+        # Verified on SE 2026: the helix APIs take a plain list here; a
+        # VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper is rejected.
+        assert args[3] == [profile]
+        assert args[4:] == (2, 0.05, 0.005, 10.0, 2, True, False, True, 0.001, 4)
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_thin_wall(0.005, 0.05, 0.001)
+        assert "axis of revolution" in result["error"]
+        models.AddFiniteBaseHelixWithThinWall.assert_not_called()
+
+
+class TestCreateHelixSyncThinWall:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+
+        result = feature_mgr.create_helix_sync_thin_wall(0.005, 0.05, 0.001)
+        assert result["status"] == "created"
+        assert models.AddFiniteBaseHelixSyncWithThinWall.call_count == 1
+        args = models.AddFiniteBaseHelixSyncWithThinWall.call_args[0]
+        assert len(args) == 14
+        assert args[0] is refaxis
+        assert args[1] == 29
+        # Verified on SE 2026: the helix APIs take a plain list here; a
+        # VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper is rejected.
+        assert args[3] == [profile]
+        assert args[4:] == (2, 0.05, 0.005, 10.0, 2, True, False, True, 0.001, 4)
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = None
+        result = feature_mgr.create_helix_sync_thin_wall(0.005, 0.05, 0.001)
+        assert "axis of revolution" in result["error"]
+        models.AddFiniteBaseHelixSyncWithThinWall.assert_not_called()
+
+
+# ============================================================================
+# THIN-WALL LOFT / SWEEP
+# ============================================================================
+
+
+class TestCreateLoftThinWall:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        p1, p2 = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+
+        result = feature_mgr.create_loft_thin_wall(0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "loft_thin_wall"
+        # AddLoftedProtrusionWithThinWall: 21 required arguments, ending in
+        # ThinWall, AddEndCaps, RemoveInsideMaterial, Thickness, ThicknessSide
+        assert models.AddLoftedProtrusionWithThinWall.call_count == 1
+        args = models.AddLoftedProtrusionWithThinWall.call_args[0]
+        assert len(args) == 21
+        assert args[0] == 2
+        assert list(args[1].value) == [p1, p2]
+        assert list(args[2].value) == [48, 48]
+        assert args[5:] == (
+            2,  # MaterialSide igRight
+            44,
+            0.0,
+            None,  # start extent
+            44,
+            0.0,
+            None,  # end extent
+            44,
+            0.0,  # start tangent
+            44,
+            0.0,  # end tangent
+            True,
+            False,
+            True,
+            0.002,
+            4,  # thin wall
+        )
+
+    def test_too_few_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
+        result = feature_mgr.create_loft_thin_wall(0.002)
+        assert "error" in result
+        models.AddLoftedProtrusionWithThinWall.assert_not_called()
+
+
+class TestCreateSweepThinWall:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        path, cs = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
+
+        result = feature_mgr.create_sweep_thin_wall(0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "sweep_thin_wall"
+        # AddSweptProtrusionWithThinWall: 20 required arguments
+        assert models.AddSweptProtrusionWithThinWall.call_count == 1
+        args = models.AddSweptProtrusionWithThinWall.call_args[0]
+        assert len(args) == 20
+        assert args[0] == 1
+        assert list(args[1].value) == [path]
+        assert list(args[2].value) == [48]
+        assert args[3] == 1
+        assert list(args[4].value) == [cs]
+        assert list(args[5].value) == [48]
+        assert args[8:] == (
+            2,  # MaterialSide igRight
+            44,
+            0.0,
+            None,  # start extent
+            44,
+            0.0,
+            None,  # end extent
+            True,
+            False,
+            True,
+            0.002,
+            4,  # thin wall
+        )
+
+    def test_too_few_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
+        result = feature_mgr.create_sweep_thin_wall(0.002)
+        assert "error" in result
+        models.AddSweptProtrusionWithThinWall.assert_not_called()

@@ -32,6 +32,8 @@ def create_extrude(
     wall_thickness: thin_wall. direction 'Symmetric' only for finite/thin_wall
     (others treat it as Normal). from/to_plane_index: required for from_to*
     methods; 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
+    'by_keypoint' (unsupported: needs a KeyPoint or tangent face object this
+    server cannot select); use 'finite' or 'from_to'.
     """
     err = validate_numerics(distance=distance, wall_thickness=wall_thickness)
     if err:

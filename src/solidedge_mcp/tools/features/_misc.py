@@ -13,9 +13,11 @@ def thicken(
 ) -> dict[str, Any]:
     """Thicken an existing surface body into a solid.
 
-    thickness in meters. direction applies to 'sync' only and accepts
-    'Both' | 'Normal' | 'Reverse'; the 'basic' backend records it but the COM
-    call ignores it (thickens both sides).
+    thickness in meters; direction is 'Both' | 'Normal' | 'Reverse'.
+    Both methods are unsupported: Models.AddThickenFeature and
+    Thickens.AddSync need the surface faces (and, for sync, the bounding
+    loop) to thicken, which cannot be selected through this API. Thicken the
+    surface in the Solid Edge UI.
     """
     err = validate_numerics(thickness=thickness)
     if err:
@@ -54,21 +56,25 @@ def create_pattern(
     y_offsets: list[float] | None = None,
     curve_edge_index: int = 0,
     spacing: float = 0.0,
+    plane_index: int = 1,
+    rectangle_angle: float = 0.0,
 ) -> dict[str, Any]:
     """Pattern an existing feature, selected by name (see list_features).
 
-    Spacings/offsets in meters, angle in degrees. Face/edge indices 0-based.
-    x_count/y_count/x_spacing/y_spacing: rectangular_ex. x_spacing/y_spacing
-    also size the grid for by_fill/by_fill_ex (with fill_region_face_index).
-    count/angle/axis_face_index: circular_ex. x_offsets/y_offsets: by_table*.
-    curve_edge_index/count/spacing: by_curve_ex. duplicate and user_defined
-    take only feature_name.
+    rectangular_ex: x_count/y_count + x_spacing/y_spacing (meters), the
+    1-based plane_index the grid sits on (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
+    and rectangle_angle (degrees, grid rotation). user_defined: feature_name
+    alone. Every other method is unsupported - circular_ex, duplicate,
+    by_fill, by_fill_ex, by_table, by_table_sync and by_curve_ex need
+    keypoints, region profiles or Excel tables that cannot be built here.
+    Use 'rectangular_ex', or pattern the feature in the Solid Edge UI.
     """
     err = validate_numerics(
         x_spacing=x_spacing,
         y_spacing=y_spacing,
         angle=angle,
         spacing=spacing,
+        rectangle_angle=rectangle_angle,
     )
     if err:
         return err
@@ -80,6 +86,8 @@ def create_pattern(
                 y_count,
                 x_spacing,
                 y_spacing,
+                plane_index,
+                rectangle_angle,
             )
         case "circular_ex":
             return feature_manager.create_pattern_circular_ex(
@@ -137,6 +145,8 @@ def create_mirror(
     mirror_plane_index is 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ, 4+ = user
     planes). feature_name (see list_features): basic/sync_ex. new_file_name
     (absolute .par path) and link_to_original: save_as_part.
+    'sync_ex' (unsupported: MirrorCopies.AddSyncEx needs an [in,out] SAFEARRAY
+    that COM late binding cannot pass byref); use 'basic'.
     """
     if mirror_plane_index < 1:
         return {
@@ -190,24 +200,30 @@ def face_operation(
 
 def add_body(
     method: Literal["basic", "by_mesh", "feature", "construction", "by_tag"] = "basic",
-    body_type: str = "Solid",
+    body_type: Literal["Solid", "Part", "SheetMetal", "Construction"] = "Solid",
+    body_name: str = "",
+    import_file_path: str = "",
+    construction_index: int = 0,
     tag: str = "",
 ) -> dict[str, Any]:
     """Add a new body to the part document.
 
-    body_type ('Solid' | 'Surface' | 'Construction') is echoed back but the COM
-    AddBody call takes no type argument, so it does not change the result.
-    tag: by_tag only.
+    basic: body_type is passed to Models.AddBody ('Solid'/'Part',
+    'SheetMetal', 'Construction') along with body_name (defaults to 'Body').
+    feature: import_file_path, the absolute path of the file to import the
+    body from (required). construction: construction_index, 0-based into
+    doc.Constructions. by_tag: tag. 'by_mesh' (unsupported: needs an array
+    of facet vertex coordinates; import the mesh in the Solid Edge UI).
     """
     match method:
         case "basic":
-            return feature_manager.add_body(body_type)
+            return feature_manager.add_body(body_type, body_name)
         case "by_mesh":
             return feature_manager.add_body_by_mesh()
         case "feature":
-            return feature_manager.add_body_feature()
+            return feature_manager.add_body_feature(import_file_path)
         case "construction":
-            return feature_manager.add_by_construction()
+            return feature_manager.add_by_construction(construction_index)
         case "by_tag":
             return feature_manager.add_body_by_tag(tag)
         case _:
@@ -219,9 +235,10 @@ def simplify(
 ) -> dict[str, Any]:
     """Simplify the model for downstream use (lighter assembly representation).
 
-    auto: automatic simplification. enclosure / local_enclosure: replace the
-    body (or a local region) with its bounding enclosure. duplicate: simplify
-    by removing duplicate geometry. Takes no other parameters.
+    Every method is unsupported: Models.AddAutoSimplify, AddSimplifyEnclosure,
+    AddSimplifyDuplicate and AddLocalSimplifyEnclosure all need an array of
+    assembly occurrences or topology proxies from a user selection, which
+    cannot be built here. Simplify the model in the Solid Edge UI.
     """
     match method:
         case "auto":

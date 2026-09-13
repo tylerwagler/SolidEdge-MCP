@@ -39,8 +39,9 @@ class SpecializedMixin:
             _logger.info(f"Adding virtual component: name={name}, type={component_type}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             type_map = {
                 "Unknown": 1,
@@ -89,8 +90,9 @@ class SpecializedMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             vc_occs = doc.VirtualComponentOccurrences
             vc_occ = vc_occs.AddAsPreDefined(filename)
@@ -132,8 +134,9 @@ class SpecializedMixin:
             _logger.info(f"Adding virtual component via BIDM: doc={doc_number}, rev={revision_id}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             type_map = {
                 "Unknown": 1,
@@ -245,8 +248,9 @@ class SpecializedMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -319,8 +323,9 @@ class SpecializedMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -383,8 +388,9 @@ class SpecializedMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -400,7 +406,11 @@ class SpecializedMixin:
             v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
 
             frames = doc.StructuralFrames
-            frame = frames.AddByOrientation(coord_system_name, len(paths), v_paths)
+            # AddByOrientation(PartFileName, CoOrdinateSystemName, NumPaths, Path,
+            #     [PreferredOrientationPlane], [GlobalEndConditions],
+            #     [GlobalEndConditionValue], [AutoPosition]).
+            # PartFileName was previously omitted, shifting every argument.
+            frame = frames.AddByOrientation(part_filename, coord_system_name, len(paths), v_paths)
 
             result: dict[str, Any] = {
                 "status": "created",
@@ -447,8 +457,9 @@ class SpecializedMixin:
             _logger.info(f"Adding splice at ({x},{y},{z}) with {len(conductor_indices)} conductors")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -515,8 +526,9 @@ class SpecializedMixin:
             _logger.info(f"Adding wire with {len(path_indices)} path segments")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             if len(path_indices) != len(path_directions):
                 return {"error": "path_indices and path_directions must have the same length"}
@@ -584,8 +596,9 @@ class SpecializedMixin:
             _logger.info(f"Adding cable with {len(path_indices)} paths, {len(wire_indices)} wires")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             if len(path_indices) != len(path_directions):
                 return {"error": "path_indices and path_directions must have the same length"}
@@ -683,8 +696,9 @@ class SpecializedMixin:
             )
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             if len(path_indices) != len(path_directions):
                 return {"error": "path_indices and path_directions must have the same length"}

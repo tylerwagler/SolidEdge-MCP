@@ -9,6 +9,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -17,6 +23,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -136,6 +143,7 @@ class TestSetComponentVisibility:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -165,7 +173,7 @@ class TestSetComponentVisibility:
 
     def test_not_assembly(self, asm_mgr):
         am, doc, occ = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.set_component_visibility(0, True)
         assert "error" in result
 
@@ -182,6 +190,7 @@ class TestDeleteComponent:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -218,6 +227,7 @@ class TestGroundComponent:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -255,6 +265,7 @@ class TestReplaceComponent:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -268,7 +279,7 @@ class TestReplaceComponent:
 
     def test_not_assembly(self, asm_mgr):
         am, doc, occ = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.replace_component(0, "C:/parts/new.par")
         assert "error" in result
 
@@ -290,6 +301,7 @@ class TestGetComponentTransform:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -329,6 +341,7 @@ class TestGetStructuredBom:
         dm = MagicMock()
         doc = MagicMock()
         doc.Name = "Asm1.asm"
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occ1 = MagicMock()
@@ -356,7 +369,7 @@ class TestGetStructuredBom:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_structured_bom()
         assert "error" in result
 
@@ -373,6 +386,7 @@ class TestSetComponentColor:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -979,6 +993,7 @@ class TestGetOccurrenceCount:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrences = MagicMock()
@@ -994,7 +1009,7 @@ class TestGetOccurrenceCount:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_occurrence_count()
         assert "error" in result
 

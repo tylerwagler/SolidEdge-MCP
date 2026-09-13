@@ -4,10 +4,78 @@ Base class for QueryManager providing constructor and shared helpers.
 
 from typing import Any
 
+import pythoncom
+from win32com.client import VARIANT
+
 from ..constants import FaceQueryConstants
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
+
+#: Default number of entities returned by a paged collection query.
+DEFAULT_PAGE_LIMIT = 200
+#: Hard ceiling on ``limit`` so a single call can never walk an entire
+#: imported model (one COM round trip per entity).
+MAX_PAGE_LIMIT = 2000
+
+
+def r8_array(size: int) -> Any:
+    """Buffer for a COM ``SAFEARRAY(VT_R8)*`` ``[in, out]`` parameter.
+
+    Pass a plain Python list. pywin32 marshals it into the SAFEARRAY and
+    returns the filled values in the result tuple; the list itself is not
+    updated in place. Verified against Solid Edge 2026: wrapping it in a
+    ``VARIANT`` (with or without ``VT_BYREF``) raises "Objects for SAFEARRAYS
+    must be sequences (of sequences), or a buffer object" on ``Body.GetRange``.
+    """
+    return [0.0] * size
+
+
+def i4_array(size: int) -> Any:
+    """Buffer for a COM ``SAFEARRAY(VT_I4)*`` ``[in, out]`` parameter."""
+    return [0] * size
+
+
+def bool_array(size: int) -> Any:
+    """Buffer for a COM ``SAFEARRAY(VT_BOOL)*`` ``[in, out]`` parameter."""
+    return [False] * size
+
+
+def dispatch_array(items: Any) -> Any:
+    """Wrap a sequence of COM objects as a ``SAFEARRAY(VT_DISPATCH)``."""
+    return VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, list(items))
+
+
+def page_bounds(total: int, offset: int, limit: int) -> tuple[int, int, int]:
+    """Clamp ``offset``/``limit`` against ``total``.
+
+    Returns ``(start, stop, limit)`` with ``0 <= start <= stop <= total``.
+    A negative or oversized ``limit`` is clamped into
+    ``0..MAX_PAGE_LIMIT``; an ``offset`` past the end yields an empty page.
+    """
+    limit = min(max(int(limit), 0), MAX_PAGE_LIMIT)
+    start = min(max(int(offset), 0), max(total, 0))
+    stop = min(start + limit, max(total, 0))
+    return start, stop, limit
+
+
+def page_result(
+    items: list[Any], total: int, start: int, limit: int, **extra: Any
+) -> dict[str, Any]:
+    """Build the standard paging envelope for a bounded collection query.
+
+    ``truncated`` means "more entities follow this page", so a caller can keep
+    requesting ``offset += limit`` until it is ``False``.
+    """
+    result: dict[str, Any] = {
+        "total": total,
+        "offset": start,
+        "limit": limit,
+        "items": items,
+        "truncated": start + len(items) < total,
+    }
+    result.update(extra)
+    return result
 
 
 class QueryManagerBase:

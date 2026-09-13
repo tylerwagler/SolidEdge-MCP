@@ -6,6 +6,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -59,8 +60,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -91,8 +93,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -104,9 +107,7 @@ class PropertiesMixin:
                 }
 
             occurrence = occurrences.Item(component_index + 1)
-            name = (
-                occurrence.Name if hasattr(occurrence, "Name") else f"Component_{component_index}"
-            )
+            name = com_get(occurrence, "Name", f"Component_{component_index}")
             occurrence.Delete()
 
             return {"status": "deleted", "component_index": component_index, "name": name}
@@ -127,8 +128,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -153,7 +155,7 @@ class PropertiesMixin:
                     try:
                         rel = relations.Item(i)
                         # Ground relations have Type = 0
-                        if hasattr(rel, "Type") and rel.Type == 0:
+                        if com_get(rel, "Type") == 0:
                             rel.Delete()
                             return {"status": "ungrounded", "component_index": component_index}
                     except Exception:
@@ -181,8 +183,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -234,8 +237,9 @@ class PropertiesMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             if not os.path.exists(new_file_path):
                 return {"error": f"File not found: {new_file_path}"}
@@ -382,7 +386,9 @@ class PropertiesMixin:
             if err:
                 return err
 
-            occurrence.SwapFamilyMember(new_member_name)
+            # SwapFamilyMember(MemberName as VT_BSTR,
+            #     SwapAllOccurrences as VT_BOOL)
+            occurrence.SwapFamilyMember(new_member_name, False)
 
             return {
                 "status": "swapped",

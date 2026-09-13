@@ -29,9 +29,11 @@ def create_ref_plane(
     distance and coordinates in meters; angle in degrees. Plane indices are
     1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ, 4+ = user planes).
     offset: parent_plane_index + distance + normal_side.
-    angle: parent_plane_index + angle + normal_side.
-    three_points: the three (x,y,z) points.
     midplane: required plane1_index and plane2_index, both 1-based.
+    'angle' (unsupported: RefPlanes.AddAngularByAngle needs a Pivot linear
+    element to rotate about) and 'three_points' (unsupported: AddBy3Points
+    builds the plane from keypoints of existing edges, not XYZ coordinates);
+    use 'offset', or place the plane in the Solid Edge UI.
     """
     err = validate_numerics(
         distance=distance,

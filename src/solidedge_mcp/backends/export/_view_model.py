@@ -6,8 +6,13 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..constants import RenderModeConstants
 from ..logging import get_logger
+from ._base import com_get, resolve_view
 
 _logger = get_logger(__name__)
+
+# From Program/constant.tlb > SeGradientType. Both gradient stops are set
+# to the same colour to get a flat background.
+_GRADIENT_TYPE_VERTICAL = 2  # seGradientTypeVertical
 
 
 class ViewModel:
@@ -29,15 +34,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            # Get the window
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             # Valid view names (discovered via introspection)
             # Note: Bottom, Back, Left may not work in all contexts
@@ -47,14 +46,14 @@ class ViewModel:
                 return {"error": f"Invalid view: {view}. Valid: {', '.join(valid_views)}"}
 
             # Use ApplyNamedView with string name (discovered method!)
-            if hasattr(view_obj, "ApplyNamedView"):
+            try:
                 view_obj.ApplyNamedView(view)
-                return {"status": "view_set", "view": view}
-            else:
+            except Exception:
                 return {
                     "error": "ApplyNamedView not available",
                     "note": "Use View menu in Solid Edge UI",
                 }
+            return {"status": "view_set", "view": view}
         except Exception as e:
             return error_result(e)
 
@@ -63,24 +62,19 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             # Zoom to fit
-            if hasattr(view_obj, "Fit"):
+            try:
                 view_obj.Fit()
-                return {"status": "zoomed_fit"}
-            else:
+            except Exception:
                 return {
                     "error": "Fit method not available",
                     "note": "Use View > Fit in Solid Edge UI",
                 }
+            return {"status": "zoomed_fit"}
         except Exception as e:
             return error_result(e)
 
@@ -89,14 +83,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.Fit()
 
@@ -117,14 +106,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             mode_map = {
                 "Wireframe": RenderModeConstants.seRenderModeWireframe,
@@ -151,6 +135,15 @@ class ViewModel:
         """
         Set the view background color.
 
+        The background lives on the view's ``ViewStyle``, not on ``View``
+        itself: none of the Solid Edge type libraries define
+        ``View.SetBackgroundColor``, ``View.BackgroundColor`` or
+        ``View.SetBackgroundGradientColor``, so the previous three-way
+        fallback chain could only ever raise. This uses
+        ``ViewStyle.SetGradientBackground(eType, crColor1, crColor2,
+        [SpotCenterX], [SpotCenterY])`` with both stops set to the requested
+        colour, which paints a flat background.
+
         Args:
             red: Red component (0-255)
             green: Green component (0-255)
@@ -162,24 +155,17 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             ole_color = red | (green << 8) | (blue << 16)
 
-            try:
-                view_obj.SetBackgroundColor(ole_color)
-            except Exception:
-                try:
-                    view_obj.BackgroundColor = ole_color
-                except Exception:
-                    view_obj.SetBackgroundGradientColor(ole_color, ole_color)
+            view_style = com_get(view_obj, "ViewStyle")
+            if view_style is None:
+                return {"error": "View does not expose a ViewStyle"}
+
+            view_style.SetGradientBackground(_GRADIENT_TYPE_VERTICAL, ole_color, ole_color)
 
             return {"status": "updated", "color": [red, green, blue]}
         except Exception as e:
@@ -198,14 +184,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             # GetCamera returns 11 out-params by reference
             result = view_obj.GetCamera()
@@ -246,14 +227,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.RotateCamera(angle, center_x, center_y, center_z, axis_x, axis_y, axis_z)
 
@@ -280,14 +256,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.PanCamera(dx, dy)
 
@@ -308,14 +279,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.ZoomCamera(factor)
 
@@ -333,14 +299,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.Update()
 
@@ -351,12 +312,9 @@ class ViewModel:
     def _get_view_object(self) -> Any:
         """Get the active view object from the first window."""
         doc = self.doc_manager.get_active_document()
-        if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-            raise Exception("No window available")
-        window = doc.Windows.Item(1)
-        view_obj = window.View if hasattr(window, "View") else None
-        if not view_obj:
-            raise Exception("Cannot access view object")
+        view_obj, err = resolve_view(doc)
+        if err:
+            raise Exception(err["error"])
         return view_obj
 
     def transform_model_to_screen(self, x: float, y: float, z: float) -> dict[str, Any]:
@@ -476,14 +434,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.SetCamera(
                 eye_x,

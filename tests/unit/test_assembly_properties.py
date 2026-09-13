@@ -10,6 +10,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -18,6 +24,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -30,6 +37,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -171,7 +179,7 @@ class TestMakeWritable:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.make_writable(0)
         assert "error" in result
@@ -203,11 +211,12 @@ class TestSwapFamilyMember:
         result = am.swap_family_member(0, "M12")
         assert result["status"] == "swapped"
         assert result["new_member_name"] == "M12"
-        occ.SwapFamilyMember.assert_called_once_with("M12")
+        # SwapFamilyMember(MemberName, SwapAllOccurrences)
+        occ.SwapFamilyMember.assert_called_once_with("M12", False)
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.swap_family_member(0, "M12")
         assert "error" in result

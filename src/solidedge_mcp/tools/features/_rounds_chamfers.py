@@ -18,8 +18,10 @@ def create_round(
 
     radius and radii in meters; all face indices are 0-based.
     all_edges: radius on every edge. on_face: radius on the edges of
-    face_index. variable: per-edge radii list on face_index.
-    blend / surface_blend: radius between face_index1 and face_index2.
+    face_index. blend / surface_blend: radius between face_index1 and
+    face_index2. 'variable' (unsupported: Rounds.AddVariable needs a
+    VertexArray naming the vertices each radius applies to, which cannot be
+    selected here); use a constant-radius method.
     """
     err = validate_numerics(radius=radius)
     if err:
@@ -89,9 +91,10 @@ def create_blend(
     """Create a blend (face-to-face fillet).
 
     Radii in meters; all face indices are 0-based.
-    basic: radius on face_index. variable: radius1 tapering to radius2 on
-    face_index. surface: blend between face_index1 and face_index2 (the
-    radius parameters are not used).
+    basic: radius on face_index. surface: radius (required, must be > 0)
+    between face_index1 and face_index2. 'variable' (unsupported:
+    Blends.AddVariable needs a VertexArray naming the vertices each radius
+    applies to, which cannot be selected here); use 'basic' or 'surface'.
     """
     err = validate_numerics(radius=radius, radius1=radius1, radius2=radius2)
     if err:
@@ -102,7 +105,7 @@ def create_blend(
         case "variable":
             return feature_manager.create_blend_variable(radius1, radius2, face_index)
         case "surface":
-            return feature_manager.create_blend_surface(face_index1, face_index2)
+            return feature_manager.create_blend_surface(face_index1, face_index2, radius)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -120,7 +123,9 @@ def delete_topology(
     hole: fills every hole of hole_type up to max_diameter.
     hole_by_face: fills the hole owning face_index.
     blend: removes the blend on face_index.
-    faces: removes the faces listed in face_indices and heals the body.
+    'faces' (unsupported: DeleteFaces.Add takes one FaceSet object and the
+    Part API exposes no way to build a FaceSet from face indices); delete the
+    faces in the Solid Edge UI.
     """
     err = validate_numerics(max_diameter=max_diameter)
     if err:

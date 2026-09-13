@@ -77,7 +77,10 @@ Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{
 - **Never `hasattr()` a COM proxy to test capability**; check `doc.Type` against `DocumentTypeConstants` or `try/except` the actual call.
 - **Never compare COM proxies with `==`**; compare `FullName`/`Name`.
 - **Collections are 1-based** in COM (`Item(1)`).
-- **Pass SAFEARRAYs explicitly** where the type library says so: `VARIANT(VT_ARRAY | VT_DISPATCH, [...])`; see `features/_base.py`.
+- **SAFEARRAY marshalling is method-specific.** All of the following were verified against Solid Edge 2026, so change them only with new evidence:
+  - `[in,out] SAFEARRAY(VT_R8)*` output buffers (`Body.GetRange`, `Occurrence.GetMatrix`, the mass-property buffers): pass a **plain Python list** and read the filled values from the **return value**. A `VARIANT` wrapper, with or without `VT_BYREF`, raises `Objects for SAFEARRAYS must be sequences`. Helpers: `query/_base.py: r8_array/i4_array/bool_array`.
+  - Profile and edge arrays: `Rounds.Add` accepts `VARIANT(VT_ARRAY | VT_DISPATCH, [...])` and is integration-tested that way, but the helix APIs reject it and need a plain `[profile]`. When in doubt, a plain sequence is the safer default.
+  - pywin32 gives every parameter a positional slot, `[out]` ones included. When an out-parameter sits between ones you must supply, pass the later arguments **by keyword** using the type library's parameter names.
 - **Cutouts** use collection-level APIs (`model.ExtrudedCutouts.AddFiniteMulti`), not `Models.AddExtrudedCutout`.
 - **Known unsupported via COM (SE 2025/2026)**: `AssemblyFeaturesPatterns.Add`, `AssemblyFeaturesMirrors.Add` (E_ACCESSDENIED); shell/thin-wall (needs interactive face pick); multiple disjoint profiles in one cutout sketch.
 - **Front plane quirk**: COM "Normal" on the Front plane points to world −Y. Cutout tools do not auto-swap; prefer `direction="Symmetric"` there.

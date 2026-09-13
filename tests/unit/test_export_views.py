@@ -11,6 +11,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants, FoldTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -19,6 +25,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -165,7 +172,7 @@ class TestAddProjectedView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_projected_view(0, "Up", 0.2, 0.3)
         assert "error" in result
@@ -212,7 +219,7 @@ class TestMoveDrawingView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.move_drawing_view(0, 0.15, 0.20)
         assert "error" in result
@@ -260,7 +267,7 @@ class TestShowHiddenEdges:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.show_hidden_edges(0, True)
         assert "error" in result
@@ -311,7 +318,7 @@ class TestSetDrawingViewDisplayMode:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.set_drawing_view_display_mode(0, "Shaded")
         assert "error" in result
@@ -360,7 +367,7 @@ class TestGetDrawingViewInfo:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_drawing_view_info(0)
         assert "error" in result
@@ -407,7 +414,7 @@ class TestSetDrawingViewOrientation:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.set_drawing_view_orientation(0, "Front")
         assert "error" in result
@@ -564,10 +571,16 @@ class TestAddDetailView:
         assert result["type"] == "detail_view"
         assert result["parent_view_index"] == 0
         assert result["scale"] == 2.0
+        # AddByDetailEnvelope(From, x1, y1, Radius, Scale, x2, y2) - Scale sits
+        # between the envelope radius and the placement point.
+        dvs.AddByDetailEnvelope.assert_called_once_with(
+            parent_view, 0.05, 0.05, 0.01, 2.0, 0.2, 0.1
+        )
+        dvs.AddDetailView.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_detail_view(0, 0.05, 0.05, 0.01, 0.2, 0.1)
         assert "error" in result
@@ -608,10 +621,14 @@ class TestAddAuxiliaryView:
         assert result["status"] == "added"
         assert result["type"] == "auxiliary_view"
         assert result["fold_direction"] == "Up"
+        # AddByFold(From, foldDir, x, y) is the fold-direction entry point.
+        # AddByAuxiliaryFold wants a fold line picked on the parent view.
+        dvs.AddByFold.assert_called_once_with(parent_view, FoldTypeConstants.igFoldUp, 0.2, 0.3)
+        dvs.AddByAuxiliaryFold.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_auxiliary_view(0, 0.2, 0.3)
         assert "error" in result
@@ -650,11 +667,12 @@ class TestAddDraftView:
         assert result["status"] == "added"
         assert result["type"] == "draft_view"
         assert result["position"] == [0.15, 0.10]
-        dvs.AddDraftView.assert_called_once_with(0.15, 0.10)
+        # AddDraftView(Scale, x1, y1) - the scale is the first argument.
+        dvs.AddDraftView.assert_called_once_with(1.0, 0.15, 0.10)
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_draft_view(0.15, 0.10)
         assert "error" in result
@@ -765,7 +783,7 @@ class TestActivateDrawingView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.activate_drawing_view(0)
         assert "error" in result
@@ -804,7 +822,7 @@ class TestDeactivateDrawingView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.deactivate_drawing_view(0)
         assert "error" in result
@@ -903,7 +921,7 @@ class TestAddAssemblyDrawingViewEx:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_assembly_drawing_view_ex()
         assert "error" in result
@@ -940,7 +958,7 @@ class TestAddDrawingViewWithConfig:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_drawing_view_with_config()
         assert "error" in result
@@ -1223,7 +1241,7 @@ class TestUpdateAllViews:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.update_all_views()
         assert "error" in result

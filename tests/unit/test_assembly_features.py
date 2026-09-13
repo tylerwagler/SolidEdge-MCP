@@ -12,6 +12,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import (
+    AssemblyFeaturePropertyConstants,
+    DocumentTypeConstants,
+    ExtentTypeConstants,
+)
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -20,6 +30,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -32,6 +43,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -119,14 +131,30 @@ class TestAssemblyHole:
 class TestAssemblyExtrudedProtrusion:
     def test_success(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        sm.get_accumulated_profiles.return_value = [MagicMock()]
+        profile = MagicMock()
+        profiles = [profile]
+        sm.get_accumulated_profiles.return_value = profiles
         protrusions = MagicMock()
-        doc.AssemblyFeatures.ExtrudedProtrusions = protrusions
+        doc.AssemblyFeatures.AssemblyFeaturesExtrudedProtrusions = protrusions
 
         result = am.create_assembly_extruded_protrusion(distance=0.05)
         assert result["status"] == "created"
         assert result["type"] == "assembly_extruded_protrusion"
-        protrusions.Add.assert_called_once()
+        # AssemblyFeaturesExtrudedProtrusions.Add(nNumProfiles, pProfiles,
+        #   ExtentType, pExtentSide, profileSide, pdDistance, pKeyPoint,
+        #   pKeyPointFlags, pFromSurfOrPlane, pToSurfOrPlane)
+        protrusions.Add.assert_called_once_with(
+            1,
+            profiles,
+            ExtentTypeConstants.igFinite,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureOneSide,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureProfileLeft,
+            0.05,
+            None,
+            0,
+            None,
+            None,
+        )
 
     def test_no_profiles(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
@@ -139,14 +167,33 @@ class TestAssemblyExtrudedProtrusion:
 class TestAssemblyRevolvedProtrusion:
     def test_success(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        sm.get_accumulated_profiles.return_value = [MagicMock()]
+        import math
+
+        profile = MagicMock()
+        profiles = [profile]
+        sm.get_accumulated_profiles.return_value = profiles
         protrusions = MagicMock()
-        doc.AssemblyFeatures.RevolvedProtrusions = protrusions
+        doc.AssemblyFeatures.AssemblyFeaturesRevolvedProtrusions = protrusions
 
         result = am.create_assembly_revolved_protrusion(angle=90.0)
         assert result["status"] == "created"
         assert result["angle"] == 90.0
-        protrusions.Add.assert_called_once()
+        # AssemblyFeaturesRevolvedProtrusions.Add(nNumProfiles, pProfiles,
+        #   pRefAxis, ExtentType, ExtentSide, profileSide, pdAngle,
+        #   KeyPointOrTangentFace, KeyPointFlags, pFromSurface, pToSurface)
+        protrusions.Add.assert_called_once_with(
+            1,
+            profiles,
+            None,
+            ExtentTypeConstants.igFinite,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureOneSide,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureProfileLeft,
+            pytest.approx(math.radians(90.0)),
+            None,
+            0,
+            None,
+            None,
+        )
 
     def test_no_profiles(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch

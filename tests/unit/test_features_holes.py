@@ -335,11 +335,23 @@ class TestCreateHoleSync:
         _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_sync(0.0, 0.0, 0.01, 0.05)
         assert result["status"] == "created"
         assert result["type"] == "hole_sync"
-        model.Holes.AddSync.assert_called_once()
+        # HoleDataCollection.Add(HoleType, HoleDiameter): igRegularHole = 33
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddSync(NumberOfProfiles, ProfilesArray, ProfilePlaneSide,
+        #         ExtentType, FiniteDepth, Data)
+        model.Holes.AddSync.assert_called_once_with(
+            1,
+            (hole_profile,),
+            2,  # igRight
+            13,  # igFinite
+            0.05,
+            doc.HoleDataCollection.Add.return_value,
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -355,6 +367,7 @@ class TestCreateHoleSync:
         result = feature_mgr.create_hole_sync(0.01, 0.02, 0.02, 0.03)
         assert result["status"] == "created"
         assert result["diameter"] == 0.02
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.02)
 
 
 # ============================================================================
@@ -367,11 +380,20 @@ class TestCreateHoleFiniteEx:
         _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_finite_ex(0.0, 0.0, 0.01, 0.05)
         assert result["status"] == "created"
         assert result["type"] == "hole_finite_ex"
-        model.Holes.AddFiniteEx.assert_called_once()
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddFiniteEx(Profile, ProfilePlaneSide, FiniteDepth, Data, bPhysicalThread)
+        model.Holes.AddFiniteEx.assert_called_once_with(
+            hole_profile,
+            2,  # igRight
+            0.05,
+            doc.HoleDataCollection.Add.return_value,
+            False,
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -380,13 +402,21 @@ class TestCreateHoleFiniteEx:
         assert "error" in result
 
     def test_reverse_direction(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
+        _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_finite_ex(0.0, 0.0, 0.01, 0.05, "Reverse")
         assert result["status"] == "created"
         assert result["direction"] == "Reverse"
+        model.Holes.AddFiniteEx.assert_called_once_with(
+            hole_profile,
+            1,  # igLeft
+            0.05,
+            doc.HoleDataCollection.Add.return_value,
+            False,
+        )
 
 
 # ============================================================================
@@ -399,14 +429,27 @@ class TestCreateHoleFromToEx:
         _, _, doc, _, model, _ = managers
         ref_planes = MagicMock()
         ref_planes.Count = 3
+        from_plane = MagicMock()
+        to_plane = MagicMock()
+        ref_planes.Item.side_effect = lambda i: {1: from_plane, 2: to_plane}[i]
         doc.RefPlanes = ref_planes
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_from_to_ex(0.0, 0.0, 0.01, 1, 2)
         assert result["status"] == "created"
         assert result["type"] == "hole_from_to_ex"
-        model.Holes.AddFromToEx.assert_called_once()
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddFromToEx(Profile, FromFaceOrRefPlane, ToFaceOrRefPlane, Data,
+        #             bPhysicalThread)
+        model.Holes.AddFromToEx.assert_called_once_with(
+            hole_profile,
+            from_plane,
+            to_plane,
+            doc.HoleDataCollection.Add.return_value,
+            False,
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -434,11 +477,19 @@ class TestCreateHoleThroughNextEx:
         _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_through_next_ex(0.0, 0.0, 0.01)
         assert result["status"] == "created"
         assert result["type"] == "hole_through_next_ex"
-        model.Holes.AddThroughNextEx.assert_called_once()
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddThroughNextEx(Profile, ProfilePlaneSide, Data, bPhysicalThread)
+        model.Holes.AddThroughNextEx.assert_called_once_with(
+            hole_profile,
+            2,  # igRight
+            doc.HoleDataCollection.Add.return_value,
+            False,
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -447,13 +498,20 @@ class TestCreateHoleThroughNextEx:
         assert "error" in result
 
     def test_reverse_direction(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
+        _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_through_next_ex(0.0, 0.0, 0.01, "Reverse")
         assert result["status"] == "created"
         assert result["direction"] == "Reverse"
+        model.Holes.AddThroughNextEx.assert_called_once_with(
+            hole_profile,
+            1,  # igLeft
+            doc.HoleDataCollection.Add.return_value,
+            False,
+        )
 
 
 # ============================================================================
@@ -466,11 +524,19 @@ class TestCreateHoleThroughAllEx:
         _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_through_all_ex(0.0, 0.0, 0.01)
         assert result["status"] == "created"
         assert result["type"] == "hole_through_all_ex"
-        model.Holes.AddThroughAllEx.assert_called_once()
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddThroughAllEx(Profile, ProfilePlaneSide, Data, bPhysicalThread)
+        model.Holes.AddThroughAllEx.assert_called_once_with(
+            hole_profile,
+            2,  # igRight
+            doc.HoleDataCollection.Add.return_value,
+            False,
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -498,11 +564,23 @@ class TestCreateHoleSyncEx:
         _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_sync_ex(0.0, 0.0, 0.01, 0.05)
         assert result["status"] == "created"
         assert result["type"] == "hole_sync_ex"
-        model.Holes.AddSyncEx.assert_called_once()
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddSyncEx(NumberOfProfiles, ProfilesArray, ProfilePlaneSide,
+        #           ExtentType, FiniteDepth, Data, bPhysicalThread)
+        model.Holes.AddSyncEx.assert_called_once_with(
+            1,
+            (hole_profile,),
+            2,  # igRight
+            13,  # igFinite
+            0.05,
+            doc.HoleDataCollection.Add.return_value,
+            False,
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -530,11 +608,31 @@ class TestCreateHoleMultiBody:
         _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_multi_body(0.0, 0.0, 0.01, 0.05)
         assert result["status"] == "created"
         assert result["type"] == "hole_multi_body"
-        model.Holes.AddMultiBody.assert_called_once()
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddMultiBody(Profile, ProfilePlaneSide, ExtentType, FiniteDepth,
+        #              KeyPointOrTangentFace, KeyPointFlags, FromFaceOrRefPlane,
+        #              ToFaceOrRefPlane, Data, NumberOfBodies, BodyArray)
+        args = model.Holes.AddMultiBody.call_args[0]
+        assert len(args) == 11
+        assert args[:10] == (
+            hole_profile,
+            2,  # igRight
+            13,  # igFinite
+            0.05,
+            None,
+            1,  # igTangentNormal
+            None,
+            None,
+            doc.HoleDataCollection.Add.return_value,
+            1,
+        )
+        assert list(args[10].value) == [model.Body]
+        assert model.Holes.AddMultiBody.call_count == 1
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -543,13 +641,14 @@ class TestCreateHoleMultiBody:
         assert "error" in result
 
     def test_reverse_direction(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
+        _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
         ps.Profiles.Add.return_value = MagicMock()
         result = feature_mgr.create_hole_multi_body(0.0, 0.0, 0.01, 0.05, 1, "Reverse")
         assert result["status"] == "created"
         assert result["direction"] == "Reverse"
+        assert model.Holes.AddMultiBody.call_args[0][1] == 1  # igLeft
 
 
 # ============================================================================
@@ -562,11 +661,27 @@ class TestCreateHoleSyncMultiBody:
         _, _, doc, _, model, _ = managers
         ps = MagicMock()
         doc.ProfileSets.Add.return_value = ps
-        ps.Profiles.Add.return_value = MagicMock()
+        hole_profile = MagicMock()
+        ps.Profiles.Add.return_value = hole_profile
         result = feature_mgr.create_hole_sync_multi_body(0.0, 0.0, 0.01, 0.05)
         assert result["status"] == "created"
         assert result["type"] == "hole_sync_multi_body"
-        model.Holes.AddSyncMultiBody.assert_called_once()
+        doc.HoleDataCollection.Add.assert_called_once_with(33, 0.01)
+        # AddSyncMultiBody(NumberOfProfiles, ProfilesArray, ProfilePlaneSide,
+        #                  ExtentType, FiniteDepth, Data, NumberOfBodies, BodyArray)
+        args = model.Holes.AddSyncMultiBody.call_args[0]
+        assert len(args) == 8
+        assert args[:7] == (
+            1,
+            (hole_profile,),
+            2,  # igRight
+            13,  # igFinite
+            0.05,
+            doc.HoleDataCollection.Add.return_value,
+            1,
+        )
+        assert list(args[7].value) == [model.Body]
+        assert model.Holes.AddSyncMultiBody.call_count == 1
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers

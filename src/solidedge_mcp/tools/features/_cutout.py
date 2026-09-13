@@ -28,6 +28,8 @@ def create_extruded_cutout(
 
     distance in meters (finite, multi_body). from/to_plane_index: required for
     from_to* methods; 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
+    'by_keypoint' (unsupported: needs a KeyPoint or tangent face object this
+    server cannot select); use 'finite', 'from_to' or 'through_all'.
     """
     err = validate_numerics(distance=distance)
     if err:
@@ -67,7 +69,8 @@ def create_revolved_cutout(
 ) -> dict[str, Any]:
     """Create a revolved cutout around the sketch's revolve axis.
 
-    angle in degrees (ignored by by_keypoint).
+    angle in degrees. 'by_keypoint' (unsupported: needs a KeyPoint or tangent
+    face object this server cannot select); use 'finite' or 'full'.
     """
     err = validate_numerics(angle=angle)
     if err:
@@ -100,6 +103,8 @@ def create_normal_cutout(
 
     distance in meters (finite). from/to_plane_index: required for from_to;
     1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
+    'by_keypoint' (unsupported: needs a KeyPoint or tangent face object this
+    server cannot select); use 'finite' or 'through_all'.
     """
     err = validate_numerics(distance=distance)
     if err:

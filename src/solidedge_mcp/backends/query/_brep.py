@@ -10,8 +10,34 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..constants import FaceQueryConstants
 from ..logging import get_logger
+from ._base import (
+    DEFAULT_PAGE_LIMIT,
+    bool_array,
+    i4_array,
+    page_bounds,
+    page_result,
+    r8_array,
+)
 
 _logger = get_logger(__name__)
+
+# geometry.tlb > GNTTypePropertyConstants. Face.GeometryForm / Edge.GeometryForm
+# return one of these, which is a single COM property read per entity — far
+# cheaper than re-querying Body.Faces() once per geometry type.
+_GEOMETRY_FORM_NAMES: dict[int, str] = {
+    -1909484335: "plane",  # igPlane
+    -114972029: "cylinder",  # igCylinder
+    -114972031: "cone",  # igCone
+    -114972027: "sphere",  # igSphere
+    -114972025: "torus",  # igTorus
+    1465959633: "bspline_surface",  # igBSplineSurface
+    -2071771273: "mesh",  # igMesh
+    167551103: "bspline_curve",  # igBSplineCurve
+    167551105: "circle",  # igCircle
+    167551107: "ellipse",  # igEllipse
+    167551109: "line",  # igLine
+    -1811952078: "param_bspline_curve",  # igParamBSplineCurve
+}
 
 
 class BRepMixin:
@@ -19,79 +45,104 @@ class BRepMixin:
 
     doc_manager: Any
 
-    def get_body_faces(self) -> dict[str, Any]:
+    def get_body_faces(self, offset: int = 0, limit: int = DEFAULT_PAGE_LIMIT) -> dict[str, Any]:
         """
-        Get all faces on the model body.
+        Get a page of faces on the model body.
 
-        Uses Body.Faces(igQueryAll=1) to enumerate all faces with their
-        geometry type, area, and edge count.
+        Uses Body.Faces(igQueryAll=1) for the total and reads area, edge count
+        and geometry form for the requested window only, so the cost is bounded
+        by ``limit`` rather than by the size of the model.
 
-        Face geometry types are determined by checking which query type
-        each face belongs to (plane, cylinder, cone, sphere, torus, spline).
+        Args:
+            offset: 0-based index of the first face to return
+            limit: maximum number of faces to return (clamped to MAX_PAGE_LIMIT)
 
         Returns:
-            Dict with list of faces and count
+            Paging envelope: total, offset, limit, items, truncated
         """
         try:
             doc, model = self._get_first_model()
             body = model.Body
 
-            # Query type constants (from SE type library)
-            query_types = {
-                6: "plane",  # igQueryPlane
-                10: "cylinder",  # igQueryCylinder
-                7: "cone",  # igQueryCone
-                9: "sphere",  # igQuerySphere
-                8: "torus",  # igQueryTorus
-                5: "spline",  # igQuerySpline
-            }
-
-            # Build a set of face indices per geometry type
-            geo_type_map = {}  # face_area -> geometry_type (approximate matching)
-            for qval, qname in query_types.items():
-                try:
-                    typed_faces = body.Faces(qval)
-                    for j in range(1, typed_faces.Count + 1):
-                        try:
-                            tf = typed_faces.Item(j)
-                            # Use (area, edge_count) as a fingerprint
-                            area = tf.Area
-                            ec = tf.Edges.Count if hasattr(tf.Edges, "Count") else 0
-                            key = (round(area, 12), ec)
-                            geo_type_map[key] = qname
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-
-            # Now enumerate all faces
             faces = body.Faces(FaceQueryConstants.igQueryAll)
-            face_list = []
+            total = faces.Count
+            start, stop, limit = page_bounds(total, offset, limit)
 
-            for i in range(1, faces.Count + 1):
+            face_list = []
+            for i in range(start + 1, stop + 1):
                 try:
                     face = faces.Item(i)
                     face_info: dict[str, Any] = {"index": i - 1}
                     with contextlib.suppress(Exception):
                         face_info["area"] = face.Area
-                    try:
-                        edge_count = face.Edges.Count if hasattr(face.Edges, "Count") else 0
-                        face_info["edge_count"] = edge_count
-                    except Exception:
-                        pass
-                    # Look up geometry type
-                    try:
-                        key = (round(face.Area, 12), face_info.get("edge_count", 0))
-                        face_info["geometry"] = geo_type_map.get(key, "unknown")
-                    except Exception:
-                        face_info["geometry"] = "unknown"
+                    with contextlib.suppress(Exception):
+                        face_info["edge_count"] = face.Edges.Count
+                    face_info["geometry"] = self._geometry_form_name(face)
                     face_list.append(face_info)
                 except Exception:
                     face_list.append({"index": i - 1})
 
-            return {"faces": face_list, "count": len(face_list)}
+            return page_result(face_list, total, start, limit)
         except Exception as e:
             return error_result(e)
+
+    @staticmethod
+    def _geometry_form_name(entity: Any) -> str:
+        """Map a Face/Edge onto a readable geometry name.
+
+        ``Geometry.Type`` returns a GNTTypePropertyConstants value and is the
+        documented route. ``GeometryForm`` is declared as a bare VT_I4 with no
+        enum behind it and returns unrelated small integers on Solid Edge 2026
+        (9 for a plane), so it is only a fallback.
+        """
+        try:
+            return _GEOMETRY_FORM_NAMES.get(int(entity.Geometry.Type), "unknown")
+        except Exception:
+            pass
+        try:
+            return _GEOMETRY_FORM_NAMES.get(int(entity.GeometryForm), "unknown")
+        except Exception:
+            return "unknown"
+
+    @staticmethod
+    def _bspline_surface_info(geom: Any) -> Any:
+        """Call BSplineSurface.GetBSplineInfo with the buffers it requires.
+
+        geometry.tlb BSplineSurface.GetBSplineInfo(
+            Order SAFEARRAY(VT_I4)* [in,out],
+            NumPoles SAFEARRAY(VT_I4)* [in,out],
+            NumKnots SAFEARRAY(VT_I4)* [in,out],
+            Rational VT_BOOL* [out],
+            Closed SAFEARRAY(VT_BOOL)* [in,out],
+            Periodic SAFEARRAY(VT_BOOL)* [in,out],
+            Planar VT_BOOL* [out])
+
+        ``Rational`` sits between the [in,out] arrays, so the buffers go in by
+        keyword and pywin32 fills the [out] slots itself. Every array holds two
+        entries, one for U and one for V.
+        """
+        return geom.GetBSplineInfo(
+            Order=i4_array(2),
+            NumPoles=i4_array(2),
+            NumKnots=i4_array(2),
+            Closed=bool_array(2),
+            Periodic=bool_array(2),
+        )
+
+    @staticmethod
+    def _bspline_curve_info(geom: Any) -> Any:
+        """Call BSplineCurve.GetBSplineInfo with the buffer it requires.
+
+        geometry.tlb BSplineCurve.GetBSplineInfo(
+            Order VT_I4* [out], NumPoles VT_I4* [out], NumKnots VT_I4* [out],
+            Rational VT_BOOL* [out], Closed VT_BOOL* [out],
+            Periodic VT_BOOL* [out], Planar VT_BOOL* [out],
+            PlaneVector SAFEARRAY(VT_R8)* [in,out])
+
+        Only the trailing plane vector is an [in,out] buffer; it is passed by
+        keyword so the seven [out] slots ahead of it stay untouched.
+        """
+        return geom.GetBSplineInfo(PlaneVector=r8_array(3))
 
     def get_face_info(self, face_index: int) -> dict[str, Any]:
         """
@@ -204,8 +255,11 @@ class BRepMixin:
             result: dict[str, Any] = {"face_index": face_index}
 
             # Try Plane
+            # geometry.tlb Plane.GetPlaneData(
+            #   RootPoint SAFEARRAY(VT_R8)* [in,out],
+            #   NormalVector SAFEARRAY(VT_R8)* [in,out])
             try:
-                plane_data = geom.GetPlaneData()
+                plane_data = geom.GetPlaneData(r8_array(3), r8_array(3))
                 if isinstance(plane_data, tuple) and len(plane_data) >= 2:
                     result["geometry_type"] = "Plane"
                     result["root_point"] = self._to_list(plane_data[0])
@@ -215,8 +269,11 @@ class BRepMixin:
                 pass
 
             # Try Cylinder
+            # geometry.tlb Cylinder.GetCylinderData(
+            #   BasePoint SAFEARRAY(VT_R8)* [in,out],
+            #   AxisVector SAFEARRAY(VT_R8)* [in,out], Radius VT_R8* [out])
             try:
-                cyl_data = geom.GetCylinderData()
+                cyl_data = geom.GetCylinderData(r8_array(3), r8_array(3))
                 if isinstance(cyl_data, tuple) and len(cyl_data) >= 3:
                     result["geometry_type"] = "Cylinder"
                     result["base_point"] = self._to_list(cyl_data[0])
@@ -227,8 +284,12 @@ class BRepMixin:
                 pass
 
             # Try Cone
+            # geometry.tlb Cone.GetConeData(
+            #   BasePoint SAFEARRAY(VT_R8)* [in,out],
+            #   AxisVector SAFEARRAY(VT_R8)* [in,out], Radius VT_R8* [out],
+            #   HalfAngle VT_R8* [out], Expanding VT_BOOL* [out])
             try:
-                cone_data = geom.GetConeData()
+                cone_data = geom.GetConeData(r8_array(3), r8_array(3))
                 if isinstance(cone_data, tuple) and len(cone_data) >= 4:
                     result["geometry_type"] = "Cone"
                     result["base_point"] = self._to_list(cone_data[0])
@@ -242,8 +303,10 @@ class BRepMixin:
                 pass
 
             # Try Sphere
+            # geometry.tlb Sphere.GetSphereData(
+            #   CenterPoint SAFEARRAY(VT_R8)* [in,out], Radius VT_R8* [out])
             try:
-                sphere_data = geom.GetSphereData()
+                sphere_data = geom.GetSphereData(r8_array(3))
                 if isinstance(sphere_data, tuple) and len(sphere_data) >= 2:
                     result["geometry_type"] = "Sphere"
                     result["center"] = self._to_list(sphere_data[0])
@@ -253,8 +316,12 @@ class BRepMixin:
                 pass
 
             # Try Torus
+            # geometry.tlb Torus.GetTorusData(
+            #   CenterPoint SAFEARRAY(VT_R8)* [in,out],
+            #   AxisVector SAFEARRAY(VT_R8)* [in,out],
+            #   MajorRadius VT_R8* [out], MinorRadius VT_R8* [out])
             try:
-                torus_data = geom.GetTorusData()
+                torus_data = geom.GetTorusData(r8_array(3), r8_array(3))
                 if isinstance(torus_data, tuple) and len(torus_data) >= 4:
                     result["geometry_type"] = "Torus"
                     result["center"] = self._to_list(torus_data[0])
@@ -267,7 +334,7 @@ class BRepMixin:
 
             # Try BSplineSurface
             try:
-                bspline_info = geom.GetBSplineInfo()
+                bspline_info = self._bspline_surface_info(geom)
                 if isinstance(bspline_info, tuple) and len(bspline_info) >= 2:
                     result["geometry_type"] = "BSplineSurface"
                     result["raw_info"] = list(bspline_info)
@@ -414,40 +481,49 @@ class BRepMixin:
     # EDGE QUERIES
     # =================================================================
 
-    def get_body_edges(self) -> dict[str, Any]:
+    def get_body_edges(self, offset: int = 0, limit: int = DEFAULT_PAGE_LIMIT) -> dict[str, Any]:
         """
-        Get all unique edges on the model body.
+        Get a page of the body's face-to-edge mapping.
 
-        Enumerates edges via faces since Body.Edges() doesn't work
-        in COM late binding. Deduplicates by collecting from all faces.
+        Enumerates edges via faces since Body.Edges() doesn't work in COM late
+        binding, so one item is emitted per face. ``total`` is the face count;
+        page with ``offset``/``limit`` until ``truncated`` is False.
+
+        Args:
+            offset: 0-based index of the first face to report
+            limit: maximum number of faces to report (clamped to MAX_PAGE_LIMIT)
 
         Returns:
-            Dict with edge count and face-edge mapping
+            Paging envelope: total, offset, limit, items, truncated, plus
+            page_edge_references (edges counted across this page only)
         """
         try:
             doc, model = self._get_first_model()
             body = model.Body
 
             faces = body.Faces(FaceQueryConstants.igQueryAll)
-            total_edges = 0
-            face_edges = []
+            total = faces.Count
+            start, stop, limit = page_bounds(total, offset, limit)
 
-            for fi in range(1, faces.Count + 1):
+            page_edges = 0
+            face_edges = []
+            for fi in range(start + 1, stop + 1):
                 try:
                     face = faces.Item(fi)
-                    edges = face.Edges
-                    edge_count = edges.Count if hasattr(edges, "Count") else 0
-                    total_edges += edge_count
+                    edge_count = face.Edges.Count
+                    page_edges += edge_count
                     face_edges.append({"face_index": fi - 1, "edge_count": edge_count})
                 except Exception:
                     face_edges.append({"face_index": fi - 1, "edge_count": 0})
 
-            return {
-                "face_edges": face_edges,
-                "total_face_count": faces.Count,
-                "total_edge_references": total_edges,
-                "note": "Edge count includes shared edges (counted once per face)",
-            }
+            return page_result(
+                face_edges,
+                total,
+                start,
+                limit,
+                page_edge_references=page_edges,
+                note="Edge counts include shared edges (counted once per face)",
+            )
         except Exception as e:
             return error_result(e)
 
@@ -692,8 +768,11 @@ class BRepMixin:
                 geom_type = str(geom_type_val)
 
             # Attempt Circle data
+            # geometry.tlb Circle.GetCircleData(
+            #   CenterPoint SAFEARRAY(VT_R8)* [in,out],
+            #   AxisVector SAFEARRAY(VT_R8)* [in,out], Radius VT_R8* [out])
             try:
-                circle_data = geom.GetCircleData()
+                circle_data = geom.GetCircleData(r8_array(3), r8_array(3))
                 if isinstance(circle_data, tuple) and len(circle_data) >= 3:
                     result["geometry_type"] = "Circle"
                     result["center"] = self._to_list(circle_data[0])
@@ -704,8 +783,13 @@ class BRepMixin:
                 pass
 
             # Attempt Ellipse data
+            # geometry.tlb Ellipse.GetEllipseData(
+            #   CenterPoint SAFEARRAY(VT_R8)* [in,out],
+            #   AxisVector SAFEARRAY(VT_R8)* [in,out],
+            #   MajorAxis SAFEARRAY(VT_R8)* [in,out],
+            #   MinorMajorRatio VT_R8* [out])
             try:
-                ellipse_data = geom.GetEllipseData()
+                ellipse_data = geom.GetEllipseData(r8_array(3), r8_array(3), r8_array(3))
                 if isinstance(ellipse_data, tuple) and len(ellipse_data) >= 4:
                     result["geometry_type"] = "Ellipse"
                     result["center"] = self._to_list(ellipse_data[0])
@@ -718,7 +802,7 @@ class BRepMixin:
 
             # Attempt BSplineCurve info
             try:
-                bspline_info = geom.GetBSplineInfo()
+                bspline_info = self._bspline_curve_info(geom)
                 if isinstance(bspline_info, tuple) and len(bspline_info) >= 4:
                     result["geometry_type"] = "BSplineCurve"
                     result["order"] = bspline_info[0]
@@ -813,59 +897,15 @@ class BRepMixin:
             model = models.Item(1)
             body = model.Body
 
-            import array as arr_mod
-
-            # Prepare out parameters for COM call
-            # GetFacetData(Tolerance, FacetCount, Points,
-            # Normals, TextureCoords, StyleIDs, FaceIDs,
-            # bHonourPrefs)
-            points = arr_mod.array("d", [])
-            normals = arr_mod.array("d", [])
-            texture_coords = arr_mod.array("d", [])
-            style_ids = arr_mod.array("i", [])
-            face_ids = arr_mod.array("i", [])
-
+            # geometry.tlb Body.GetFacetData(
+            #   Tolerance VT_R8 [in], FacetCount VT_I4* [out],
+            #   Points SAFEARRAY(VT_R8)* [in,out],
+            #   Normals/TextureCoords/StyleIDs/FaceIDs VT_VARIANT* [out,optional],
+            #   bHonourPrefs VT_VARIANT [in,optional])
+            # FacetCount sits between the two arguments we supply, so Points is
+            # passed by keyword. Solid Edge resizes the buffer it is handed.
             try:
-                result_data = body.GetFacetData(
-                    tolerance,  # Tolerance
-                )
-
-                # GetFacetData returns a tuple of
-                # (facetCount, points, normals,
-                # textureCoords, styleIds, faceIds)
-                if isinstance(result_data, tuple) and len(result_data) >= 2:
-                    facet_count = result_data[0] if isinstance(result_data[0], int) else 0
-                    pts = result_data[1] if len(result_data) > 1 else []
-
-                    return {
-                        "facet_count": facet_count,
-                        "point_count": len(pts) // 3 if pts else 0,
-                        "tolerance": tolerance,
-                        "has_data": facet_count > 0,
-                    }
-            except Exception:
-                pass
-
-            # Alternative: try with explicit out params
-            try:
-                facet_count = 0
-                body.GetFacetData(
-                    tolerance,
-                    facet_count,
-                    points,
-                    normals,
-                    texture_coords,
-                    style_ids,
-                    face_ids,
-                    False,
-                )
-
-                return {
-                    "facet_count": facet_count,
-                    "point_count": len(points) // 3 if points else 0,
-                    "tolerance": tolerance,
-                    "has_data": len(points) > 0,
-                }
+                result_data = body.GetFacetData(Tolerance=tolerance, Points=r8_array(1))
             except Exception as e2:
                 return error_result(
                     e2,
@@ -873,6 +913,20 @@ class BRepMixin:
                     "Try export_stl() instead.",
                 )
 
+            # Returns (FacetCount, Points, ...optional out params).
+            facet_count = 0
+            points: Any = []
+            if isinstance(result_data, tuple) and len(result_data) >= 2:
+                if isinstance(result_data[0], int):
+                    facet_count = result_data[0]
+                points = result_data[1] or []
+
+            return {
+                "facet_count": facet_count,
+                "point_count": len(points) // 3 if points else 0,
+                "tolerance": tolerance,
+                "has_data": facet_count > 0 or bool(points),
+            }
         except Exception as e:
             return error_result(e)
 
@@ -951,8 +1005,12 @@ class BRepMixin:
         """
         Get the extreme point of the body in a given direction.
 
-        Uses body.GetExtremePoint(dx, dy, dz, ex, ey, ez) where the
-        last three parameters are out-params for the extreme point coords.
+        geometry.tlb Body.GetExtremePoint(
+            DirectionX VT_R8 [in], DirectionY VT_R8 [in], DirectionZ VT_R8 [in],
+            ExtremeX VT_R8* [out], ExtremeY VT_R8* [out], ExtremeZ VT_R8* [out])
+
+        Only the three direction components are passed; pywin32 returns the
+        [out] coordinates as the result tuple.
 
         Args:
             direction_x: X component of direction vector
@@ -965,14 +1023,7 @@ class BRepMixin:
         try:
             _doc, _model, body = self._get_body()
 
-            result = body.GetExtremePoint(
-                direction_x,
-                direction_y,
-                direction_z,
-                0.0,
-                0.0,
-                0.0,
-            )
+            result = body.GetExtremePoint(direction_x, direction_y, direction_z)
 
             if isinstance(result, tuple) and len(result) >= 3:
                 extreme = [result[0], result[1], result[2]]
@@ -1115,22 +1166,30 @@ class BRepMixin:
         except Exception as e:
             return error_result(e)
 
-    def get_body_shells(self) -> dict[str, Any]:
+    def get_body_shells(self, offset: int = 0, limit: int = DEFAULT_PAGE_LIMIT) -> dict[str, Any]:
         """
-        List all shells in the body with basic properties.
+        List a page of shells in the body with basic properties.
 
-        Iterates body.Shells to get IsClosed and Volume for each shell.
+        Iterates body.Shells to get IsClosed and Volume for each shell in the
+        requested window; page with ``offset``/``limit`` until ``truncated``
+        is False.
+
+        Args:
+            offset: 0-based index of the first shell to return
+            limit: maximum number of shells to return (clamped to MAX_PAGE_LIMIT)
 
         Returns:
-            Dict with shell count and list of shell info
+            Paging envelope: total, offset, limit, items, truncated
         """
         try:
             _doc, _model, body = self._get_body()
 
             shells = body.Shells
-            shell_list = []
+            total = shells.Count
+            start, stop, limit = page_bounds(total, offset, limit)
 
-            for i in range(1, shells.Count + 1):
+            shell_list = []
+            for i in range(start + 1, stop + 1):
                 shell = shells.Item(i)
                 shell_info: dict[str, Any] = {"index": i - 1}
 
@@ -1141,30 +1200,34 @@ class BRepMixin:
 
                 shell_list.append(shell_info)
 
-            return {
-                "shell_count": len(shell_list),
-                "shells": shell_list,
-            }
+            return page_result(shell_list, total, start, limit)
         except Exception as e:
             return error_result(e)
 
-    def get_body_vertices(self) -> dict[str, Any]:
+    def get_body_vertices(self, offset: int = 0, limit: int = DEFAULT_PAGE_LIMIT) -> dict[str, Any]:
         """
-        Get all vertices of the body with their 3D coordinates.
+        Get a page of body vertices with their 3D coordinates.
 
-        Iterates body.Vertices and calls GetPointData() on each to
-        extract XYZ coordinates.
+        Iterates body.Vertices and calls GetPointData() on each vertex in the
+        requested window; page with ``offset``/``limit`` until ``truncated``
+        is False.
+
+        Args:
+            offset: 0-based index of the first vertex to return
+            limit: maximum number of vertices to return (clamped to MAX_PAGE_LIMIT)
 
         Returns:
-            Dict with vertex count and coordinate list
+            Paging envelope: total, offset, limit, items, truncated
         """
         try:
             _doc, _model, body = self._get_body()
 
             vertices = body.Vertices
-            vertex_list = []
+            total = vertices.Count
+            start, stop, limit = page_bounds(total, offset, limit)
 
-            for i in range(1, vertices.Count + 1):
+            vertex_list = []
+            for i in range(start + 1, stop + 1):
                 try:
                     vertex = vertices.Item(i)
                     point_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
@@ -1178,10 +1241,7 @@ class BRepMixin:
                 except Exception:
                     vertex_list.append({"index": i - 1, "point": None})
 
-            return {
-                "vertex_count": len(vertex_list),
-                "vertices": vertex_list,
-            }
+            return page_result(vertex_list, total, start, limit)
         except Exception as e:
             return error_result(e)
 
@@ -1251,7 +1311,7 @@ class BRepMixin:
             _doc, _model, _body, _face, edge = self._get_face_edge(face_index, edge_index)
 
             geom = edge.Geometry
-            bspline_info = geom.GetBSplineInfo()
+            bspline_info = self._bspline_curve_info(geom)
 
             if not isinstance(bspline_info, tuple) or len(bspline_info) < 4:
                 return {
@@ -1297,7 +1357,7 @@ class BRepMixin:
             _doc, _model, _body, face = self._get_face(face_index)
 
             geom = face.Geometry
-            bspline_info = geom.GetBSplineInfo()
+            bspline_info = self._bspline_surface_info(geom)
 
             if not isinstance(bspline_info, tuple) or len(bspline_info) < 2:
                 return {
@@ -1308,20 +1368,19 @@ class BRepMixin:
 
             result: dict[str, Any] = {"face_index": face_index}
 
-            # BSplineSurface.GetBSplineInfo returns data for both U and V
-            # The exact tuple structure depends on the SE API version.
-            # Common pattern: (orderU, orderV, numPolesU, numPolesV,
-            #                   numKnotsU, numKnotsV, rational, ...)
-            if len(bspline_info) >= 6:
-                result["order"] = [bspline_info[0], bspline_info[1]]
-                result["num_poles"] = [bspline_info[2], bspline_info[3]]
-                result["num_knots"] = [bspline_info[4], bspline_info[5]]
-                if len(bspline_info) > 6:
-                    result["rational"] = bool(bspline_info[6])
-                if len(bspline_info) > 7:
-                    result["planar"] = bool(bspline_info[7])
+            # Returns (Order, NumPoles, NumKnots, Rational, Closed, Periodic,
+            # Planar); Order/NumPoles/NumKnots/Closed/Periodic are two-element
+            # arrays holding the U value then the V value.
+            if len(bspline_info) >= 7:
+                result["order"] = self._to_list(bspline_info[0])
+                result["num_poles"] = self._to_list(bspline_info[1])
+                result["num_knots"] = self._to_list(bspline_info[2])
+                result["rational"] = bool(bspline_info[3])
+                result["closed"] = [bool(v) for v in self._to_list(bspline_info[4])]
+                result["periodic"] = [bool(v) for v in self._to_list(bspline_info[5])]
+                result["planar"] = bool(bspline_info[6])
             else:
-                # Simpler format - store raw info
+                # Unexpected shape - store raw info rather than mislabel it.
                 result["raw_info"] = list(bspline_info)
 
             return result

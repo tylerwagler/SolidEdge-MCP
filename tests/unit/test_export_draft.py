@@ -10,6 +10,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -18,6 +24,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -295,7 +302,7 @@ class TestAddSmartFrame:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_smart_frame("A4", 0.0, 0.0, 0.297, 0.21)
         assert "error" in result
@@ -328,7 +335,7 @@ class TestAddSmartFrameByOrigin:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_smart_frame_by_origin("A3", 0.01, 0.01, 0.28, 0.01, 0.01, 0.40)
         assert "error" in result
@@ -366,7 +373,7 @@ class TestAddSymbol:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_symbol("C:/symbols/arrow.sym", 0.1, 0.1)
         assert "error" in result
@@ -424,7 +431,7 @@ class TestGetSymbols:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_symbols()
         assert "error" in result
@@ -557,7 +564,7 @@ class TestGetDraftGlobalParameter:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_draft_global_parameter(5)
         assert "error" in result
@@ -589,7 +596,7 @@ class TestSetDraftGlobalParameter:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.set_draft_global_parameter(5, 0.005)
         assert "error" in result
@@ -618,11 +625,12 @@ class TestGetSymbolFileOrigin:
         assert result["status"] == "success"
         assert result["x"] == 0.05
         assert result["y"] == 0.10
-        doc.GetSymbolFileOrigin.assert_called_once()
+        # GetSymbolFileOrigin(pxOrigin, pyOrigin) - both must be supplied
+        doc.GetSymbolFileOrigin.assert_called_once_with(0.0, 0.0)
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_symbol_file_origin()
         assert "error" in result
@@ -654,7 +662,7 @@ class TestSetSymbolFileOrigin:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.set_symbol_file_origin(0.05, 0.10)
         assert "error" in result

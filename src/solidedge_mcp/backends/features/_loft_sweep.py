@@ -17,6 +17,18 @@ from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
+# constant.tlb > FeaturePropertyConstants.igStart -- names the end of the helix
+# axis the helix grows from. Not yet exposed by backends/constants.py.
+_IG_START = 29
+# constant.tlb > FeaturePropertyConstants.igInside -- ThicknessSide of a
+# thin-wall feature (the wall grows inside the profile). Likewise not yet in
+# backends/constants.py.
+_IG_INSIDE = 4
+
+_NO_AXIS_ERROR = (
+    "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."
+)
+
 
 @verify_geometry_on_creators
 class LoftSweepMixin:
@@ -208,6 +220,11 @@ class LoftSweepMixin:
         """
         Create a helical feature.
 
+        Type library: Models.AddFiniteBaseHelix(HelixAxis, AxisStart,
+        NumCrossSections, CrossSectionArray, ProfileSide, Height, Pitch,
+        NumberOfTurns, HelixDir, [8 optional taper/extent parameters]) -- nine
+        required arguments. The helix axis is the sketch's axis of revolution.
+
         Args:
             pitch: Distance between coils (meters)
             height: Total height of helix (meters)
@@ -220,9 +237,12 @@ class LoftSweepMixin:
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+            if not refaxis:
+                return {"error": _NO_AXIS_ERROR}
 
             models = doc.Models
 
@@ -230,13 +250,25 @@ class LoftSweepMixin:
             if revolutions is None:
                 revolutions = height / pitch
 
-            # AddFiniteBaseHelix
+            helix_dir = (
+                DirectionConstants.igRight if direction == "Right" else DirectionConstants.igLeft
+            )
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
+
             models.AddFiniteBaseHelix(
-                NumberOfProfiles=1,
-                ProfileArray=(profile,),
-                Pitch=pitch,
-                Height=height,
-                Revolutions=revolutions,
+                refaxis,  # HelixAxis
+                _IG_START,  # AxisStart
+                1,  # NumCrossSections
+                v_profiles,  # CrossSectionArray
+                DirectionConstants.igRight,  # ProfileSide
+                height,  # Height
+                pitch,  # Pitch
+                revolutions,  # NumberOfTurns
+                helix_dir,  # HelixDir
             )
 
             return {
@@ -255,6 +287,15 @@ class LoftSweepMixin:
     ) -> dict[str, Any]:
         """
         Create a thin-walled loft feature between multiple profiles.
+
+        Type library: Models.AddLoftedProtrusionWithThinWall(NumSections,
+        CrossSections, CrossSectionTypes, Origins, SegmentMaps, MaterialSide,
+        StartExtentType, StartExtentDistance, StartSurfaceOrRefPlane,
+        EndExtentType, EndExtentDistance, EndSurfaceOrRefPlane,
+        StartTangentType, StartTangentMagnitude, EndTangentType,
+        EndTangentMagnitude, ThinWall, AddEndCaps, RemoveInsideMaterial,
+        Thickness, ThicknessSide, [NumGuideCurves, GuideCurves]) -- twenty-one
+        required arguments; the four wall flags around Thickness were missing.
 
         Uses accumulated profiles from close_sketch() calls.
 
@@ -283,23 +324,27 @@ class LoftSweepMixin:
             v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
 
             models.AddLoftedProtrusionWithThinWall(
-                len(profiles),
-                v_profiles,
-                v_types,
-                v_origins,
+                len(profiles),  # NumSections
+                v_profiles,  # CrossSections
+                v_types,  # CrossSectionTypes
+                v_origins,  # Origins
                 v_seg,  # SegmentMaps
                 DirectionConstants.igRight,  # MaterialSide
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,  # Start extent
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,  # End extent
-                ExtentTypeConstants.igNone,
-                0.0,  # Start tangent
-                ExtentTypeConstants.igNone,
-                0.0,  # End tangent
-                wall_thickness,  # WallThickness
+                ExtentTypeConstants.igNone,  # StartExtentType
+                0.0,  # StartExtentDistance
+                None,  # StartSurfaceOrRefPlane
+                ExtentTypeConstants.igNone,  # EndExtentType
+                0.0,  # EndExtentDistance
+                None,  # EndSurfaceOrRefPlane
+                ExtentTypeConstants.igNone,  # StartTangentType
+                0.0,  # StartTangentMagnitude
+                ExtentTypeConstants.igNone,  # EndTangentType
+                0.0,  # EndTangentMagnitude
+                True,  # ThinWall
+                False,  # AddEndCaps
+                True,  # RemoveInsideMaterial
+                wall_thickness,  # Thickness
+                _IG_INSIDE,  # ThicknessSide
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -317,6 +362,14 @@ class LoftSweepMixin:
     ) -> dict[str, Any]:
         """
         Create a thin-walled sweep feature along a path.
+
+        Type library: Models.AddSweptProtrusionWithThinWall(NumCurves,
+        TraceCurves, TraceCurveTypes, NumSections, CrossSections,
+        CrossSectionTypes, Origins, SegmentMaps, MaterialSide, StartExtentType,
+        StartExtentDistance, StartSurfaceOrRefPlane, EndExtentType,
+        EndExtentDistance, EndSurfaceOrRefPlane, ThinWall, AddEndCaps,
+        RemoveInsideMaterial, Thickness, ThicknessSide) -- twenty required
+        arguments; the four wall flags around Thickness were missing.
 
         Uses accumulated profiles: first is path (open), rest are cross-sections (closed).
 
@@ -358,22 +411,26 @@ class LoftSweepMixin:
             v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
 
             models.AddSweptProtrusionWithThinWall(
-                1,
-                v_paths,
-                v_path_types,
-                len(cross_sections),
-                v_sections,
-                v_section_types,
-                v_origins,
-                v_seg,
-                DirectionConstants.igRight,
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,
-                ExtentTypeConstants.igNone,
-                0.0,
-                None,
-                wall_thickness,
+                1,  # NumCurves
+                v_paths,  # TraceCurves
+                v_path_types,  # TraceCurveTypes
+                len(cross_sections),  # NumSections
+                v_sections,  # CrossSections
+                v_section_types,  # CrossSectionTypes
+                v_origins,  # Origins
+                v_seg,  # SegmentMaps
+                DirectionConstants.igRight,  # MaterialSide
+                ExtentTypeConstants.igNone,  # StartExtentType
+                0.0,  # StartExtentDistance
+                None,  # StartSurfaceOrRefPlane
+                ExtentTypeConstants.igNone,  # EndExtentType
+                0.0,  # EndExtentDistance
+                None,  # EndSurfaceOrRefPlane
+                True,  # ThinWall
+                False,  # AddEndCaps
+                True,  # RemoveInsideMaterial
+                wall_thickness,  # Thickness
+                _IG_INSIDE,  # ThicknessSide
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -389,25 +446,44 @@ class LoftSweepMixin:
     def create_helix_sync(
         self, pitch: float, height: float, revolutions: float | None = None
     ) -> dict[str, Any]:
-        """Create synchronous helix feature"""
+        """Create synchronous helix feature.
+
+        Type library: Models.AddFiniteBaseHelixSync(HelixAxis, AxisStart,
+        NumCrossSections, CrossSectionArray, ProfileSide, Height, Pitch,
+        NumberOfTurns, HelixDir, [8 optional parameters]) -- nine required
+        arguments.
+        """
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+            if not refaxis:
+                return {"error": _NO_AXIS_ERROR}
 
             models = doc.Models
 
             if revolutions is None:
                 revolutions = height / pitch
 
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
+
             models.AddFiniteBaseHelixSync(
-                NumberOfProfiles=1,
-                ProfileArray=(profile,),
-                Pitch=pitch,
-                Height=height,
-                Revolutions=revolutions,
+                refaxis,  # HelixAxis
+                _IG_START,  # AxisStart
+                1,  # NumCrossSections
+                v_profiles,  # CrossSectionArray
+                DirectionConstants.igRight,  # ProfileSide
+                height,  # Height
+                pitch,  # Pitch
+                revolutions,  # NumberOfTurns
+                DirectionConstants.igRight,  # HelixDir (right-hand)
             )
 
             return {
@@ -423,26 +499,50 @@ class LoftSweepMixin:
     def create_helix_thin_wall(
         self, pitch: float, height: float, wall_thickness: float, revolutions: float | None = None
     ) -> dict[str, Any]:
-        """Create thin-walled helix feature"""
+        """Create thin-walled helix feature.
+
+        Type library: Models.AddFiniteBaseHelixWithThinWall(HelixAxis,
+        AxisStart, NumCrossSections, CrossSectionArray, ProfileSide, Height,
+        Pitch, NumberOfTurns, HelixDir, ThinWall, AddEndCaps,
+        RemoveInsideMaterial, Thickness, ThicknessSide, [8 optional
+        parameters]) -- fourteen required arguments.
+        """
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+            if not refaxis:
+                return {"error": _NO_AXIS_ERROR}
 
             models = doc.Models
 
             if revolutions is None:
                 revolutions = height / pitch
 
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
+
             models.AddFiniteBaseHelixWithThinWall(
-                NumberOfProfiles=1,
-                ProfileArray=(profile,),
-                Pitch=pitch,
-                Height=height,
-                Revolutions=revolutions,
-                WallThickness=wall_thickness,
+                refaxis,  # HelixAxis
+                _IG_START,  # AxisStart
+                1,  # NumCrossSections
+                v_profiles,  # CrossSectionArray
+                DirectionConstants.igRight,  # ProfileSide
+                height,  # Height
+                pitch,  # Pitch
+                revolutions,  # NumberOfTurns
+                DirectionConstants.igRight,  # HelixDir (right-hand)
+                True,  # ThinWall
+                False,  # AddEndCaps
+                True,  # RemoveInsideMaterial
+                wall_thickness,  # Thickness
+                _IG_INSIDE,  # ThicknessSide
             )
 
             return {
@@ -458,26 +558,50 @@ class LoftSweepMixin:
     def create_helix_sync_thin_wall(
         self, pitch: float, height: float, wall_thickness: float, revolutions: float | None = None
     ) -> dict[str, Any]:
-        """Create synchronous thin-walled helix feature"""
+        """Create synchronous thin-walled helix feature.
+
+        Type library: Models.AddFiniteBaseHelixSyncWithThinWall(HelixAxis,
+        AxisStart, NumCrossSections, CrossSectionArray, ProfileSide, Height,
+        Pitch, NumberOfTurns, HelixDir, ThinWall, AddEndCaps,
+        RemoveInsideMaterial, Thickness, ThicknessSide, [8 optional
+        parameters]) -- fourteen required arguments.
+        """
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
+            refaxis = self.sketch_manager.get_active_refaxis()
 
             if not profile:
                 return {"error": "No active sketch profile"}
+            if not refaxis:
+                return {"error": _NO_AXIS_ERROR}
 
             models = doc.Models
 
             if revolutions is None:
                 revolutions = height / pitch
 
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
+
             models.AddFiniteBaseHelixSyncWithThinWall(
-                NumberOfProfiles=1,
-                ProfileArray=(profile,),
-                Pitch=pitch,
-                Height=height,
-                Revolutions=revolutions,
-                WallThickness=wall_thickness,
+                refaxis,  # HelixAxis
+                _IG_START,  # AxisStart
+                1,  # NumCrossSections
+                v_profiles,  # CrossSectionArray
+                DirectionConstants.igRight,  # ProfileSide
+                height,  # Height
+                pitch,  # Pitch
+                revolutions,  # NumberOfTurns
+                DirectionConstants.igRight,  # HelixDir (right-hand)
+                True,  # ThinWall
+                False,  # AddEndCaps
+                True,  # RemoveInsideMaterial
+                wall_thickness,  # Thickness
+                _IG_INSIDE,  # ThicknessSide
             )
 
             return {
@@ -496,8 +620,12 @@ class LoftSweepMixin:
         """
         Create a helix protrusion between two reference planes.
 
-        Uses HelixProtrusions.AddFromTo(HelixAxis, AxisStart, NumCrossSections,
-        CrossSectionArray, ProfileSide, FromFace, ToFace, Pitch, HelixDir).
+        Type library: HelixProtrusions.AddFromTo(HelixAxis, AxisStart,
+        NumCrossSections, CrossSectionArray, ProfileSide, Height, Pitch,
+        NumberOfTurns, HelixDir, FromPlane, ToPlane, [6 optional taper/pitch
+        parameters]) -- eleven required arguments. Height and NumberOfTurns are
+        driven by the from/to planes, so they are passed as 0.0, matching
+        AddFromToSync below.
 
         Args:
             from_plane_index: 1-based index of the starting reference plane
@@ -542,19 +670,25 @@ class LoftSweepMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
 
             helix = model.HelixProtrusions
             helix.AddFromTo(
                 refaxis,  # HelixAxis
-                DirectionConstants.igRight,  # AxisStart
+                _IG_START,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
-                from_plane,  # FromFace
-                to_plane,  # ToFace
+                0.0,  # Height (driven by the from/to planes)
                 pitch,  # Pitch
+                0.0,  # NumberOfTurns (driven by the from/to planes)
                 DirectionConstants.igRight,  # HelixDir
+                from_plane,  # FromPlane
+                to_plane,  # ToPlane
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -579,9 +713,11 @@ class LoftSweepMixin:
         """
         Create a thin-walled helix protrusion between two reference planes.
 
-        Uses HelixProtrusions.AddFromToWithThinWall(HelixAxis, AxisStart,
-        NumCrossSections, CrossSectionArray, ProfileSide, FromFace, ToFace,
-        Pitch, HelixDir, WallThickness).
+        Type library: HelixProtrusions.AddFromToWithThinWall(HelixAxis,
+        AxisStart, NumCrossSections, CrossSectionArray, ProfileSide, Height,
+        Pitch, NumberOfTurns, HelixDir, FromPlane, ToPlane, ThinWall,
+        AddEndCaps, RemoveInsideMaterial, Thickness, ThicknessSide, [6 optional
+        taper/pitch parameters]) -- sixteen required arguments.
 
         Args:
             from_plane_index: 1-based index of the starting reference plane
@@ -627,20 +763,30 @@ class LoftSweepMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
 
             helix = model.HelixProtrusions
             helix.AddFromToWithThinWall(
                 refaxis,  # HelixAxis
-                DirectionConstants.igRight,  # AxisStart
+                _IG_START,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
-                from_plane,  # FromFace
-                to_plane,  # ToFace
+                0.0,  # Height (driven by the from/to planes)
                 pitch,  # Pitch
+                0.0,  # NumberOfTurns (driven by the from/to planes)
                 DirectionConstants.igRight,  # HelixDir
-                wall_thickness,  # WallThickness
+                from_plane,  # FromPlane
+                to_plane,  # ToPlane
+                True,  # ThinWall
+                False,  # AddEndCaps
+                True,  # RemoveInsideMaterial
+                wall_thickness,  # Thickness
+                _IG_INSIDE,  # ThicknessSide
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -708,7 +854,11 @@ class LoftSweepMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
 
             helix = model.HelixProtrusions
             helix.AddFromToSync(
@@ -793,7 +943,11 @@ class LoftSweepMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            # A plain sequence, not a VARIANT: the helix APIs reject
+            # VARIANT(VT_ARRAY | VT_DISPATCH, ...) with "Objects for SAFEARRAYS
+            # must be sequences", verified against Solid Edge 2026. Other
+            # collections (Rounds.Add) do accept the VARIANT form.
+            v_profiles = [profile]
 
             helix = model.HelixProtrusions
             helix.AddFromToSyncWithThinWall(

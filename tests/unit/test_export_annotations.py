@@ -11,6 +11,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -19,6 +25,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -29,25 +36,29 @@ def export_mgr():
 
 
 class TestAddDimension:
-    def test_success(self, export_mgr):
+    """Dimensions.AddLength takes the 2D object, not a pair of coordinates."""
+
+    def test_unsupported_does_not_call_com(self, export_mgr):
         em, doc = export_mgr
         sheet = MagicMock()
         dims = MagicMock()
         sheet.Dimensions = dims
         doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
 
         result = em.add_dimension(0.0, 0.0, 0.1, 0.0)
-        assert result["status"] == "added"
-        assert result["type"] == "dimension"
-        dims.AddLength.assert_called_once()
 
-    def test_not_draft(self, export_mgr):
+        assert result["unsupported"] is True
+        assert "add_length_dimension" in result["error"]
+        dims.AddLength.assert_not_called()
+
+    def test_unsupported_even_when_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_dimension(0, 0, 0.1, 0)
-        assert "error" in result
+
+        assert result["unsupported"] is True
+        doc.ActiveSheet.Dimensions.AddLength.assert_not_called()
 
 
 # ============================================================================
@@ -56,36 +67,29 @@ class TestAddDimension:
 
 
 class TestAddAngularDimension:
-    def test_success(self, export_mgr):
+    """Dimensions has no AddAngular member in any Solid Edge type library."""
+
+    def test_unsupported_does_not_call_com(self, export_mgr):
         em, doc = export_mgr
         sheet = MagicMock()
         dims = MagicMock()
         sheet.Dimensions = dims
         doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
 
         result = em.add_angular_dimension(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
-        assert result["status"] == "created"
-        assert result["type"] == "angular_dimension"
-        assert result["vertex"] == [0.05, 0.05]
-        dims.AddAngular.assert_called_once()
 
-    def test_not_draft(self, export_mgr):
+        assert result["unsupported"] is True
+        assert "AddAngular" in result["error"]
+        dims.AddAngular.assert_not_called()
+        dims.AddAngle.assert_not_called()
+
+    def test_unsupported_even_when_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_angular_dimension(0, 0, 0.05, 0.05, 0.1, 0)
-        assert "error" in result
 
-    def test_exception(self, export_mgr):
-        em, doc = export_mgr
-        sheet = MagicMock()
-        sheet.Dimensions.AddAngular.side_effect = Exception("COM error")
-        doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
-
-        result = em.add_angular_dimension(0, 0, 0, 0, 0, 0)
-        assert "error" in result
+        assert result["unsupported"] is True
 
 
 # ============================================================================
@@ -110,7 +114,7 @@ class TestAddRadialDimension:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_radial_dimension(0.05, 0.05, 0.1, 0.05)
         assert "error" in result
@@ -150,7 +154,7 @@ class TestAddDiameterDimension:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_diameter_dimension(0.05, 0.05, 0.1, 0.05)
         assert "error" in result
@@ -189,7 +193,7 @@ class TestAddOrdinateDimension:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_ordinate_dimension(0, 0, 0.1, 0)
         assert "error" in result
@@ -229,7 +233,7 @@ class TestAddDistanceDimension:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_distance_dimension(0.0, 0.0, 0.1, 0.05)
         assert "error" in result
@@ -274,7 +278,8 @@ class TestAddLengthDimension:
         assert result["status"] == "added"
         assert result["dimension_type"] == "length"
         assert result["object_index"] == 0
-        dims.AddLength.assert_called_once()
+        # AddLength(Object) dimensions the 2D element itself
+        dims.AddLength.assert_called_once_with(line)
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr
@@ -290,7 +295,7 @@ class TestAddLengthDimension:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_length_dimension(0)
         assert "error" in result
@@ -363,7 +368,9 @@ class TestAddRadiusDimension2d:
 
 
 class TestAddAngleDimension2d:
-    def test_success(self, export_mgr):
+    """Dimensions.AddAngle takes a single object, not three points."""
+
+    def test_unsupported_does_not_call_com(self, export_mgr):
         em, doc = export_mgr
         sheet = MagicMock()
         dims = MagicMock()
@@ -371,28 +378,18 @@ class TestAddAngleDimension2d:
         doc.ActiveSheet = sheet
 
         result = em.add_angle_dimension_2d(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
-        assert result["status"] == "added"
-        assert result["dimension_type"] == "angle"
-        assert result["vertex"] == [0.05, 0.05]
-        dims.AddAngle.assert_called_once()
 
-    def test_not_draft(self, export_mgr):
+        assert result["unsupported"] is True
+        assert "AddAngle" in result["error"]
+        dims.AddAngle.assert_not_called()
+
+    def test_unsupported_even_when_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_angle_dimension_2d(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
-        assert "error" in result
 
-    def test_com_error(self, export_mgr):
-        em, doc = export_mgr
-        sheet = MagicMock()
-        dims = MagicMock()
-        dims.AddAngle.side_effect = Exception("COM error")
-        sheet.Dimensions = dims
-        doc.ActiveSheet = sheet
-
-        result = em.add_angle_dimension_2d(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
-        assert "error" in result
+        assert result["unsupported"] is True
 
 
 # ============================================================================
@@ -417,7 +414,7 @@ class TestAddCenterMark:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_center_mark(0.1, 0.1)
         assert "error" in result
@@ -456,7 +453,7 @@ class TestAddCenterline:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_centerline(0, 0, 0.1, 0)
         assert "error" in result
@@ -493,7 +490,7 @@ class TestAddSurfaceFinishSymbol:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_surface_finish_symbol(0.1, 0.1)
         assert "error" in result
@@ -520,14 +517,20 @@ class TestAddWeldSymbol:
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
+        symbol = MagicMock()
+        ws.Add.return_value = symbol
+
         result = em.add_weld_symbol(0.1, 0.1, "fillet")
         assert result["status"] == "added"
         assert result["type"] == "weld_symbol"
         assert result["weld_type"] == "fillet"
+        # WeldSymbols.Add(x1, y1, z1); the type is the TopType property
+        ws.Add.assert_called_once_with(0.1, 0.1, 0)
+        assert symbol.TopType == 1  # igDimWeldTopFillet
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_weld_symbol(0.1, 0.1)
         assert "error" in result
@@ -564,7 +567,7 @@ class TestAddGeometricTolerance:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_geometric_tolerance(0.1, 0.1)
         assert "error" in result
@@ -609,7 +612,7 @@ class TestAddTextBox:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_text_box(0.1, 0.1, "Test")
         assert "error" in result
@@ -638,7 +641,7 @@ class TestAddLeader:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_leader(0.05, 0.05, 0.15, 0.15)
         assert "error" in result
@@ -669,7 +672,7 @@ class TestAddNote:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_note(0.1, 0.1, "Test")
         assert "error" in result
@@ -694,11 +697,14 @@ class TestAddBalloon:
         result = em.add_balloon(0.1, 0.1, "1", 0.05, 0.05)
         assert result["status"] == "added"
         assert result["type"] == "balloon"
-        balloons.Add.assert_called_once_with(0.05, 0.05, 0, 0.1, 0.1, 0)
+        # Balloons.Add(x1, y1, z1) places the balloon; the leader is a vertex.
+        balloons.Add.assert_called_once_with(0.1, 0.1, 0)
+        balloon.AddVertex.assert_called_once_with(0.05, 0.05, 0)
+        assert balloon.BalloonText == "1"
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_balloon(0.1, 0.1)
         assert "error" in result
@@ -751,7 +757,7 @@ class TestGetLines2d:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_lines2d()
         assert "error" in result
@@ -791,7 +797,7 @@ class TestGetCircles2d:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_circles2d()
         assert "error" in result
@@ -835,7 +841,76 @@ class TestGetArcs2d:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_arcs2d()
         assert "error" in result
+
+
+# ============================================================================
+# DOCUMENT-TYPE GUARD (replaces the old hasattr probe)
+# ============================================================================
+
+
+class TestDraftDocumentGuard:
+    """The guard reads Document.Type instead of probing for Sheets."""
+
+    def test_part_document_is_rejected(self, export_mgr):
+        em, doc = export_mgr
+        doc.Type = IG_PART_DOCUMENT
+
+        result = em.add_balloon(0.1, 0.1)
+        assert result["error"] == "Active document is not a draft document"
+
+    def test_raising_type_getter_is_rejected(self, export_mgr):
+        em, doc = export_mgr
+        type(doc).Type = property(lambda self: (_ for _ in ()).throw(Exception("gone")))
+        try:
+            result = em.add_balloon(0.1, 0.1)
+            assert result["error"] == "Active document is not a draft document"
+        finally:
+            del type(doc).Type
+
+    def test_raising_sheet_getter_surfaces_the_real_error(self, export_mgr):
+        em, doc = export_mgr
+        type(doc).ActiveSheet = property(
+            lambda self: (_ for _ in ()).throw(Exception("ActiveSheet exploded"))
+        )
+        try:
+            result = em.add_balloon(0.1, 0.1)
+            # The old hasattr probe swallowed this as "not a draft document".
+            assert "error" in result
+            assert result["error"] != "Active document is not a draft document"
+        finally:
+            del type(doc).ActiveSheet
+
+
+class TestWeldTypeConstants:
+    """The weld type map now uses DimWeldTypeConstants values, not 0..4."""
+
+    @pytest.mark.parametrize(
+        ("weld_type", "expected"),
+        [
+            ("fillet", 1),  # igDimWeldTopFillet
+            ("spot", 2),  # igDimWeldTopSpot
+            ("seam", 3),  # igDimWeldTopSeam
+            ("groove", 5),  # igDimWeldTopVGroove
+            ("plug", 6),  # igDimWeldTopSlot
+        ],
+    )
+    def test_top_type_value(self, export_mgr, weld_type, expected):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        ws = MagicMock()
+        symbol = MagicMock()
+        ws.Add.return_value = symbol
+        sheet.WeldSymbols = ws
+        doc.ActiveSheet = sheet
+
+        result = em.add_weld_symbol(0.1, 0.1, weld_type)
+
+        assert result["status"] == "added"
+        ws.Add.assert_called_once_with(0.1, 0.1, 0)
+        assert symbol.TopType == expected
+        # 0 is igDimWeldTypeNone - never a valid symbol
+        assert symbol.TopType != 0

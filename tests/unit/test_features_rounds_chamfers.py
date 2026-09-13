@@ -303,41 +303,23 @@ class TestChamferAngle:
 
 
 class TestVariableRound:
-    def test_success(self, feature_mgr, managers):
+    """Rounds.AddVariable takes per-vertex radii and a VertexArray."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
         result = feature_mgr.create_variable_round([0.001, 0.002])
-        assert result["status"] == "created"
+        assert result["unsupported"] is True
         assert result["type"] == "variable_round"
-        assert result["edge_count"] == 2
-        model.Rounds.AddVariable.assert_called_once()
+        assert result["radii"] == [0.001, 0.002]
+        assert "VertexArray" in result["error"]
+        model.Rounds.AddVariable.assert_not_called()
 
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_variable_round([0.001])
-        assert "error" in result
-        assert "No features" in result["error"]
-
-    def test_radii_extends_to_edge_count(self, feature_mgr, managers):
-        """If fewer radii than edges, last radius should be repeated."""
+    def test_unsupported_on_specific_face(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        result = feature_mgr.create_variable_round([0.003])
-        assert result["status"] == "created"
-        # 2 edges in fixture, 1 radius provided -> extended to [0.003, 0.003]
-        assert len(result["radii"]) == 2
-        assert result["radii"] == [0.003, 0.003]
-
-    def test_on_specific_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_variable_round([0.001, 0.002], face_index=0)
-        assert result["status"] == "created"
-        assert result["edge_count"] == 2
-
-    def test_invalid_face_index(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_variable_round([0.001], face_index=5)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
+        result = feature_mgr.create_variable_round([0.001], face_index=0)
+        assert result["unsupported"] is True
+        assert result["face_index"] == 0
+        model.Rounds.AddVariable.assert_not_called()
 
 
 # ============================================================================
@@ -383,12 +365,19 @@ class TestBlend:
 class TestCreateChamferUnequalOnFace:
     def test_success(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
+        face = model.Body.Faces.return_value.Item.return_value
         result = feature_mgr.create_chamfer_unequal_on_face(0.002, 0.004, 0)
         assert result["status"] == "created"
         assert result["type"] == "chamfer_unequal_on_face"
         assert result["distance1"] == 0.002
         assert result["distance2"] == 0.004
-        model.Chamfers.AddUnequalSetback.assert_called_once()
+        # AddUnequalSetback(ReferenceFace, NumberOfEdgeSets, EdgeSetArray,
+        # SetbackDistance1, SetbackDistance2)
+        args = model.Chamfers.AddUnequalSetback.call_args.args
+        assert len(args) == 5
+        assert args[0] is face
+        assert args[1] == len(args[2])
+        assert args[3:] == (0.002, 0.004)
 
     def test_no_base_feature(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -442,10 +431,13 @@ class TestCreateRoundBlend:
 class TestCreateRoundSurfaceBlend:
     def test_success(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
+        face = model.Body.Faces.return_value.Item.return_value
         result = feature_mgr.create_round_surface_blend(0, 0, 0.002)
         assert result["status"] == "created"
         assert result["type"] == "round_surface_blend"
-        model.Rounds.AddSurfaceBlend.assert_called_once()
+        # AddSurfaceBlend(LeftWallFace, LeftFaceSide, RightWallFace,
+        # RightFaceSide, Radius, TrimInput, TrimOutput); igRight = 2
+        model.Rounds.AddSurfaceBlend.assert_called_once_with(face, 2, face, 2, 0.002, True, True)
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -466,29 +458,23 @@ class TestCreateRoundSurfaceBlend:
 
 
 class TestCreateBlendVariable:
-    def test_success(self, feature_mgr, managers):
+    """Blends.AddVariable takes per-vertex radii and a VertexArray."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
         result = feature_mgr.create_blend_variable(0.001, 0.003)
-        assert result["status"] == "created"
-        assert result["type"] == "blend_variable"
+        assert result["unsupported"] is True
         assert result["radius1"] == 0.001
         assert result["radius2"] == 0.003
-        model.Blends.AddVariable.assert_called_once()
+        assert "VertexArray" in result["error"]
+        model.Blends.AddVariable.assert_not_called()
 
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_blend_variable(0.001, 0.003)
-        assert "error" in result
-
-    def test_no_faces(self, feature_mgr, managers):
+    def test_unsupported_on_specific_face(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        faces = MagicMock()
-        faces.Count = 0
-        model.Body.Faces.return_value = faces
-        result = feature_mgr.create_blend_variable(0.001, 0.003)
-        assert "error" in result
-        assert "No faces" in result["error"]
+        result = feature_mgr.create_blend_variable(0.001, 0.003, face_index=0)
+        assert result["unsupported"] is True
+        assert result["face_index"] == 0
+        model.Blends.AddVariable.assert_not_called()
 
 
 # ============================================================================
@@ -499,19 +485,30 @@ class TestCreateBlendVariable:
 class TestCreateBlendSurface:
     def test_success(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        result = feature_mgr.create_blend_surface(0, 0)
+        face = model.Body.Faces.return_value.Item.return_value
+        result = feature_mgr.create_blend_surface(0, 0, radius=0.002)
         assert result["status"] == "created"
         assert result["type"] == "blend_surface"
-        model.Blends.AddSurfaceBlend.assert_called_once()
+        assert result["radius"] == 0.002
+        # AddSurfaceBlend(LeftWallFace, LeftFaceSide, RightWallFace,
+        # RightFaceSide, Radius, TrimInput, TrimOutput); igRight = 2
+        model.Blends.AddSurfaceBlend.assert_called_once_with(face, 2, face, 2, 0.002, True, True)
+
+    def test_radius_required(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_blend_surface(0, 0)
+        assert "error" in result
+        assert "Radius" in result["error"]
+        model.Blends.AddSurfaceBlend.assert_not_called()
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
         models.Count = 0
-        result = feature_mgr.create_blend_surface(0, 0)
+        result = feature_mgr.create_blend_surface(0, 0, radius=0.002)
         assert "error" in result
 
     def test_invalid_face_index(self, feature_mgr, managers):
         _, _, _, _, _, _ = managers
-        result = feature_mgr.create_blend_surface(0, 99)
+        result = feature_mgr.create_blend_surface(0, 99, radius=0.002)
         assert "error" in result
         assert "Invalid face_index2" in result["error"]

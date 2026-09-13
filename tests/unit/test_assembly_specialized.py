@@ -12,6 +12,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -20,6 +26,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -32,6 +39,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -69,7 +77,7 @@ class TestAddVirtualComponent:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_virtual_component("test")
         assert "error" in result
@@ -110,7 +118,7 @@ class TestAddVirtualComponentPredefined:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=True):
@@ -135,7 +143,7 @@ class TestAddVirtualComponentBIDM:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_virtual_component_bidm("DOC001", "REV_A")
         assert "error" in result
@@ -203,7 +211,7 @@ class TestGetTube:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_tube(0)
         assert "error" in result
@@ -259,7 +267,7 @@ class TestAddTube:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         import unittest.mock
 
@@ -321,7 +329,7 @@ class TestAddStructuralFrame:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         import unittest.mock
 
@@ -354,7 +362,12 @@ class TestAddStructuralFrameByOrientation:
         assert result["status"] == "created"
         assert result["type"] == "structural_frame_oriented"
         assert result["coord_system"] == "CoordSys1"
-        frames.AddByOrientation.assert_called_once()
+        # AddByOrientation(PartFileName, CoOrdinateSystemName, NumPaths, Path)
+        call_args = frames.AddByOrientation.call_args.args
+        assert len(call_args) == 4
+        assert call_args[0] == "C:\\frames\\beam.par"
+        assert call_args[1] == "CoordSys1"
+        assert call_args[2] == 1
 
     def test_file_not_found(self, asm_mgr):
         am, doc = asm_mgr
@@ -366,7 +379,7 @@ class TestAddStructuralFrameByOrientation:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         import unittest.mock
 
@@ -415,7 +428,7 @@ class TestAddSplice:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_splice(0, 0, 0, [0], "")
         assert "error" in result
@@ -468,7 +481,7 @@ class TestAddWire:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_wire([0], [True], "")
         assert "error" in result
@@ -522,7 +535,7 @@ class TestAddCable:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_cable([0], [True], [0])
         assert "error" in result
@@ -576,7 +589,7 @@ class TestAddBundle:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_bundle([0], [True], [0])
         assert "error" in result

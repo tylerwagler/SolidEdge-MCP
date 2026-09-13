@@ -2,19 +2,12 @@
 
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
-
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
-    DraftSideConstants,
+    ExtentTypeConstants,
     KeyPointExtentConstants,
-    TreatmentCrownCurvatureSideConstants,
-    TreatmentCrownSideConstants,
-    TreatmentCrownTypeConstants,
-    TreatmentTypeConstants,
 )
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
@@ -22,6 +15,11 @@ from ._base import verify_geometry_on_creators
 _logger = get_logger(__name__)
 
 _REVOLVE_OPERATIONS = ("Add", "Cut", "Intersect")
+
+# constant.tlb > FeaturePropertyConstants.igInside. Used as ThicknessSide of a
+# thin-wall feature (the wall grows inside the profile). Not yet exposed by
+# backends/constants.py.
+_IG_INSIDE = 4
 
 
 @verify_geometry_on_creators
@@ -162,6 +160,13 @@ class RevolveMixin:
         """
         Create a thin-walled revolve feature.
 
+        Type library: Models.AddRevolvedProtrusionWithThinWall(NumberOfProfiles,
+        ProfileArray, RefAxis, ProfileSide, ExtentType1, ExtentSide1,
+        FiniteAngle1, KeyPointOrTangentFace1, KeyPointFlags1, ExtentType2,
+        ExtentSide2, FiniteAngle2, KeyPointOrTangentFace2, KeyPointFlags2,
+        ThinWall, AddEndCaps, RemoveInsideMaterial, Thickness, ThicknessSide) --
+        nineteen required arguments. Only the first extent is used.
+
         Requires an axis of revolution to be set in the sketch before closing.
 
         Args:
@@ -195,10 +200,23 @@ class RevolveMixin:
             models.AddRevolvedProtrusionWithThinWall(
                 1,  # NumberOfProfiles
                 (profile,),  # ProfileArray
-                refaxis,  # ReferenceAxis
-                DirectionConstants.igRight,  # ProfilePlaneSide
-                angle_rad,  # AngleofRevolution
-                wall_thickness,  # WallThickness
+                refaxis,  # RefAxis
+                DirectionConstants.igRight,  # ProfileSide
+                ExtentTypeConstants.igFinite,  # ExtentType1
+                DirectionConstants.igRight,  # ExtentSide1
+                angle_rad,  # FiniteAngle1
+                None,  # KeyPointOrTangentFace1
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags1
+                ExtentTypeConstants.igNone,  # ExtentType2 (single-sided)
+                DirectionConstants.igRight,  # ExtentSide2
+                0.0,  # FiniteAngle2
+                None,  # KeyPointOrTangentFace2
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags2
+                True,  # ThinWall
+                False,  # AddEndCaps
+                True,  # RemoveInsideMaterial
+                wall_thickness,  # Thickness
+                _IG_INSIDE,  # ThicknessSide
             )
 
             return {
@@ -211,7 +229,14 @@ class RevolveMixin:
             return error_result(e)
 
     def create_revolve_sync(self, angle: float) -> dict[str, Any]:
-        """Create synchronous revolve feature"""
+        """Create synchronous revolve feature.
+
+        Type library: Models.AddRevolvedProtrusionSync(NumberOfProfiles,
+        ProfileArray, RefAxis, ProfileSide, ExtentType1, ExtentSide1,
+        FiniteAngle1, KeyPointOrTangentFace1, KeyPointFlags1, ExtentType2,
+        ExtentSide2, FiniteAngle2, KeyPointOrTangentFace2, KeyPointFlags2) --
+        fourteen required arguments. Only the first extent is used.
+        """
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
@@ -235,9 +260,18 @@ class RevolveMixin:
             models.AddRevolvedProtrusionSync(
                 1,  # NumberOfProfiles
                 (profile,),  # ProfileArray
-                refaxis,  # ReferenceAxis
-                DirectionConstants.igRight,  # ProfilePlaneSide
-                angle_rad,  # AngleofRevolution
+                refaxis,  # RefAxis
+                DirectionConstants.igRight,  # ProfileSide
+                ExtentTypeConstants.igFinite,  # ExtentType1
+                DirectionConstants.igRight,  # ExtentSide1
+                angle_rad,  # FiniteAngle1
+                None,  # KeyPointOrTangentFace1
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags1
+                ExtentTypeConstants.igNone,  # ExtentType2 (single-sided)
+                DirectionConstants.igRight,  # ExtentSide2
+                0.0,  # FiniteAngle2
+                None,  # KeyPointOrTangentFace2
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags2
             )
 
             return {"status": "created", "type": "revolve_sync", "angle": angle}
@@ -282,59 +316,58 @@ class RevolveMixin:
         """
         Create a revolve up to a keypoint extent.
 
-        Uses RevolvedProtrusions.AddFiniteByKeyPoint(Profile, RefAxis, PlaneSide).
-        Revolves the profile to the nearest keypoint.
+        Type library: RevolvedProtrusions.AddFiniteByKeyPoint(Profile, RefAxis,
+        KeyPointOrTangentFace, KeyPointFlags, ProfileSide, [ProfilePlaneSide]).
+        The KeyPoint (or tangent face) is a selected model object that this
+        server has no way to pick, so the call can never be formed; report that
+        instead of failing inside COM.
 
         Returns:
-            Dict with status and revolve info
+            Dict with an explanatory error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-            refaxis = self.sketch_manager.get_active_refaxis()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-            if not refaxis:
-                return {
-                    "error": "No axis of revolution set. "
-                    "Use set_axis_of_revolution() before "
-                    "closing the sketch."
-                }
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            protrusions = model.RevolvedProtrusions
-            protrusions.AddFiniteByKeyPoint(profile, refaxis, DirectionConstants.igRight)
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {"status": "created", "type": "revolve_by_keypoint"}
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Revolving to a keypoint needs a KeyPoint or tangent face object, "
+                "which this server cannot select. Use create_revolve(angle) or the "
+                "Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def create_revolve_full(
         self, angle: float = 360.0, treatment_type: str = "None"
     ) -> dict[str, Any]:
         """
-        Create a revolve with full treatment parameters.
+        Create a revolve through the full collection-level API.
 
-        Uses RevolvedProtrusions.Add(NumProfiles, ProfileArray, RefAxis, PlaneSide,
-        AngleOfRevolution, ...). Provides access to treatment options.
+        Type library: RevolvedProtrusions.Add(NumberOfProfiles, ProfileArray,
+        RefAxis, ProfileSide, ExtentType1, ExtentSide1, FiniteAngle1,
+        KeyPointOrTangentFace1, KeyPointFlags1, ExtentType2, ExtentSide2,
+        FiniteAngle2, KeyPointOrTangentFace2, KeyPointFlags2) -- fourteen
+        required arguments, all of them extents. Unlike the extruded
+        protrusion API this overload has no treatment (draft/crown)
+        parameters, so treatment_type must be 'None'.
 
         Args:
             angle: Revolution angle in degrees (360 for full revolution)
-            treatment_type: 'None', 'Draft', 'Crown', or 'CrownAndDraft'
+            treatment_type: must be 'None' -- see above
 
         Returns:
             Dict with status and revolve info
         """
         try:
             import math
+
+            if treatment_type != "None":
+                return {
+                    "error": (
+                        f"treatment_type={treatment_type!r} is not supported: "
+                        "RevolvedProtrusions.Add takes only extent parameters, with no "
+                        "draft or crown treatment slots. Add the treatment as a "
+                        "separate draft feature, or use the Solid Edge UI."
+                    ),
+                    "unsupported": True,
+                }
 
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
@@ -356,31 +389,22 @@ class RevolveMixin:
             model = models.Item(1)
             angle_rad = math.radians(angle)
 
-            treatment_map = {
-                "None": TreatmentTypeConstants.seTreatmentNone,
-                "Draft": TreatmentTypeConstants.seTreatmentDraft,
-                "Crown": TreatmentTypeConstants.seTreatmentCrown,
-                "CrownAndDraft": TreatmentTypeConstants.seTreatmentCrownAndDraft,
-            }
-            treat_const = treatment_map.get(treatment_type, TreatmentTypeConstants.seTreatmentNone)
-
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
-
             protrusions = model.RevolvedProtrusions
             protrusions.Add(
-                1,  # NumProfiles
-                profile_array,  # ProfileArray
+                1,  # NumberOfProfiles
+                (profile,),  # ProfileArray
                 refaxis,  # RefAxis
-                DirectionConstants.igRight,  # PlaneSide
-                angle_rad,  # AngleOfRevolution
-                treat_const,  # TreatmentType
-                DraftSideConstants.seDraftNone,  # TreatmentDraftSide
-                0.0,  # TreatmentDraftAngle
-                TreatmentCrownTypeConstants.seTreatmentCrownByOffset,
-                TreatmentCrownSideConstants.seTreatmentCrownSideInside,
-                TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
-                0.0,  # TreatmentCrownRadiusOrOffset
-                0.0,  # TreatmentCrownTakeOffAngle
+                DirectionConstants.igRight,  # ProfileSide
+                ExtentTypeConstants.igFinite,  # ExtentType1
+                DirectionConstants.igRight,  # ExtentSide1
+                angle_rad,  # FiniteAngle1
+                None,  # KeyPointOrTangentFace1
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags1
+                ExtentTypeConstants.igNone,  # ExtentType2 (single-sided)
+                DirectionConstants.igRight,  # ExtentSide2
+                0.0,  # FiniteAngle2
+                None,  # KeyPointOrTangentFace2
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags2
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -398,46 +422,20 @@ class RevolveMixin:
         """
         Create a synchronous revolve up to a keypoint extent.
 
-        Uses RevolvedProtrusions.AddFiniteByKeyPointSync(Profile, RefAxis,
-        KeyPointOrTangentFace, KeyPointFlags, ProfileSide).
+        Type library: RevolvedProtrusions.AddFiniteByKeyPointSync(Profile,
+        RefAxis, KeyPointOrTangentFace, KeyPointFlags, ProfileSide,
+        [ProfilePlaneSide]). KeyPointOrTangentFace is a required object that
+        this server cannot select -- passing None only moves the failure into
+        COM -- so report it here, exactly as create_revolve_by_keypoint does.
 
         Returns:
-            Dict with status and revolve info
+            Dict with an explanatory error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-            refaxis = self.sketch_manager.get_active_refaxis()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-            if not refaxis:
-                return {
-                    "error": "No axis of revolution set. "
-                    "Use set_axis_of_revolution() before "
-                    "closing the sketch."
-                }
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            protrusions = model.RevolvedProtrusions
-            protrusions.AddFiniteByKeyPointSync(
-                profile,
-                refaxis,
-                None,  # KeyPointOrTangentFace
-                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags
-                DirectionConstants.igRight,  # ProfileSide
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "revolve_by_keypoint_sync",
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Revolving to a keypoint needs a KeyPoint or tangent face object, "
+                "which this server cannot select. Use create_revolve_sync(angle) or "
+                "the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }

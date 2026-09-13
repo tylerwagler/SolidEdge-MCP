@@ -1,6 +1,7 @@
 """Dispatch tests for tools/features composite tools."""
 
 import ast
+import importlib
 import inspect
 import typing
 from unittest.mock import MagicMock
@@ -8,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import solidedge_mcp.tools.features as features_pkg
+from solidedge_mcp.backends.features import FeatureManager
 from solidedge_mcp.tools.features import (
     add_body,
     create_bend,
@@ -634,6 +636,12 @@ class TestCreateBlend:
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
 
+    def test_surface_passes_radius(self, mock_mgr):
+        """Blends.AddSurfaceBlend needs a positive Radius."""
+        mock_mgr.create_blend_surface.return_value = {"status": "ok"}
+        create_blend(method="surface", face_index1=1, face_index2=4, radius=0.002)
+        mock_mgr.create_blend_surface.assert_called_once_with(1, 4, 0.002)
+
     def test_unknown(self, mock_mgr):
         result = create_blend(method="bogus")
         assert "error" in result
@@ -849,11 +857,25 @@ class TestCreateSheetMetalBase:
         mock_mgr.create_base_flange.assert_called_once_with(0.0, 0.001, None)
 
     def test_contour_advanced_none_bend_radius_defaults(self, mock_mgr):
-        """bend_radius=None should default to 0.001."""
+        """bend_radius=None should default to 0.001, width=None to 0.0."""
         mock_mgr.create_base_contour_flange_advanced.return_value = {"status": "ok"}
         create_sheet_metal_base(type="contour_advanced", bend_radius=None, thickness=0.002)
         mock_mgr.create_base_contour_flange_advanced.assert_called_once_with(
-            0.002, 0.001, "Default"
+            0.002, 0.001, "Default", 0.0
+        )
+
+    def test_contour_advanced_forwards_width(self, mock_mgr):
+        """width is the required projection distance for the advanced base."""
+        mock_mgr.create_base_contour_flange_advanced.return_value = {"status": "ok"}
+        create_sheet_metal_base(
+            type="contour_advanced",
+            thickness=0.002,
+            bend_radius=0.003,
+            width=0.05,
+            relief_type="Round",
+        )
+        mock_mgr.create_base_contour_flange_advanced.assert_called_once_with(
+            0.002, 0.003, "Round", 0.05
         )
 
     def test_unknown(self, mock_mgr):
@@ -1024,6 +1046,12 @@ class TestCreateLouver:
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
 
+    def test_basic_passes_height_and_direction(self, mock_mgr):
+        """Louvers.Add needs a positive height, so the tool must forward it."""
+        mock_mgr.create_louver.return_value = {"status": "ok"}
+        create_louver(method="basic", depth=0.004, height=0.01, direction="Reverse")
+        mock_mgr.create_louver.assert_called_once_with(0.004, "Reverse", 0.01)
+
     def test_unknown(self, mock_mgr):
         result = create_louver(method="bogus")
         assert "error" in result
@@ -1074,9 +1102,19 @@ class TestCreatePattern:
             y_count=2,
             x_spacing=0.01,
             y_spacing=0.02,
+            plane_index=2,
+            rectangle_angle=30.0,
         )
         mock_mgr.create_pattern_rectangular_ex.assert_called_once_with(
-            "Protrusion 1", 3, 2, 0.01, 0.02
+            "Protrusion 1", 3, 2, 0.01, 0.02, 2, 30.0
+        )
+
+    def test_rectangular_ex_plane_and_angle_default(self, mock_mgr):
+        """plane_index defaults to the 1-based Top plane, angle to 0 degrees."""
+        mock_mgr.create_pattern_rectangular_ex.return_value = {"status": "ok"}
+        create_pattern(method="rectangular_ex", feature_name="Protrusion 1")
+        mock_mgr.create_pattern_rectangular_ex.assert_called_once_with(
+            "Protrusion 1", 1, 1, 0.0, 0.0, 1, 0.0
         )
 
     def test_unknown(self, mock_mgr):
@@ -1174,6 +1212,22 @@ class TestAddBody:
         result = add_body(method=disc)
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
+
+    def test_basic_passes_type_and_name(self, mock_mgr):
+        """Models.AddBody(igBodyType, BodyName) takes both arguments."""
+        mock_mgr.add_body.return_value = {"status": "ok"}
+        add_body(method="basic", body_type="SheetMetal", body_name="Skin")
+        mock_mgr.add_body.assert_called_once_with("SheetMetal", "Skin")
+
+    def test_feature_passes_import_path(self, mock_mgr):
+        mock_mgr.add_body_feature.return_value = {"status": "ok"}
+        add_body(method="feature", import_file_path="C:/parts/insert.x_t")
+        mock_mgr.add_body_feature.assert_called_once_with("C:/parts/insert.x_t")
+
+    def test_construction_passes_index(self, mock_mgr):
+        mock_mgr.add_by_construction.return_value = {"status": "ok"}
+        add_body(method="construction", construction_index=2)
+        mock_mgr.add_by_construction.assert_called_once_with(2)
 
     def test_unknown(self, mock_mgr):
         result = add_body(method="bogus")
@@ -1343,9 +1397,14 @@ class TestCreateReinforcement:
 class TestStandaloneFeatures:
     def test_create_web_network(self, mock_mgr):
         mock_mgr.create_web_network.return_value = {"status": "ok"}
-        result = create_web_network()
-        mock_mgr.create_web_network.assert_called_once()
+        result = create_web_network(thickness=0.003, depth=0.02, direction="Reverse")
+        mock_mgr.create_web_network.assert_called_once_with(0.003, 0.02, "Reverse")
         assert result == {"status": "ok"}
+
+    def test_create_web_network_rejects_non_numeric_thickness(self, mock_mgr):
+        result = create_web_network(thickness="thick")
+        assert "error" in result
+        mock_mgr.create_web_network.assert_not_called()
 
     def test_create_split(self, mock_mgr):
         mock_mgr.create_split.return_value = {"status": "ok"}
@@ -1498,3 +1557,58 @@ class TestRegistration:
     def test_geometry_removing_tools_are_destructive(self, registered):
         destructive = {n for n, kw in registered.items() if kw["annotations"]["destructiveHint"]}
         assert destructive == {"manage_feature", "delete_topology"}
+
+
+# === Tool/backend signature agreement ===
+
+
+def backend_call_violations(module_name: str, managers: dict[str, type]) -> list[str]:
+    """Report backend calls in a tool module that the tool cannot satisfy.
+
+    Walks every ``<manager>.<method>(...)`` call in the module and checks the
+    call site against the real backend signature: the method must exist, the
+    call must not overflow the positional parameters, and every parameter
+    without a default must be supplied. Shared by the features, export, and
+    assembly tool tests.
+    """
+    module = importlib.import_module(module_name)
+    tree = ast.parse(inspect.getsource(module))
+    problems: list[str] = []
+    for call in (n for n in ast.walk(tree) if isinstance(n, ast.Call)):
+        func = call.func
+        if not isinstance(func, ast.Attribute) or not isinstance(func.value, ast.Name):
+            continue
+        cls = managers.get(func.value.id)
+        if cls is None:
+            continue
+        where = f"{module_name}: {func.value.id}.{func.attr}"
+        backend = getattr(cls, func.attr, None)
+        if backend is None:
+            problems.append(f"{where} does not exist on {cls.__name__}")
+            continue
+        params = [p for p in inspect.signature(backend).parameters.values() if p.name != "self"]
+        if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in params):
+            continue
+        if any(isinstance(a, ast.Starred) for a in call.args):
+            continue
+        positional = [p for p in params if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+        if len(call.args) > len(positional):
+            problems.append(
+                f"{where} takes {len(positional)} positional args, got {len(call.args)}"
+            )
+            continue
+        supplied = {p.name for p in positional[: len(call.args)]}
+        supplied |= {kw.arg for kw in call.keywords if kw.arg}
+        missing = [p.name for p in params if p.default is p.empty and p.name not in supplied]
+        if missing:
+            problems.append(f"{where} is missing required {missing}")
+    return problems
+
+
+class TestBackendSignatureAgreement:
+    """Every feature tool must be able to supply its backend's required params."""
+
+    @pytest.mark.parametrize("module_name", _FEATURE_SUBMODULES)
+    def test_no_backend_call_violations(self, module_name):
+        violations = backend_call_violations(module_name, {"feature_manager": FeatureManager})
+        assert violations == []

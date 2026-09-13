@@ -6,7 +6,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
-from ._base import QueryManagerBase
+from ._base import QueryManagerBase, r8_array
 
 _logger = get_logger(__name__)
 
@@ -16,12 +16,49 @@ class PhysicalPropsMixin(QueryManagerBase):
 
     doc_manager: Any
 
+    @staticmethod
+    def _compute_physical_properties(model: Any, density: float, accuracy: float) -> Any:
+        """Call Model.ComputePhysicalPropertiesWithSpecifiedDensity correctly.
+
+        Part.tlb Model.ComputePhysicalPropertiesWithSpecifiedDensity(
+            Density VT_R8 [in], Accuracy VT_R8 [in],
+            Volume VT_R8* [out], Area VT_R8* [out], Mass VT_R8* [out],
+            CenterOfGravity SAFEARRAY(VT_R8)* [in,out],
+            CenterOfVolume SAFEARRAY(VT_R8)* [in,out],
+            GlobalMomentsOfInteria SAFEARRAY(VT_R8)* [in,out],
+            PrincipalMomentsOfInteria SAFEARRAY(VT_R8)* [in,out],
+            PrincipalAxes SAFEARRAY(VT_R8)* [in,out],
+            RadiiOfGyration SAFEARRAY(VT_R8)* [in,out],
+            RelativeAccuracyAchieved VT_R8* [out], Status VT_INT* [out])
+
+        The six SAFEARRAY parameters are [in,out]: pywin32 marshals them by
+        reference and the caller must supply correctly sized buffers, so
+        calling with just (density, accuracy) fails inside COM with
+        "Parameter not optional" (0x8002000F). Volume/Area/Mass sit between
+        Accuracy and the buffers, hence the keyword arguments — the parameter
+        names are spelled exactly as the type library spells them, typo
+        included. Returns the [out]/[in,out] values as a tuple:
+        (volume, area, mass, cog, cov, global_moi, principal_moi,
+        principal_axes, radii_of_gyration, relative_accuracy, status).
+        """
+        return model.ComputePhysicalPropertiesWithSpecifiedDensity(
+            Density=density,
+            Accuracy=accuracy,
+            CenterOfGravity=r8_array(3),
+            CenterOfVolume=r8_array(3),
+            GlobalMomentsOfInteria=r8_array(6),
+            PrincipalMomentsOfInteria=r8_array(3),
+            PrincipalAxes=r8_array(9),
+            RadiiOfGyration=r8_array(3),
+        )
+
     def get_mass_properties(self, density: float = 7850) -> dict[str, Any]:
         """
         Get mass properties of the part.
 
-        Uses Model.ComputePhysicalProperties(status, density, accuracy) which
-        returns a tuple: (volume, area, mass, cog_tuple, cov_tuple, moi_tuple, ...)
+        Uses Model.ComputePhysicalPropertiesWithSpecifiedDensity, which returns
+        (volume, area, mass, cog, cov, global_moi, principal_moi,
+        principal_axes, radii_of_gyration, relative_accuracy, status).
 
         Args:
             density: Material density in kg/m³ (default: 7850 for steel)
@@ -33,10 +70,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             _logger.info(f"Computing mass properties with density={density} kg/m^3")
             doc, model = self._get_first_model()
 
-            # ComputePhysicalPropertiesWithSpecifiedDensity(Density, Accuracy)
-            # Returns tuple: (volume, area, mass, cog, cov, moi, principal_moi,
-            #                  principal_axes, radii_of_gyration, ?, ?)
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(density, 0.99)
+            result = self._compute_physical_properties(model, density, 0.99)
 
             volume = result[0] if len(result) > 0 else 0
             surface_area = result[1] if len(result) > 1 else 0
@@ -80,7 +114,13 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         Get the bounding box of the model.
 
-        Uses Body.GetRange() which returns ((min_x, min_y, min_z), (max_x, max_y, max_z)).
+        geometry.tlb Body.GetRange(
+            MinRangePoint SAFEARRAY(VT_R8)* [in,out],
+            MaxRangePoint SAFEARRAY(VT_R8)* [in,out])
+
+        Both parameters are [in,out], so the caller supplies the buffers and
+        reads the filled points back out of the returned tuple
+        ((min_x, min_y, min_z), (max_x, max_y, max_z)).
 
         Returns:
             Dict with min/max coordinates and dimensions
@@ -89,7 +129,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             doc, model = self._get_first_model()
 
             body = model.Body
-            range_data = body.GetRange()
+            range_data = body.GetRange(r8_array(3), r8_array(3))
 
             min_pt = range_data[0]
             max_pt = range_data[1]
@@ -236,7 +276,7 @@ class PhysicalPropsMixin(QueryManagerBase):
 
             # Fallback: compute physical properties
             doc, model = self._get_first_model()
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(7850.0, 0.001)
+            result = self._compute_physical_properties(model, 7850.0, 0.001)
             # result[3] is the center of gravity tuple
             cog = result[3]
             return {"center_of_gravity": list(cog), "center_of_gravity_mm": [c * 1000 for c in cog]}
@@ -252,10 +292,9 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(7850.0, 0.001)
-            # result: (volume, area, mass, cog, cov, moi,
-            # principal_moi, principal_axes,
-            # radii_of_gyration, ?, ?)
+            result = self._compute_physical_properties(model, 7850.0, 0.001)
+            # result: (volume, area, mass, cog, cov, global_moi, principal_moi,
+            # principal_axes, radii_of_gyration, relative_accuracy, status)
             moi = result[5]
             principal_moi = result[6]
 
@@ -532,7 +571,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 return {"error": f"Density must be positive, got {density}"}
 
             # Recompute with new density
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(density, 0.99)
+            result = self._compute_physical_properties(model, density, 0.99)
 
             mass = result[2] if len(result) > 2 else 0
             volume = result[0] if len(result) > 0 else 0

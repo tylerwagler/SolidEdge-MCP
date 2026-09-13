@@ -1,5 +1,6 @@
 """File export operations (STEP, STL, IGES, PDF, DXF, Parasolid, JT, etc.)."""
 
+import contextlib
 import os
 from typing import Any
 
@@ -68,13 +69,11 @@ class FileExportMixin:
 
             # Save as STL
             # Note: Actual method may vary by Solid Edge version
-            try:
+            # Some Solid Edge versions expose other export entry points; there
+            # is no working fallback here, so a failure is swallowed exactly as
+            # before rather than probed for with hasattr.
+            with contextlib.suppress(Exception):
                 doc.SaveCopyAs(file_path)
-            except Exception:
-                # Alternative export method
-                if hasattr(doc, "SaveAsJT"):
-                    # Some versions use different export methods
-                    pass
 
             return {
                 "status": "exported",
@@ -207,14 +206,16 @@ class FileExportMixin:
                 file_path += ".dxf"
 
             # Access FlatPatternModels collection (sheet metal only)
-            if not hasattr(doc, "FlatPatternModels"):
+            try:
+                flat_models = doc.FlatPatternModels
+            except Exception:
+                flat_models = None
+            if flat_models is None:
                 return {
                     "error": "Active document is not a "
                     "sheet metal document. "
                     "FlatPatternModels not available."
                 }
-
-            flat_models = doc.FlatPatternModels
 
             # SaveAsFlatDXFEx(filename, face, edge, vertex, useFlatPattern)
             # Pass None for face/edge/vertex to export all
@@ -254,14 +255,9 @@ class FileExportMixin:
                 file_path += ".png"
 
             # Get the window and view
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available for screenshot"}
-
-            window = doc.Windows.Item(1)
-            view = window.View if hasattr(window, "View") else None
-
-            if not view:
-                return {"error": "Cannot access view object"}
+            view, err = self._resolve_view(doc, "No window available for screenshot")
+            if err:
+                return err
 
             # View.SaveAsImage(Filename, Width, Height)
             view.SaveAsImage(file_path, width, height)

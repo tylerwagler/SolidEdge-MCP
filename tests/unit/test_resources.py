@@ -1,4 +1,4 @@
-"""Tests for tools/resources.py — the 52 read-only solidedge:// endpoints."""
+"""Tests for tools/resources.py — the 53 read-only solidedge:// endpoints."""
 
 import asyncio
 import json
@@ -9,8 +9,8 @@ from fastmcp import Client, FastMCP
 
 from solidedge_mcp.tools import resources
 
-EXPECTED_TOTAL = 52
-EXPECTED_STATIC = 37
+EXPECTED_TOTAL = 53
+EXPECTED_STATIC = 38
 EXPECTED_TEMPLATES = 15
 
 MANAGER_NAMES = (
@@ -50,7 +50,7 @@ def managers(monkeypatch):
 
 
 class TestRegistration:
-    def test_registers_all_52_endpoints(self, mcp):
+    def test_registers_all_endpoints(self, mcp):
         static = _run(mcp.get_resources())
         templates = _run(mcp.get_resource_templates())
         assert len(static) == EXPECTED_STATIC
@@ -180,3 +180,52 @@ class TestHandlers:
             out = fn(**kwargs)
             assert isinstance(out, str), uri
             json.loads(out)
+
+
+class TestSpatialContextResource:
+    def test_registered_at_the_documented_uri(self, mcp):
+        static = _run(mcp.get_resources())
+        assert "solidedge://spatial-context" in static
+        assert static["solidedge://spatial-context"].mime_type == "application/json"
+        assert static["solidedge://spatial-context"].tags == {"query"}
+
+    def test_reads_from_the_query_manager(self, mcp, managers):
+        payload = {
+            "body_count": 1,
+            "bounding_box": {"min": [0, 0, 0], "max": [1, 1, 1], "center": [0.5, 0.5, 0.5]},
+            "centered_on_origin": False,
+            "active_sketch": None,
+            "plane_axis_map": {"1": {"name": "Top"}},
+        }
+        managers["query_manager"].get_spatial_context.return_value = payload
+        assert _read(mcp, "solidedge://spatial-context") == payload
+        managers["query_manager"].get_spatial_context.assert_called_once_with()
+
+
+class TestPagedGeometryResources:
+    """The paged geometry resources keep their URI and expose the page flags."""
+
+    def test_faces_resource_forwards_the_default_page(self, mcp, managers):
+        managers["query_manager"].get_body_faces.return_value = {
+            "total": 900,
+            "offset": 0,
+            "limit": 200,
+            "items": [{"index": 0}],
+            "truncated": True,
+        }
+        payload = _read(mcp, "solidedge://geometry/faces")
+        assert payload["total"] == 900
+        assert payload["truncated"] is True
+        managers["query_manager"].get_body_faces.assert_called_once_with()
+
+    def test_edges_resource_forwards_the_default_page(self, mcp, managers):
+        managers["query_manager"].get_body_edges.return_value = {
+            "total": 4,
+            "offset": 0,
+            "limit": 200,
+            "items": [],
+            "truncated": False,
+        }
+        payload = _read(mcp, "solidedge://geometry/edges")
+        assert payload["truncated"] is False
+        managers["query_manager"].get_body_edges.assert_called_once_with()

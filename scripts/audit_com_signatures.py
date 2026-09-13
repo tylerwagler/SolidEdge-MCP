@@ -1,9 +1,22 @@
 #!/usr/bin/env python
 """Check COM call arity in the backends against the Solid Edge type libraries.
 
-pywin32 passes only ``[in]`` parameters; ``[out]`` values come back as return
-values. A call is well-formed when its argument count lies between the number
-of required ``[in]`` parameters and the total number of ``[in]`` parameters.
+pywin32 returns ``[out]`` values rather than taking them, so a positional call
+is well-formed when its argument count lies between the number of required
+``[in]`` parameters and the total number of ``[in]`` parameters.
+
+``[in,out]`` parameters count as optional, not required. Verified against Solid
+Edge 2026: ``Body.GetRange``, whose two parameters are both ``[in,out]``
+SAFEARRAYs, works both with no arguments and with two plain lists. Treating them
+as required produced a false positive here, and "fixing" it broke a working
+call.
+
+Two rules for supplying such buffers, both verified live. Pass them as **plain
+Python lists**; a ``VARIANT`` wrapper is rejected with "Objects for SAFEARRAYS
+must be sequences". And when an out-parameter sits *between* parameters you must
+supply, pass the later ones by keyword, using the names this script prints under
+``--filter`` — pywin32 gives every parameter a positional slot, ``[out]`` ones
+included, so filling only the ``[in]`` slots positionally misaligns the call.
 
 Precision comes from resolving the receiver. ``model.ExtrudedCutouts`` names an
 interface directly, and the common ``cutouts = model.ExtrudedCutouts`` pattern
@@ -46,8 +59,12 @@ def load_typelibs() -> tuple[dict[str, dict[str, tuple[int, int]]], dict[str, se
         for iface_name, iface in (payload.get("interfaces") or {}).items():
             for method, sig in (iface.get("methods") or {}).items():
                 params = sig.get("params", [])
-                ins = [p for p in params if "in" in (p.get("flags") or "").split(",")]
-                required = [p for p in ins if "optional" not in (p.get("flags") or "")]
+                flags = [set((p.get("flags") or "").split(",")) for p in params]
+                # Anything the caller may supply, including [in,out] buffers.
+                ins = [f for f in flags if "in" in f]
+                # Required: pure [in], neither optional nor an out-buffer that
+                # pywin32 is willing to allocate itself.
+                required = [f for f in ins if not ({"optional", "out"} & f)]
                 window = (len(required), len(ins))
                 iface_methods[iface_name][method] = window
                 any_windows[method].add(window)

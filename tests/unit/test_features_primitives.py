@@ -77,7 +77,25 @@ class TestBoxCutout:
         assert result["type"] == "box_cutout"
         assert result["corner1"] == [0, 0, 0]
         assert result["corner2"] == [0.05, 0.05, 0.05]
-        box_features.AddCutoutByTwoPoints.assert_called_once()
+        # AddCutoutByTwoPoints(x1, y1, Z1, x2, y2, Z2, dAngle, dDepth, pPlane,
+        # ProfileSide, ExtentSide, vbKeyPointExtent, pKeyPointObj,
+        # pKeyPointFlags); igInside = 4, igRight = 2
+        box_features.AddCutoutByTwoPoints.assert_called_once_with(
+            0,
+            0,
+            0,
+            0.05,
+            0.05,
+            0.05,
+            0,
+            0.05,
+            ref_planes.Item.return_value,
+            4,
+            2,
+            False,
+            None,
+            0,
+        )
 
     def test_no_base_feature(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -105,7 +123,24 @@ class TestBoxCutoutByCenter:
         assert result["type"] == "box_cutout"
         assert result["method"] == "by_center"
         assert result["center"] == [0, 0, 0]
-        box_features.AddCutoutByCenter.assert_called_once()
+        # AddCutoutByCenter(x, y, z, dWidth, dHeight, dAngle, dDepth, pPlane,
+        # ProfileSide, ExtentSide, vbKeyPointExtent, pKeyPointObj,
+        # pKeyPointFlags); igInside = 4, igRight = 2
+        box_features.AddCutoutByCenter.assert_called_once_with(
+            0,
+            0,
+            0,
+            0.1,
+            0.1,
+            0,
+            0.05,
+            ref_planes.Item.return_value,
+            4,
+            2,
+            False,
+            None,
+            0,
+        )
 
     def test_no_base_feature(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -132,7 +167,27 @@ class TestBoxCutoutByThreePoints:
         assert result["status"] == "created"
         assert result["type"] == "box_cutout"
         assert result["method"] == "by_three_points"
-        box_features.AddCutoutByThreePoints.assert_called_once()
+        # AddCutoutByThreePoints(x1, y1, Z1, x2, y2, Z2, x3, y3, z3, dDepth,
+        # pPlane, ProfileSide, ExtentSide, vbKeyPointExtent, pKeyPointObj,
+        # pKeyPointFlags); igInside = 4, igRight = 2
+        box_features.AddCutoutByThreePoints.assert_called_once_with(
+            0,
+            0,
+            0,
+            0.1,
+            0,
+            0,
+            0,
+            0.1,
+            0,
+            0.1,
+            ref_planes.Item.return_value,
+            4,
+            2,
+            False,
+            None,
+            0,
+        )
 
     def test_no_base_feature(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers

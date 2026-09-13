@@ -73,7 +73,7 @@ class TestRegistration:
     def test_resources_and_guides(self, mcp):
         resources = _run(mcp.get_resources())
         templates = _run(mcp.get_resource_templates())
-        assert len(resources) + len(templates) == 54  # 52 data + 2 guides
+        assert len(resources) + len(templates) == 55  # 53 data + 2 guides
         assert "solidedge://guide/workflows" in resources
         assert "solidedge://guide/conventions" in resources
         for uri, res in resources.items():

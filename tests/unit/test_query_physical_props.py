@@ -461,3 +461,151 @@ class TestSetMaterialDensity:
         result = qm.set_material_density(-100)
         assert "error" in result
         assert "positive" in result["error"]
+
+
+# ============================================================================
+# COM CALL SIGNATURES
+#
+# Expected argument lists come from reference/typelib_dump.json; see
+# scripts/audit_com_signatures.py.
+# ============================================================================
+
+import pythoncom  # noqa: E402
+from win32com.client import VARIANT  # noqa: E402
+
+VT_R8_ARRAY = pythoncom.VT_ARRAY | pythoncom.VT_R8
+
+
+def _shape(arg):
+    if isinstance(arg, VARIANT):
+        return (arg.varianttype, list(arg.value))
+    return arg
+
+
+def call_shape(mock_method):
+    """(positional_args, keyword_args) of the single call, VARIANTs normalised."""
+    assert mock_method.call_count == 1, mock_method.call_args_list
+    args, kwargs = mock_method.call_args
+    return tuple(_shape(a) for a in args), {k: _shape(v) for k, v in kwargs.items()}
+
+
+def _model(doc):
+    model = MagicMock()
+    models = MagicMock()
+    models.Count = 1
+    models.Item.return_value = model
+    doc.Models = models
+    return model
+
+
+#: Part.tlb Model.ComputePhysicalPropertiesWithSpecifiedDensity - the six
+#: SAFEARRAY [in,out] buffers, keyed by the type library's parameter names
+#: (including the "Interia" typo).
+#: Plain lists, not VARIANTs: verified against Solid Edge 2026, a VARIANT
+#: wrapper on an [in,out] SAFEARRAY raises "Objects for SAFEARRAYS must be
+#: sequences". See backends/query/_base.py::r8_array.
+EXPECTED_MASS_BUFFERS = {
+    "CenterOfGravity": [0.0] * 3,
+    "CenterOfVolume": [0.0] * 3,
+    "GlobalMomentsOfInteria": [0.0] * 6,
+    "PrincipalMomentsOfInteria": [0.0] * 3,
+    "PrincipalAxes": [0.0] * 9,
+    "RadiiOfGyration": [0.0] * 3,
+}
+
+
+class TestComputePhysicalPropertiesSignature:
+    def test_mass_properties_passes_density_accuracy_and_six_buffers(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
+            0.001,
+            0.06,
+            7.85,
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0,) * 6,
+            (0.0,) * 3,
+            (0.0,) * 9,
+            (0.0,) * 3,
+            0.99,
+            0,
+        )
+
+        result = qm.get_mass_properties(7850)
+        assert result["status"] == "computed"
+
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 7850, "Accuracy": 0.99, **EXPECTED_MASS_BUFFERS}
+
+    def test_center_of_gravity_fallback_uses_the_same_call(self, query_mgr):
+        qm, doc = query_mgr
+        doc.Variables.Count = 0
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
+            0.001,
+            0.06,
+            7.85,
+            (0.01, 0.02, 0.03),
+        )
+
+        result = qm.get_center_of_gravity()
+        assert result["center_of_gravity"] == [0.01, 0.02, 0.03]
+
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 7850.0, "Accuracy": 0.001, **EXPECTED_MASS_BUFFERS}
+
+    def test_moments_of_inertia_uses_the_same_call(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
+            0.0,
+            0.0,
+            0.0,
+            (0,),
+            (0,),
+            (1.0, 2.0, 3.0),
+            (1.5, 2.5, 3.5),
+        )
+
+        qm.get_moments_of_inertia()
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 7850.0, "Accuracy": 0.001, **EXPECTED_MASS_BUFFERS}
+
+    def test_set_material_density_uses_the_same_call(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (0.001, 0.06, 7.85)
+
+        qm.set_material_density(2700)
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 2700, "Accuracy": 0.99, **EXPECTED_MASS_BUFFERS}
+
+    def test_a_com_failure_is_reported_not_raised(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.side_effect = Exception(
+            "0x8002000F Parameter not optional"
+        )
+
+        result = qm.get_mass_properties()
+        assert "error" in result
+
+
+class TestGetRangeSignature:
+    def test_bounding_box_passes_two_r8_buffers(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.Body.GetRange.return_value = ((0.0, 0.0, 0.0), (0.1, 0.2, 0.3))
+
+        result = qm.get_bounding_box()
+        assert result["min"] == [0.0, 0.0, 0.0]
+        assert result["max"] == [0.1, 0.2, 0.3]
+        assert result["dimensions"] == {"x": 0.1, "y": 0.2, "z": 0.3}
+
+        # Plain lists: Body.GetRange rejects a VARIANT wrapper on Solid Edge 2026.
+        assert call_shape(model.Body.GetRange) == (([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]), {})
