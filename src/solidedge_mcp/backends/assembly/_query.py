@@ -713,49 +713,30 @@ class QueryMixin:
                     "message": "Need at least 2 components for interference check",
                 }
 
-            # Build set1 - single component or all
-            if component_index is not None:
-                if component_index < 0 or component_index >= occurrences.Count:
-                    return {"error": f"Invalid component index: {component_index}"}
-                set1 = [occurrences.Item(component_index + 1)]
-            else:
-                set1 = [occurrences.Item(i) for i in range(1, occurrences.Count + 1)]
+            if component_index is not None and (
+                component_index < 0 or component_index >= occurrences.Count
+            ):
+                return {"error": f"Invalid component index: {component_index}"}
 
-            # Call CheckInterference
-            # seInterferenceComparisonSet1vsAllOther = 1
-            comparison_method = 1
-
-            # Status is a pure [out] parameter and NumInterferences is
-            # [out, optional]: pywin32 returns both rather than accepting them.
-            # Passing ctypes buffers made pywin32 try to parse them as integers.
-            try:
-                returned = doc.CheckInterference(
-                    len(set1),
-                    set1,
-                    ComparisonMethod=comparison_method,
-                    NumElementsSet2=0,
-                    AddInterferenceAsOccurrence=False,
-                )
-                values = returned if isinstance(returned, tuple) else (returned,)
-                status_value = values[0] if values else None
-                count = values[1] if len(values) > 1 else None
-
-                result: dict[str, Any] = {
-                    "status": "checked",
-                    "interference_found": bool(status_value),
-                    "interference_status": status_value,
-                    "component_checked": component_index,
-                }
-                if isinstance(count, int):
-                    result["num_interferences"] = count
-                return result
-            except Exception as e:
-                # CheckInterference has complex COM signature; report what we can
-                return error_result(
-                    e,
-                    note="CheckInterference COM signature is complex. "
-                    "Use Solid Edge UI for reliable results.",
-                )
+            # AssemblyDocument.CheckInterference declares Status as an [out]
+            # InterferenceStatusConstants* and NumInterferences as an
+            # [out, optional] VT_VARIANT*, with six more [in,out] optionals
+            # after them. pywin32 gives every parameter a positional slot and
+            # cannot synthesise the enum out-pointer, so every argument shape
+            # tried against Solid Edge 2026 fails: passing the buffers gives a
+            # buffer-parse error, omitting them gives DISP_E_TYPEMISMATCH.
+            return {
+                "error": (
+                    "Interference checking is not reachable through COM automation. "
+                    "AssemblyDocument.CheckInterference returns its result through an "
+                    "out-parameter that pywin32 cannot supply, and every argument form "
+                    "fails with a type mismatch. Use Inspect > Check Interference in "
+                    "Solid Edge, or compare component bounding boxes with "
+                    "query_component(property='bounding_box') for a rough overlap test."
+                ),
+                "unsupported": True,
+                "component_checked": component_index,
+            }
 
         except Exception as e:
             return error_result(e)

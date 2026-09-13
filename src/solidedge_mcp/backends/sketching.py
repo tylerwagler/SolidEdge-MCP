@@ -18,6 +18,9 @@ _logger = get_logger(__name__)
 #: Orientation argument of Ellipses2d.AddByCenter: 1 sweeps counterclockwise.
 CURVE_COUNTERCLOCKWISE = 1
 
+#: CleanProfileOptions default for CleanGeometry2d: no special handling.
+_CLEAN_PROFILE_DEFAULT = 0
+
 #: Profile collections that together make up the sketch's 2D geometry.
 _GEOMETRY_2D_COLLECTIONS = (
     "Lines2d",
@@ -1617,24 +1620,22 @@ class SketchManager:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}
 
-            profile = self.active_profile
-            profile.CleanGeometry2d(
-                0,  # reserved
-                clean_points,
-                clean_splines,
-                clean_identical,
-                clean_small,
-                None,  # reserved
-                small_tolerance,
-            )
-
+            # Profile.CleanGeometry2d takes seven arguments (the Sheet
+            # overload's nine include an element array, which Profile's does
+            # not). Every shape was tried against Solid Edge 2026 -- five,
+            # six and seven arguments, the layer as None, 0 and Missing -- and
+            # each returns 0x80070057 E_INVALIDARG. The options argument is a
+            # CleanProfileOptions value the type library does not enumerate,
+            # so there is nothing left to guess at.
             return {
-                "status": "cleaned",
-                "clean_points": clean_points,
-                "clean_splines": clean_splines,
-                "clean_identical": clean_identical,
-                "clean_small": clean_small,
-                "small_tolerance": small_tolerance,
+                "error": (
+                    "Sketch cleanup is not reachable through COM automation. "
+                    "Profile.CleanGeometry2d rejects every documented argument form "
+                    "with E_INVALIDARG. Use Tools > Clean Geometry in Solid Edge, or "
+                    "avoid creating duplicates: draw() reports the element count so a "
+                    "repeated call is visible."
+                ),
+                "unsupported": True,
             }
         except Exception as e:
             return error_result(e)

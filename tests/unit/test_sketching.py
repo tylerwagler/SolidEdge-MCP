@@ -374,14 +374,22 @@ class TestGetSketchMatrix:
 
 
 class TestCleanSketchGeometry:
-    def test_success(self, sketch_mgr):
+    def test_reports_unsupported_without_calling_com(self, sketch_mgr):
+        """Profile.CleanGeometry2d rejects every documented argument form.
+
+        Five, six and seven arguments, with the layer as None, 0 and Missing,
+        all return 0x80070057 E_INVALIDARG on Solid Edge 2026. The options
+        argument is a CleanProfileOptions value the type library does not
+        enumerate, so there is nothing left to try.
+        """
         sm, doc = sketch_mgr
         profile = MagicMock()
         sm.active_profile = profile
 
         result = sm.clean_sketch_geometry()
-        assert result["status"] == "cleaned"
-        profile.CleanGeometry2d.assert_called_once()
+        assert result["unsupported"] is True
+        assert "Clean Geometry" in result["error"]
+        profile.CleanGeometry2d.assert_not_called()
 
     def test_no_active_sketch(self, sketch_mgr):
         sm, doc = sketch_mgr
@@ -390,21 +398,6 @@ class TestCleanSketchGeometry:
         result = sm.clean_sketch_geometry()
         assert "error" in result
         assert "No active sketch" in result["error"]
-
-    def test_custom_params(self, sketch_mgr):
-        sm, doc = sketch_mgr
-        profile = MagicMock()
-        sm.active_profile = profile
-
-        result = sm.clean_sketch_geometry(
-            clean_points=False,
-            clean_splines=False,
-            clean_identical=True,
-            clean_small=True,
-            small_tolerance=0.001,
-        )
-        assert result["status"] == "cleaned"
-        profile.CleanGeometry2d.assert_called_once_with(0, False, False, True, True, None, 0.001)
 
 
 # ============================================================================

@@ -407,38 +407,33 @@ class TestGetSubOccurrences:
 
 
 class TestCheckInterference:
-    def test_status_is_read_from_the_return_value(self, asm_mgr):
-        """Status is [out] and NumInterferences is [out, optional].
+    def test_reports_unsupported_without_calling_com(self, asm_mgr):
+        """CheckInterference cannot be driven from pywin32.
 
-        pywin32 returns both. Passing ctypes buffers for them made it try to
-        parse the buffer as an integer, so every interference check failed.
+        Status is an [out] enum pointer and NumInterferences an
+        [out, optional] variant, with six more optionals behind them. Every
+        argument shape tried against Solid Edge 2026 failed: supplying buffers
+        gave a buffer-parse error, omitting them DISP_E_TYPEMISMATCH.
         """
-        am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: [None, occ1, occ2][i]
-        doc.Occurrences = occurrences
-        doc.CheckInterference.return_value = (1, 3)
-
-        result = am.check_interference()
-        assert result["status"] == "checked"
-        assert result["interference_found"] is True
-        assert result["num_interferences"] == 3
-        _, kwargs = doc.CheckInterference.call_args
-        assert "Status" not in kwargs
-        assert "NumInterferences" not in kwargs
-
-    def test_no_interference_reported(self, asm_mgr):
         am, doc = asm_mgr
         occurrences = MagicMock()
         occurrences.Count = 2
         occurrences.Item.side_effect = lambda i: MagicMock()
         doc.Occurrences = occurrences
-        doc.CheckInterference.return_value = (0, 0)
 
         result = am.check_interference()
-        assert result["interference_found"] is False
+        assert result["unsupported"] is True
+        assert "bounding_box" in result["error"]
+        doc.CheckInterference.assert_not_called()
+
+    def test_invalid_index_still_validated(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        doc.Occurrences = occurrences
+
+        result = am.check_interference(99)
+        assert "Invalid component index" in result["error"]
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
