@@ -1,21 +1,21 @@
-"""Miscellaneous feature tools (thicken, pattern, mirror, thin wall, etc.)."""
+"""Miscellaneous feature tools (thicken, pattern, mirror, face ops, etc.)."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def thicken(
-    method: str = "basic",
+    method: Literal["basic", "sync"] = "basic",
     thickness: float = 0.0,
     direction: str = "Both",
 ) -> dict[str, Any]:
-    """Thicken a surface to create a solid.
+    """Thicken an existing surface body into a solid.
 
-    method: 'basic' | 'sync'
-
-    thickness in meters.
+    thickness in meters. direction applies to 'sync' only and accepts
+    'Both' | 'Normal' | 'Reverse'; the 'basic' backend records it but the COM
+    call ignores it (thickens both sides).
     """
     err = validate_numerics(thickness=thickness)
     if err:
@@ -30,18 +30,24 @@ def thicken(
 
 
 def create_pattern(
-    method: str = "rectangular_ex",
-    feature_index: int = 0,
+    method: Literal[
+        "rectangular_ex",
+        "circular_ex",
+        "duplicate",
+        "by_fill",
+        "by_table",
+        "by_table_sync",
+        "by_fill_ex",
+        "by_curve_ex",
+        "user_defined",
+    ] = "rectangular_ex",
     feature_name: str = "",
     x_count: int = 1,
     y_count: int = 1,
-    x_gap: float = 0.0,
-    y_gap: float = 0.0,
     x_spacing: float = 0.0,
     y_spacing: float = 0.0,
     count: int = 1,
     angle: float = 0.0,
-    radius: float = 0.0,
     axis_face_index: int = 0,
     fill_region_face_index: int = 0,
     x_offsets: list[float] | None = None,
@@ -49,23 +55,19 @@ def create_pattern(
     curve_edge_index: int = 0,
     spacing: float = 0.0,
 ) -> dict[str, Any]:
-    """Create a pattern of a feature.
+    """Pattern an existing feature, selected by name (see list_features).
 
-    method: 'rectangular_ex' | 'rectangular' | 'circular'
-        | 'circular_ex' | 'duplicate' | 'by_fill'
-        | 'by_table' | 'by_table_sync' | 'by_fill_ex'
-        | 'by_curve_ex' | 'user_defined'
-
-    Spacing/gap values in meters. angle in degrees.
-    feature_index is 0-based; feature_name used by _ex variants.
+    Spacings/offsets in meters, angle in degrees. Face/edge indices 0-based.
+    x_count/y_count/x_spacing/y_spacing: rectangular_ex. x_spacing/y_spacing
+    also size the grid for by_fill/by_fill_ex (with fill_region_face_index).
+    count/angle/axis_face_index: circular_ex. x_offsets/y_offsets: by_table*.
+    curve_edge_index/count/spacing: by_curve_ex. duplicate and user_defined
+    take only feature_name.
     """
     err = validate_numerics(
-        x_gap=x_gap,
-        y_gap=y_gap,
         x_spacing=x_spacing,
         y_spacing=y_spacing,
         angle=angle,
-        radius=radius,
         spacing=spacing,
     )
     if err:
@@ -79,16 +81,6 @@ def create_pattern(
                 x_spacing,
                 y_spacing,
             )
-        case "rectangular":
-            return {
-                "error": "Pattern 'rectangular' (by index) is not implemented. "
-                "Use 'rectangular_ex' (by name) instead."
-            }
-        case "circular":
-            return {
-                "error": "Pattern 'circular' (by index) is not implemented. "
-                "Use 'circular_ex' (by name) instead."
-            }
         case "circular_ex":
             return feature_manager.create_pattern_circular_ex(
                 feature_name,
@@ -134,18 +126,25 @@ def create_pattern(
 
 
 def create_mirror(
-    method: str = "basic",
+    method: Literal["basic", "sync_ex", "save_as_part"] = "basic",
     feature_name: str = "",
-    mirror_plane_index: int = 0,
+    mirror_plane_index: int = 3,
     new_file_name: str = "",
     link_to_original: bool = True,
 ) -> dict[str, Any]:
-    """Mirror a feature across a reference plane, or save as mirror part.
+    """Mirror a feature across a reference plane, or save a mirrored part.
 
-    method: 'basic' | 'sync_ex' | 'save_as_part'
-
-    mirror_plane_index is 1-based.
+    mirror_plane_index is 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ, 4+ = user
+    planes). feature_name (see list_features): basic/sync_ex. new_file_name
+    (absolute .par path) and link_to_original: save_as_part.
     """
+    if mirror_plane_index < 1:
+        return {
+            "error": (
+                f"mirror_plane_index must be >= 1 (got {mirror_plane_index}); "
+                "plane indices are 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ)."
+            )
+        }
     match method:
         case "basic":
             return feature_manager.create_mirror(feature_name, mirror_plane_index)
@@ -153,48 +152,24 @@ def create_mirror(
             return feature_manager.create_mirror_sync_ex(feature_name, mirror_plane_index)
         case "save_as_part":
             return feature_manager.save_as_mirror_part(
-                new_file_name, mirror_plane_index or 3, link_to_original
+                new_file_name, mirror_plane_index, link_to_original
             )
         case _:
             return {"error": f"Unknown method: {method}"}
 
 
-def create_thin_wall(
-    method: str = "basic",
-    thickness: float = 0.0,
-    open_face_indices: list[int] | None = None,
-) -> dict[str, Any]:
-    """Convert a solid body to a thin wall (shell).
-
-    method: 'basic' | 'with_open_faces'
-
-    thickness in meters.
-    """
-    err = validate_numerics(thickness=thickness)
-    if err:
-        return err
-    match method:
-        case "basic":
-            return feature_manager.create_shell(thickness)
-        case "with_open_faces":
-            return feature_manager.create_shell(thickness, open_face_indices)
-        case _:
-            return {"error": f"Unknown method: {method}"}
-
-
 def face_operation(
-    type: str = "rotate_by_points",
+    type: Literal["rotate_by_points", "rotate_by_edge"] = "rotate_by_points",
     face_index: int = 0,
     vertex1_index: int = 0,
     vertex2_index: int = 0,
     edge_index: int = 0,
     angle: float = 0.0,
 ) -> dict[str, Any]:
-    """Perform a face operation (rotate).
+    """Rotate a face of the solid body about an axis.
 
-    type: 'rotate_by_points' | 'rotate_by_edge'
-
-    angle in degrees.
+    angle in degrees. All indices are 0-based. rotate_by_points takes the axis
+    from vertex1_index/vertex2_index; rotate_by_edge takes it from edge_index.
     """
     err = validate_numerics(angle=angle)
     if err:
@@ -214,14 +189,15 @@ def face_operation(
 
 
 def add_body(
-    method: str = "basic",
+    method: Literal["basic", "by_mesh", "feature", "construction", "by_tag"] = "basic",
     body_type: str = "Solid",
     tag: str = "",
 ) -> dict[str, Any]:
-    """Add a body to the part.
+    """Add a new body to the part document.
 
-    method: 'basic' | 'by_mesh' | 'feature' | 'construction'
-        | 'by_tag'
+    body_type ('Solid' | 'Surface' | 'Construction') is echoed back but the COM
+    AddBody call takes no type argument, so it does not change the result.
+    tag: by_tag only.
     """
     match method:
         case "basic":
@@ -239,12 +215,13 @@ def add_body(
 
 
 def simplify(
-    method: str = "auto",
+    method: Literal["auto", "enclosure", "duplicate", "local_enclosure"] = "auto",
 ) -> dict[str, Any]:
-    """Simplify the model.
+    """Simplify the model for downstream use (lighter assembly representation).
 
-    method: 'auto' | 'enclosure' | 'duplicate'
-        | 'local_enclosure'
+    auto: automatic simplification. enclosure / local_enclosure: replace the
+    body (or a local region) with its bounding enclosure. duplicate: simplify
+    by removing duplicate geometry. Takes no other parameters.
     """
     match method:
         case "auto":
@@ -260,7 +237,7 @@ def simplify(
 
 
 def manage_feature(
-    action: str = "delete",
+    action: Literal["delete", "suppress", "unsuppress", "reorder", "rename", "convert"] = "delete",
     index: int = 0,
     target_index: int = 0,
     after: bool = True,
@@ -268,12 +245,13 @@ def manage_feature(
     feature_name: str = "",
     target_type: str = "",
 ) -> dict[str, Any]:
-    """Manage features in the feature tree.
+    """Manage entries in the feature tree (delete, suppress, reorder, rename).
 
-    action: 'delete' | 'suppress' | 'unsuppress' | 'reorder'
-        | 'rename' | 'convert'
-
-    index is 0-based.
+    index and target_index are 0-based positions in the feature tree (see
+    list_features). reorder moves 'index' to 'target_index' ('after' places it
+    behind the target). rename uses new_name. convert selects the feature by
+    feature_name and needs target_type: 'cutout' or 'protrusion'.
+    Deleting a feature is destructive and removes its geometry.
     """
     match action:
         case "delete":
@@ -297,7 +275,11 @@ def create_draft_angle(
     angle: float,
     plane_index: int = 1,
 ) -> dict[str, Any]:
-    """Add a draft angle to a face."""
+    """Add a draft (taper) to a face, pulled from a reference plane.
+
+    angle in degrees. face_index is 0-based. plane_index is the 1-based draft
+    (parting) plane: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    """
     err = validate_numerics(angle=angle)
     if err:
         return err

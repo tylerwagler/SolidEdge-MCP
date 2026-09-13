@@ -24,14 +24,24 @@ class PropertiesMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            if hasattr(occurrence, "Suppress") and suppress:
-                occurrence.Suppress()
-            elif hasattr(occurrence, "Unsuppress") and not suppress:
-                occurrence.Unsuppress()
-            else:
-                return {"error": "Suppress/Unsuppress not available on this occurrence"}
+            # Occurrence exposes no Suppress member (verified against
+            # assembly.tlb). Suppression goes through the document, which hands
+            # back a SuppressComponent object; that object owns UnSuppress.
+            if suppress:
+                doc.SetSuppressComponent(occurrence)
+                return {"status": "updated", "component": component_index, "suppressed": True}
 
-            return {"status": "updated", "component": component_index, "suppressed": suppress}
+            return {
+                "error": (
+                    "Unsuppressing a component is not reachable through COM automation. "
+                    "AssemblyDocument.SetSuppressComponent returns the SuppressComponent "
+                    "object that owns UnSuppress, and Solid Edge offers no way to look that "
+                    "object up again for an already-suppressed occurrence. Unsuppress the "
+                    "component in the Solid Edge UI."
+                ),
+                "unsupported": True,
+                "component": component_index,
+            }
         except Exception as e:
             return error_result(e)
 

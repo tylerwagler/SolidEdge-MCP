@@ -826,8 +826,13 @@ class SketchManager:
                 _logger.error(f"Profile.End({end_flags}) raised: {e}")
                 return error_result(e, context="Profile validation failed", end_flags=end_flags)
 
-            # Add to accumulated profiles for loft/sweep operations
-            self.accumulated_profiles.append(self.active_profile)
+            # Queue for loft/sweep, which consume several profiles. Guard against
+            # a second close_sketch() on the same profile: that used to queue the
+            # profile twice and silently corrupt the next multi-profile feature.
+            # Identity, not ==, because COM proxies do not compare reliably.
+            already_queued = any(p is self.active_profile for p in self.accumulated_profiles)
+            if not already_queued:
+                self.accumulated_profiles.append(self.active_profile)
 
             sketch_id = "sketch"
             if self.active_sketch is not None and hasattr(self.active_sketch, "Name"):

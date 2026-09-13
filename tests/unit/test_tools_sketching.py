@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.sketching as sketching_tools
 from solidedge_mcp.tools.sketching import (
     draw,
     manage_sketch,
@@ -12,6 +13,7 @@ from solidedge_mcp.tools.sketching import (
     sketch_modify,
     sketch_project,
 )
+from tests.unit.test_tools_query import assert_literal_discriminators
 
 
 @pytest.fixture
@@ -287,3 +289,10 @@ class TestSketchProject:
     def test_unknown(self, mock_mgr):
         result = sketch_project(source="bogus")
         assert "error" in result
+
+
+# === Literal discriminator drift ===
+
+
+def test_sketching_discriminators_match_their_cases():
+    assert assert_literal_discriminators(sketching_tools) == 6

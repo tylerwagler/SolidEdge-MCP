@@ -785,11 +785,11 @@ class RelationsMixin:
                 info["name"] = rel.Name
 
             with contextlib.suppress(Exception):
-                occ1 = rel.OccurrencePart1
+                occ1 = rel.Occurrence1
                 info["occurrence1_name"] = occ1.Name if hasattr(occ1, "Name") else str(occ1)
 
             with contextlib.suppress(Exception):
-                occ2 = rel.OccurrencePart2
+                occ2 = rel.Occurrence2
                 info["occurrence2_name"] = occ2.Name if hasattr(occ2, "Name") else str(occ2)
 
             with contextlib.suppress(Exception):

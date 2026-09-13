@@ -157,60 +157,83 @@ class TestAssemblyRevolvedProtrusion:
 
 
 class TestAssemblyMirror:
-    def test_success(self, asm_mgr_with_sketch):
+    """AssemblyFeaturesMirrors.Add returns E_ACCESSDENIED on SE 2025/2026 in
+    every argument combination, so the backend must refuse without touching COM."""
+
+    def test_returns_unsupported_without_calling_com(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
         feat = MagicMock()
         cutouts_coll = MagicMock()
         cutouts_coll.Item.return_value = feat
         doc.AssemblyFeatures.AssemblyFeaturesExtrudedCutouts = cutouts_coll
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts.Item.side_effect = Exception
-        doc.AssemblyFeatures.AssemblyFeaturesHoles = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesHoles.Item.side_effect = Exception
         mirrors = MagicMock()
         doc.AssemblyFeatures.AssemblyFeaturesMirrors = mirrors
         plane = MagicMock()
         doc.RefPlanes.Item.return_value = plane
 
         result = am.create_assembly_mirror([0], plane_index=2)
-        assert result["status"] == "created"
-        mirrors.Add.assert_called_once()
+        assert "status" not in result
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        assert "part document" in result["error"]
+        assert result["plane_index"] == 2
+        assert result["feature_indices"] == [0]
+        mirrors.Add.assert_not_called()
+        cutouts_coll.Item.assert_not_called()
+        doc.RefPlanes.Item.assert_not_called()
+        # Never even fetched the assembly-features collection.
+        assert not doc.AssemblyFeatures.method_calls
 
-    def test_no_features(self, asm_mgr_with_sketch):
-        am, doc, sm = asm_mgr_with_sketch
-        for coll_name in [
-            "AssemblyFeaturesExtrudedCutouts",
-            "AssemblyFeaturesRevolvedCutouts",
-            "AssemblyFeaturesHoles",
-        ]:
-            coll = MagicMock()
-            coll.Item.side_effect = Exception("not found")
-            setattr(doc.AssemblyFeatures, coll_name, coll)
+    def test_unsupported_even_without_active_document(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+
+        dm = MagicMock()
+        dm.get_active_document.side_effect = RuntimeError("no document")
+        am = AssemblyManager(dm, MagicMock())
 
         result = am.create_assembly_mirror([99])
-        assert "error" in result
-        assert "No features" in result["error"]
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        dm.get_active_document.assert_not_called()
 
 
 class TestAssemblyPattern:
-    def test_success(self, asm_mgr_with_sketch):
+    """AssemblyFeaturesPatterns.Add returns E_ACCESSDENIED on SE 2025/2026 in
+    every argument combination, so the backend must refuse without touching COM."""
+
+    def test_returns_unsupported_without_calling_com(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
         sm.get_accumulated_profiles.return_value = [MagicMock()]
         feat = MagicMock()
         cutouts_coll = MagicMock()
         cutouts_coll.Item.return_value = feat
         doc.AssemblyFeatures.AssemblyFeaturesExtrudedCutouts = cutouts_coll
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts.Item.side_effect = Exception
-        doc.AssemblyFeatures.AssemblyFeaturesHoles = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesHoles.Item.side_effect = Exception
         patterns = MagicMock()
         doc.AssemblyFeatures.AssemblyFeaturesPatterns = patterns
 
         result = am.create_assembly_pattern([0], pattern_type="Circular")
-        assert result["status"] == "created"
+        assert "status" not in result
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        assert "pattern_component" in result["error"]
         assert result["pattern_type"] == "Circular"
-        patterns.Add.assert_called_once()
+        assert result["feature_indices"] == [0]
+        patterns.Add.assert_not_called()
+        cutouts_coll.Item.assert_not_called()
+        sm.get_accumulated_profiles.assert_not_called()
+        assert not doc.AssemblyFeatures.method_calls
+
+    def test_unsupported_even_without_active_document(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+
+        dm = MagicMock()
+        dm.get_active_document.side_effect = RuntimeError("no document")
+        am = AssemblyManager(dm, MagicMock())
+
+        result = am.create_assembly_pattern([0])
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        dm.get_active_document.assert_not_called()
 
 
 class TestAssemblySweptProtrusion:

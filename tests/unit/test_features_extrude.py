@@ -66,13 +66,26 @@ def feature_mgr(managers):
 
 class TestCreateExtrude:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, models, _, profile = managers
+        _, sketch_mgr, _, models, model, profile = managers
         result = feature_mgr.create_extrude(0.05)
         assert result["status"] == "created"
         assert result["type"] == "extrude"
         assert result["distance"] == 0.05
+        assert result["operation"] == "Add"
         models.AddFiniteExtrudedProtrusion.assert_called_once()
+        model.ExtrudedCutouts.AddFiniteMulti.assert_not_called()
         sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_add_direction_reverse_uses_igLeft(self, feature_mgr, managers):
+        from solidedge_mcp.backends.constants import DirectionConstants
+
+        _, _, _, models, _, profile = managers
+        result = feature_mgr.create_extrude(0.05, "Add", "Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+        models.AddFiniteExtrudedProtrusion.assert_called_once_with(
+            1, (profile,), DirectionConstants.igLeft, 0.05
+        )
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -80,6 +93,88 @@ class TestCreateExtrude:
         result = feature_mgr.create_extrude(0.05)
         assert "error" in result
         assert "No active sketch" in result["error"]
+
+    def test_cut_uses_extruded_cutout_collection(self, feature_mgr, managers):
+        from solidedge_mcp.backends.constants import DirectionConstants
+
+        _, sketch_mgr, _, models, model, profile = managers
+        result = feature_mgr.create_extrude(0.02, "Cut")
+        assert result["status"] == "created"
+        assert result["type"] == "extrude"
+        assert result["operation"] == "Cut"
+        assert result["distance"] == 0.02
+        assert result["direction"] == "Normal"
+        assert result["method"] == "ExtrudedCutouts.AddFiniteMulti"
+        model.ExtrudedCutouts.AddFiniteMulti.assert_called_once_with(
+            1, (profile,), DirectionConstants.igRight, 0.02
+        )
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_cut_reverse_direction(self, feature_mgr, managers):
+        from solidedge_mcp.backends.constants import DirectionConstants
+
+        _, _, _, models, model, profile = managers
+        result = feature_mgr.create_extrude(0.02, "Cut", "Reverse")
+        assert result["status"] == "created"
+        assert result["direction"] == "Reverse"
+        model.ExtrudedCutouts.AddFiniteMulti.assert_called_once_with(
+            1, (profile,), DirectionConstants.igLeft, 0.02
+        )
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+
+    def test_cut_without_base_feature_is_clear_error(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, model, _ = managers
+        models.Count = 0
+        result = feature_mgr.create_extrude(0.02, "Cut")
+        assert "error" in result
+        assert "No base feature" in result["error"]
+        model.ExtrudedCutouts.AddFiniteMulti.assert_not_called()
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
+
+    def test_cut_without_profile_is_clear_error(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, model, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_extrude(0.02, "Cut")
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+        model.ExtrudedCutouts.AddFiniteMulti.assert_not_called()
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+
+    def test_cut_symmetric_is_rejected(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        result = feature_mgr.create_extrude(0.02, "Cut", "Symmetric")
+        assert "error" in result
+        assert "Symmetric" in result["error"]
+        model.ExtrudedCutouts.AddFiniteMulti.assert_not_called()
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+
+    def test_cut_propagates_com_error(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        model.ExtrudedCutouts.AddFiniteMulti.side_effect = RuntimeError("COM boom")
+        result = feature_mgr.create_extrude(0.02, "Cut")
+        assert "error" in result
+        assert "COM boom" in result["error"]
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+
+    def test_intersect_is_unsupported(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, model, _ = managers
+        result = feature_mgr.create_extrude(0.02, "Intersect")
+        assert "error" in result
+        assert result["unsupported"] is True
+        assert "Intersect" in result["error"]
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+        model.ExtrudedCutouts.AddFiniteMulti.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
+
+    def test_unknown_operation_is_error(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        result = feature_mgr.create_extrude(0.02, "Subtract")
+        assert "error" in result
+        assert "Unknown operation" in result["error"]
+        models.AddFiniteExtrudedProtrusion.assert_not_called()
+        model.ExtrudedCutouts.AddFiniteMulti.assert_not_called()
 
 
 # ============================================================================

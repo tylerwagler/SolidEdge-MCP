@@ -1,9 +1,20 @@
 """Export, drawing, and view tools for Solid Edge MCP."""
 
-from typing import Any
+import math
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import export_manager, view_manager
+from solidedge_mcp.tools._registry import register_tool
+
+# Orientation names accepted by the draft view backends (shared by every
+# add_*_view / set_drawing_view_orientation path).
+DrawingViewOrientation = Literal[
+    "Front", "Back", "Top", "Bottom", "Right", "Left", "Isometric", "Iso"
+]
+# Render modes accepted by ViewModel.set_display_mode and
+# DrawingViews.set_drawing_view_display_mode.
+RenderMode = Literal["Wireframe", "HiddenEdgesVisible", "Shaded", "ShadedWithEdges"]
 
 # ================================================================
 # Group 47: export_file (8 → 1)
@@ -11,17 +22,28 @@ from solidedge_mcp.managers import export_manager, view_manager
 
 
 def export_file(
-    format: str = "step",
+    format: Literal[
+        "step",
+        "stl",
+        "iges",
+        "pdf",
+        "dxf",
+        "parasolid",
+        "jt",
+        "flat_dxf",
+        "prc",
+        "plmxml",
+        "image",
+    ] = "step",
     file_path: str = "",
     ini_file_path: str = "",
     width: int = 800,
     height: int = 600,
 ) -> dict[str, Any]:
-    """Export the active document to a file.
+    """Export the active document to file_path.
 
-    format: 'step' | 'stl' | 'iges' | 'pdf' | 'dxf'
-            | 'parasolid' | 'jt' | 'flat_dxf'
-            | 'prc' | 'plmxml' | 'image'
+    plmxml: also ini_file_path. image: screenshot at width x height pixels.
+    flat_dxf needs a sheet metal part; pdf/dxf work best on drafts.
     """
     if file_path:
         file_path, err = validate_path(file_path, must_exist=False)
@@ -60,28 +82,39 @@ def export_file(
 
 
 def add_drawing_view(
-    type: str = "assembly",
+    type: Literal[
+        "assembly",
+        "assembly_ex",
+        "with_config",
+        "projected",
+        "detail",
+        "auxiliary",
+        "draft",
+        "by_draft_view",
+        "section",
+    ] = "assembly",
     x: float = 0.15,
     y: float = 0.15,
-    orientation: str = "Isometric",
+    orientation: DrawingViewOrientation = "Isometric",
     scale: float = 1.0,
     config: str | None = None,
     configuration: str = "Default",
     parent_view_index: int = 0,
-    fold_direction: str = "Up",
+    fold_direction: Literal["Up", "Down", "Left", "Right"] = "Up",
     center_x: float = 0.0,
     center_y: float = 0.0,
     radius: float = 0.01,
     source_view_index: int = 0,
     section_type: int = 0,
 ) -> dict[str, Any]:
-    """Add a drawing view to the active draft.
+    """Add a drawing view to the active draft. Positions/radii in meters.
 
-    type: 'assembly' | 'assembly_ex' | 'with_config'
-          | 'projected' | 'detail' | 'auxiliary'
-          | 'draft' | 'by_draft_view' | 'section'
-
-    Positions/radii in meters. View indices are 0-based.
+    x,y place the view on the sheet. assembly/assembly_ex/with_config:
+    orientation + scale (assembly_ex adds config; with_config adds
+    configuration). projected/auxiliary: 0-based parent_view_index +
+    fold_direction. detail: parent_view_index + circle center_x/center_y/radius.
+    by_draft_view: 0-based source_view_index. section: parent_view_index +
+    section_type (raw SectionTypeConstants int).
     """
     match type:
         case "assembly":
@@ -122,28 +155,39 @@ def add_drawing_view(
 
 
 def manage_drawing_view(
-    action: str,
+    action: Literal[
+        "get_model_link",
+        "show_tangent_edges",
+        "set_scale",
+        "delete",
+        "update",
+        "move",
+        "show_hidden_edges",
+        "set_display_mode",
+        "set_orientation",
+        "activate",
+        "deactivate",
+        "get_dimensions",
+        "align",
+        "update_all",
+    ],
     view_index: int = 0,
     view_index2: int = 0,
     scale: float = 1.0,
     x: float = 0.0,
     y: float = 0.0,
     show: bool = True,
-    mode: str = "Wireframe",
-    orientation: str = "Front",
+    mode: RenderMode = "Wireframe",
+    orientation: DrawingViewOrientation = "Front",
     align: bool = True,
     force_update: bool = True,
 ) -> dict[str, Any]:
-    """Manage an existing drawing view.
+    """Manage an existing drawing view (0-based view_index). Meters.
 
-    action: 'get_model_link' | 'show_tangent_edges'
-            | 'set_scale' | 'delete' | 'update' | 'move'
-            | 'show_hidden_edges' | 'set_display_mode'
-            | 'set_orientation' | 'activate' | 'deactivate'
-            | 'get_dimensions' | 'align' | 'update_all'
-
-    View indices are 0-based. Positions in meters.
-    mode: 'Wireframe' | 'HiddenEdgesVisible' | 'Shaded' | 'ShadedWithEdges'.
+    show_tangent_edges/show_hidden_edges: show. set_scale: scale.
+    move: x,y. set_display_mode: mode. set_orientation: orientation.
+    align: second view via 0-based view_index2 + align flag.
+    update_all: force_update (ignores view_index). delete removes the view.
     """
     match action:
         case "get_model_link":
@@ -184,7 +228,7 @@ def manage_drawing_view(
 
 
 def add_annotation(
-    type: str,
+    type: Literal["text_box", "leader", "balloon", "note"],
     x: float = 0.0,
     y: float = 0.0,
     x1: float = 0.0,
@@ -196,11 +240,11 @@ def add_annotation(
     leader_x: float | None = None,
     leader_y: float | None = None,
 ) -> dict[str, Any]:
-    """Add a text annotation to the active draft.
+    """Add a text annotation to the active draft. Meters.
 
-    type: 'text_box' | 'leader' | 'balloon' | 'note'
-
-    Positions in meters. height is text height in meters.
+    text_box/note: x,y + text + height (text height).
+    leader: line (x1,y1)-(x2,y2) + text.
+    balloon: x,y + text, optional leader tip at leader_x/leader_y.
     """
     match type:
         case "text_box":
@@ -221,7 +265,13 @@ def add_annotation(
 
 
 def add_dimension_annotation(
-    type: str,
+    type: Literal[
+        "dimension",
+        "angular_dimension",
+        "radial_dimension",
+        "diameter_dimension",
+        "ordinate_dimension",
+    ],
     x1: float = 0.0,
     y1: float = 0.0,
     x2: float = 0.0,
@@ -237,12 +287,12 @@ def add_dimension_annotation(
     origin_x: float = 0.0,
     origin_y: float = 0.0,
 ) -> dict[str, Any]:
-    """Add a dimension annotation to the active draft.
+    """Add a dimension annotation to the active draft. All coordinates in meters.
 
-    type: 'dimension' | 'angular_dimension' | 'radial_dimension'
-          | 'diameter_dimension' | 'ordinate_dimension'
-
-    All coordinates in meters.
+    dimension: between (x1,y1) and (x2,y2). angular_dimension: three points
+    (x1,y1)-(x2,y2)-(x3,y3). radial_dimension/diameter_dimension: center_x/y +
+    point_x/y on the curve. ordinate_dimension: origin_x/y + point_x/y.
+    dim_x/dim_y optionally place the dimension text (None = auto).
     """
     match type:
         case "dimension":
@@ -286,25 +336,28 @@ def add_dimension_annotation(
 
 
 def add_symbol_annotation(
-    type: str,
+    type: Literal[
+        "center_mark",
+        "centerline",
+        "surface_finish",
+        "weld_symbol",
+        "geometric_tolerance",
+    ],
     x: float = 0.0,
     y: float = 0.0,
     x1: float = 0.0,
     y1: float = 0.0,
     x2: float = 0.0,
     y2: float = 0.0,
-    symbol_type: str = "machined",
-    weld_type: str = "fillet",
+    symbol_type: Literal["machined", "any", "prohibited"] = "machined",
+    weld_type: Literal["fillet", "groove", "plug", "spot", "seam"] = "fillet",
     tolerance_text: str = "",
 ) -> dict[str, Any]:
-    """Add a symbol annotation to the active draft.
+    """Add a symbol annotation to the active draft. Positions in meters.
 
-    type: 'center_mark' | 'centerline' | 'surface_finish'
-          | 'weld_symbol' | 'geometric_tolerance'
-
-    Positions in meters.
-    symbol_type: 'machined' | 'any' | 'prohibited'.
-    weld_type: 'fillet' | 'groove' | 'plug' | 'spot' | 'seam'.
+    center_mark: x,y. centerline: (x1,y1)-(x2,y2).
+    surface_finish: x,y + symbol_type. weld_symbol: x,y + weld_type.
+    geometric_tolerance: x,y + tolerance_text (feature control frame text).
     """
     match type:
         case "center_mark":
@@ -327,7 +380,7 @@ def add_symbol_annotation(
 
 
 def add_2d_dimension(
-    type: str = "distance",
+    type: Literal["distance", "length", "radius", "angle"] = "distance",
     x1: float = 0.0,
     y1: float = 0.0,
     x2: float = 0.0,
@@ -335,13 +388,13 @@ def add_2d_dimension(
     x3: float = 0.0,
     y3: float = 0.0,
     object_index: int = 0,
-    object_type: str = "circle",
+    object_type: Literal["circle", "arc"] = "circle",
 ) -> dict[str, Any]:
-    """Add a 2D dimension on the active draft sheet.
+    """Add a 2D dimension on the active draft sheet. Meters, in sheet space.
 
-    type: 'distance' | 'length' | 'radius' | 'angle'
-
-    Coordinates in meters (sheet space). object_index is 0-based.
+    distance: (x1,y1)-(x2,y2). angle: three points (x1,y1)-(x2,y2)-(x3,y3).
+    length: 0-based object_index into the sheet Lines2d collection.
+    radius: 0-based object_index into Circles2d or Arcs2d, per object_type.
     """
     match type:
         case "distance":
@@ -362,8 +415,18 @@ def add_2d_dimension(
 
 
 def camera_control(
-    action: str,
-    view: str = "Iso",
+    action: Literal[
+        "set_orientation",
+        "zoom_fit",
+        "zoom_to_selection",
+        "rotate",
+        "pan",
+        "zoom",
+        "refresh",
+        "begin_dynamics",
+        "end_dynamics",
+    ],
+    view: Literal["Iso", "Top", "Front", "Right", "Bottom", "Back", "Left"] = "Iso",
     angle: float = 0.0,
     center_x: float = 0.0,
     center_y: float = 0.0,
@@ -375,13 +438,12 @@ def camera_control(
     dy: int = 0,
     factor: float = 1.0,
 ) -> dict[str, Any]:
-    """Control the 3D camera/view.
+    """Control the 3D camera/view of the active window.
 
-    action: 'set_orientation' | 'zoom_fit' | 'zoom_to_selection'
-            | 'rotate' | 'pan' | 'zoom' | 'refresh'
-            | 'begin_dynamics' | 'end_dynamics'
-
-    angle in radians. factor >1 zooms in, <1 zooms out. dx/dy in pixels.
+    set_orientation: view. rotate: angle in DEGREES about the axis
+    (axis_x,axis_y,axis_z) through center_x/y/z (meters). pan: dx,dy pixels.
+    zoom: factor >1 zooms in, <1 zooms out.
+    begin_dynamics/end_dynamics bracket a burst of rotate/pan/zoom calls.
     """
     match action:
         case "set_orientation":
@@ -391,8 +453,9 @@ def camera_control(
         case "zoom_to_selection":
             return view_manager.zoom_to_selection()
         case "rotate":
+            # The backend (View.RotateCamera) takes radians.
             return view_manager.rotate_camera(
-                angle,
+                math.radians(angle),
                 center_x,
                 center_y,
                 center_z,
@@ -432,9 +495,10 @@ def set_camera(
     perspective: bool = False,
     scale_or_angle: float = 1.0,
 ) -> dict[str, Any]:
-    """Set the 3D camera position, target, and projection.
+    """Set the 3D camera eye, target, up vector, and projection. Meters.
 
-    Coordinates in meters. scale_or_angle is ortho scale or perspective FOV angle.
+    scale_or_angle is the orthographic view scale when perspective=False, or
+    the perspective field-of-view angle in RADIANS when perspective=True.
     """
     return view_manager.set_camera(
         eye_x,
@@ -457,8 +521,14 @@ def set_camera(
 
 
 def display_control(
-    action: str,
-    mode: str = "Shaded",
+    action: Literal[
+        "set_mode",
+        "set_background",
+        "model_to_screen",
+        "screen_to_model",
+        "set_texture",
+    ],
+    mode: RenderMode = "Shaded",
     red: int = 0,
     green: int = 0,
     blue: int = 0,
@@ -472,12 +542,10 @@ def display_control(
 ) -> dict[str, Any]:
     """Control display settings and coordinate transforms.
 
-    action: 'set_mode' | 'set_background'
-            | 'model_to_screen' | 'screen_to_model'
-            | 'set_texture'
-
-    mode: 'Shaded' | 'ShadedWithEdges' | 'Wireframe' | 'HiddenEdgesVisible'.
-    RGB values 0-255. face_index is 0-based.
+    set_mode: mode. set_background: RGB 0-255.
+    model_to_screen: model x,y,z (meters) -> pixels.
+    screen_to_model: screen_x/screen_y pixels -> model meters.
+    set_texture: 0-based face_index + texture_name.
     """
     match action:
         case "set_mode":
@@ -500,18 +568,18 @@ def display_control(
 
 
 def manage_sheet(
-    action: str,
+    action: Literal["activate", "rename", "delete", "create_drawing", "add"],
     sheet_index: int = 0,
     new_name: str = "",
     template: str | None = None,
     views: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Manage draft sheets.
+    """Manage draft sheets (0-based sheet_index).
 
-    action: 'activate' | 'rename' | 'delete'
-            | 'create_drawing' | 'add'
-
-    sheet_index is 0-based.
+    rename: new_name. delete removes the sheet and its views.
+    create_drawing: optional template path + views, a list of orientation names
+    from Front/Back/Top/Bottom/Right/Left/Isometric (default all four standard).
+    add appends an empty sheet and ignores sheet_index.
     """
     match action:
         case "activate":
@@ -534,13 +602,13 @@ def manage_sheet(
 
 
 def print_control(
-    action: str,
+    action: Literal["print", "set_printer", "get_printer", "set_paper_size", "print_full"],
     copies: int = 1,
     all_sheets: bool = True,
     printer_name: str = "",
     width: float = 0.0,
     height: float = 0.0,
-    orientation: str = "Landscape",
+    orientation: Literal["Landscape", "Portrait"] = "Landscape",
     num_copies: int = 1,
     print_orientation: int | None = None,
     paper_size: int | None = None,
@@ -554,10 +622,12 @@ def print_control(
 ) -> dict[str, Any]:
     """Control printing for the active draft.
 
-    action: 'print' | 'set_printer' | 'get_printer'
-            | 'set_paper_size' | 'print_full'
-
-    Paper dimensions in meters. orientation: 'Landscape' | 'Portrait'.
+    print: copies + all_sheets. set_printer: printer_name.
+    set_paper_size: width/height in meters + orientation.
+    print_full: full DraftPrintUtility control - printer_name, num_copies,
+    print_orientation/paper_size/print_range (raw COM ints), scale,
+    print_to_file + output_file_name, sheets (e.g. '1-3'), color_as_black,
+    collate. None leaves a print_full setting at the document default.
     """
     match action:
         case "print":
@@ -592,17 +662,23 @@ def print_control(
 
 
 def query_sheet(
-    type: str,
+    type: Literal[
+        "dimensions",
+        "balloons",
+        "text_boxes",
+        "drawing_objects",
+        "sections",
+        "lines2d",
+        "circles2d",
+        "arcs2d",
+        "section_cuts",
+    ],
     view_index: int = 0,
 ) -> dict[str, Any]:
-    """Query sheet collections on the active draft.
+    """List a collection on the active draft sheet (read-only).
 
-    type: 'dimensions' | 'balloons' | 'text_boxes'
-          | 'drawing_objects' | 'sections'
-          | 'lines2d' | 'circles2d' | 'arcs2d'
-          | 'section_cuts'
-
-    view_index (0-based) only used for 'section_cuts'.
+    Every type ignores view_index except section_cuts, which reads the cuts on
+    the drawing view at 0-based view_index.
     """
     match type:
         case "dimensions":
@@ -633,7 +709,7 @@ def query_sheet(
 
 
 def manage_annotation_data(
-    action: str,
+    action: Literal["add_symbol", "get_symbols", "get_pmi", "set_pmi_visibility"],
     file_path: str = "",
     x: float = 0.0,
     y: float = 0.0,
@@ -642,12 +718,11 @@ def manage_annotation_data(
     show_dimensions: bool = True,
     show_annotations: bool = True,
 ) -> dict[str, Any]:
-    """Manage symbols and PMI annotation data.
+    """Manage sheet symbols and PMI annotation data.
 
-    action: 'add_symbol' | 'get_symbols'
-            | 'get_pmi' | 'set_pmi_visibility'
-
-    Positions in meters.
+    add_symbol: symbol file_path placed at x,y (meters) with insertion_type
+    (raw SymbolInsertTypeConstants int).
+    set_pmi_visibility: show (all PMI) + show_dimensions + show_annotations.
     """
     if action == "add_symbol" and file_path:
         file_path, err = validate_path(file_path, must_exist=True)
@@ -672,7 +747,7 @@ def manage_annotation_data(
 
 
 def add_smart_frame(
-    method: str = "two_point",
+    method: Literal["two_point", "by_origin"] = "two_point",
     style_name: str = "",
     x1: float = 0.0,
     y1: float = 0.0,
@@ -685,11 +760,10 @@ def add_smart_frame(
     left: float = 0.0,
     right: float = 0.0,
 ) -> dict[str, Any]:
-    """Add a smart frame (title block/border) to the sheet.
+    """Add a smart frame (title block/border) to the sheet. Meters.
 
-    method: 'two_point' | 'by_origin'
-
-    Positions and margins in meters.
+    two_point: corners (x1,y1)-(x2,y2). by_origin: origin x,y + the
+    top/bottom/left/right margins. style_name selects the frame style.
     """
     match method:
         case "two_point":
@@ -708,7 +782,7 @@ def add_smart_frame(
 
 
 def draft_config(
-    action: str,
+    action: Literal["get_global", "set_global", "get_origin", "set_origin"],
     parameter: int = 0,
     value: float = 0.0,
     x: float = 0.0,
@@ -716,10 +790,8 @@ def draft_config(
 ) -> dict[str, Any]:
     """Manage draft document configuration.
 
-    action: 'get_global' | 'set_global'
-            | 'get_origin' | 'set_origin'
-
-    Positions in meters.
+    get_global/set_global: parameter is a raw DraftGlobalConstants int;
+    set_global also takes value. set_origin: symbol file origin x,y in meters.
     """
     match action:
         case "get_global":
@@ -740,7 +812,7 @@ def draft_config(
 
 
 def create_table(
-    type: str = "parts_list",
+    type: Literal["parts_list", "bend"] = "parts_list",
     auto_balloon: bool = True,
     x: float = 0.15,
     y: float = 0.25,
@@ -749,9 +821,9 @@ def create_table(
 ) -> dict[str, Any]:
     """Create a table on the active draft sheet.
 
-    type: 'parts_list' | 'bend'
-
-    view_index is 0-based (bend only).
+    parts_list: placed at x,y (meters); auto_balloon also balloons the views.
+    bend: 0-based view_index of a flat-pattern view + optional saved_settings
+    name (needs a sheet metal model).
     """
     match type:
         case "parts_list":
@@ -769,20 +841,22 @@ def create_table(
 
 def register(mcp: Any) -> None:
     """Register export, drawing, and view tools."""
-    mcp.tool()(export_file)
-    mcp.tool()(add_drawing_view)
-    mcp.tool()(manage_drawing_view)
-    mcp.tool()(add_annotation)
-    mcp.tool()(add_dimension_annotation)
-    mcp.tool()(add_symbol_annotation)
-    mcp.tool()(add_2d_dimension)
-    mcp.tool()(camera_control)
-    mcp.tool()(set_camera)
-    mcp.tool()(display_control)
-    mcp.tool()(manage_sheet)
-    mcp.tool()(print_control)
-    mcp.tool()(query_sheet)
-    mcp.tool()(manage_annotation_data)
-    mcp.tool()(add_smart_frame)
-    mcp.tool()(draft_config)
-    mcp.tool()(create_table)
+    export_tags = {"export"}
+    draft_tags = {"export", "draft"}
+    register_tool(mcp, export_file, tags=export_tags, idempotent=True)
+    register_tool(mcp, add_drawing_view, tags=draft_tags)
+    register_tool(mcp, manage_drawing_view, tags=draft_tags, destructive=True)
+    register_tool(mcp, add_annotation, tags=draft_tags)
+    register_tool(mcp, add_dimension_annotation, tags=draft_tags)
+    register_tool(mcp, add_symbol_annotation, tags=draft_tags)
+    register_tool(mcp, add_2d_dimension, tags=draft_tags)
+    register_tool(mcp, camera_control, tags=export_tags)
+    register_tool(mcp, set_camera, tags=export_tags, idempotent=True)
+    register_tool(mcp, display_control, tags=export_tags, idempotent=True)
+    register_tool(mcp, manage_sheet, tags=draft_tags, destructive=True)
+    register_tool(mcp, print_control, tags=draft_tags)
+    register_tool(mcp, query_sheet, tags=draft_tags, read_only=True)
+    register_tool(mcp, manage_annotation_data, tags=draft_tags)
+    register_tool(mcp, add_smart_frame, tags=draft_tags)
+    register_tool(mcp, draft_config, tags=draft_tags)
+    register_tool(mcp, create_table, tags=draft_tags)

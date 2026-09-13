@@ -84,10 +84,11 @@ module = [
 ]
 disable_error_code = ["attr-defined", "no-any-return"]
 
-# FastMCP decorators (@mcp.tool(), @mcp.resource()) lack type information
+# FastMCP decorators (@mcp.tool(), @mcp.resource(), @mcp.prompt()) are untyped
 [[tool.mypy.overrides]]
 module = [
     "solidedge_mcp.tools.*",
+    "solidedge_mcp.prompts",
 ]
 disable_error_code = ["untyped-decorator"]
 

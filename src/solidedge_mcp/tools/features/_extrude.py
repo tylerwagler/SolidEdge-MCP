@@ -1,27 +1,37 @@
 """Extrude protrusion tools."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_extrude(
-    method: str = "finite",
+    method: Literal[
+        "finite",
+        "infinite",
+        "through_next",
+        "from_to",
+        "thin_wall",
+        "symmetric",
+        "through_next_v2",
+        "from_to_v2",
+        "by_keypoint",
+        "from_to_single",
+        "through_next_single",
+    ] = "finite",
     distance: float = 0.0,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse", "Symmetric"] = "Normal",
     wall_thickness: float = 0.0,
     from_plane_index: int = 0,
     to_plane_index: int = 0,
 ) -> dict[str, Any]:
     """Create an extruded protrusion from the active sketch profile.
 
-    method: 'finite' | 'infinite' | 'through_next' | 'from_to'
-        | 'thin_wall' | 'symmetric' | 'through_next_v2'
-        | 'from_to_v2' | 'by_keypoint' | 'from_to_single'
-        | 'through_next_single'
-
-    distance/wall_thickness in meters. Plane indices are 1-based.
+    Lengths in meters. distance: finite/thin_wall/symmetric/by_keypoint.
+    wall_thickness: thin_wall. direction 'Symmetric' only for finite/thin_wall
+    (others treat it as Normal). from/to_plane_index: required for from_to*
+    methods; 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(distance=distance, wall_thickness=wall_thickness)
     if err:

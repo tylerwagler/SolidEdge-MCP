@@ -606,3 +606,52 @@ class TestGetOrderedGeometry:
         assert result["status"] == "ok"
         assert result["num_elements"] == 0
         assert result["elements"] == []
+
+
+class TestCloseSketchIdempotence:
+    """close_sketch() must not queue the same profile twice.
+
+    Loft and sweep consume accumulated_profiles; a duplicated entry silently
+    corrupts the next multi-profile feature.
+    """
+
+    def _sketch_manager(self):
+        from unittest.mock import MagicMock
+
+        from solidedge_mcp.backends.sketching import SketchManager
+
+        doc_mgr = MagicMock()
+        sm = SketchManager(doc_mgr)
+        profile = MagicMock()
+        profile.End.return_value = 0
+        sm.active_profile = profile
+        sm.active_sketch = MagicMock(Name="Sketch1")
+        return sm, profile
+
+    def test_second_close_does_not_duplicate_profile(self):
+        sm, profile = self._sketch_manager()
+
+        first = sm.close_sketch()
+        assert first["status"] == "closed"
+        assert first["accumulated_profiles"] == 1
+
+        second = sm.close_sketch()
+        assert second["status"] == "closed"
+        assert second["accumulated_profiles"] == 1
+        assert sm.get_accumulated_profiles() == [profile]
+
+    def test_distinct_profiles_both_queue(self):
+        from unittest.mock import MagicMock
+
+        sm, first_profile = self._sketch_manager()
+        sm.close_sketch()
+
+        second_profile = MagicMock()
+        second_profile.End.return_value = 0
+        sm.active_profile = second_profile
+        result = sm.close_sketch()
+
+        assert result["accumulated_profiles"] == 2
+        queued = sm.get_accumulated_profiles()
+        assert queued[0] is first_profile
+        assert queued[1] is second_profile

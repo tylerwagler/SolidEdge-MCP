@@ -165,55 +165,68 @@ class ModelingModeConstants:
 
 
 class TreatmentTypeConstants:
-    """Treatment type constants for extruded surfaces (from type library)"""
+    """constant.tlb > TreatmentTypeConstants."""
 
-    seTreatmentNone = 0
-    seTreatmentCrown = 1
-    seTreatmentDraft = 2
+    seTreatmentNone = 44
+    seTreatmentDraft = 173
+    seTreatmentCrown = 174
+    # Not a member of the type library enum; Solid Edge has no combined value.
+    # Kept so existing callers resolve, but it will be rejected by COM.
     seTreatmentCrownAndDraft = 3
 
 
 class DraftSideConstants:
-    """Draft side constants (from type library)"""
+    """constant.tlb > DraftSideConstants."""
 
-    seDraftNone = 0
-    seDraftInside = 1
-    seDraftOutside = 2
+    seDraftNone = 44
+    seDraftInside = 4
+    seDraftOutside = 5
 
 
 class TreatmentCrownTypeConstants:
-    """Crown type constants (from type library)"""
+    """constant.tlb > TreatmentCrownTypeConstants."""
 
-    seTreatmentCrownByRadius = 0
-    seTreatmentCrownByOffset = 1
+    seTreatmentCrownNone = 0
+    seTreatmentCrownByRadius = 1
+    seTreatmentCrownByRadiusAndTakeOffAngle = 2
+    seTreatmentCrownByOffset = 3
+    seTreatmentCrownByOffsetAndTakeOffAngle = 4
 
 
 class TreatmentCrownSideConstants:
-    """Crown side constants (from type library)"""
+    """constant.tlb > TreatmentCrownSideConstants."""
 
-    seTreatmentCrownSideInside = 0
-    seTreatmentCrownSideOutside = 1
+    seTreatmentCrownSideNone = 44
+    seTreatmentCrownSideInside = 4
+    seTreatmentCrownSideOutside = 5
 
 
 class TreatmentCrownCurvatureSideConstants:
-    """Crown curvature side constants (from type library)"""
+    """constant.tlb > TreatmentCrownCurvatureSideConstants."""
 
-    seTreatmentCrownCurvatureInside = 0
-    seTreatmentCrownCurvatureOutside = 1
+    seTreatmentCrownCurvatureNone = 44
+    seTreatmentCrownCurvatureInside = 4
+    seTreatmentCrownCurvatureOutside = 5
 
 
 class OffsetSideConstants:
-    """Offset side constants (from type library)"""
+    """constant.tlb > OffsetSideConstants.
 
-    seOffsetNone = 0
-    seOffsetInside = 1
-    seOffsetOutside = 2
+    The enum is None/Left/Right; there are no Inside/Outside members.
+    """
+
+    seOffsetNone = 44
+    seOffsetLeft = 1
+    seOffsetRight = 2
 
 
 class KeyPointExtentConstants:
-    """Keypoint extent constants (from type library)"""
+    """constant.tlb > KeyPointExtentConstants."""
 
-    igTangentNormal = 0
+    igTangentNormal = 1
+    igReverseTangentNormal = 2
+    igInteriorTangentNormal = 3
+    igInteriorReverseTangentNormal = 4
 
 
 class KeyPointTypeConstants:
@@ -294,25 +307,25 @@ class AssemblyGlobalConstants:
     """
 
     seAssemblyGlobalTubeWallThickness = 1
-    seAssemblyGlobalTubeOuterDiameter = 2
-    seAssemblyGlobalMiterClearance = 3
-    seAssemblyGlobalTrimExtendLength = 4
-    seAssemblyGlobalCopeClearance = 5
-    seAssemblyGlobalNotchPlateLength = 6
-    seAssemblyGlobalWeldOffset = 7
-    seAssemblyGlobalWeldAngle = 8
-    seAssemblyGlobalWeldSize = 9
-    seAssemblyGlobalBoltDiameter = 10
-    seAssemblyGlobalHoleDiameter = 11
-    seAssemblyGlobalHoleDiameterOffset = 12
-    seAssemblyGlobalBoltHeadDiameter = 13
-    seAssemblyGlobalBoltLength = 14
-    seAssemblyGlobalNutDiameter = 15
-    seAssemblyGlobalNutHeight = 16
-    seAssemblyGlobalWasherOuterDiameter = 17
-    seAssemblyGlobalWasherThickness = 18
-    seAssemblyGlobalDefaultMaterial = 19
-    seAssemblyGlobalEndCapType = 20
+    seAssemblyGlobalTubeBendRadius = 2
+    seAssemblyGlobalTubeOuterDiameter = 3
+    seAssemblyGlobalTubeMinimumFlatLength = 4
+    seAssemblyGlobalTubeEndTreatmentOutsideDiameter = 5
+    seAssemblyGlobalTubeEndTreatmentInsideDiameter = 6
+    seAssemblyGlobalTubeEndTreatmentDepth = 7
+    seAssemblyGlobalTubeEndTreatmentAngle = 8
+    seAssemblyGlobalTubeEndTreatmentRadius = 9
+    seAssemblyGlobalDefaultPartDensity = 10
+    seAssemblyGlobalDefaultAccuracyForPartDensity = 11
+    seAssemblyGlobalWireHarnessDefaultSlackCompensation = 12
+    seAssemblyGlobalWireHarnessDefaultHoleClearance = 13
+    seAssemblyGlobalWireHarnessDefaultBundleClearance = 14
+    seAssemblyGlobalWireHarnessDefaultWireAdder = 15
+    seAssemblyGlobalWireHarnessDefaultCableAdder = 16
+    seAssemblyGlobalWireHarnessDefaultBundleAdder = 17
+    seAssemblyGlobalUpdatePhysicalPropertiesOnSave = 18
+    seAssemblyGlobalAutomaticUpdate = 19
+    seAssemblyGlobalAdjustableAsm = 20
     seAssemblyGlobalAdjustableTubes = 21
 
 

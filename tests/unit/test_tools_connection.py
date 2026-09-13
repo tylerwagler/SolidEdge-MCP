@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.connection as connection_tools
 from solidedge_mcp.tools.connection import (
     app_command,
     app_config,
@@ -13,6 +14,7 @@ from solidedge_mcp.tools.connection import (
     manage_connection,
     run_macro,
 )
+from tests.unit.test_tools_query import assert_literal_discriminators
 
 
 @pytest.fixture
@@ -152,3 +154,10 @@ class TestStandaloneConnection:
         result = run_macro("test.vba")
         mock_mgr.run_macro.assert_called_once_with("test.vba")
         assert result == {"status": "ok"}
+
+
+# === Literal discriminator drift ===
+
+
+def test_connection_discriminators_match_their_cases():
+    assert assert_literal_discriminators(connection_tools) == 3

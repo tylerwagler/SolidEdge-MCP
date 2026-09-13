@@ -46,7 +46,8 @@ class TestSuppressFeature:
 
         result = qm.suppress_feature("ExtrudedProtrusion_1")
         assert result["status"] == "suppressed"
-        feat.Suppress.assert_called_once()
+        # Suppress is a read/write VT_BOOL property, not a method.
+        assert feat.Suppress is True
 
     def test_not_found(self, query_mgr):
         qm, doc = query_mgr
@@ -77,7 +78,8 @@ class TestUnsuppressFeature:
 
         result = qm.unsuppress_feature("ExtrudedProtrusion_1")
         assert result["status"] == "unsuppressed"
-        feat.Unsuppress.assert_called_once()
+        assert feat.Suppress is False
+        feat.Unsuppress.assert_not_called()
 
 
 # ============================================================================
@@ -192,7 +194,7 @@ class TestGetFeatureStatus:
         feat = MagicMock()
         feat.Name = "Extrude1"
         feat.Status = 1
-        feat.IsSuppressed = False
+        feat.Suppress = False
         feat.Type = 25
 
         features = MagicMock()

@@ -4,14 +4,13 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import (
-    DirectionConstants,
-    FeatureOperationConstants,
-)
+from ..constants import DirectionConstants
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
+
+_EXTRUDE_OPERATIONS = ("Add", "Cut", "Intersect")
 
 
 @verify_geometry_on_creators
@@ -22,17 +21,56 @@ class ExtrudeMixin:
         self, distance: float, operation: str = "Add", direction: str = "Normal"
     ) -> dict[str, Any]:
         """
-        Create an extrusion feature from the active sketch profile.
+        Create a finite extrusion feature from the active sketch profile.
+
+        'Add' calls Models.AddFiniteExtrudedProtrusion. 'Cut' removes material
+        instead, via ExtrudedCutouts.AddFiniteMulti on the existing base body
+        (delegates to create_extruded_cutout, so a base feature must already
+        exist). 'Intersect' has no finite-extrude COM equivalent and is
+        rejected.
 
         Args:
             distance: Extrusion distance in meters
-            operation: 'Add', 'Cut', or 'Intersect'
-            direction: 'Normal', 'Reverse', or 'Symmetric'
+            operation: 'Add' (default) or 'Cut'; 'Intersect' returns an error
+            direction: 'Normal', 'Reverse', or 'Symmetric' ('Symmetric' is
+                only valid for 'Add')
 
         Returns:
             Dict with status and feature info
         """
         try:
+            if operation not in _EXTRUDE_OPERATIONS:
+                return {
+                    "error": f"Unknown operation: {operation!r}. "
+                    f"Expected one of {', '.join(_EXTRUDE_OPERATIONS)}."
+                }
+            if operation == "Intersect":
+                return {
+                    "error": "Intersect is not supported by create_extrude: Solid Edge "
+                    "COM automation exposes no finite extruded-intersect feature. "
+                    "Use 'Add' or 'Cut'.",
+                    "unsupported": True,
+                }
+            if operation == "Cut":
+                if direction == "Symmetric":
+                    return {
+                        "error": "direction='Symmetric' is not supported for a Cut "
+                        "extrusion. Use 'Normal' or 'Reverse'."
+                    }
+                # create_extruded_cutout already checks for a profile and an
+                # existing base body, so a cut on an empty part returns a clear
+                # error instead of a COM exception.
+                result = self.create_extruded_cutout(distance, direction)
+                if "error" in result:
+                    return result
+                _logger.info(f"Created extrusion cut: distance={distance}m, direction={direction}")
+                return {
+                    **result,
+                    "type": "extrude",
+                    "operation": "Cut",
+                    "method": "ExtrudedCutouts.AddFiniteMulti",
+                }
+
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
 
@@ -41,14 +79,6 @@ class ExtrudeMixin:
 
             # Get the models collection
             models = doc.Models
-
-            # Map operation string to constant
-            operation_map = {
-                "Add": FeatureOperationConstants.igFeatureAdd,
-                "Cut": FeatureOperationConstants.igFeatureCut,
-                "Intersect": FeatureOperationConstants.igFeatureIntersect,
-            }
-            operation_map.get(operation, FeatureOperationConstants.igFeatureAdd)
 
             # Map direction string to constant
             direction_map = {
@@ -69,7 +99,7 @@ class ExtrudeMixin:
                 "status": "created",
                 "type": "extrude",
                 "distance": distance,
-                "operation": operation,
+                "operation": "Add",
                 "direction": direction,
             }
         except Exception as e:

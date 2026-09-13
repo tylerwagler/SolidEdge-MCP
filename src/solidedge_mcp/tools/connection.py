@@ -1,19 +1,22 @@
 """Connection tools for Solid Edge MCP."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.managers import connection
+from solidedge_mcp.tools._registry import register_tool
 
 # === Composite: manage_connection ===
 
 
 def manage_connection(
-    action: str = "connect",
+    action: Literal["connect", "disconnect", "quit", "activate"] = "connect",
     start_if_needed: bool = True,
 ) -> dict[str, Any]:
     """Manage the Solid Edge application connection.
 
-    action: 'connect' | 'disconnect' | 'quit' | 'activate'
+    connect: attach to a running instance (start_if_needed launches one).
+    disconnect: drop the COM reference. quit: exit Solid Edge (unsaved work
+    may be lost). activate: bring the window to the foreground.
     """
     match action:
         case "connect":
@@ -32,13 +35,15 @@ def manage_connection(
 
 
 def app_command(
-    action: str,
+    action: Literal["start", "abort", "idle"],
     command_id: int = 0,
     abort_all: bool = True,
 ) -> dict[str, Any]:
-    """Execute an application command.
+    """Drive the Solid Edge command engine.
 
-    action: 'start' | 'abort' | 'idle'
+    start: run command_id (Solid Edge command constant).
+    abort: cancel the running command (abort_all cancels nested ones too).
+    idle: let Solid Edge process pending events.
     """
     match action:
         case "start":
@@ -55,7 +60,18 @@ def app_command(
 
 
 def app_config(
-    property: str,
+    property: Literal[
+        "set_performance",
+        "get_environment",
+        "get_status_bar",
+        "set_status_bar",
+        "get_visible",
+        "set_visible",
+        "get_global",
+        "set_global",
+        "get_template",
+        "set_template",
+    ],
     delay_compute: bool | None = None,
     screen_updating: bool | None = None,
     interactive: bool | None = None,
@@ -67,13 +83,13 @@ def app_config(
     doc_type: int = 1,
     template_path: str = "",
 ) -> dict[str, Any]:
-    """Get or set application configuration properties.
+    """Get or set application-level settings.
 
-    property: 'set_performance' | 'get_environment' | 'get_status_bar'
-      | 'set_status_bar' | 'get_visible' | 'set_visible'
-      | 'get_global' | 'set_global' | 'get_template' | 'set_template'
-
-    doc_type: 1=Part, 2=Draft, 3=Assembly, 4=SheetMetal
+    set_performance: delay_compute/screen_updating/interactive/display_alerts
+    (None leaves a flag unchanged). set_status_bar: text. set_visible: visible.
+    get_global/set_global: parameter (ApplicationGlobalConstants) [+ value].
+    get_template/set_template: doc_type 1=Part, 2=Draft, 3=Assembly,
+    4=SheetMetal [+ template_path].
     """
     match property:
         case "set_performance":
@@ -109,25 +125,22 @@ def app_config(
 
 
 def convert_by_file_path(input_path: str, output_path: str) -> dict[str, Any]:
-    """Batch-convert CAD files between formats."""
+    """Convert a CAD file to another format by extension (e.g. .par -> .step)."""
     return connection.convert_by_file_path(input_path, output_path)
 
 
 def arrange_windows(style: int = 1) -> dict[str, Any]:
-    """Arrange document windows.
-
-    style: 1=Tiled, 2=Horizontal, 4=Vertical, 8=Cascade
-    """
+    """Arrange open document windows. style: 1=Tiled, 2=Horizontal, 4=Vertical, 8=Cascade."""
     return connection.arrange_windows(style)
 
 
 def get_active_command() -> dict[str, Any]:
-    """Get the currently active Solid Edge command."""
+    """Return the currently active Solid Edge command (read-only)."""
     return connection.get_active_command()
 
 
 def run_macro(filename: str) -> dict[str, Any]:
-    """Run a VBA macro file in Solid Edge."""
+    """Run a VBA macro file (.vba/.exe path) in Solid Edge."""
     return connection.run_macro(filename)
 
 
@@ -136,12 +149,13 @@ def run_macro(filename: str) -> dict[str, Any]:
 
 def register(mcp: Any) -> None:
     """Register connection tools with the MCP server."""
+    tags = {"app"}
     # Composite tools
-    mcp.tool()(manage_connection)
-    mcp.tool()(app_command)
-    mcp.tool()(app_config)
+    register_tool(mcp, manage_connection, tags=tags, destructive=True)
+    register_tool(mcp, app_command, tags=tags)
+    register_tool(mcp, app_config, tags=tags)
     # Standalone tools
-    mcp.tool()(convert_by_file_path)
-    mcp.tool()(arrange_windows)
-    mcp.tool()(get_active_command)
-    mcp.tool()(run_macro)
+    register_tool(mcp, convert_by_file_path, tags=tags)
+    register_tool(mcp, arrange_windows, tags=tags, idempotent=True)
+    register_tool(mcp, get_active_command, tags=tags, read_only=True)
+    register_tool(mcp, run_macro, tags=tags)

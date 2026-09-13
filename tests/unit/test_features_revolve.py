@@ -60,6 +60,116 @@ def feature_mgr(managers):
 
 
 # ============================================================================
+# REVOLVE (operation routing: Add -> protrusion, Cut -> RevolvedCutouts)
+# ============================================================================
+
+
+class TestCreateRevolve:
+    def test_add_uses_finite_revolved_protrusion(self, feature_mgr, managers):
+        import math
+
+        from solidedge_mcp.backends.constants import DirectionConstants
+
+        _, sketch_mgr, _, models, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        result = feature_mgr.create_revolve(90)
+        assert result["status"] == "created"
+        assert result["type"] == "revolve"
+        assert result["angle"] == 90
+        assert result["operation"] == "Add"
+        models.AddFiniteRevolvedProtrusion.assert_called_once_with(
+            1, (profile,), refaxis, DirectionConstants.igRight, math.radians(90)
+        )
+        model.RevolvedCutouts.AddFiniteMulti.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        sketch_mgr.get_active_refaxis.return_value = MagicMock()
+        result = feature_mgr.create_revolve(360)
+        assert "error" in result
+        assert "No active sketch" in result["error"]
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+
+    def test_no_refaxis(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_revolve(360)
+        assert "error" in result
+        assert "axis of revolution" in result["error"]
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+
+    def test_cut_uses_revolved_cutout_collection(self, feature_mgr, managers):
+        import math
+
+        from solidedge_mcp.backends.constants import DirectionConstants
+
+        _, sketch_mgr, _, models, model, profile = managers
+        refaxis = MagicMock()
+        sketch_mgr.get_active_refaxis.return_value = refaxis
+        result = feature_mgr.create_revolve(180, "Cut")
+        assert result["status"] == "created"
+        assert result["type"] == "revolve"
+        assert result["operation"] == "Cut"
+        assert result["angle"] == 180
+        assert result["method"] == "RevolvedCutouts.AddFiniteMulti"
+        model.RevolvedCutouts.AddFiniteMulti.assert_called_once_with(
+            1, (profile,), refaxis, DirectionConstants.igRight, math.radians(180)
+        )
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_cut_without_base_feature_is_clear_error(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, model, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = MagicMock()
+        models.Count = 0
+        result = feature_mgr.create_revolve(360, "Cut")
+        assert "error" in result
+        assert "No base feature" in result["error"]
+        model.RevolvedCutouts.AddFiniteMulti.assert_not_called()
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
+
+    def test_cut_without_refaxis_is_clear_error(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        result = feature_mgr.create_revolve(360, "Cut")
+        assert "error" in result
+        assert "axis of revolution" in result["error"]
+        model.RevolvedCutouts.AddFiniteMulti.assert_not_called()
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+
+    def test_cut_propagates_com_error(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, model, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = MagicMock()
+        model.RevolvedCutouts.AddFiniteMulti.side_effect = RuntimeError("COM boom")
+        result = feature_mgr.create_revolve(360, "Cut")
+        assert "error" in result
+        assert "COM boom" in result["error"]
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+
+    def test_intersect_is_unsupported(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, model, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = MagicMock()
+        result = feature_mgr.create_revolve(360, "Intersect")
+        assert "error" in result
+        assert result["unsupported"] is True
+        assert "Intersect" in result["error"]
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+        model.RevolvedCutouts.AddFiniteMulti.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
+
+    def test_unknown_operation_is_error(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, model, _ = managers
+        sketch_mgr.get_active_refaxis.return_value = MagicMock()
+        result = feature_mgr.create_revolve(360, "Subtract")
+        assert "error" in result
+        assert "Unknown operation" in result["error"]
+        models.AddFiniteRevolvedProtrusion.assert_not_called()
+        model.RevolvedCutouts.AddFiniteMulti.assert_not_called()
+
+
+# ============================================================================
 # REVOLVE BY KEYPOINT
 # ============================================================================
 

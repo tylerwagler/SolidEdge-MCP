@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.assembly as assembly_tools
 from solidedge_mcp.tools.assembly import (
     add_assembly_component,
     add_assembly_constraint,
@@ -20,6 +21,7 @@ from solidedge_mcp.tools.assembly import (
     virtual_component,
     wiring,
 )
+from tests.unit.test_tools_query import assert_literal_discriminators
 
 
 @pytest.fixture
@@ -132,19 +134,22 @@ class TestQueryComponent:
     )
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
-        # interference needs a nonzero component_index to avoid None transform
-        if disc == "interference":
-            result = query_component(property=disc, component_index=1)
-        elif disc == "occurrence":
+        if disc == "occurrence":
             result = query_component(property=disc, internal_id=42)
         else:
             result = query_component(property=disc, component_index=1)
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
 
-    def test_interference_zero_index_passes_none(self, mock_mgr):
+    def test_interference_zero_index_is_component_zero_not_all(self, mock_mgr):
+        """Component 0 is a real component; only an omitted index means 'all pairs'."""
         mock_mgr.check_interference.return_value = {"status": "ok"}
         query_component(property="interference", component_index=0)
+        mock_mgr.check_interference.assert_called_once_with(0)
+
+    def test_interference_omitted_index_passes_none(self, mock_mgr):
+        mock_mgr.check_interference.return_value = {"status": "ok"}
+        query_component(property="interference")
         mock_mgr.check_interference.assert_called_once_with(None)
 
     def test_interference_nonzero_index_passes_value(self, mock_mgr):
@@ -515,3 +520,10 @@ class TestWiring:
     def test_unknown(self, mock_mgr):
         result = wiring(type="bogus")
         assert "error" in result
+
+
+# === Literal discriminator drift ===
+
+
+def test_assembly_discriminators_match_their_cases():
+    assert assert_literal_discriminators(assembly_tools) == 13

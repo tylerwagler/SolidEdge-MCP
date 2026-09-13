@@ -1,0 +1,9 @@
+# Normalize line endings in the index; working-tree endings follow core.autocrlf.
+* text=auto
+
+*.png binary
+*.jpg binary
+*.par binary
+*.asm binary
+*.dft binary
+*.psm binary

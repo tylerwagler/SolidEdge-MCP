@@ -1,30 +1,40 @@
 """Sheet metal tools."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_flange(
-    method: str = "basic",
+    method: Literal[
+        "basic",
+        "by_match_face",
+        "sync",
+        "by_face",
+        "with_bend_calc",
+        "sync_with_bend_calc",
+        "match_face_with_bend",
+        "by_face_with_bend",
+    ] = "basic",
     face_index: int = 0,
     edge_index: int = 0,
     flange_length: float = 0.0,
-    side: str = "Right",
+    side: Literal["Left", "Right", "Both"] = "Right",
     inside_radius: float | None = None,
     bend_angle: float | None = None,
     bend_deduction: float = 0.0,
     ref_face_index: int = 0,
     bend_radius: float = 0.001,
 ) -> dict[str, Any]:
-    """Create a flange on an edge (sheet metal).
+    """Create a flange on an edge of a sheet metal part.
 
-    method: 'basic' | 'by_match_face' | 'sync' | 'by_face'
-        | 'with_bend_calc' | 'sync_with_bend_calc'
-        | 'match_face_with_bend' | 'by_face_with_bend'
-
-    Lengths/radii in meters. bend_angle in degrees.
+    Lengths and radii in meters; bend_angle in degrees. face_index,
+    edge_index (within that face) and ref_face_index are 0-based.
+    inside_radius: basic / by_match_face / sync / match_face_with_bend
+    (defaults to 0.001 when omitted). bend_angle: basic only.
+    bend_deduction: *_bend_calc methods. ref_face_index and bend_radius:
+    by_face / by_face_with_bend.
     """
     err = validate_numerics(
         flange_length=flange_length,
@@ -104,20 +114,20 @@ def create_flange(
 
 
 def create_contour_flange(
-    method: str = "ex",
+    method: Literal["ex", "sync", "sync_with_bend", "v3", "sync_ex"] = "ex",
     thickness: float = 0.0,
     bend_radius: float = 0.001,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse"] = "Normal",
     face_index: int = 0,
     edge_index: int = 0,
     bend_deduction: float = 0.0,
 ) -> dict[str, Any]:
-    """Create a contour flange (sheet metal).
+    """Sweep the active sketch profile into a contour flange (sheet metal).
 
-    method: 'ex' | 'sync' | 'sync_with_bend' | 'v3'
-        | 'sync_ex'
-
-    Dimensions in meters.
+    Thickness, radii and deduction in meters. direction is the side the
+    material is projected to. face_index and edge_index (0-based) select the
+    attachment edge and apply to the sync* methods only. bend_deduction:
+    sync_with_bend only.
     """
     err = validate_numerics(
         thickness=thickness,
@@ -161,18 +171,18 @@ def create_contour_flange(
 
 
 def create_sheet_metal_base(
-    type: str = "flange",
+    type: Literal["flange", "tab", "contour_advanced", "tab_multi_profile"] = "flange",
     thickness: float = 0.0,
     width: float | None = None,
     bend_radius: float | None = None,
     relief_type: str = "Default",
 ) -> dict[str, Any]:
-    """Create a sheet metal base feature.
+    """Create the base feature of a sheet metal part from the active sketch.
 
-    type: 'flange' | 'tab' | 'contour_advanced'
-        | 'tab_multi_profile'
-
-    Dimensions in meters.
+    All dimensions in meters. thickness applies to every type.
+    width: flange (defaults to 0.0) and tab. bend_radius: flange and
+    contour_advanced (defaults to 0.001). relief_type is accepted for
+    contour_advanced but the COM call does not currently consume it.
     """
     err = validate_numerics(thickness=thickness)
     if err:
@@ -195,15 +205,14 @@ def create_sheet_metal_base(
 
 
 def create_lofted_flange(
-    method: str = "basic",
+    method: Literal["basic", "advanced", "ex"] = "basic",
     thickness: float = 0.0,
     bend_radius: float = 0.0,
 ) -> dict[str, Any]:
-    """Create a lofted flange (sheet metal).
+    """Create a lofted flange between two sketch profiles (sheet metal).
 
-    method: 'basic' | 'advanced' | 'ex'
-
-    Dimensions in meters.
+    Dimensions in meters. bend_radius applies to 'advanced' only, which uses
+    bend deduction/allowance; 'basic' and 'ex' take thickness alone.
     """
     err = validate_numerics(thickness=thickness, bend_radius=bend_radius)
     if err:
@@ -220,17 +229,17 @@ def create_lofted_flange(
 
 
 def create_bend(
-    method: str = "basic",
+    method: Literal["basic", "with_calc"] = "basic",
     bend_angle: float = 90.0,
-    direction: str = "Normal",
-    moving_side: str = "Right",
+    direction: Literal["Normal", "Reverse"] = "Normal",
+    moving_side: Literal["Left", "Right"] = "Right",
     bend_deduction: float = 0.0,
 ) -> dict[str, Any]:
-    """Create a bend feature on sheet metal.
+    """Bend a sheet metal face along the active sketch line.
 
-    method: 'basic' | 'with_calc'
-
-    bend_angle in degrees.
+    bend_angle in degrees; bend_deduction in meters. direction is the side the
+    material folds toward; moving_side selects which side of the bend line
+    moves. bend_deduction applies to 'with_calc' only.
     """
     err = validate_numerics(bend_angle=bend_angle, bend_deduction=bend_deduction)
     if err:
@@ -250,17 +259,16 @@ def create_bend(
 
 
 def create_slot(
-    method: str = "basic",
+    method: Literal["basic", "ex", "sync", "multi_body", "sync_multi_body"] = "basic",
     width: float = 0.0,
     depth: float = 0.0,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse"] = "Normal",
 ) -> dict[str, Any]:
-    """Create a slot feature.
+    """Create a slot from the active sketch profile.
 
-    method: 'basic' | 'ex' | 'sync' | 'multi_body'
-        | 'sync_multi_body'
-
-    Dimensions in meters.
+    width and depth in meters. 'basic' uses width alone (as the slot depth);
+    every other method uses both width and depth. direction is ignored by
+    'sync'.
     """
     err = validate_numerics(width=width, depth=depth)
     if err:
@@ -281,16 +289,15 @@ def create_slot(
 
 
 def create_thread(
-    method: str = "basic",
+    method: Literal["basic", "physical"] = "basic",
     face_index: int = 0,
     thread_diameter: float = 0.0,
     thread_depth: float = 0.0,
 ) -> dict[str, Any]:
     """Create a thread on a cylindrical face.
 
-    method: 'basic' (cosmetic) | 'physical' (modeled geometry)
-
-    face_index is 0-based. Diameter/depth in meters; 0 = auto-detect.
+    'basic' is cosmetic; 'physical' cuts real geometry. face_index is 0-based.
+    Diameter and depth in meters; leave at 0 to auto-detect from the face.
     """
     err = validate_numerics(thread_diameter=thread_diameter, thread_depth=thread_depth)
     if err:
@@ -312,15 +319,14 @@ def create_thread(
 
 
 def create_drawn_cutout(
-    method: str = "basic",
+    method: Literal["basic", "ex"] = "basic",
     depth: float = 0.0,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse"] = "Normal",
 ) -> dict[str, Any]:
-    """Create a drawn cutout (sheet metal).
+    """Create a drawn cutout from the active sketch profile (sheet metal).
 
-    method: 'basic' | 'ex'
-
-    depth in meters.
+    depth in meters. direction is the side the material is drawn toward.
+    'ex' uses the extended COM overload; both take the same parameters.
     """
     err = validate_numerics(depth=depth)
     if err:
@@ -335,16 +341,15 @@ def create_drawn_cutout(
 
 
 def create_dimple(
-    method: str = "basic",
+    method: Literal["basic", "ex"] = "basic",
     depth: float = 0.0,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse"] = "Normal",
     punch_tool_diameter: float = 0.01,
 ) -> dict[str, Any]:
-    """Create a dimple feature.
+    """Create a dimple from the active sketch profile (sheet metal).
 
-    method: 'basic' | 'ex'
-
-    Dimensions in meters.
+    depth and punch_tool_diameter in meters. direction is the side the
+    material is pushed toward. punch_tool_diameter applies to 'ex' only.
     """
     err = validate_numerics(depth=depth, punch_tool_diameter=punch_tool_diameter)
     if err:
@@ -359,14 +364,12 @@ def create_dimple(
 
 
 def create_louver(
-    method: str = "basic",
+    method: Literal["basic", "sync"] = "basic",
     depth: float = 0.0,
 ) -> dict[str, Any]:
-    """Create a louver feature.
+    """Create a louver from the active sketch profile (sheet metal).
 
-    method: 'basic' | 'sync'
-
-    depth in meters.
+    depth in meters. 'sync' uses the synchronous modeling overload.
     """
     err = validate_numerics(depth=depth)
     if err:
@@ -381,28 +384,32 @@ def create_louver(
 
 
 def sheet_metal_misc(
-    action: str = "hem",
+    action: Literal["hem", "jog", "close_corner", "multi_edge_flange", "convert"] = "hem",
     face_index: int = 0,
     edge_index: int = 0,
     hem_width: float = 0.005,
     bend_radius: float = 0.001,
-    hem_type: str = "Closed",
+    hem_type: Literal[
+        "Closed", "Open", "SFlange", "Curl", "OpenLoop", "ClosedLoop", "CenteredLoop"
+    ] = "Closed",
     jog_offset: float = 0.005,
     jog_angle: float = 90.0,
-    direction: str = "Normal",
-    moving_side: str = "Right",
-    closure_type: str = "Close",
+    direction: Literal["Normal", "Reverse"] = "Normal",
+    moving_side: Literal["Left", "Right"] = "Right",
+    closure_type: Literal["Close", "Overlap"] = "Close",
     edge_indices: list[int] | None = None,
     flange_length: float = 0.0,
-    side: str = "Right",
+    side: Literal["Left", "Right", "Both"] = "Right",
     thickness: float = 0.001,
 ) -> dict[str, Any]:
-    """Miscellaneous sheet metal operations.
+    """Hems, jogs, corner closures, multi-edge flanges, and part conversion.
 
-    action: 'hem' | 'jog' | 'close_corner' | 'multi_edge_flange'
-        | 'convert'
-
-    Dimensions in meters. jog_angle in degrees.
+    Lengths in meters, jog_angle in degrees; face/edge indices are 0-based.
+    hem: face_index, edge_index, hem_width, bend_radius, hem_type.
+    jog: jog_offset, jog_angle, direction, moving_side (uses active sketch).
+    close_corner: face_index, edge_index, closure_type.
+    multi_edge_flange: face_index, edge_indices, flange_length, side.
+    convert: turns the solid part into sheet metal of the given thickness.
     """
     err = validate_numerics(
         hem_width=hem_width,
@@ -434,14 +441,12 @@ def sheet_metal_misc(
 
 
 def create_stamped(
-    type: str = "bead",
+    type: Literal["bead", "gusset"] = "bead",
     depth: float = 0.0,
 ) -> dict[str, Any]:
-    """Create a stamped feature (bead or gusset).
+    """Create a stamped feature from the active sketch: a bead or a gusset.
 
-    type: 'bead' | 'gusset'
-
-    depth in meters.
+    depth in meters (the gusset uses it as the material thickness).
     """
     err = validate_numerics(depth=depth)
     if err:
@@ -456,18 +461,18 @@ def create_stamped(
 
 
 def create_surface_mark(
-    type: str = "emboss",
+    type: Literal["emboss", "etch"] = "emboss",
     face_indices: list[int] | None = None,
     clearance: float = 0.001,
     thickness: float = 0.0,
     thicken: bool = False,
     default_side: bool = True,
 ) -> dict[str, Any]:
-    """Create a surface mark (emboss or etch).
+    """Emboss or etch the active sketch profile onto the body.
 
-    type: 'emboss' | 'etch'
-
-    Dimensions in meters.
+    clearance and thickness in meters; face_indices are 0-based. All
+    parameters other than the discriminator apply to 'emboss'; 'etch' takes
+    the active profile alone.
     """
     err = validate_numerics(clearance=clearance, thickness=thickness)
     if err:
@@ -484,15 +489,15 @@ def create_surface_mark(
 
 
 def create_reinforcement(
-    type: str = "rib",
+    type: Literal["rib", "lip"] = "rib",
     thickness: float = 0.0,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse", "Symmetric"] = "Normal",
 ) -> dict[str, Any]:
-    """Create a reinforcement feature (rib or lip).
+    """Create a reinforcement from the active sketch: a rib or a lip.
 
-    type: 'rib' | 'lip'
-
-    thickness in meters.
+    thickness in meters (the lip uses it as the lip depth). direction is the
+    side material is added to; 'Symmetric' is accepted by 'rib' only and is
+    treated as 'Normal' by 'lip'.
     """
     err = validate_numerics(thickness=thickness)
     if err:
@@ -507,10 +512,16 @@ def create_reinforcement(
 
 
 def create_web_network() -> dict[str, Any]:
-    """Create a web network (sheet metal)."""
+    """Create a web network from the active sketch (sheet metal / plastic part).
+
+    Takes no parameters; the web geometry comes from the open sketch profile.
+    """
     return feature_manager.create_web_network()
 
 
 def create_split() -> dict[str, Any]:
-    """Split the body using the active profile."""
+    """Split the solid body with the active sketch profile.
+
+    Takes no parameters; the cutting geometry comes from the active profile.
+    """
     return feature_manager.create_split()

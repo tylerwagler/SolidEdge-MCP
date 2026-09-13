@@ -1,20 +1,21 @@
 """Document management tools for Solid Edge MCP."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import doc_manager
+from solidedge_mcp.tools._registry import register_tool
 
 # === Composite: create_document ===
 
 
 def create_document(
-    type: str = "part",
+    type: Literal["part", "assembly", "sheet_metal", "draft", "weldment"] = "part",
     template: str | None = None,
 ) -> dict[str, Any]:
-    """Create a new Solid Edge document.
+    """Create a new document of the given type; it becomes the active document.
 
-    type: 'part' | 'assembly' | 'sheet_metal' | 'draft' | 'weldment'
+    template: optional template file path (None uses the Solid Edge default).
     """
     match type:
         case "part":
@@ -35,15 +36,17 @@ def create_document(
 
 
 def open_document(
-    method: str = "foreground",
+    method: Literal["foreground", "background", "with_template", "dialog"] = "foreground",
     file_path: str = "",
     template: str = "",
     filename: str | None = None,
     dialog_title: str | None = None,
 ) -> dict[str, Any]:
-    """Open a document.
+    """Open an existing document.
 
-    method: 'foreground' | 'background' | 'with_template' | 'dialog'
+    foreground/background: file_path (must exist). with_template: file_path +
+    template. dialog: shows the Solid Edge open dialog (optional filename
+    preset, dialog_title).
     """
     if method in ("foreground", "background", "with_template") and file_path:
         file_path, err = validate_path(file_path, must_exist=True)
@@ -66,12 +69,12 @@ def open_document(
 
 
 def close_document(
-    scope: str = "active",
+    scope: Literal["active", "all"] = "active",
     save: bool = True,
 ) -> dict[str, Any]:
-    """Close documents.
+    """Close the active document or all documents.
 
-    scope: 'active' | 'all'
+    save=False discards unsaved changes.
     """
     match scope:
         case "active":
@@ -86,12 +89,13 @@ def close_document(
 
 
 def save_document(
-    method: str = "save",
+    method: Literal["save", "copy_as"] = "save",
     file_path: str | None = None,
 ) -> dict[str, Any]:
     """Save the active document.
 
-    method: 'save' | 'copy_as'
+    save: in place, or Save As when file_path is given.
+    copy_as: write a copy to file_path (required) and keep the current file active.
     """
     if file_path:
         file_path, err = validate_path(file_path, must_exist=False)
@@ -111,11 +115,8 @@ def save_document(
 # === Composite: undo_redo ===
 
 
-def undo_redo(action: str = "undo") -> dict[str, Any]:
-    """Undo or redo the last operation.
-
-    action: 'undo' | 'redo'
-    """
+def undo_redo(action: Literal["undo", "redo"] = "undo") -> dict[str, Any]:
+    """Undo or redo the last operation in the active document."""
     match action:
         case "undo":
             return doc_manager.undo()
@@ -129,12 +130,12 @@ def undo_redo(action: str = "undo") -> dict[str, Any]:
 
 
 def activate_document(name_or_index: str | int) -> dict[str, Any]:
-    """Activate a specific open document by name or index."""
+    """Make an open document active, by document name or 0-based index."""
     return doc_manager.activate_document(name_or_index)
 
 
 def import_file(file_path: str) -> dict[str, Any]:
-    """Import an external CAD file (STEP, IGES, Parasolid, etc.)."""
+    """Import an external CAD file (STEP, IGES, Parasolid, ...) as a new document."""
     file_path, err = validate_path(file_path, must_exist=True)
     if err:
         return err
@@ -146,12 +147,13 @@ def import_file(file_path: str) -> dict[str, Any]:
 
 def register(mcp: Any) -> None:
     """Register document tools with the MCP server."""
+    tags = {"document"}
     # Composite tools
-    mcp.tool()(create_document)
-    mcp.tool()(open_document)
-    mcp.tool()(close_document)
-    mcp.tool()(save_document)
-    mcp.tool()(undo_redo)
+    register_tool(mcp, create_document, tags=tags)
+    register_tool(mcp, open_document, tags=tags)
+    register_tool(mcp, close_document, tags=tags, destructive=True)
+    register_tool(mcp, save_document, tags=tags, idempotent=True)
+    register_tool(mcp, undo_redo, tags=tags)
     # Standalone tools
-    mcp.tool()(activate_document)
-    mcp.tool()(import_file)
+    register_tool(mcp, activate_document, tags=tags, idempotent=True)
+    register_tool(mcp, import_file, tags=tags)

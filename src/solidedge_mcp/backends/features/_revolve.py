@@ -21,6 +21,8 @@ from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
+_REVOLVE_OPERATIONS = ("Add", "Cut", "Intersect")
+
 
 @verify_geometry_on_creators
 class RevolveMixin:
@@ -28,19 +30,50 @@ class RevolveMixin:
 
     def create_revolve(self, angle: float = 360, operation: str = "Add") -> dict[str, Any]:
         """
-        Create a revolve feature from the active sketch profile.
+        Create a finite revolve feature from the active sketch profile.
 
         Requires an axis of revolution to be set in the sketch before closing.
         Use set_axis_of_revolution() in the sketch to define the axis.
 
+        'Add' calls Models.AddFiniteRevolvedProtrusion. 'Cut' removes material
+        instead, via RevolvedCutouts.AddFiniteMulti on the existing base body
+        (delegates to create_revolved_cutout, so a base feature must already
+        exist). 'Intersect' has no revolved COM equivalent and is rejected.
+
         Args:
             angle: Revolution angle in degrees (360 for full revolution)
-            operation: 'Add' (Note: 'Cut' not available in COM API)
+            operation: 'Add' (default) or 'Cut'; 'Intersect' returns an error
 
         Returns:
             Dict with status and feature info
         """
         try:
+            if operation not in _REVOLVE_OPERATIONS:
+                return {
+                    "error": f"Unknown operation: {operation!r}. "
+                    f"Expected one of {', '.join(_REVOLVE_OPERATIONS)}."
+                }
+            if operation == "Intersect":
+                return {
+                    "error": "Intersect is not supported by create_revolve: Solid Edge "
+                    "COM automation exposes no revolved-intersect feature. "
+                    "Use 'Add' or 'Cut'.",
+                    "unsupported": True,
+                }
+            if operation == "Cut":
+                # create_revolved_cutout checks for a profile, an axis and an
+                # existing base body, so a cut on an empty part returns a clear
+                # error instead of a COM exception.
+                result = self.create_revolved_cutout(angle)
+                if "error" in result:
+                    return result
+                return {
+                    **result,
+                    "type": "revolve",
+                    "operation": "Cut",
+                    "method": "RevolvedCutouts.AddFiniteMulti",
+                }
+
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
             refaxis = self.sketch_manager.get_active_refaxis()
@@ -75,7 +108,7 @@ class RevolveMixin:
             # Clear accumulated profiles (consumed by this feature)
             self.sketch_manager.clear_accumulated_profiles()
 
-            return {"status": "created", "type": "revolve", "angle": angle, "operation": operation}
+            return {"status": "created", "type": "revolve", "angle": angle, "operation": "Add"}
         except Exception as e:
             return error_result(e)
 

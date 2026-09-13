@@ -1,9 +1,13 @@
-"""Dispatch tests for tools/features.py composite tools."""
+"""Dispatch tests for tools/features composite tools."""
 
+import ast
+import inspect
+import typing
 from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.features as features_pkg
 from solidedge_mcp.tools.features import (
     add_body,
     create_bend,
@@ -47,7 +51,6 @@ from solidedge_mcp.tools.features import (
     create_sweep,
     create_swept_cutout,
     create_swept_surface,
-    create_thin_wall,
     create_thread,
     create_web_network,
     delete_topology,
@@ -1051,9 +1054,30 @@ class TestCreatePattern:
         assert result == {"status": "ok"}
 
     @pytest.mark.parametrize("disc", ["rectangular", "circular"])
-    def test_not_implemented(self, mock_mgr, disc):
+    def test_index_based_variants_are_gone(self, mock_mgr, disc):
+        """The by-index variants were never implemented; only *_ex survives."""
         result = create_pattern(method=disc)
         assert "error" in result
+
+    def test_dropped_params_are_not_accepted(self):
+        """feature_index/x_gap/y_gap/radius were never forwarded to a backend."""
+        params = inspect.signature(create_pattern).parameters
+        for dead in ("feature_index", "x_gap", "y_gap", "radius"):
+            assert dead not in params
+
+    def test_rectangular_ex_passes_args(self, mock_mgr):
+        mock_mgr.create_pattern_rectangular_ex.return_value = {"status": "ok"}
+        create_pattern(
+            method="rectangular_ex",
+            feature_name="Protrusion 1",
+            x_count=3,
+            y_count=2,
+            x_spacing=0.01,
+            y_spacing=0.02,
+        )
+        mock_mgr.create_pattern_rectangular_ex.assert_called_once_with(
+            "Protrusion 1", 3, 2, 0.01, 0.02
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_pattern(method="bogus")
@@ -1078,11 +1102,21 @@ class TestCreateMirror:
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
 
-    def test_save_as_part_zero_plane_defaults_to_3(self, mock_mgr):
-        """mirror_plane_index=0 should default to 3."""
+    def test_plane_index_defaults_to_3(self, mock_mgr):
+        """The default plane is 3 (Front/XZ) and is passed through as-is."""
         mock_mgr.save_as_mirror_part.return_value = {"status": "ok"}
-        create_mirror(method="save_as_part", new_file_name="mirror.par", mirror_plane_index=0)
+        create_mirror(method="save_as_part", new_file_name="mirror.par")
         mock_mgr.save_as_mirror_part.assert_called_once_with("mirror.par", 3, True)
+
+    @pytest.mark.parametrize("disc", ["basic", "sync_ex", "save_as_part"])
+    @pytest.mark.parametrize("bad_index", [0, -1])
+    def test_plane_index_below_one_is_rejected(self, mock_mgr, disc, bad_index):
+        """Plane indices are 1-based; 0 is a caller error, not a default."""
+        result = create_mirror(method=disc, mirror_plane_index=bad_index)
+        assert "1-based" in result["error"]
+        mock_mgr.create_mirror.assert_not_called()
+        mock_mgr.create_mirror_sync_ex.assert_not_called()
+        mock_mgr.save_as_mirror_part.assert_not_called()
 
     def test_save_as_part_nonzero_plane_passed(self, mock_mgr):
         mock_mgr.save_as_mirror_part.return_value = {"status": "ok"}
@@ -1096,38 +1130,6 @@ class TestCreateMirror:
 
     def test_unknown(self, mock_mgr):
         result = create_mirror(method="bogus")
-        assert "error" in result
-
-
-# === create_thin_wall ===
-
-
-class TestCreateThinWall:
-    @pytest.mark.parametrize(
-        "disc",
-        [
-            "basic",
-            "with_open_faces",
-        ],
-    )
-    def test_dispatch(self, mock_mgr, disc):
-        mock_mgr.create_shell.return_value = {"status": "ok"}
-        result = create_thin_wall(method=disc)
-        mock_mgr.create_shell.assert_called_once()
-        assert result == {"status": "ok"}
-
-    def test_basic_no_open_faces(self, mock_mgr):
-        mock_mgr.create_shell.return_value = {"status": "ok"}
-        create_thin_wall(method="basic", thickness=0.002)
-        mock_mgr.create_shell.assert_called_once_with(0.002)
-
-    def test_with_open_faces_passes_list(self, mock_mgr):
-        mock_mgr.create_shell.return_value = {"status": "ok"}
-        create_thin_wall(method="with_open_faces", thickness=0.002, open_face_indices=[0, 1])
-        mock_mgr.create_shell.assert_called_once_with(0.002, [0, 1])
-
-    def test_unknown(self, mock_mgr):
-        result = create_thin_wall(method="bogus")
         assert "error" in result
 
 
@@ -1362,3 +1364,137 @@ class TestStandaloneFeatures:
         result = create_bounded_surface(want_end_caps=False, periodic=True)
         mock_mgr.create_bounded_surface.assert_called_once_with(False, True)
         assert result == {"status": "ok"}
+
+
+# === Package-wide invariants ===
+
+
+def _tools() -> dict:
+    """Every public tool exported by the features package, by name."""
+    return {name: getattr(features_pkg, name) for name in features_pkg.__all__}
+
+
+def _case_labels(fn) -> tuple[str, list[str]] | None:
+    """Return (discriminator param name, case labels) parsed from ``fn``'s source.
+
+    Returns None for tools that do not dispatch on a discriminator.
+    """
+    tree = ast.parse(inspect.getsource(fn))
+    func = tree.body[0]
+    assert isinstance(func, ast.FunctionDef)
+    params = {a.arg for a in func.args.args} | {a.arg for a in func.args.kwonlyargs}
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Match):
+            continue
+        subject = node.subject
+        if not (isinstance(subject, ast.Name) and subject.id in params):
+            continue
+        labels = [
+            case.pattern.value.value
+            for case in node.cases
+            if isinstance(case.pattern, ast.MatchValue)
+            and isinstance(case.pattern.value, ast.Constant)
+            and isinstance(case.pattern.value.value, str)
+        ]
+        return subject.id, labels
+    return None
+
+
+class TestDiscriminatorAnnotations:
+    """The Literal on each discriminator must match its match/case labels."""
+
+    @pytest.mark.parametrize("name", sorted(features_pkg.__all__))
+    def test_literal_matches_case_labels(self, name):
+        fn = _tools()[name]
+        parsed = _case_labels(fn)
+        if parsed is None:
+            pytest.skip(f"{name} has no discriminator dispatch")
+        param, labels = parsed
+        assert labels, f"{name}: match on {param!r} has no string case labels"
+        assert len(labels) == len(set(labels)), f"{name}: duplicate case labels {labels}"
+
+        annotation = typing.get_type_hints(fn)[param]
+        assert typing.get_origin(annotation) is typing.Literal, (
+            f"{name}: {param!r} must be annotated Literal[...], got {annotation!r}"
+        )
+        assert set(typing.get_args(annotation)) == set(labels), (
+            f"{name}: Literal values for {param!r} drifted from the match statement"
+        )
+
+    @pytest.mark.parametrize("name", sorted(features_pkg.__all__))
+    def test_default_is_a_valid_case_label(self, name):
+        fn = _tools()[name]
+        parsed = _case_labels(fn)
+        if parsed is None:
+            pytest.skip(f"{name} has no discriminator dispatch")
+        param, labels = parsed
+        default = inspect.signature(fn).parameters[param].default
+        assert default in labels, f"{name}: default {default!r} for {param!r} is not dispatchable"
+
+    @pytest.mark.parametrize("name", sorted(features_pkg.__all__))
+    def test_unknown_discriminator_returns_error(self, mock_mgr, name):
+        """Literal is not enforced at runtime, so the ``case _`` branch must stay."""
+        fn = _tools()[name]
+        parsed = _case_labels(fn)
+        if parsed is None:
+            pytest.skip(f"{name} has no discriminator dispatch")
+        param, _labels = parsed
+        result = fn(**{param: "definitely-not-a-real-method"})
+        assert "error" in result
+
+
+class TestRemovedSurface:
+    def test_thin_wall_tool_is_gone(self):
+        """create_shell always errors, so the tool was removed rather than shipped."""
+        assert not hasattr(features_pkg, "create_thin_wall")
+        assert "create_thin_wall" not in features_pkg.__all__
+
+
+class TestRegistration:
+    @pytest.fixture
+    def registered(self):
+        mcp = MagicMock()
+        features_pkg.register(mcp)
+        return {call.args[0].__wrapped__.__name__: call.kwargs for call in mcp.tool.call_args_list}
+
+    def test_every_exported_tool_is_registered(self, registered):
+        assert set(registered) == set(features_pkg.__all__)
+
+    def test_every_tool_is_tagged_part(self, registered):
+        for name, kwargs in registered.items():
+            assert "part" in kwargs["tags"], name
+            assert kwargs["tags"] <= {"part", "sheet_metal"}, name
+
+    def test_sheet_metal_tools_carry_the_sheet_metal_tag(self, registered):
+        expected = {
+            "create_sheet_metal_base",
+            "create_flange",
+            "create_contour_flange",
+            "create_lofted_flange",
+            "create_bend",
+            "create_slot",
+            "create_drawn_cutout",
+            "create_dimple",
+            "create_louver",
+            "create_stamped",
+            "sheet_metal_misc",
+        }
+        tagged = {n for n, kw in registered.items() if "sheet_metal" in kw["tags"]}
+        assert tagged == expected
+
+    def test_annotations_are_always_populated(self, registered):
+        for name, kwargs in registered.items():
+            ann = kwargs["annotations"]
+            assert set(ann) == {
+                "readOnlyHint",
+                "destructiveHint",
+                "idempotentHint",
+                "openWorldHint",
+            }, name
+            assert ann["openWorldHint"] is False, name
+            # Every feature tool mutates the model.
+            assert ann["readOnlyHint"] is False, name
+
+    def test_geometry_removing_tools_are_destructive(self, registered):
+        destructive = {n for n, kw in registered.items() if kw["annotations"]["destructiveHint"]}
+        assert destructive == {"manage_feature", "delete_topology"}

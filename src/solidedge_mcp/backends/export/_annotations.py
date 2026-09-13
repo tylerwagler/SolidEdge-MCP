@@ -679,7 +679,7 @@ class AnnotationsMixin:
                 return {"error": "Active document is not a draft document"}
 
             sheet = doc.ActiveSheet
-            centerlines = sheet.Centerlines
+            centerlines = sheet.CenterLines
             centerlines.Add(x1, y1, 0, x2, y2, 0)
 
             return {

@@ -1,25 +1,32 @@
 """Revolve protrusion tools."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_revolve(
-    method: str = "full",
+    method: Literal[
+        "full",
+        "finite",
+        "sync",
+        "finite_sync",
+        "thin_wall",
+        "by_keypoint",
+        "full_360",
+        "by_keypoint_sync",
+    ] = "full",
     angle: float = 360.0,
     axis_type: str = "CenterLine",
     wall_thickness: float = 0.0,
-    treatment_type: str = "None",
+    treatment_type: Literal["None", "Draft", "Crown", "CrownAndDraft"] = "None",
 ) -> dict[str, Any]:
-    """Create a revolved protrusion around the set axis.
+    """Create a revolved protrusion around the sketch's revolve axis.
 
-    method: 'full' | 'finite' | 'sync' | 'finite_sync'
-        | 'thin_wall' | 'by_keypoint' | 'full_360'
-        | 'by_keypoint_sync'
-
-    angle in degrees. wall_thickness in meters.
+    angle in degrees (used by all but by_keypoint*). wall_thickness in meters
+    (thin_wall). treatment_type: full_360 only. axis_type is accepted but
+    currently ignored (axis comes from the sketch).
     """
     err = validate_numerics(angle=angle, wall_thickness=wall_thickness)
     if err:

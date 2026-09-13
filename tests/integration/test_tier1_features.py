@@ -1,46 +1,16 @@
 """
 Integration tests for Tier 1 feature operations.
 
-These tests require Solid Edge to be running on Windows.
-Run with: uv run pytest tests/integration/test_tier1_features.py -v -m integration
+These require a running Solid Edge on Windows. Shared fixtures (connection,
+managers, and the ``new_part`` scratch document) live in conftest.py, which
+also guarantees no pre-existing document is ever closed.
 
-Each test creates a new part, builds geometry, applies the feature, and verifies success.
+Run with: uv run pytest -m integration
 """
 
 import pytest
 
-# Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
-
-
-@pytest.fixture(scope="module")
-def managers():
-    """Initialize and connect all managers for integration tests."""
-    from solidedge_mcp.backends.connection import SolidEdgeConnection
-    from solidedge_mcp.backends.documents import DocumentManager
-    from solidedge_mcp.backends.features import FeatureManager
-    from solidedge_mcp.backends.sketching import SketchManager
-
-    conn = SolidEdgeConnection()
-    result = conn.connect(start_if_needed=True)
-    if "error" in result:
-        pytest.skip(f"Cannot connect to Solid Edge: {result['error']}")
-
-    doc_mgr = DocumentManager(conn)
-    sketch_mgr = SketchManager(doc_mgr)
-    feature_mgr = FeatureManager(doc_mgr, sketch_mgr)
-
-    return doc_mgr, sketch_mgr, feature_mgr
-
-
-@pytest.fixture
-def new_part(managers):
-    """Create a new part document for each test, close it after."""
-    doc_mgr, _, _ = managers
-    result = doc_mgr.create_part()
-    assert "error" not in result, f"Failed to create part: {result}"
-    yield
-    doc_mgr.close_document(save=False)
 
 
 def _create_box(sketch_mgr, feature_mgr, size=0.1, height=0.05):

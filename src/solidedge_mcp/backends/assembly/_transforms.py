@@ -43,7 +43,7 @@ class TransformsMixin:
                 current[12] = x
                 current[13] = y
                 current[14] = z
-                occurrence.SetMatrix(current)
+                occurrence.PutMatrix(current)
                 return {
                     "status": "position_updated",
                     "component": component_index,

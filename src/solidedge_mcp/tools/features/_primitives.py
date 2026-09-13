@@ -1,13 +1,15 @@
 """Primitive solid creation and cutout tools."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_primitive(
-    shape: str = "box_two_points",
+    shape: Literal[
+        "box_two_points", "box_center", "box_three_points", "cylinder", "sphere"
+    ] = "box_two_points",
     x1: float = 0.0,
     y1: float = 0.0,
     z1: float = 0.0,
@@ -24,13 +26,13 @@ def create_primitive(
     depth: float = 0.0,
     plane_index: int = 1,
 ) -> dict[str, Any]:
-    """Create a primitive solid shape.
+    """Create a primitive solid (no sketch needed).
 
-    shape: 'box_two_points' | 'box_center' | 'box_three_points'
-        | 'cylinder' | 'sphere'
-
-    All coordinates/dimensions in meters.
-    plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    All coordinates/dimensions in meters. box_two_points: (x1,y1,z1)-(x2,y2,z2)
+    corners. box_center: center (x1,y1,z1) + length/width/height.
+    box_three_points: three corner points. cylinder: center (x1,y1,z1),
+    radius, depth. sphere: center (x1,y1,z1), radius.
+    plane_index is 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(
         x1=x1,
@@ -85,7 +87,7 @@ def create_primitive(
 
 
 def create_primitive_cutout(
-    shape: str = "box",
+    shape: Literal["box", "cylinder", "sphere"] = "box",
     x1: float = 0.0,
     y1: float = 0.0,
     z1: float = 0.0,
@@ -96,12 +98,11 @@ def create_primitive_cutout(
     height: float = 0.0,
     plane_index: int = 1,
 ) -> dict[str, Any]:
-    """Create a primitive cutout (removes material).
+    """Create a primitive cutout (removes material; no sketch needed).
 
-    shape: 'box' | 'cylinder' | 'sphere'
-
-    All coordinates/dimensions in meters.
-    plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    All coordinates/dimensions in meters. box: (x1,y1,z1)-(x2,y2,z2) corners.
+    cylinder: center (x1,y1,z1), radius, height. sphere: center, radius.
+    plane_index is 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(
         x1=x1,

@@ -36,10 +36,12 @@ def verifies_geometry(fn: _Creator[_P]) -> _Creator[_P]:
     success, downgrades the misleading result to an explicit error when the
     body did not change.
 
-    The check keys on the body's FACE COUNT (and Models.Count for the first
-    solid), NOT the feature-tree count -- a failed feature still adds a tree
-    node, so DesignEdgebarFeatures.Count is not a reliable geometry signal,
-    whereas a no-op leaves the body's face count unchanged. If those counts
+    The check keys on the TOTAL FACE COUNT across every body in Models (and
+    Models.Count for the first solid), NOT the feature-tree count -- a failed
+    feature still adds a tree node, so DesignEdgebarFeatures.Count is not a
+    reliable geometry signal, whereas a no-op leaves every body's face count
+    unchanged. Summing over all bodies means a multi-body feature that only
+    touches body 2+ is still recognised as real geometry. If those counts
     cannot be read as ints (e.g. mocked tests, or no body), the decorator
     passes the result through unchanged -- it never invents a failure it
     cannot prove.
@@ -100,13 +102,16 @@ class FeatureManagerBase:
         self.sketch_manager = sketch_manager
 
     def _geometry_snapshot(self) -> tuple[int | None, int | None]:
-        """Return (models_count, body_face_count); None for unreadable.
+        """Return (models_count, total_face_count); None for unreadable.
 
         Used by @verifies_geometry to detect feature calls that silently
-        created nothing. face_count is 0 when no body exists yet, the body's
-        face count when one does, and None when it cannot be read (e.g. mocked
-        COM objects) so the check stays conservative. ``type(x) is int`` guards
-        against MagicMock values in unit tests.
+        created nothing. total_face_count is 0 when no body exists yet, the
+        SUM of the face counts of every body in Models (Item(1..Count)) when
+        bodies do exist, and None when any of them cannot be read (e.g. mocked
+        COM objects) so the check stays conservative. Summing across bodies is
+        what lets multi-body creators that change only body 2+ register as
+        real geometry. ``type(x) is int`` guards against MagicMock values in
+        unit tests.
         """
         try:
             doc = self.doc_manager.get_active_document()
@@ -125,11 +130,27 @@ class FeatureManagerBase:
         if models == 0:
             faces = 0  # no body yet -> definitively zero faces
         elif models is not None and models > 0:
-            with contextlib.suppress(Exception):
-                body = doc.Models.Item(1).Body
-                fc = body.Faces(FaceQueryConstants.igQueryAll).Count
-                faces = fc if type(fc) is int else None
+            faces = self._total_face_count(doc, models)
         return (models, faces)
+
+    @staticmethod
+    def _total_face_count(doc: Any, models_count: int) -> int | None:
+        """Sum the face counts of bodies Models.Item(1..models_count).
+
+        Returns None as soon as any body's count is unreadable or not a plain
+        int, so a partial sum can never be mistaken for a real measurement.
+        """
+        total = 0
+        try:
+            for i in range(1, models_count + 1):
+                body = doc.Models.Item(i).Body
+                fc = body.Faces(FaceQueryConstants.igQueryAll).Count
+                if type(fc) is not int:
+                    return None
+                total += fc
+        except Exception:
+            return None
+        return total
 
     @staticmethod
     def _no_geometry_created(
@@ -287,7 +308,7 @@ class FeatureManagerBase:
                 return err
             assert feat is not None
             name = getattr(feat, "Name", f"Feature_{index}")
-            feat.Suppress()
+            feat.Suppress = True
             return {"status": "suppressed", "feature_name": name, "index": index}
         except Exception as e:
             return error_result(e)
@@ -300,7 +321,7 @@ class FeatureManagerBase:
                 return err
             assert feat is not None
             name = getattr(feat, "Name", f"Feature_{index}")
-            feat.Unsuppress()
+            feat.Suppress = False
             return {"status": "unsuppressed", "feature_name": name, "index": index}
         except Exception as e:
             return error_result(e)

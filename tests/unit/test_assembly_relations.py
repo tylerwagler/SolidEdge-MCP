@@ -685,8 +685,8 @@ class TestGetRelationGeometry:
         rel = MagicMock()
         rel.Type = 2
         rel.Name = "Planar_1"
-        rel.OccurrencePart1 = occ1
-        rel.OccurrencePart2 = occ2
+        rel.Occurrence1 = occ1
+        rel.Occurrence2 = occ2
         rel.Offset = 0.01
         rel.NormalsAligned = True
         rel.Suppressed = False

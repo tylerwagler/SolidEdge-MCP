@@ -1,25 +1,25 @@
 """Round, chamfer, blend, and topology deletion tools."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_round(
-    method: str = "all_edges",
+    method: Literal["all_edges", "on_face", "variable", "blend", "surface_blend"] = "all_edges",
     radius: float = 0.0,
     face_index: int | None = None,
     radii: list[float] | None = None,
     face_index1: int = 0,
     face_index2: int = 0,
 ) -> dict[str, Any]:
-    """Round (fillet) edges of the active body.
+    """Round (fillet) edges of the active solid body.
 
-    method: 'all_edges' | 'on_face' | 'variable' | 'blend'
-        | 'surface_blend'
-
-    radius/radii in meters.
+    radius and radii in meters; all face indices are 0-based.
+    all_edges: radius on every edge. on_face: radius on the edges of
+    face_index. variable: per-edge radii list on face_index.
+    blend / surface_blend: radius between face_index1 and face_index2.
     """
     err = validate_numerics(radius=radius)
     if err:
@@ -40,19 +40,19 @@ def create_round(
 
 
 def create_chamfer(
-    method: str = "equal",
+    method: Literal["equal", "on_face", "unequal", "unequal_on_face", "angle"] = "equal",
     distance: float = 0.0,
     face_index: int = 0,
     distance1: float = 0.0,
     distance2: float = 0.0,
     angle: float = 0.0,
 ) -> dict[str, Any]:
-    """Chamfer edges of the active body.
+    """Chamfer edges of the active solid body.
 
-    method: 'equal' | 'on_face' | 'unequal'
-        | 'unequal_on_face' | 'angle'
-
-    Distances in meters. angle in degrees.
+    Distances in meters; angle in degrees. face_index is 0-based and selects
+    the face whose edges are chamfered (ignored by 'equal', which chamfers all
+    edges). distance: equal / on_face / angle. distance1 and distance2:
+    unequal / unequal_on_face. angle: 'angle' method only.
     """
     err = validate_numerics(
         distance=distance,
@@ -78,7 +78,7 @@ def create_chamfer(
 
 
 def create_blend(
-    method: str = "basic",
+    method: Literal["basic", "variable", "surface"] = "basic",
     radius: float = 0.0,
     face_index: int | None = None,
     radius1: float = 0.0,
@@ -88,9 +88,10 @@ def create_blend(
 ) -> dict[str, Any]:
     """Create a blend (face-to-face fillet).
 
-    method: 'basic' | 'variable' | 'surface'
-
-    Radii in meters.
+    Radii in meters; all face indices are 0-based.
+    basic: radius on face_index. variable: radius1 tapering to radius2 on
+    face_index. surface: blend between face_index1 and face_index2 (the
+    radius parameters are not used).
     """
     err = validate_numerics(radius=radius, radius1=radius1, radius2=radius2)
     if err:
@@ -107,17 +108,19 @@ def create_blend(
 
 
 def delete_topology(
-    type: str = "hole",
+    type: Literal["hole", "hole_by_face", "blend", "faces"] = "hole",
     max_diameter: float = 1.0,
-    hole_type: str = "All",
+    hole_type: Literal["All", "Round", "NonRound"] = "All",
     face_index: int = 0,
     face_indices: list[int] | None = None,
 ) -> dict[str, Any]:
-    """Delete topology features (holes, blends, faces).
+    """Remove topology from the body: fill holes, remove blends or faces.
 
-    type: 'hole' | 'hole_by_face' | 'blend' | 'faces'
-
-    max_diameter in meters.
+    max_diameter in meters; face indices are 0-based. This deletes geometry.
+    hole: fills every hole of hole_type up to max_diameter.
+    hole_by_face: fills the hole owning face_index.
+    blend: removes the blend on face_index.
+    faces: removes the faces listed in face_indices and heals the body.
     """
     err = validate_numerics(max_diameter=max_diameter)
     if err:

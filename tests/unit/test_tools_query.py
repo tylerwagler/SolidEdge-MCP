@@ -1,9 +1,19 @@
-"""Dispatch tests for tools/query.py composite tools."""
+"""Dispatch tests for tools/query.py composite tools.
 
+Also hosts :func:`assert_literal_discriminators`, the shared drift check that
+every other ``test_tools_*`` module imports.
+"""
+
+import ast
+import inspect
+import typing
+from types import ModuleType
 from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.query as query_tools
+from solidedge_mcp.backends.constants import DirectionConstants, ExtentTypeConstants
 from solidedge_mcp.tools.query import (
     edit_feature_extent,
     manage_feature_tree,
@@ -27,6 +37,63 @@ def mock_mgr(monkeypatch):
     mgr = MagicMock()
     monkeypatch.setattr("solidedge_mcp.tools.query.query_manager", mgr)
     return mgr
+
+
+# ===================================================================
+# Shared drift check: Literal discriminators vs. actual match/case labels
+# ===================================================================
+
+
+def _case_labels(match_node: ast.Match) -> set[str]:
+    """String labels of every ``case`` in a match, excluding the ``case _`` fallback."""
+    labels: set[str] = set()
+    for case in match_node.cases:
+        patterns = (
+            case.pattern.patterns if isinstance(case.pattern, ast.MatchOr) else [case.pattern]
+        )
+        for pat in patterns:
+            if isinstance(pat, ast.MatchAs) and pat.pattern is None:
+                continue  # `case _` / bare capture
+            assert isinstance(pat, ast.MatchValue) and isinstance(pat.value, ast.Constant), (
+                f"unexpected case pattern {ast.dump(pat)}"
+            )
+            labels.add(pat.value.value)
+    return labels
+
+
+def assert_literal_discriminators(module: ModuleType) -> int:
+    """Assert each tool's discriminator is a Literal of exactly its case labels.
+
+    Parses ``module`` with ``ast``, finds every top-level function containing a
+    ``match`` on a plain parameter name, and compares the case labels against the
+    ``Literal[...]`` members of that parameter's annotation. Returns the number of
+    functions checked so callers can guard against a silently empty sweep.
+    """
+    tree = ast.parse(inspect.getsource(module))
+    checked = 0
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        matches = [stmt for stmt in node.body if isinstance(stmt, ast.Match)]
+        if not matches:
+            continue
+        assert len(matches) == 1, f"{node.name}: expected a single match statement"
+        subject = matches[0].subject
+        assert isinstance(subject, ast.Name), f"{node.name}: match subject is not a parameter"
+        param = subject.id
+        annotation = typing.get_type_hints(getattr(module, node.name)).get(param)
+        assert typing.get_origin(annotation) is typing.Literal, (
+            f"{module.__name__}.{node.name}: discriminator '{param}' is not a Literal"
+        )
+        assert set(typing.get_args(annotation)) == _case_labels(matches[0]), (
+            f"{module.__name__}.{node.name}: Literal for '{param}' drifted from its cases"
+        )
+        checked += 1
+    return checked
+
+
+def test_query_discriminators_match_their_cases():
+    assert assert_literal_discriminators(query_tools) == 14
 
 
 # === measure ===
@@ -258,15 +325,46 @@ class TestEditFeatureExtent:
         getattr(mock_mgr, method).assert_called_once()
         assert result == {"status": "ok"}
 
-    def test_set_direction1_passes_args(self, mock_mgr):
+    def test_set_direction1_maps_extent_name_to_com_constant(self, mock_mgr):
         mock_mgr.set_direction1_extent.return_value = {"status": "ok"}
         edit_feature_extent(
             property="set_direction1",
             feature_name="Extrude1",
-            extent_type=13,
+            extent_type="finite",
             distance=0.05,
         )
-        mock_mgr.set_direction1_extent.assert_called_once_with("Extrude1", 13, 0.05)
+        mock_mgr.set_direction1_extent.assert_called_once_with(
+            "Extrude1", ExtentTypeConstants.igFinite, 0.05
+        )
+
+    @pytest.mark.parametrize(
+        "name, constant",
+        [
+            ("finite", ExtentTypeConstants.igFinite),
+            ("through_all", ExtentTypeConstants.igThroughAll),
+            ("none", ExtentTypeConstants.igNone),
+        ],
+    )
+    def test_extent_type_names_cover_every_constant(self, mock_mgr, name, constant):
+        mock_mgr.set_direction2_extent.return_value = {"status": "ok"}
+        edit_feature_extent(
+            property="set_direction2", feature_name="Cut1", extent_type=name, distance=0.01
+        )
+        mock_mgr.set_direction2_extent.assert_called_once_with("Cut1", constant, 0.01)
+
+    @pytest.mark.parametrize(
+        "name, constant",
+        [
+            ("left", DirectionConstants.igLeft),
+            ("right", DirectionConstants.igRight),
+        ],
+    )
+    def test_set_to_face_maps_offset_side(self, mock_mgr, name, constant):
+        mock_mgr.set_to_face_offset.return_value = {"status": "ok"}
+        edit_feature_extent(
+            property="set_to_face", feature_name="Extrude1", offset_side=name, distance=0.02
+        )
+        mock_mgr.set_to_face_offset.assert_called_once_with("Extrude1", constant, 0.02)
 
     def test_unknown(self, mock_mgr):
         result = edit_feature_extent(property="bogus")

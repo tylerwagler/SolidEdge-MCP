@@ -35,29 +35,35 @@ def asm_mgr_with_sketch():
 
 
 class TestSuppressComponent:
-    def test_suppress(self, asm_mgr):
-        am, doc = asm_mgr
+    def _occurrences(self, doc):
         occ = MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 2
         occurrences.Item.return_value = occ
         doc.Occurrences = occurrences
+        return occ
+
+    def test_suppress_goes_through_the_document(self, asm_mgr):
+        """Occurrence has no Suppress member; AssemblyDocument owns it."""
+        am, doc = asm_mgr
+        occ = self._occurrences(doc)
 
         result = am.suppress_component(0, suppress=True)
         assert result["status"] == "updated"
-        occ.Suppress.assert_called_once()
+        assert result["suppressed"] is True
+        doc.SetSuppressComponent.assert_called_once_with(occ)
+        occ.Suppress.assert_not_called()
 
-    def test_unsuppress(self, asm_mgr):
+    def test_unsuppress_reports_unsupported(self, asm_mgr):
+        """UnSuppress lives on a SuppressComponent that cannot be looked up."""
         am, doc = asm_mgr
-        occ = MagicMock()
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        occurrences.Item.return_value = occ
-        doc.Occurrences = occurrences
+        occ = self._occurrences(doc)
 
         result = am.suppress_component(0, suppress=False)
-        assert result["status"] == "updated"
-        occ.Unsuppress.assert_called_once()
+        assert result["unsupported"] is True
+        assert "UnSuppress" in result["error"]
+        doc.SetSuppressComponent.assert_not_called()
+        occ.Unsuppress.assert_not_called()
 
 
 # ============================================================================

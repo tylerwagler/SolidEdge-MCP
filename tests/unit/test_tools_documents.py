@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.documents as documents_tools
 from solidedge_mcp.tools.documents import (
     activate_document,
     close_document,
@@ -13,6 +14,7 @@ from solidedge_mcp.tools.documents import (
     save_document,
     undo_redo,
 )
+from tests.unit.test_tools_query import assert_literal_discriminators
 
 
 @pytest.fixture
@@ -167,3 +169,10 @@ class TestStandaloneDocuments:
         result = import_file("test.step")
         mock_mgr.import_file.assert_called_once_with("test.step")
         assert result == {"status": "ok"}
+
+
+# === Literal discriminator drift ===
+
+
+def test_documents_discriminators_match_their_cases():
+    assert assert_literal_discriminators(documents_tools) == 5

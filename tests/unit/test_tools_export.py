@@ -1,9 +1,11 @@
 """Dispatch tests for tools/export.py composite tools."""
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.export as export_tools
 from solidedge_mcp.tools.export import (
     add_2d_dimension,
     add_annotation,
@@ -23,6 +25,7 @@ from solidedge_mcp.tools.export import (
     query_sheet,
     set_camera,
 )
+from tests.unit.test_tools_query import assert_literal_discriminators
 
 
 @pytest.fixture
@@ -270,6 +273,17 @@ class TestCameraControl:
         camera_control(action="set_orientation", view="Top")
         mock_view.set_view.assert_called_once_with("Top")
 
+    def test_rotate_converts_degrees_to_radians(self, mock_export, mock_view):
+        """The tool takes degrees; View.RotateCamera underneath takes radians."""
+        mock_view.rotate_camera.return_value = {"status": "ok"}
+        camera_control(action="rotate", angle=90.0, axis_x=0.0, axis_y=0.0, axis_z=1.0)
+        mock_view.rotate_camera.assert_called_once_with(math.pi / 2, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+
+    def test_rotate_zero_degrees_stays_zero(self, mock_export, mock_view):
+        mock_view.rotate_camera.return_value = {"status": "ok"}
+        camera_control(action="rotate", angle=0.0)
+        assert mock_view.rotate_camera.call_args.args[0] == 0.0
+
     def test_zoom_passes_factor(self, mock_export, mock_view):
         mock_view.zoom_camera.return_value = {"status": "ok"}
         camera_control(action="zoom", factor=2.0)
@@ -514,3 +528,10 @@ class TestCreateTable:
     def test_unknown(self, mock_export, mock_view):
         result = create_table(type="bogus")
         assert "error" in result
+
+
+# === Literal discriminator drift ===
+
+
+def test_export_discriminators_match_their_cases():
+    assert assert_literal_discriminators(export_tools) == 16

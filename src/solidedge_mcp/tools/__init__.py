@@ -1,4 +1,13 @@
+"""Tool, resource, and prompt registration.
+
+Each module exposes ``register(mcp)``. Tools and resources are registered
+through :mod:`solidedge_mcp.tools._registry` so they run on the COM worker
+thread and carry MCP annotations and tags.
+"""
+
 from typing import Any
+
+from solidedge_mcp.prompts import register_prompts
 
 from . import (
     assembly,
@@ -7,6 +16,7 @@ from . import (
     documents,
     export,
     features,
+    guide,
     query,
     resources,
     sketching,
@@ -14,7 +24,10 @@ from . import (
 
 
 def register_tools(mcp: Any) -> None:
-    """Register all tools and resources with the MCP server instance."""
+    """Register all tools, resources, and prompts with the MCP server instance."""
+    # Guidance (static text)
+    guide.register(mcp)
+    register_prompts(mcp)
     # Resources (read-only data endpoints)
     resources.register(mcp)
     # Tools (actions that modify state)

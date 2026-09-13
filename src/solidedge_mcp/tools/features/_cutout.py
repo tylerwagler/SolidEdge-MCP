@@ -1,26 +1,33 @@
 """Cutout tools (extruded, revolved, normal, lofted, swept, helix)."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_extruded_cutout(
-    method: str = "finite",
+    method: Literal[
+        "finite",
+        "through_all",
+        "through_next",
+        "from_to",
+        "from_to_v2",
+        "by_keypoint",
+        "through_next_single",
+        "multi_body",
+        "from_to_multi_body",
+        "through_all_multi_body",
+    ] = "finite",
     distance: float = 0.0,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse"] = "Normal",
     from_plane_index: int = 0,
     to_plane_index: int = 0,
 ) -> dict[str, Any]:
-    """Create an extruded cutout (removes material).
+    """Create an extruded cutout (removes material) from the active sketch.
 
-    method: 'finite' | 'through_all' | 'through_next' | 'from_to'
-        | 'from_to_v2' | 'by_keypoint' | 'through_next_single'
-        | 'multi_body' | 'from_to_multi_body'
-        | 'through_all_multi_body'
-
-    distance in meters. Plane indices are 1-based.
+    distance in meters (finite, multi_body). from/to_plane_index: required for
+    from_to* methods; 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(distance=distance)
     if err:
@@ -55,15 +62,12 @@ def create_extruded_cutout(
 
 
 def create_revolved_cutout(
-    method: str = "finite",
+    method: Literal["finite", "sync", "by_keypoint", "multi_body", "full", "full_sync"] = "finite",
     angle: float = 360.0,
 ) -> dict[str, Any]:
-    """Create a revolved cutout around the set axis.
+    """Create a revolved cutout around the sketch's revolve axis.
 
-    method: 'finite' | 'sync' | 'by_keypoint' | 'multi_body'
-        | 'full' | 'full_sync'
-
-    angle in degrees.
+    angle in degrees (ignored by by_keypoint).
     """
     err = validate_numerics(angle=angle)
     if err:
@@ -86,18 +90,16 @@ def create_revolved_cutout(
 
 
 def create_normal_cutout(
-    method: str = "finite",
+    method: Literal["finite", "through_all", "from_to", "through_next", "by_keypoint"] = "finite",
     distance: float = 0.0,
-    direction: str = "Normal",
+    direction: Literal["Normal", "Reverse"] = "Normal",
     from_plane_index: int = 0,
     to_plane_index: int = 0,
 ) -> dict[str, Any]:
-    """Create a normal cutout perpendicular to a face.
+    """Create a normal cutout (perpendicular to a face) from the active sketch.
 
-    method: 'finite' | 'through_all' | 'from_to'
-        | 'through_next' | 'by_keypoint'
-
-    distance in meters. Plane indices are 1-based.
+    distance in meters (finite). from/to_plane_index: required for from_to;
+    1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(distance=distance)
     if err:
@@ -118,12 +120,13 @@ def create_normal_cutout(
 
 
 def create_lofted_cutout(
-    method: str = "basic",
+    method: Literal["basic", "full"] = "basic",
     profile_indices: list[int] | None = None,
 ) -> dict[str, Any]:
-    """Create a lofted cutout between multiple profiles.
+    """Create a lofted cutout between multiple closed profiles.
 
-    method: 'basic' | 'full'
+    profile_indices: optional 0-based indices into accumulated profiles
+    (default: all).
     """
     match method:
         case "basic":
@@ -135,12 +138,13 @@ def create_lofted_cutout(
 
 
 def create_swept_cutout(
-    method: str = "basic",
+    method: Literal["basic", "multi_body"] = "basic",
     path_profile_index: int | None = None,
 ) -> dict[str, Any]:
-    """Create a swept cutout along a path.
+    """Create a swept cutout along a path profile.
 
-    method: 'basic' | 'multi_body'
+    path_profile_index: 0-based index of the path profile (multi_body only;
+    default: auto).
     """
     match method:
         case "basic":
@@ -152,19 +156,19 @@ def create_swept_cutout(
 
 
 def create_helix_cutout(
-    method: str = "finite",
+    method: Literal["finite", "sync", "from_to", "from_to_sync"] = "finite",
     pitch: float = 0.0,
     height: float = 0.0,
     revolutions: float | None = None,
-    direction: str = "Right",
+    direction: Literal["Right", "Left"] = "Right",
     from_plane_index: int = 0,
     to_plane_index: int = 0,
 ) -> dict[str, Any]:
-    """Create a helical cutout.
+    """Create a helical cutout from the active sketch.
 
-    method: 'finite' | 'sync' | 'from_to' | 'from_to_sync'
-
-    pitch/height in meters. Plane indices are 1-based.
+    pitch/height in meters. height, revolutions (default height/pitch) and
+    direction (hand of helix) apply to finite/sync. from/to_plane_index:
+    required for from_to*; 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(pitch=pitch, height=height)
     if err:

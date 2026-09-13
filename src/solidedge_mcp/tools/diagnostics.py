@@ -4,20 +4,17 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 from solidedge_mcp.managers import diagnose_document, diagnose_feature, doc_manager
+from solidedge_mcp.tools._registry import register_tool
 
 
 def diagnose_api() -> dict[str, Any]:
-    """Run diagnostic checks on the Solid Edge API connection and active document."""
+    """Inspect the COM connection and active document (type, collections, methods)."""
     doc = doc_manager.get_active_document()
     return diagnose_document(doc)
 
 
 def diagnose_feature_tool(feature_index: int = 0) -> dict[str, Any]:
-    """Inspect a feature/model object - shows type, properties, available methods.
-
-    Args:
-        feature_index: 0-based index into the Models collection (default: first model)
-    """
+    """Inspect a Models entry (0-based feature_index): type, properties, methods."""
 
     try:
         doc = doc_manager.get_active_document()
@@ -29,5 +26,6 @@ def diagnose_feature_tool(feature_index: int = 0) -> dict[str, Any]:
 
 def register(mcp: Any) -> None:
     """Register diagnostic tools with the MCP server."""
-    mcp.tool()(diagnose_api)
-    mcp.tool()(diagnose_feature_tool)
+    tags = {"diagnostics"}
+    register_tool(mcp, diagnose_api, tags=tags, read_only=True)
+    register_tool(mcp, diagnose_feature_tool, tags=tags, read_only=True)

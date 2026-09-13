@@ -1,28 +1,36 @@
 """Helix, loft, and sweep tools."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_helix(
-    method: str = "finite",
+    method: Literal[
+        "finite",
+        "sync",
+        "thin_wall",
+        "sync_thin_wall",
+        "from_to",
+        "from_to_thin_wall",
+        "from_to_sync",
+        "from_to_sync_thin_wall",
+    ] = "finite",
     pitch: float = 0.0,
     height: float = 0.0,
     revolutions: float | None = None,
-    direction: str = "Right",
+    direction: Literal["Right", "Left"] = "Right",
     wall_thickness: float = 0.0,
     from_plane_index: int = 0,
     to_plane_index: int = 0,
 ) -> dict[str, Any]:
-    """Create a helical feature (springs, threads).
+    """Create a helical protrusion (springs, threads) from the active sketch.
 
-    method: 'finite' | 'sync' | 'thin_wall'
-        | 'sync_thin_wall' | 'from_to' | 'from_to_thin_wall'
-        | 'from_to_sync' | 'from_to_sync_thin_wall'
-
-    pitch/height/wall_thickness in meters. Plane indices are 1-based.
+    Lengths in meters. height/revolutions (default height/pitch): non-from_to
+    methods. direction (hand): finite only. wall_thickness: *thin_wall.
+    from/to_plane_index: required for from_to*; 1-based (1=Top/XY,
+    2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(pitch=pitch, height=height, wall_thickness=wall_thickness)
     if err:
@@ -65,16 +73,16 @@ def create_helix(
 
 
 def create_loft(
-    method: str = "solid",
+    method: Literal["solid", "thin_wall", "with_guides"] = "solid",
     profile_indices: list[int] | None = None,
     wall_thickness: float = 0.0,
     guide_profile_indices: list[int] | None = None,
 ) -> dict[str, Any]:
-    """Create a loft feature between multiple profiles.
+    """Create a loft between multiple closed profiles.
 
-    method: 'solid' | 'thin_wall' | 'with_guides'
-
-    wall_thickness in meters.
+    profile_indices / guide_profile_indices: 0-based indices into accumulated
+    profiles (default: all). wall_thickness in meters (thin_wall).
+    guide_profile_indices: with_guides only.
     """
     err = validate_numerics(wall_thickness=wall_thickness)
     if err:
@@ -91,15 +99,14 @@ def create_loft(
 
 
 def create_sweep(
-    method: str = "solid",
+    method: Literal["solid", "thin_wall"] = "solid",
     path_profile_index: int | None = None,
     wall_thickness: float = 0.0,
 ) -> dict[str, Any]:
-    """Create a sweep feature along a path.
+    """Create a sweep of a closed profile along a path profile.
 
-    method: 'solid' | 'thin_wall'
-
-    wall_thickness in meters.
+    path_profile_index: 0-based index of the path profile (default: auto).
+    wall_thickness in meters (thin_wall).
     """
     err = validate_numerics(wall_thickness=wall_thickness)
     if err:

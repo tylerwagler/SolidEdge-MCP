@@ -413,12 +413,12 @@ class DraftMixin:
 
             # Try to set texture via face style
             try:
-                face.TextureName = texture_name
+                face.TextureFileName = texture_name
             except Exception:
                 # Alternative: use Style object
                 try:
                     style = face.Style
-                    style.TextureName = texture_name
+                    style.TextureFileName = texture_name
                 except Exception as inner_e:
                     return error_result(inner_e, context="Cannot set texture")
 

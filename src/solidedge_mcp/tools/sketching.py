@@ -1,16 +1,26 @@
 """Sketching tools for Solid Edge MCP."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import sketch_manager
+from solidedge_mcp.tools._registry import register_tool
+
+SketchElementType = Literal["line", "circle", "arc", "ellipse", "spline"]
 
 # === Composite: manage_sketch ===
 
 
 def manage_sketch(
-    action: str = "create",
-    plane: str = "Top",
+    action: Literal[
+        "create",
+        "close",
+        "create_on_plane",
+        "set_axis",
+        "set_visibility",
+        "get_geometry",
+    ] = "create",
+    plane: Literal["Top", "Front", "Right", "XY", "XZ", "YZ"] = "Top",
     plane_index: int = 1,
     x1: float = 0.0,
     y1: float = 0.0,
@@ -19,18 +29,14 @@ def manage_sketch(
     visible: bool = False,
     closed: bool = True,
 ) -> dict[str, Any]:
-    """Create, close, or configure a 2D sketch.
+    """Create, close, or configure the active 2D sketch.
 
-    action: 'create' | 'close' | 'create_on_plane'
-      | 'set_axis' | 'set_visibility' | 'get_geometry'
-
-    Named planes: 'Top','Front','Right','XY','XZ','YZ'.
-    Coordinates in meters.
-
-    For action='close': closed=True (default) validates the profile as a
-    closed region (required for solids; welds polyline rectangles into a
-    region). The result includes 'validation_code' (0 = clean close; other
-    values are a hint, not a hard failure). Pass closed=False for open profiles.
+    create: on named plane (Top=XY, Right=YZ, Front=XZ).
+    create_on_plane: 1-based plane_index (1=Top/XY, 2=Right/YZ, 3=Front/XZ,
+    4+ = user planes). close: finish the profile; closed=True validates a
+    closed region (needed for solids) and returns 'validation_code' (0=clean).
+    set_axis: revolve axis from (x1,y1) to (x2,y2) in meters.
+    set_visibility: visible. get_geometry: ordered element list.
     """
     err = validate_numerics(x1=x1, y1=y1, x2=x2, y2=y2)
     if err:
@@ -56,7 +62,20 @@ def manage_sketch(
 
 
 def draw(
-    shape: str = "line",
+    shape: Literal[
+        "line",
+        "circle",
+        "rectangle",
+        "arc",
+        "polygon",
+        "ellipse",
+        "spline",
+        "arc_3pt",
+        "circle_2pt",
+        "circle_3pt",
+        "point",
+        "construction_line",
+    ] = "line",
     x1: float = 0.0,
     y1: float = 0.0,
     x2: float = 0.0,
@@ -76,13 +95,13 @@ def draw(
     x: float = 0.0,
     y: float = 0.0,
 ) -> dict[str, Any]:
-    """Draw geometry in the active sketch.
+    """Draw one element in the active sketch. Meters; angles in degrees.
 
-    shape: 'line' | 'circle' | 'rectangle' | 'arc' | 'polygon'
-           | 'ellipse' | 'spline' | 'arc_3pt' | 'circle_2pt'
-           | 'circle_3pt' | 'point' | 'construction_line'
-
-    Coordinates in meters. Angles in degrees.
+    line/construction_line/rectangle/circle_2pt: (x1,y1)-(x2,y2).
+    circle: center_x/y + radius. arc: center + radius + start/end_angle.
+    polygon: center + radius + sides. ellipse: center + major/minor_radius + angle.
+    spline: points [[x,y],...]. arc_3pt: (x1,y1) start, (center_x,center_y) mid,
+    (x2,y2) end. circle_3pt: three points. point: x,y.
     """
     err = validate_numerics(
         x1=x1,
@@ -139,21 +158,20 @@ def draw(
 
 
 def sketch_modify(
-    action: str,
+    action: Literal["fillet", "chamfer", "offset", "rotate", "scale", "mirror", "paste"],
     radius: float = 0.0,
     distance: float = 0.0,
     center_x: float = 0.0,
     center_y: float = 0.0,
     angle_degrees: float = 0.0,
     scale_factor: float = 1.0,
-    axis: str = "X",
+    axis: Literal["X", "Y"] = "X",
 ) -> dict[str, Any]:
-    """Modify sketch geometry with common operations.
+    """Modify all geometry in the active sketch. Meters.
 
-    action: 'fillet' | 'chamfer' | 'offset' | 'rotate' | 'scale'
-      | 'mirror' | 'paste'
-
-    Distances in meters. angle_degrees in degrees.
+    fillet: radius. chamfer/offset: distance. rotate: center_x/y + angle_degrees.
+    scale: center_x/y + scale_factor. mirror: axis X or Y (adds mirrored copies).
+    paste: paste clipboard geometry.
     """
     err = validate_numerics(
         radius=radius,
@@ -188,7 +206,7 @@ def sketch_modify(
 
 
 def sketch_advanced_modify(
-    action: str,
+    action: Literal["mirror_spline", "offset_2d", "clean"],
     axis_x1: float = 0.0,
     axis_y1: float = 0.0,
     axis_x2: float = 0.0,
@@ -203,11 +221,12 @@ def sketch_advanced_modify(
     clean_small: bool = True,
     small_tolerance: float = 0.0001,
 ) -> dict[str, Any]:
-    """Specialized sketch modification operations.
+    """Specialized sketch operations. Meters.
 
-    action: 'mirror_spline' | 'offset_2d' | 'clean'
-
-    Coordinates and distances in meters.
+    mirror_spline: axis (axis_x1,axis_y1)-(axis_x2,axis_y2); copy keeps original.
+    offset_2d: offset toward point (offset_side_x, offset_side_y) by offset_distance.
+    clean: delete stray points/splines/duplicates/tiny elements (< small_tolerance)
+    per the clean_* flags.
     """
     err = validate_numerics(
         axis_x1=axis_x1,
@@ -242,22 +261,31 @@ def sketch_advanced_modify(
 
 
 def sketch_constraint(
-    type: str = "geometric",
-    constraint_type: str = "",
-    elements: list[Any] | None = None,
-    element1_type: str = "",
+    type: Literal["geometric", "keypoint"] = "geometric",
+    constraint_type: Literal[
+        "Horizontal",
+        "Vertical",
+        "Parallel",
+        "Perpendicular",
+        "Equal",
+        "Concentric",
+        "Tangent",
+    ] = "Horizontal",
+    elements: list[list[str | int]] | None = None,
+    element1_type: SketchElementType = "line",
     element1_index: int = 0,
     keypoint1: int = 0,
-    element2_type: str = "",
+    element2_type: SketchElementType = "line",
     element2_index: int = 0,
     keypoint2: int = 0,
 ) -> dict[str, Any]:
-    """Add a constraint to sketch elements.
+    """Add a 2D relation in the active sketch. Element indices are 1-BASED.
 
-    type: 'geometric' | 'keypoint'
-
-    geometric: constraint_type (Horizontal, Vertical, etc.) + elements list.
-    keypoint: connect two elements at specific keypoints.
+    geometric: constraint_type + elements as [type, index] pairs, e.g.
+    [["line", 1], ["line", 2]]; type in line/circle/arc/ellipse/spline.
+    Horizontal/Vertical need 1 element, the rest need 2.
+    keypoint: weld element1 keypoint1 to element2 keypoint2. Keypoints are
+    0=start, 1=end, 2=midpoint (lines/arcs); 0=center (circles).
     """
     match type:
         case "geometric":
@@ -279,7 +307,15 @@ def sketch_constraint(
 
 
 def sketch_project(
-    source: str,
+    source: Literal[
+        "edge",
+        "include_edge",
+        "ref_plane",
+        "silhouette",
+        "region_faces",
+        "chain",
+        "to_curve",
+    ],
     face_index: int = 0,
     edge_index: int = 0,
     plane_index: int = 1,
@@ -288,10 +324,12 @@ def sketch_project(
     y: float = 0.0,
     tolerance: float = 0.001,
 ) -> dict[str, Any]:
-    """Project external geometry into the active sketch.
+    """Bring external geometry into the active sketch.
 
-    source: 'edge' | 'include_edge' | 'ref_plane' | 'silhouette'
-            | 'region_faces' | 'chain' | 'to_curve'
+    edge/include_edge: 0-based face_index + edge_index. ref_plane: 1-based
+    plane_index (1=Top/XY, 2=Right/YZ, 3=Front/XZ). silhouette: body outline.
+    region_faces: 0-based face_indices. chain: pick a chain near (x,y) within
+    tolerance (meters). to_curve: convert included geometry to curves.
     """
     err = validate_numerics(x=x, y=y, tolerance=tolerance)
     if err:
@@ -320,9 +358,10 @@ def sketch_project(
 
 def register(mcp: Any) -> None:
     """Register sketching tools with the MCP server."""
-    mcp.tool()(manage_sketch)
-    mcp.tool()(draw)
-    mcp.tool()(sketch_modify)
-    mcp.tool()(sketch_advanced_modify)
-    mcp.tool()(sketch_constraint)
-    mcp.tool()(sketch_project)
+    tags = {"sketch"}
+    register_tool(mcp, manage_sketch, tags=tags)
+    register_tool(mcp, draw, tags=tags)
+    register_tool(mcp, sketch_modify, tags=tags)
+    register_tool(mcp, sketch_advanced_modify, tags=tags, destructive=True)
+    register_tool(mcp, sketch_constraint, tags=tags)
+    register_tool(mcp, sketch_project, tags=tags)

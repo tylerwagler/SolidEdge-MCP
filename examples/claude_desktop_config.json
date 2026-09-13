@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "solidedge": {
+      "command": "uv",
+      "args": ["--directory", "C:/path/to/SolidEdge-MCP", "run", "solidedge-mcp"],
+      "env": {
+        "SOLIDEDGE_MCP_LOG_LEVEL": "WARNING"
+      }
+    }
+  }
+}

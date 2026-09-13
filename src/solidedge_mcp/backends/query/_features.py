@@ -45,7 +45,7 @@ class FeatureQueryMixin:
                     with contextlib.suppress(Exception):
                         entry["type"] = feat.Type
                     with contextlib.suppress(Exception):
-                        entry["suppressed"] = feat.IsSuppressed
+                        entry["suppressed"] = feat.Suppress
                     feature_list.append(entry)
                 except Exception:
                     feature_list.append({"index": i - 1, "name": f"Feature_{i}"})
@@ -106,7 +106,7 @@ class FeatureQueryMixin:
                 feat = features.Item(i)
                 try:
                     if feat.Name == feature_name:
-                        feat.Suppress()
+                        feat.Suppress = True
                         return {"status": "suppressed", "feature": feature_name}
                 except Exception:
                     continue
@@ -133,7 +133,7 @@ class FeatureQueryMixin:
                 feat = features.Item(i)
                 try:
                     if feat.Name == feature_name:
-                        feat.Unsuppress()
+                        feat.Suppress = False
                         return {"status": "unsuppressed", "feature": feature_name}
                 except Exception:
                     continue
@@ -201,7 +201,7 @@ class FeatureQueryMixin:
                         with contextlib.suppress(Exception):
                             result["status"] = feat.Status
                         with contextlib.suppress(Exception):
-                            result["is_suppressed"] = feat.IsSuppressed
+                            result["is_suppressed"] = feat.Suppress
                         try:
                             status_ex = feat.GetStatusEx()
                             result["status_ex"] = status_ex

@@ -443,7 +443,7 @@ class TestAddCenterline:
         em, doc = export_mgr
         sheet = MagicMock()
         centerlines = MagicMock()
-        sheet.Centerlines = centerlines
+        sheet.CenterLines = centerlines
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
@@ -464,7 +464,7 @@ class TestAddCenterline:
     def test_exception(self, export_mgr):
         em, doc = export_mgr
         sheet = MagicMock()
-        sheet.Centerlines.Add.side_effect = Exception("COM error")
+        sheet.CenterLines.Add.side_effect = Exception("COM error")
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
