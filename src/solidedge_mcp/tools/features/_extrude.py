@@ -22,6 +22,7 @@ def create_extrude(
     ] = "finite",
     distance: float = 0.0,
     direction: Literal["Normal", "Reverse", "Symmetric"] = "Normal",
+    operation: Literal["Add", "Cut", "Intersect"] = "Add",
     wall_thickness: float = 0.0,
     from_plane_index: int = 0,
     to_plane_index: int = 0,
@@ -32,6 +33,8 @@ def create_extrude(
     wall_thickness: thin_wall. direction 'Symmetric' only for finite/thin_wall
     (others treat it as Normal). from/to_plane_index: required for from_to*
     methods; 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
+    operation applies to 'finite' only: 'Cut' removes material and needs an
+    existing base feature; 'Intersect' is unsupported.
     'by_keypoint' (unsupported: needs a KeyPoint or tangent face object this
     server cannot select); use 'finite' or 'from_to'.
     """
@@ -40,7 +43,9 @@ def create_extrude(
         return err
     match method:
         case "finite":
-            return feature_manager.create_extrude(distance, direction)
+            return feature_manager.create_extrude(
+                distance, operation=operation, direction=direction
+            )
         case "infinite":
             return feature_manager.create_extrude_infinite(direction)
         case "through_next":

@@ -37,21 +37,33 @@ class ViewModel:
             if err:
                 return err
 
-            # Valid view names (discovered via introspection)
-            # Note: Bottom, Back, Left may not work in all contexts
-            valid_views = ["Iso", "Top", "Front", "Right", "Bottom", "Back", "Left"]
+            # View.ApplyNamedView(Name) is the only named-view API framewrk.tlb
+            # exposes. Solid Edge 2026 accepts only these four names; the other
+            # three raise, verified by applying each one and comparing the
+            # rendered window.
+            working_views = ["Iso", "Top", "Front", "Right"]
+            rejected_views = ["Bottom", "Back", "Left"]
 
-            if view not in valid_views:
-                return {"error": f"Invalid view: {view}. Valid: {', '.join(valid_views)}"}
+            if view not in working_views + rejected_views:
+                return {
+                    "error": f"Invalid view: {view}. Valid: {', '.join(working_views)}",
+                }
 
-            # Use ApplyNamedView with string name (discovered method!)
             try:
                 view_obj.ApplyNamedView(view)
-            except Exception:
-                return {
-                    "error": "ApplyNamedView not available",
-                    "note": "Use View menu in Solid Edge UI",
-                }
+            except Exception as exc:
+                if view in rejected_views:
+                    return {
+                        "error": (
+                            f"Solid Edge has no named view '{view}'. ApplyNamedView "
+                            f"accepts only {', '.join(working_views)}. To look from "
+                            "the other side, apply the opposite view and rotate with "
+                            "camera_control(action='rotate'), or use set_camera."
+                        ),
+                        "unsupported": True,
+                        "working_views": working_views,
+                    }
+                return error_result(exc, context=f"ApplyNamedView({view!r}) failed")
             return {"status": "view_set", "view": view}
         except Exception as e:
             return error_result(e)

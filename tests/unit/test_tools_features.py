@@ -115,7 +115,24 @@ class TestCreateExtrude:
     def test_finite_passes_args(self, mock_mgr):
         mock_mgr.create_extrude.return_value = {"status": "ok"}
         create_extrude(method="finite", distance=0.05, direction="Reverse")
-        mock_mgr.create_extrude.assert_called_once_with(0.05, "Reverse")
+        # Keywords, not position: the backend signature is
+        # create_extrude(distance, operation="Add", direction="Normal"), so a
+        # positional second argument silently became the operation and every
+        # extrude failed with "Unknown operation: 'Reverse'". Caught only by
+        # driving real Solid Edge.
+        mock_mgr.create_extrude.assert_called_once_with(0.05, operation="Add", direction="Reverse")
+
+    def test_finite_forwards_the_operation(self, mock_mgr):
+        mock_mgr.create_extrude.return_value = {"status": "ok"}
+        create_extrude(method="finite", distance=0.05, operation="Cut")
+        mock_mgr.create_extrude.assert_called_once_with(0.05, operation="Cut", direction="Normal")
+
+    def test_direction_never_lands_in_operation(self, mock_mgr):
+        mock_mgr.create_extrude.return_value = {"status": "ok"}
+        create_extrude(method="finite", distance=0.01, direction="Symmetric")
+        _, kwargs = mock_mgr.create_extrude.call_args
+        assert kwargs["operation"] in {"Add", "Cut", "Intersect"}
+        assert kwargs["direction"] == "Symmetric"
 
     def test_unknown(self, mock_mgr):
         result = create_extrude(method="bogus")

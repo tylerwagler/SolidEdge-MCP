@@ -229,3 +229,34 @@ class TestDocumentSwitchDetection:
         app.ActiveDocument = None
         with pytest.raises(Exception, match="No active document"):
             dm.get_active_document()
+
+
+class TestModalDialogSuppression:
+    """A modal Solid Edge dialog blocks the COM call that raised it.
+
+    Observed live: export_file on a part with no solid body raised
+    "could not be saved because of a file translation error" and the server
+    hung until the dialog was dismissed by hand.
+    """
+
+    def test_connect_disables_display_alerts(self, monkeypatch):
+        conn = SolidEdgeConnection()
+        app = MagicMock()
+        app.Version = "226"
+        monkeypatch.setattr(
+            "solidedge_mcp.backends.connection.win32com.client.GetActiveObject",
+            lambda progid: app,
+        )
+        assert conn.connect(start_if_needed=False)["status"] == "connected"
+        assert app.DisplayAlerts is False
+
+    def test_connect_survives_a_build_without_display_alerts(self, monkeypatch):
+        conn = SolidEdgeConnection()
+        app = MagicMock()
+        app.Version = "226"
+        type(app).DisplayAlerts = PropertyMock(side_effect=AttributeError("no such member"))
+        monkeypatch.setattr(
+            "solidedge_mcp.backends.connection.win32com.client.GetActiveObject",
+            lambda progid: app,
+        )
+        assert conn.connect(start_if_needed=False)["status"] == "connected"

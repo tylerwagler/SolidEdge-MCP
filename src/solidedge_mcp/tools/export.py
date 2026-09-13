@@ -446,10 +446,12 @@ def camera_control(
 ) -> dict[str, Any]:
     """Control the 3D camera/view of the active window.
 
-    set_orientation: view. rotate: angle in DEGREES about the axis
-    (axis_x,axis_y,axis_z) through center_x/y/z (meters). pan: dx,dy pixels.
-    zoom: factor >1 zooms in, <1 zooms out.
-    begin_dynamics/end_dynamics bracket a burst of rotate/pan/zoom calls.
+    set_orientation: view. Solid Edge only has named views for Iso, Top,
+    Front and Right; Bottom, Back and Left report unsupported, so reach them
+    by applying the opposite view and rotating 180 degrees.
+    rotate: angle in DEGREES about the axis (axis_x,axis_y,axis_z) through
+    center_x/y/z (meters). pan: dx,dy pixels. zoom: factor >1 zooms in,
+    <1 zooms out. begin_dynamics/end_dynamics bracket a burst of calls.
     """
     match action:
         case "set_orientation":

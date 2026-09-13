@@ -41,7 +41,9 @@ def create_hole(
         return err
     match method:
         case "finite":
-            return feature_manager.create_hole(x, y, diameter, depth, direction)
+            return feature_manager.create_hole(
+                x, y, diameter, depth, plane_index=plane_index, direction=direction
+            )
         case "through_all":
             return feature_manager.create_hole_through_all(x, y, diameter, plane_index, direction)
         case "from_to":

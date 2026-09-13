@@ -281,7 +281,7 @@ def create_slot(
         return err
     match method:
         case "basic":
-            return feature_manager.create_slot(width, direction)
+            return feature_manager.create_slot(depth=depth, direction=direction)
         case "ex":
             return feature_manager.create_slot_ex(width, depth, direction)
         case "sync":
@@ -470,7 +470,9 @@ def create_stamped(
         case "bead":
             return feature_manager.create_bead(depth)
         case "gusset":
-            return feature_manager.create_gusset(depth)
+            # The backend parameter is the plate thickness; this tool only
+            # exposes `depth`, which is what Solid Edge uses for it here.
+            return feature_manager.create_gusset(thickness=depth)
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -523,7 +525,7 @@ def create_reinforcement(
         case "rib":
             return feature_manager.create_rib(thickness, direction)
         case "lip":
-            return feature_manager.create_lip(thickness)
+            return feature_manager.create_lip(depth=thickness)
         case _:
             return {"error": f"Unknown type: {type}"}
 

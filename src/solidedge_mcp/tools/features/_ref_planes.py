@@ -198,9 +198,9 @@ def create_ref_plane_tangent(
             )
         case "tangent_parallel":
             return feature_manager.create_ref_plane_tangent_parallel(
-                parent_plane_index,
-                face_index,
-                normal_side_int,
+                face_index=face_index,
+                parent_plane_index=parent_plane_index,
+                normal_side=normal_side_int,
             )
         case _:
             return {"error": f"Unknown method: {method}"}

@@ -94,6 +94,19 @@ class SolidEdgeConnection:
 
             self._is_connected = True
 
+            # Solid Edge raises modal dialogs for things an automation client
+            # cannot answer: a failed STEP translation, an overwrite prompt, a
+            # rebuild warning. The dialog blocks the COM call that triggered it
+            # for as long as it is on screen, which hangs this server with no
+            # error and no timeout. Suppressing alerts turns those into ordinary
+            # COM failures we can report. Observed with export_file on a part
+            # with no solid body: "could not be saved because of a file
+            # translation error" sat there until dismissed by hand.
+            try:
+                self.application.DisplayAlerts = False
+            except Exception as exc:  # not fatal; older builds may not expose it
+                _logger.debug(f"Could not disable DisplayAlerts: {exc}")
+
             # Get version info
             version = self.application.Version
 
