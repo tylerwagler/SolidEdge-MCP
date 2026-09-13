@@ -4,9 +4,6 @@ import contextlib
 import math
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
-
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
@@ -195,7 +192,7 @@ class SheetMetalMixin:
             }
             web_direction = dir_map.get(direction, DirectionConstants.igRight)
 
-            profile_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, list(profiles))
+            profile_arr = list(profiles)
 
             models.AddWebNetwork(
                 len(profiles),
@@ -307,7 +304,7 @@ class SheetMetalMixin:
             if not profiles:
                 return {"error": "No active sketch profile"}
 
-            profile_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, list(profiles))
+            profile_arr = list(profiles)
 
             models.AddBaseTabWithMultipleProfiles(
                 len(profiles),
@@ -415,7 +412,7 @@ class SheetMetalMixin:
                     return {"error": f"Invalid face index: {fi}. Body has {faces.Count} faces."}
                 face_list.append(faces.Item(fi + 1))
 
-            tools_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, face_list)
+            tools_arr = face_list
 
             emboss_features = model.EmbossFeatures
             emboss_features.Add(
@@ -1020,8 +1017,8 @@ class SheetMetalMixin:
                 hole_data.ThreadDepth = thread_depth
 
             # Build VARIANT arrays for the COM call
-            cyl_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [cyl_face])
-            end_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [end_face])
+            cyl_arr = [cyl_face]
+            end_arr = [end_face]
 
             threads = model.Threads
             if physical:
@@ -1778,7 +1775,7 @@ class SheetMetalMixin:
             }
             side_const = side_map.get(side, DirectionConstants.igRight)
 
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
+            edge_arr = edge_list
 
             multi_edge_flanges = model.MultiEdgeFlanges
             # Add(NumberOfEdges, Edges, FlangeSide, dFlangeLength, ...)
@@ -2091,7 +2088,7 @@ class SheetMetalMixin:
                 if direction == "Normal"
                 else _SE_DRAWN_CUTOUT_DEPTH_LEFT
             )
-            profile_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, list(profiles))
+            profile_arr = list(profiles)
 
             drawn_cutouts = model.DrawnCutouts
             drawn_cutouts.AddEx(
@@ -2514,7 +2511,7 @@ class SheetMetalMixin:
             )
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             slots = model.Slots
             slots.AddMultiBody(
@@ -2585,7 +2582,7 @@ class SheetMetalMixin:
             )
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             slots = model.Slots
             slots.AddSyncMultiBody(

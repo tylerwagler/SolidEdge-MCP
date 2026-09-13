@@ -631,7 +631,7 @@ class TestCreateHoleMultiBody:
             doc.HoleDataCollection.Add.return_value,
             1,
         )
-        assert list(args[10].value) == [model.Body]
+        assert list(args[10]) == [model.Body]
         assert model.Holes.AddMultiBody.call_count == 1
 
     def test_no_model(self, feature_mgr, managers):
@@ -680,7 +680,7 @@ class TestCreateHoleSyncMultiBody:
             doc.HoleDataCollection.Add.return_value,
             1,
         )
-        assert list(args[7].value) == [model.Body]
+        assert list(args[7]) == [model.Body]
         assert model.Holes.AddSyncMultiBody.call_count == 1
 
     def test_no_model(self, feature_mgr, managers):

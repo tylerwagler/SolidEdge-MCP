@@ -8,9 +8,6 @@ import contextlib
 import math
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
-
 from solidedge_mcp.backends.errors import error_result
 
 from .constants import FaceQueryConstants, ProfileValidationConstants
@@ -44,7 +41,7 @@ def _r8_array(size: int) -> Any:
 
 def _dispatch_array(items: Any) -> Any:
     """Wrap a sequence of COM objects as a ``SAFEARRAY(VT_DISPATCH)``."""
-    return VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, list(items))
+    return list(items)
 
 
 class SketchManager:

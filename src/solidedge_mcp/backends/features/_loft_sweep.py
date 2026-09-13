@@ -94,7 +94,7 @@ class LoftSweepMixin:
                 pass
 
             # Fall back to models.AddLoftedProtrusion (works as initial feature)
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_seg: list[Any] = []
             model = models.AddLoftedProtrusion(
                 len(profiles),
                 v_profiles,
@@ -162,19 +162,18 @@ class LoftSweepMixin:
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
             # Path arrays
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS])
+            v_paths = [path_profile]
+            v_path_types = [_CS]
 
             # Cross-section arrays
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
-            v_section_types = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(cross_sections)
-            )
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_sections = cross_sections
+            v_section_types = [_CS] * len(cross_sections)
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+            ]
+            v_seg: list[Any] = []
 
             # AddSweptProtrusion: 15 required params
             models.AddSweptProtrusion(
@@ -316,7 +315,7 @@ class LoftSweepMixin:
                 return {"error": f"Loft requires at least 2 profiles, got {len(profiles)}."}
 
             v_profiles, v_types, v_origins = self._make_loft_variant_arrays(profiles)
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_seg: list[Any] = []
 
             models.AddLoftedProtrusionWithThinWall(
                 len(profiles),  # NumSections
@@ -393,17 +392,16 @@ class LoftSweepMixin:
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS])
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
-            v_section_types = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(cross_sections)
-            )
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_paths = [path_profile]
+            v_path_types = [_CS]
+            v_sections = cross_sections
+            v_section_types = [_CS] * len(cross_sections)
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+            ]
+            v_seg: list[Any] = []
 
             models.AddSweptProtrusionWithThinWall(
                 1,  # NumCurves
@@ -1030,9 +1028,9 @@ class LoftSweepMixin:
             guides = [all_profiles[i] for i in guide_profile_indices]
 
             v_profiles, v_types, v_origins = self._make_loft_variant_arrays(profiles)
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_seg: list[Any] = []
             v_num_guides = VARIANT(pythoncom.VT_I4, len(guides))
-            v_guides = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, guides)
+            v_guides = guides
 
             # Try LoftedProtrusions.AddSimple with guide params first
             try:

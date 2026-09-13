@@ -261,10 +261,7 @@ class SpecializedMixin:
                     return {"error": f"Invalid segment index: {idx}. Count: {occurrences.Count}"}
                 segments.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_segments = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, segments)
+            v_segments = segments
 
             occ = occurrences.AddTube(
                 v_segments,
@@ -335,10 +332,7 @@ class SpecializedMixin:
                     return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
                 paths.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
+            v_paths = paths
 
             frames = doc.StructuralFrames
             frame = frames.Add(part_filename, len(paths), v_paths)
@@ -400,10 +394,7 @@ class SpecializedMixin:
                     return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
                 paths.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
+            v_paths = paths
 
             frames = doc.StructuralFrames
             # AddByOrientation(PartFileName, CoOrdinateSystemName, NumPaths, Path,
@@ -469,10 +460,7 @@ class SpecializedMixin:
                     return {"error": f"Invalid conductor index: {idx}. Count: {occurrences.Count}"}
                 conductors.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_conductors = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, conductors)
+            v_conductors = conductors
 
             splices = doc.Splices
             splice = splices.Add(
@@ -541,11 +529,8 @@ class SpecializedMixin:
                     return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
                 paths.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-            v_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, path_directions)
+            v_paths = paths
+            v_dirs = path_directions
 
             wires = doc.Wires
             wire = wires.Add(len(paths), v_paths, v_dirs, description)
@@ -624,14 +609,11 @@ class SpecializedMixin:
                     return {"error": f"Invalid split path index: {idx}. Count: {occurrences.Count}"}
                 split_paths.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-            v_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, path_directions)
-            v_wires = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, wires_list)
-            v_split_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, split_paths)
-            v_split_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, split_dirs)
+            v_paths = paths
+            v_dirs = path_directions
+            v_wires = wires_list
+            v_split_paths = split_paths
+            v_split_dirs = split_dirs
 
             cables = doc.Cables
             cable = cables.Add(
@@ -724,14 +706,11 @@ class SpecializedMixin:
                     return {"error": f"Invalid split path index: {idx}. Count: {occurrences.Count}"}
                 split_paths.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-            v_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, path_directions)
-            v_conductors = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, conductors)
-            v_split_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, split_paths)
-            v_split_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, split_dirs)
+            v_paths = paths
+            v_dirs = path_directions
+            v_conductors = conductors
+            v_split_paths = split_paths
+            v_split_dirs = split_dirs
 
             bundles = doc.Bundles
             bundle = bundles.Add(

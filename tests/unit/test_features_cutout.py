@@ -678,9 +678,9 @@ class TestCreateLoftedCutoutFull:
         args = model.LoftedCutouts.Add.call_args[0]
         assert len(args) == 16
         assert args[0] == 2
-        assert list(args[1].value) == [p1, p2]
-        assert list(args[2].value) == [48, 48]  # igProfileBasedCrossSection
-        assert len(args[3].value) == 2  # per-profile origins
+        assert list(args[1]) == [p1, p2]
+        assert list(args[2]) == [48, 48]  # igProfileBasedCrossSection
+        assert len(args[3]) == 2  # per-profile origins
         assert args[5:] == (2, 44, 0.0, None, 44, 0.0, None, 44, 0.0, 44, 0.0)
 
     def test_too_few_profiles(self, feature_mgr, managers):
@@ -719,13 +719,13 @@ class TestCreateSweptCutoutMultiBody:
         args = model.SweptCutouts.AddMultiBody.call_args[0]
         assert len(args) == 17
         assert args[0] == 1
-        assert list(args[1].value) == [path]
-        assert list(args[2].value) == [48]
+        assert list(args[1]) == [path]
+        assert list(args[2]) == [48]
         assert args[3] == 1
-        assert list(args[4].value) == [cs]
-        assert list(args[5].value) == [48]
+        assert list(args[4]) == [cs]
+        assert list(args[5]) == [48]
         assert args[8:16] == (2, 44, 0.0, None, 44, 0.0, None, 1)
-        assert list(args[16].value) == [model.Body]
+        assert list(args[16]) == [model.Body]
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -900,7 +900,7 @@ class TestCreateHelixCutoutFromTo:
         assert args[0] is refaxis
         assert args[1] == 29  # igStart
         assert args[2] == 1
-        assert list(args[3].value) == [profile]
+        assert list(args[3]) == [profile]
         assert args[4:] == (2, 0.0, 0.005, 0.0, 2, from_plane, to_plane)
 
     def test_no_profile(self, feature_mgr, managers):

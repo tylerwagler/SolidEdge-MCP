@@ -4,9 +4,6 @@ import contextlib
 import math
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
-
 from solidedge_mcp.backends.comutil import com_get
 from solidedge_mcp.backends.errors import error_result
 
@@ -1302,7 +1299,7 @@ class MiscFeaturesMixin:
                     "to define occurrence locations."
                 }
 
-            profiles_var = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
+            profiles_var = all_profiles
 
             udp = model.UserDefinedPatterns
             udp.AddByProfiles(len(all_profiles), profiles_var, seed_feature)

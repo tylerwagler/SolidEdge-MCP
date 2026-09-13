@@ -7,8 +7,6 @@ Uses unittest.mock to simulate COM objects.
 from unittest.mock import MagicMock
 
 import pytest
-import pythoncom
-from win32com.client import VARIANT
 
 
 @pytest.fixture
@@ -377,7 +375,6 @@ class TestGetFeatureDimensions:
         args, kwargs = feat.GetDimensions.call_args
         assert args == ()
         assert set(kwargs) == {"Dimensions"}
-        assert kwargs["Dimensions"].varianttype == (pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH)
 
     def test_feature_not_found(self, query_mgr):
         """Test when feature doesn't exist."""
@@ -1141,9 +1138,10 @@ class TestSetBodyArray:
         assert len(args) == 3
         assert args[0] is True
         assert args[1] == 2
-        assert isinstance(args[2], VARIANT)
-        assert args[2].varianttype == pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH
-        assert list(args[2].value) == [model.Body, model.Body]
+        # Plain sequence, not a VARIANT: Solid Edge 2026 accepts a list wherever
+        # the wrapper was used and rejects the wrapper on several APIs.
+        assert isinstance(args[2], list)
+        assert list(args[2]) == [model.Body, model.Body]
 
     def test_multi_body_cut_flag_is_passed(self, query_mgr):
         qm, doc = query_mgr

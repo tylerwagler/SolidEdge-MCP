@@ -3,6 +3,9 @@
 import math
 from typing import Any
 
+import pythoncom
+from win32com.client import VARIANT
+
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
@@ -517,13 +520,13 @@ class AssemblyFeaturesMixin:
             trace_curves = profiles[:num_trace_curves]
             cross_sections = profiles[num_trace_curves : num_trace_curves + num_cross_sections]
 
-            import pythoncom
-            from win32com.client import VARIANT
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
 
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+            ]
 
             swept = af.AssemblyFeaturesSweptProtrusions
             swept.Add(

@@ -470,8 +470,7 @@ class TestIncludeRegionFaces:
         args, kwargs = profile.IncludeRegionFaces.call_args
         assert kwargs == {}
         assert args[0] == 2
-        assert args[1].varianttype == VT_DISPATCH_ARRAY
-        assert list(args[1].value) == [face1, face2]
+        assert list(args[1]) == [face1, face2]
 
     def test_no_active_sketch(self, sketch_mgr):
         sm, doc = sketch_mgr
@@ -553,8 +552,7 @@ class TestConvertToCurve:
         args, kwargs = profile.ConvertToCurve.call_args
         assert kwargs == {}
         assert args[0] == 2
-        assert args[1].varianttype == VT_DISPATCH_ARRAY
-        assert list(args[1].value) == [line, circle]
+        assert list(args[1]) == [line, circle]
 
     def test_no_active_sketch(self, sketch_mgr):
         sm, doc = sketch_mgr
@@ -662,8 +660,7 @@ class TestGetOrderedGeometry:
         args, kwargs = profile.OrderedGeometry.call_args
         assert args == ()
         assert set(kwargs) == {"Elements"}
-        assert kwargs["Elements"].varianttype == VT_DISPATCH_ARRAY
-        assert list(kwargs["Elements"].value) == [elem1, elem2]
+        assert list(kwargs["Elements"]) == [elem1, elem2]
         assert len(result["elements"]) == 2
         assert result["elements"][0]["start_x"] == 0.0
         assert result["elements"][0]["end_x"] == 0.1

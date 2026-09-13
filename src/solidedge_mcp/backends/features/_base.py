@@ -189,15 +189,11 @@ class FeatureManagerBase:
         Returns:
             Tuple of (v_profiles, v_types, v_origins) VARIANT arrays
         """
-        v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, profiles)
-        v_types = VARIANT(
-            pythoncom.VT_ARRAY | pythoncom.VT_I4,
-            [LoftSweepConstants.igProfileBasedCrossSection] * len(profiles),
-        )
-        v_origins = VARIANT(
-            pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-            [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in profiles],
-        )
+        v_profiles = profiles
+        v_types = [LoftSweepConstants.igProfileBasedCrossSection] * len(profiles)
+        # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+        # the outer wrapper is not. Dropping them broke the lofted cutout.
+        v_origins = [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in profiles]
         return v_profiles, v_types, v_origins
 
     def _get_edge_from_face(

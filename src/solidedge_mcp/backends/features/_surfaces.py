@@ -56,7 +56,7 @@ class SurfacesMixin:
             extruded_surfaces = constructions.ExtrudedSurfaces
 
             # Build profile array
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             depth1 = distance
             depth2 = distance if direction == "Symmetric" else 0.0
@@ -150,7 +150,7 @@ class SurfacesMixin:
             models = doc.Models
             angle_rad = math.radians(angle)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
             # Try collection-level API first (on model), then Models-level
             if models.Count > 0:
@@ -204,12 +204,13 @@ class SurfacesMixin:
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
-            v_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(all_profiles))
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles],
-            )
+            v_sections = all_profiles
+            v_types = [_CS] * len(all_profiles)
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles
+            ]
 
             if models.Count > 0:
                 model = models.Item(1)
@@ -282,8 +283,8 @@ class SurfacesMixin:
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
+            v_paths = [path_profile]
+            v_sections = cross_sections
 
             swept_surfaces = model.SweptSurfaces
             swept_surfaces.Add(
@@ -349,7 +350,7 @@ class SurfacesMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             constructions = doc.Constructions
             extruded_surfaces = constructions.ExtrudedSurfaces
@@ -393,7 +394,7 @@ class SurfacesMixin:
             if not profile:
                 return {"error": "No active sketch profile. Create and close a sketch first."}
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             constructions = doc.Constructions
             extruded_surfaces = constructions.ExtrudedSurfaces
@@ -440,7 +441,7 @@ class SurfacesMixin:
             if not profile:
                 return {"error": "No active sketch profile. Create and close a sketch first."}
 
-            curve_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            curve_array = [profile]
 
             depth1 = distance
             depth2 = distance if direction == "Symmetric" else 0.0
@@ -539,7 +540,7 @@ class SurfacesMixin:
             model = models.Item(1)
             angle_rad = math.radians(angle)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
             rev_surfaces = model.RevolvedSurfaces
             rev_surfaces.AddFiniteSync(
@@ -595,7 +596,7 @@ class SurfacesMixin:
 
             model = models.Item(1)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
             rev_surfaces = model.RevolvedSurfaces
             rev_surfaces.AddFiniteByKeyPoint(
@@ -651,12 +652,13 @@ class SurfacesMixin:
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
-            v_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(all_profiles))
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles],
-            )
+            v_sections = all_profiles
+            v_types = [_CS] * len(all_profiles)
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles
+            ]
 
             loft_surfaces = model.LoftedSurfaces
             loft_surfaces.Add2(
@@ -727,12 +729,13 @@ class SurfacesMixin:
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
+            v_paths = [path_profile]
+            v_sections = cross_sections
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+            ]
 
             swept_surfaces = model.SweptSurfaces
             swept_surfaces.AddEx(
@@ -812,7 +815,7 @@ class SurfacesMixin:
             )
             draft_angle_rad = math.radians(draft_angle)
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             depth1 = distance
             depth2 = distance if direction == "Symmetric" else 0.0
@@ -914,7 +917,7 @@ class SurfacesMixin:
             model = models.Item(1)
 
             angle_rad = math.radians(angle)
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             surfaces = model.RevolvedSurfaces
             surfaces.Add(
@@ -980,11 +983,8 @@ class SurfacesMixin:
                     f"got {len(all_profiles)}."
                 }
 
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH,
-                [None] * len(all_profiles),
-            )
+            v_sections = all_profiles
+            v_origins = [None] * len(all_profiles)
 
             blue_surfs = model.BlueSurfs
             blue_surfs.Add(
@@ -1054,7 +1054,7 @@ class SurfacesMixin:
             model = models.Item(1)
 
             angle_rad = math.radians(angle)
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             surfaces = model.RevolvedSurfaces
             surfaces.AddSync(

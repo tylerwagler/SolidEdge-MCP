@@ -329,8 +329,8 @@ class TestCreateLoftThinWall:
         args = models.AddLoftedProtrusionWithThinWall.call_args[0]
         assert len(args) == 21
         assert args[0] == 2
-        assert list(args[1].value) == [p1, p2]
-        assert list(args[2].value) == [48, 48]
+        assert list(args[1]) == [p1, p2]
+        assert list(args[2]) == [48, 48]
         assert args[5:] == (
             2,  # MaterialSide igRight
             44,
@@ -372,11 +372,11 @@ class TestCreateSweepThinWall:
         args = models.AddSweptProtrusionWithThinWall.call_args[0]
         assert len(args) == 20
         assert args[0] == 1
-        assert list(args[1].value) == [path]
-        assert list(args[2].value) == [48]
+        assert list(args[1]) == [path]
+        assert list(args[2]) == [48]
         assert args[3] == 1
-        assert list(args[4].value) == [cs]
-        assert list(args[5].value) == [48]
+        assert list(args[4]) == [cs]
+        assert list(args[5]) == [48]
         assert args[8:] == (
             2,  # MaterialSide igRight
             44,

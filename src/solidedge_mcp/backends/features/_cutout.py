@@ -396,19 +396,18 @@ class CutoutMixin:
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
             # Path arrays
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS])
+            v_paths = [path_profile]
+            v_path_types = [_CS]
 
             # Cross-section arrays
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
-            v_section_types = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(cross_sections)
-            )
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_sections = cross_sections
+            v_section_types = [_CS] * len(cross_sections)
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+            ]
+            v_seg: list[Any] = []
 
             # SweptCutouts.Add: same 15 params as SweptProtrusions
             swept_cutouts = model.SweptCutouts
@@ -494,7 +493,7 @@ class CutoutMixin:
             )
 
             # Wrap cross-section profile in SAFEARRAY
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
             helix_cutouts = model.HelixCutouts
             helix_cutouts.AddFinite(
@@ -975,7 +974,7 @@ class CutoutMixin:
                 }
 
             v_profiles, v_types, v_origins = self._make_loft_variant_arrays(profiles)
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_seg: list[Any] = []
 
             lc = model.LoftedCutouts
             lc.Add(
@@ -1057,20 +1056,19 @@ class CutoutMixin:
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_path_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS])
+            v_paths = [path_profile]
+            v_path_types = [_CS]
 
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
-            v_section_types = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(cross_sections)
-            )
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
-            v_seg = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_VARIANT, [])
+            v_sections = cross_sections
+            v_section_types = [_CS] * len(cross_sections)
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+            ]
+            v_seg: list[Any] = []
 
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [model.Body])
+            body_arr = [model.Body]
 
             swept_cutouts = model.SweptCutouts
             swept_cutouts.AddMultiBody(
@@ -1152,7 +1150,7 @@ class CutoutMixin:
                 DirectionConstants.igRight if direction == "Right" else DirectionConstants.igLeft
             )
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
             helix_cutouts = model.HelixCutouts
             helix_cutouts.AddFiniteSync(
@@ -1236,7 +1234,7 @@ class CutoutMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
             helix_cutouts = model.HelixCutouts
             helix_cutouts.AddFromTo(
@@ -1316,7 +1314,7 @@ class CutoutMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
             helix_cutouts = model.HelixCutouts
             helix_cutouts.AddFromToSync(
@@ -1427,7 +1425,7 @@ class CutoutMixin:
             )
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             cutouts = model.ExtrudedCutouts
             cutouts.AddFiniteMultiBody(
@@ -1495,7 +1493,7 @@ class CutoutMixin:
             to_plane = ref_planes.Item(to_plane_index)
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             cutouts = model.ExtrudedCutouts
             cutouts.AddFromToMultiBody(
@@ -1551,7 +1549,7 @@ class CutoutMixin:
             )
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             cutouts = model.ExtrudedCutouts
             cutouts.AddThroughAllMultiBody(
@@ -1609,7 +1607,7 @@ class CutoutMixin:
             angle_rad = math.radians(angle)
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             cutouts = model.RevolvedCutouts
             cutouts.AddFiniteMultiBody(
@@ -1668,7 +1666,7 @@ class CutoutMixin:
             model = models.Item(1)
             angle_rad = math.radians(angle)
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             cutouts = model.RevolvedCutouts
             cutouts.Add(
@@ -1729,7 +1727,7 @@ class CutoutMixin:
             model = models.Item(1)
             angle_rad = math.radians(angle)
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             cutouts = model.RevolvedCutouts
             cutouts.AddSync(

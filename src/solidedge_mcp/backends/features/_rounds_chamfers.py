@@ -2,9 +2,6 @@
 
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
-
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
@@ -39,9 +36,6 @@ class RoundsChamfersMixin:
             Dict with status and round info
         """
         try:
-            import pythoncom
-            from win32com.client import VARIANT
-
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
@@ -69,11 +63,8 @@ class RoundsChamfersMixin:
                 return {"error": "No edges found on body"}
 
             # Each edge as its own edge set, all with the same radius
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_R8,
-                [radius] * len(edge_list),
-            )
+            edge_arr = edge_list
+            radius_arr = [radius] * len(edge_list)
 
             rounds = model.Rounds
             rounds.Add(len(edge_list), edge_arr, radius_arr)
@@ -103,9 +94,6 @@ class RoundsChamfersMixin:
             Dict with status and round info
         """
         try:
-            import pythoncom
-            from win32com.client import VARIANT
-
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
@@ -128,11 +116,8 @@ class RoundsChamfersMixin:
             for ei in range(1, face_edges.Count + 1):
                 edge_list.append(face_edges.Item(ei))
 
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_R8,
-                [radius] * len(edge_list),
-            )
+            edge_arr = edge_list
+            radius_arr = [radius] * len(edge_list)
 
             rounds = model.Rounds
             rounds.Add(len(edge_list), edge_arr, radius_arr)
@@ -503,8 +488,8 @@ class RoundsChamfersMixin:
                 return {"error": "No edges found on body"}
 
             # VARIANT wrappers (same pattern as Rounds)
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [radius])
+            edge_arr = edge_list
+            radius_arr = [radius]
 
             blends = model.Blends
             blends.Add(1, edge_arr, radius_arr)

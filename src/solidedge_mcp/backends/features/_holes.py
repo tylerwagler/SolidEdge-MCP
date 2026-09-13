@@ -2,9 +2,6 @@
 
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
-
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
@@ -748,7 +745,7 @@ class HolesMixin:
             profile.End(0)
 
             hole_data = self._make_hole_data(doc, diameter)
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [model.Body])
+            body_arr = [model.Body]
 
             holes = model.Holes
             holes.AddMultiBody(
@@ -817,7 +814,7 @@ class HolesMixin:
             profile.End(0)
 
             hole_data = self._make_hole_data(doc, diameter)
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [model.Body])
+            body_arr = [model.Body]
 
             holes = model.Holes
             holes.AddSyncMultiBody(

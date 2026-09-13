@@ -26,7 +26,7 @@ from win32com.client import VARIANT
 
 def _shape(arg):
     if isinstance(arg, VARIANT):
-        return ("VARIANT", arg.varianttype, list(arg.value))
+        return ("VARIANT", arg.varianttype, list(arg.value))  # a regression
     if isinstance(arg, list):
         return (tuple(type(v).__name__ for v in arg), tuple(arg))
     return arg

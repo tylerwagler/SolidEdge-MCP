@@ -3,9 +3,6 @@
 import contextlib
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
-
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import FaceQueryConstants
@@ -217,8 +214,8 @@ class BRepMixin:
         try:
             _doc, _model, _body, face = self._get_face(face_index)
 
-            params_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [u, v])
-            normals_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
+            params_arr = [u, v]
+            normals_arr = [0.0, 0.0, 0.0]
 
             result = face.GetNormal(1, params_arr, normals_arr)
 
@@ -408,10 +405,10 @@ class BRepMixin:
         try:
             _doc, _model, _body, face = self._get_face(face_index)
 
-            params_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [u, v])
-            max_tangents_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
-            max_curvatures_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0])
-            min_curvatures_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0])
+            params_arr = [u, v]
+            max_tangents_arr = [0.0, 0.0, 0.0]
+            max_curvatures_arr = [0.0]
+            min_curvatures_arr = [0.0]
 
             result = face.GetCurvatures(
                 1, params_arr, max_tangents_arr, max_curvatures_arr, min_curvatures_arr
@@ -630,8 +627,8 @@ class BRepMixin:
         try:
             _doc, _model, _body, _face, edge = self._get_face_edge(face_index, edge_index)
 
-            start_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
-            end_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
+            start_arr = [0.0, 0.0, 0.0]
+            end_arr = [0.0, 0.0, 0.0]
             result = edge.GetEndPoints(start_arr, end_arr)
 
             # GetEndPoints returns (start_arr, end_arr) as a tuple
@@ -719,8 +716,8 @@ class BRepMixin:
         try:
             _doc, _model, _body, _face, edge = self._get_face_edge(face_index, edge_index)
 
-            params_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [param])
-            tangents_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
+            params_arr = [param]
+            tangents_arr = [0.0, 0.0, 0.0]
 
             result = edge.GetTangent(1, params_arr, tangents_arr)
 
@@ -846,9 +843,9 @@ class BRepMixin:
         try:
             _doc, _model, _body, _face, edge = self._get_face_edge(face_index, edge_index)
 
-            params_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [param])
-            directions_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
-            curvatures_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0])
+            params_arr = [param]
+            directions_arr = [0.0, 0.0, 0.0]
+            curvatures_arr = [0.0]
 
             result = edge.GetCurvature(1, params_arr, directions_arr, curvatures_arr)
 
@@ -1156,7 +1153,7 @@ class BRepMixin:
 
             shell = shells.Item(1)
 
-            point_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [x, y, z])
+            point_arr = [x, y, z]
             is_inside = shell.IsPointInside(point_arr)
 
             return {
@@ -1230,7 +1227,7 @@ class BRepMixin:
             for i in range(start + 1, stop + 1):
                 try:
                     vertex = vertices.Item(i)
-                    point_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
+                    point_arr = [0.0, 0.0, 0.0]
                     result = vertex.GetPointData(point_arr)
 
                     point = (
@@ -1270,7 +1267,7 @@ class BRepMixin:
 
             vertex = edge.StartVertex if which == "start" else edge.EndVertex
 
-            point_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0, 0.0])
+            point_arr = [0.0, 0.0, 0.0]
             result = vertex.GetPointData(point_arr)
 
             point = self._to_list(result[0]) if isinstance(result, tuple) else list(point_arr)
