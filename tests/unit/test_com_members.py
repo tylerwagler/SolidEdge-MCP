@@ -65,18 +65,23 @@ UNVERIFIED: frozenset[str] = frozenset(
         # became GetStartPoint / GetEndPoint / GetCenterPoint; EndAngle
         # became StartAngle + SweepAngle; and FCFs became
         # FeatureControlFrames. See tests/unit/test_export_annotations.py.
+        # Also removed: AlignToView and RemoveAlignment became the
+        # collection's DrawingViews.Align / Unalign, driven through the
+        # document select set; XPosition, YPosition, OriginX and OriginY on
+        # a drawing view became SetOrigin / GetOrigin; DisplayMode became
+        # Shading and Defaults_ShowHiddenEdges;
+        # AddAssemblyViewWithConfiguration became a seventh argument to
+        # AddAssemblyView; AddPartViewWithConfiguration became
+        # AddPartViewByConfiguration; and DraftPrintUtility.PrintAllSheets
+        # became AddDocument / AddSheet.
         # Each still needs checking against a live install; they are reachable
         # only through interfaces the type libraries do not describe, or they
         # are wrong. Treat a failure here as a real bug until proven otherwise.
-        "AddAssemblyViewWithConfiguration",
         "AddFiniteRevolvedSurface",
-        "AddPartViewWithConfiguration",
-        "AlignToView",
         "ApplyStyle",
         "Bodies",
         "CenterPoint",
         "ConvertToType",
-        "DisplayMode",
         "ForegroundColor",
         "GetInstalledLanguage",
         "GetInstalledVersion",
@@ -84,17 +89,11 @@ UNVERIFIED: frozenset[str] = frozenset(
         "MoveBefore",
         "OccurrenceColor",
         "OffsetProfile",
-        "OriginX",
-        "OriginY",
         "Parents",
         "PoissonsRatio",
-        "PrintAllSheets",
-        "RemoveAlignment",
         "SetForegroundColor",
         "SurfaceArea",
         "UseOccurrenceColor",
-        "XPosition",
-        "YPosition",
         "YoungsModulus",
     }
 )

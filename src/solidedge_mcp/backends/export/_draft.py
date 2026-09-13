@@ -176,10 +176,16 @@ class DraftMixin:
                 info: dict[str, Any] = {"index": i - 1}
                 with contextlib.suppress(Exception):
                     info["name"] = sym.Name
+                # Symbol2d has no OriginX/OriginY, so both keys were always
+                # missing. Its position comes from its first keypoint.
                 with contextlib.suppress(Exception):
-                    info["x"] = sym.OriginX
+                    keypoint = sym.GetKeyPoint(0)
+                    info["x"] = float(keypoint[0])
+                    info["y"] = float(keypoint[1])
                 with contextlib.suppress(Exception):
-                    info["y"] = sym.OriginY
+                    info["scale"] = sym.ScaleFactor
+                with contextlib.suppress(Exception):
+                    info["angle"] = sym.Angle
                 items.append(info)
             return {"count": len(items), "symbols": items}
         except Exception as e:
@@ -505,13 +511,20 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            # Try DraftPrintUtility first (more control)
+            # DraftPrintUtility gives more control than Document.PrintOut.
             dpu = com_get(doc, "DraftPrintUtility")
             if dpu is not None:
                 with contextlib.suppress(Exception):
                     dpu.Copies = copies
+                # There is no PrintAllSheets property; setting it did nothing
+                # and every print silently used whatever was already queued.
+                # AddDocument queues the whole document, AddSheet just one.
                 with contextlib.suppress(Exception):
-                    dpu.PrintAllSheets = all_sheets
+                    dpu.RemoveAllDocuments()
+                if all_sheets:
+                    dpu.AddDocument(doc)
+                else:
+                    dpu.AddSheet(doc.ActiveSheet)
                 dpu.PrintOut()
                 return {"status": "printed", "copies": copies, "all_sheets": all_sheets}
 

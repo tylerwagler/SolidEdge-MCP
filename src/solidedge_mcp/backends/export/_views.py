@@ -5,11 +5,43 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import DrawingViewOrientationConstants, FoldTypeConstants, RenderModeConstants
+from ..constants import DrawingViewOrientationConstants, FoldTypeConstants
 from ..logging import get_logger
 from ._base import com_get
 
 _logger = get_logger(__name__)
+
+
+#: How each display mode maps onto the properties a DrawingView actually has.
+#: DrawingView.SetRenderMode and DisplayMode do not exist; SetRenderMode is on
+#: the 3D window View in framewrk.tlb.
+_DISPLAY_MODES: dict[str, dict[str, Any]] = {
+    "Wireframe": {
+        "Shading": False,
+        "Defaults_ShowHiddenEdges": True,
+    },
+    "HiddenEdgesVisible": {
+        "Shading": False,
+        "Defaults_ShowHiddenEdges": False,
+    },
+    "Shaded": {
+        "Shading": True,
+        "ShadingShowVisibleEdges": False,
+    },
+    "ShadedWithEdges": {
+        "Shading": True,
+        "ShadingShowVisibleEdges": True,
+    },
+}
+
+
+def _origin_of(view: Any) -> list[float] | None:
+    """The view's origin on the sheet. GetOrigin is pure [out]."""
+    try:
+        origin = view.GetOrigin()
+        return [float(origin[0]), float(origin[1])]
+    except Exception:
+        return None
 
 
 class ViewsMixin:
@@ -133,17 +165,50 @@ class ViewsMixin:
         except Exception as e:
             return error_result(e)
 
+    def _set_edge_display(self, view_index: int, prop: str, show: bool, key: str) -> dict[str, Any]:
+        """Set one edge-display property on a view and confirm it took."""
+        try:
+            dvs = self._get_drawing_views()
+
+            if view_index < 0 or view_index >= dvs.Count:
+                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
+
+            view = dvs.Item(view_index + 1)
+            setattr(view, prop, show)
+            with contextlib.suppress(Exception):
+                view.Update()
+
+            result: dict[str, Any] = {"status": "updated", "view_index": view_index, key: show}
+            actual = com_get(view, prop)
+            if actual is not None and bool(actual) != show:
+                # Say so rather than report a success the view did not accept.
+                return {
+                    "error": (
+                        f"This drawing view did not accept {key}={show}; it still "
+                        f"reports {bool(actual)}. Some view types fix their edge "
+                        f"display."
+                    ),
+                    "view_index": view_index,
+                }
+            return result
+        except Exception as e:
+            return error_result(e)
+
     def move_drawing_view(self, view_index: int, x: float, y: float) -> dict[str, Any]:
-        """
-        Reposition a drawing view on the sheet.
+        """Move a drawing view to a new position on the sheet.
+
+        ``DrawingView.SetOrigin(x, y)`` is the only route. There is no
+        ``OriginX``/``OriginY`` property to assign, and no ``XPosition``, which
+        is what the fallback tried; both raise "can not be set", so this always
+        failed. The new origin is read back with ``GetOrigin``.
 
         Args:
-            view_index: 0-based view index
-            x: New X position (meters)
-            y: New Y position (meters)
+            view_index: 0-based index of the view to move.
+            x: New origin X on the sheet, in meters.
+            y: New origin Y on the sheet, in meters.
 
         Returns:
-            Dict with status
+            Dict with status and the origin Solid Edge settled on.
         """
         try:
             dvs = self._get_drawing_views()
@@ -152,52 +217,58 @@ class ViewsMixin:
                 return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
 
             view = dvs.Item(view_index + 1)
+            view.SetOrigin(x, y)
 
-            try:
-                view.OriginX = x
-                view.OriginY = y
-            except Exception:
-                view.XPosition = x
-                view.YPosition = y
-
-            return {"status": "moved", "view_index": view_index, "position": [x, y]}
+            result: dict[str, Any] = {
+                "status": "moved",
+                "view_index": view_index,
+                "position": [x, y],
+            }
+            origin = _origin_of(view)
+            if origin is not None:
+                result["origin"] = origin
+            return result
         except Exception as e:
             return error_result(e)
 
     def show_hidden_edges(self, view_index: int, show: bool = True) -> dict[str, Any]:
-        """
-        Toggle hidden edge visibility on a drawing view.
+        """Toggle hidden edge display on a drawing view.
+
+        ``DrawingView.ShowHiddenEdges`` does not exist and raises "can not be
+        set". ``ModelMember.ShowHiddenEdges`` does exist, accepts the write,
+        and then reads back unchanged, so routing it there would look like
+        success and do nothing. ``DrawingView.Defaults_ShowHiddenEdges`` is the
+        one that takes and survives an Update. Verified on Solid Edge 2026.
 
         Args:
-            view_index: 0-based view index
-            show: True to show hidden edges, False to hide them
+            view_index: 0-based index of the view.
+            show: True to draw hidden edges, False to leave them out.
 
         Returns:
-            Dict with status
+            Dict with status and the value the view reports afterwards.
         """
-        try:
-            dvs = self._get_drawing_views()
-
-            if view_index < 0 or view_index >= dvs.Count:
-                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
-
-            view = dvs.Item(view_index + 1)
-            view.ShowHiddenEdges = show
-
-            return {"status": "updated", "view_index": view_index, "show_hidden_edges": show}
-        except Exception as e:
-            return error_result(e)
+        return self._set_edge_display(
+            view_index, "Defaults_ShowHiddenEdges", show, "show_hidden_edges"
+        )
 
     def set_drawing_view_display_mode(self, view_index: int, mode: str) -> dict[str, Any]:
-        """
-        Set the display/render mode of a drawing view.
+        """Set how a drawing view is rendered.
+
+        ``SetRenderMode`` belongs to the 3D window ``View`` in framewrk.tlb,
+        not to a 2D ``DrawingView``, and ``DrawingView.DisplayMode`` does not
+        exist, so both the call and its fallback always raised. A drawing view
+        is controlled by ``Shading``, ``ShadingShowVisibleEdges`` and
+        ``Defaults_ShowHiddenEdges`` instead. Verified on Solid Edge 2026.
 
         Args:
-            view_index: 0-based view index
-            mode: 'Wireframe', 'HiddenEdgesVisible', 'Shaded', or 'ShadedWithEdges'
+            view_index: 0-based index of the view.
+            mode: 'Wireframe' shades nothing and draws every edge.
+                'HiddenEdgesVisible' shades nothing and hides obscured edges.
+                'Shaded' shades without edge lines.
+                'ShadedWithEdges' shades and keeps visible edges.
 
         Returns:
-            Dict with status
+            Dict with status and the properties that were set.
         """
         try:
             dvs = self._get_drawing_views()
@@ -205,26 +276,42 @@ class ViewsMixin:
             if view_index < 0 or view_index >= dvs.Count:
                 return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
 
-            mode_map = {
-                "Wireframe": RenderModeConstants.seRenderModeWireframe,
-                "HiddenEdgesVisible": RenderModeConstants.seRenderModeVHL,
-                "Shaded": RenderModeConstants.seRenderModeSmooth,
-                "ShadedWithEdges": RenderModeConstants.seRenderModeSmoothBoundary,
-            }
-
-            mode_value = mode_map.get(mode)
-            if mode_value is None:
-                valid = ", ".join(mode_map.keys())
+            settings = _DISPLAY_MODES.get(mode)
+            if settings is None:
+                valid = ", ".join(_DISPLAY_MODES)
                 return {"error": f"Invalid mode: '{mode}'. Valid: {valid}"}
 
             view = dvs.Item(view_index + 1)
+            applied: dict[str, Any] = {}
+            refused: list[str] = []
+            for prop, value in settings.items():
+                try:
+                    setattr(view, prop, value)
+                    applied[prop] = value
+                except Exception:
+                    refused.append(prop)
 
-            try:
-                view.SetRenderMode(mode_value)
-            except Exception:
-                view.DisplayMode = mode_value
+            if not applied:
+                return {
+                    "error": (
+                        f"This drawing view accepted none of the properties for "
+                        f"mode '{mode}': {', '.join(refused)}."
+                    ),
+                    "view_index": view_index,
+                }
 
-            return {"status": "updated", "view_index": view_index, "mode": mode}
+            with contextlib.suppress(Exception):
+                view.Update()
+
+            result: dict[str, Any] = {
+                "status": "updated",
+                "view_index": view_index,
+                "mode": mode,
+                "applied": applied,
+            }
+            if refused:
+                result["not_supported_by_this_view"] = refused
+            return result
         except Exception as e:
             return error_result(e)
 
@@ -246,22 +333,24 @@ class ViewsMixin:
 
             view = dvs.Item(view_index + 1)
 
-            info = {"view_index": view_index}
+            info: dict[str, Any] = {"view_index": view_index}
 
             with contextlib.suppress(Exception):
                 info["name"] = view.Name
             with contextlib.suppress(Exception):
                 info["scale"] = view.ScaleFactor
+            # GetOrigin is pure [out]; there is no OriginX/OriginY to read,
+            # so these two keys were always missing.
+            origin = _origin_of(view)
+            if origin is not None:
+                info["origin_x"] = origin[0]
+                info["origin_y"] = origin[1]
             with contextlib.suppress(Exception):
-                info["origin_x"] = view.OriginX
+                info["show_hidden_edges"] = view.Defaults_ShowHiddenEdges
             with contextlib.suppress(Exception):
-                info["origin_y"] = view.OriginY
+                info["show_tangent_edges"] = view.Defaults_ShowTangentEdges
             with contextlib.suppress(Exception):
-                info["show_hidden_edges"] = view.ShowHiddenEdges
-            with contextlib.suppress(Exception):
-                members = com_get(view, "ModelMembers")
-                if members is not None and com_get(members, "Count", 0):
-                    info["show_tangent_edges"] = members.Item(1).ShowTangentEdges
+                info["shaded"] = view.Shading
             with contextlib.suppress(Exception):
                 info["type"] = view.Type
 
@@ -352,48 +441,27 @@ class ViewsMixin:
             return error_result(e)
 
     def show_tangent_edges(self, view_index: int, show: bool = True) -> dict[str, Any]:
-        """
-        Set tangent edge visibility on a drawing view.
+        """Toggle tangent edge display on a drawing view.
 
-        Tangent edges are edges where two surfaces meet tangentially
-        (e.g., where a fillet meets a flat face).
+        Tangent edges are where two surfaces meet smoothly, such as where a
+        fillet runs into a flat face.
+
+        ``DrawingView.ShowTangentEdges`` does not exist.
+        ``ModelMember.ShowTangentEdges`` does, but accepts the write and reads
+        back unchanged, so it is a silent no-op.
+        ``DrawingView.Defaults_ShowTangentEdges`` is the one that holds.
+        Verified on Solid Edge 2026.
 
         Args:
-            view_index: 0-based view index
-            show: True to show tangent edges, False to hide them
+            view_index: 0-based index of the view.
+            show: True to draw tangent edges, False to leave them out.
 
         Returns:
-            Dict with status
+            Dict with status and the value the view reports afterwards.
         """
-        try:
-            dvs = self._get_drawing_views()
-
-            if view_index < 0 or view_index >= dvs.Count:
-                return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
-
-            view = dvs.Item(view_index + 1)
-            # draft.tlb puts ShowTangentEdges on ModelMember, not DrawingView.
-            # Setting it on the view raised "Property 'Item.ShowTangentEdges'
-            # can not be set."
-            members = com_get(view, "ModelMembers")
-            count = com_get(members, "Count", 0) or 0
-            if not count:
-                return {
-                    "error": (
-                        "This drawing view has no model members, so tangent edge "
-                        "display cannot be changed."
-                    )
-                }
-            for i in range(1, int(count) + 1):
-                members.Item(i).ShowTangentEdges = show
-
-            return {
-                "status": "updated",
-                "view_index": view_index,
-                "show_tangent_edges": show,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._set_edge_display(
+            view_index, "Defaults_ShowTangentEdges", show, "show_tangent_edges"
+        )
 
     # =================================================================
     # DRAWING VIEW VARIANTS
@@ -557,19 +625,26 @@ class ViewsMixin:
     def align_drawing_views(
         self, view_index1: int, view_index2: int, align: bool = True
     ) -> dict[str, Any]:
-        """
-        Align or unalign two drawing views.
+        """Align or unalign two drawing views.
 
-        When aligned, moving one view constrains the other to maintain
-        alignment (horizontal or vertical).
+        ``DrawingView.AlignToView`` and ``RemoveAlignment`` are in no Solid
+        Edge type library, so both the call and its fallback always raised.
+        The real API is on the collection: ``DrawingViews.Align()`` and
+        ``Unalign()``, which act on whatever is in the document select set.
+        ``Align()`` raises outright when nothing is selected. Verified on
+        Solid Edge 2026.
+
+        Solid Edge can only align views that already have a fold relationship,
+        so this reports each view's origin before and after; equal origins mean
+        Solid Edge found nothing to align.
 
         Args:
-            view_index1: 0-based index of the first view
-            view_index2: 0-based index of the second view
-            align: True to align, False to unalign
+            view_index1: 0-based index of the first view.
+            view_index2: 0-based index of the second view.
+            align: True to align the pair, False to release the alignment.
 
         Returns:
-            Dict with status
+            Dict with status and both origins before and after.
         """
         try:
             dvs = self._get_drawing_views()
@@ -578,26 +653,56 @@ class ViewsMixin:
                 return {"error": f"Invalid view_index1: {view_index1}. Count: {dvs.Count}"}
             if view_index2 < 0 or view_index2 >= dvs.Count:
                 return {"error": f"Invalid view_index2: {view_index2}. Count: {dvs.Count}"}
+            if view_index1 == view_index2:
+                return {
+                    "error": (
+                        f"view_index1 and view_index2 are both {view_index1}. "
+                        f"Alignment needs two different views."
+                    )
+                }
 
             view1 = dvs.Item(view_index1 + 1)
             view2 = dvs.Item(view_index2 + 1)
+            before = [_origin_of(view1), _origin_of(view2)]
 
-            if align:
-                try:
-                    view1.AlignToView(view2)
-                except Exception:
-                    view2.AlignToView(view1)
-            else:
-                try:
-                    view1.RemoveAlignment()
-                except Exception:
-                    view2.RemoveAlignment()
+            doc = self.doc_manager.get_active_document()
+            select_set = com_get(doc, "SelectSet")
+            if select_set is None:
+                return {
+                    "error": (
+                        "This document has no SelectSet, so the views cannot be "
+                        "handed to DrawingViews.Align."
+                    )
+                }
+            with contextlib.suppress(Exception):
+                select_set.RemoveAll()
+            select_set.Add(view1)
+            select_set.Add(view2)
 
-            return {
+            try:
+                if align:
+                    dvs.Align()
+                else:
+                    dvs.Unalign()
+            finally:
+                with contextlib.suppress(Exception):
+                    select_set.RemoveAll()
+
+            after = [_origin_of(view1), _origin_of(view2)]
+            result: dict[str, Any] = {
                 "status": "aligned" if align else "unaligned",
                 "view_index1": view_index1,
                 "view_index2": view_index2,
+                "origins_before": before,
+                "origins_after": after,
             }
+            if align and before == after:
+                result["note"] = (
+                    "Neither view moved. Solid Edge aligns views that share a fold "
+                    "relationship; unrelated views have nothing to align to. Create "
+                    "one with add_drawing_view(type='projected', parent_view_index=...)."
+                )
+            return result
         except Exception as e:
             return error_result(e)
 
@@ -811,16 +916,19 @@ class ViewsMixin:
             # CuttingPlane.CreateView(SectionType) creates the section view
             section_view = cutting_plane.CreateView(section_type)
 
-            # Move the section view to the desired position
+            # Move the section view to the desired position. A DrawingView
+            # has no OriginX/OriginY to assign, so this quietly left every
+            # section view wherever Solid Edge first put it.
+            placed = False
             with contextlib.suppress(Exception):
-                section_view.OriginX = x
-                section_view.OriginY = y
+                section_view.SetOrigin(x, y)
+                placed = True
 
             result = {
                 "status": "added",
                 "source_view_index": view_index,
                 "section_type": "standard" if section_type == 0 else "revolved",
-                "position": [x, y],
+                "position": [x, y] if placed else None,
                 "total_cutting_planes": cutting_planes.Count,
             }
 

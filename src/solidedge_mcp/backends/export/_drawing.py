@@ -408,10 +408,14 @@ class DrawingMixin:
             dvs_early = sheet.DrawingViews
             dvs = dyn.Dispatch(dvs_early._oleobj_)
 
-            # If config specified, try AddWithConfiguration
+            # There is no AddAssemblyViewWithConfiguration. The configuration
+            # is the seventh argument of AddAssemblyView(From, Orientation,
+            # Scale, x, y, ViewType, ConfigurationName, Snapshot,
+            # SnapShotQuality), so this always raised and fell through, and the
+            # requested configuration was silently ignored.
             if config is not None:
                 try:
-                    dvs.AddAssemblyViewWithConfiguration(model_link, orient, scale, x, y, 0, config)
+                    dvs.AddAssemblyView(model_link, orient, scale, x, y, 0, config)
                     return {
                         "status": "added",
                         "orientation": orientation,
@@ -500,10 +504,22 @@ class DrawingMixin:
             dvs_early = sheet.DrawingViews
             dvs = dyn.Dispatch(dvs_early._oleobj_)
 
-            try:
-                dvs.AddPartViewWithConfiguration(model_link, orient, scale, x, y, 0, configuration)
-            except Exception:
-                # Fall back to standard AddPartView
+            # draft.tlb names this AddPartViewByConfiguration, not
+            # AddPartViewWithConfiguration, so this always raised and the
+            # configuration was silently dropped by the fallback.
+            configured = False
+            if configuration:
+                try:
+                    dvs.AddPartViewByConfiguration(
+                        model_link, orient, scale, x, y, 0, configuration
+                    )
+                    configured = True
+                except Exception:
+                    _logger.warning(
+                        "Configuration %r was rejected; adding a plain part view",
+                        configuration,
+                    )
+            if not configured:
                 dvs.AddPartView(model_link, orient, scale, x, y, 0)
 
             return {
@@ -511,7 +527,7 @@ class DrawingMixin:
                 "orientation": orientation,
                 "scale": scale,
                 "position": [x, y],
-                "configuration": configuration,
+                "configuration": configuration if configured else None,
             }
         except Exception as e:
             return error_result(e)

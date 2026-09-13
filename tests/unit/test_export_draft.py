@@ -391,18 +391,20 @@ class TestAddSymbol:
 
 
 class TestGetSymbols:
+    """Symbol2d has no OriginX/OriginY; its position is its first keypoint."""
+
     def test_success(self, export_mgr):
         em, doc = export_mgr
         sheet = MagicMock()
         sym1 = MagicMock()
         sym1.Name = "Arrow"
-        sym1.OriginX = 0.1
-        sym1.OriginY = 0.1
+        sym1.GetKeyPoint.return_value = (0.1, 0.1, 0.0, 0, 0)
+        sym1.ScaleFactor = 1.0
+        sym1.Angle = 0.0
 
         sym2 = MagicMock()
         sym2.Name = "Star"
-        sym2.OriginX = 0.2
-        sym2.OriginY = 0.2
+        sym2.GetKeyPoint.return_value = (0.2, 0.2, 0.0, 0, 0)
 
         symbols = MagicMock()
         symbols.Count = 2
@@ -414,8 +416,26 @@ class TestGetSymbols:
         assert result["count"] == 2
         assert result["symbols"][0]["name"] == "Arrow"
         assert result["symbols"][0]["x"] == 0.1
+        assert result["symbols"][0]["y"] == 0.1
+        assert result["symbols"][0]["scale"] == 1.0
         assert result["symbols"][1]["name"] == "Star"
         assert result["symbols"][1]["index"] == 1
+
+    def test_a_symbol_without_a_keypoint_still_lists(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sym = MagicMock()
+        sym.Name = "Odd"
+        sym.GetKeyPoint.side_effect = Exception("no keypoints")
+        symbols = MagicMock()
+        symbols.Count = 1
+        symbols.Item.return_value = sym
+        sheet.Symbols = symbols
+        doc.ActiveSheet = sheet
+
+        result = em.get_symbols()
+        assert result["symbols"][0]["name"] == "Odd"
+        assert "x" not in result["symbols"][0]
 
     def test_empty(self, export_mgr):
         em, doc = export_mgr
