@@ -260,3 +260,47 @@ class TestModalDialogSuppression:
             lambda progid: app,
         )
         assert conn.connect(start_if_needed=False)["status"] == "connected"
+
+
+class TestOverwritePromptRefusal:
+    """Saving over an existing file raises a modal prompt DisplayAlerts cannot suppress.
+
+    Observed live: save_document to an existing .par put up "This file exists.
+    Do you want to overwrite it?" and the COM call blocked until it was clicked.
+    """
+
+    def _manager(self, tmp_path):
+        conn = MagicMock()
+        dm = DocumentManager(conn)
+        dm.active_document = MagicMock()
+        dm.active_document.Name = "Part1"
+        return dm
+
+    def test_refuses_an_existing_path_by_default(self, tmp_path):
+        dm = self._manager(tmp_path)
+        target = tmp_path / "part.par"
+        target.write_bytes(b"existing")
+
+        result = dm.save_document(str(target))
+        assert result["exists"] is True
+        assert "overwrite=true" in result["error"]
+        dm.active_document.SaveAs.assert_not_called()
+        assert target.read_bytes() == b"existing"
+
+    def test_overwrite_replaces_the_file(self, tmp_path):
+        dm = self._manager(tmp_path)
+        target = tmp_path / "part.par"
+        target.write_bytes(b"existing")
+
+        result = dm.save_document(str(target), overwrite=True)
+        assert result["status"] == "saved"
+        dm.active_document.SaveAs.assert_called_once_with(str(target))
+        assert not target.exists()  # removed; Solid Edge writes it via COM
+
+    def test_new_path_saves_without_a_flag(self, tmp_path):
+        dm = self._manager(tmp_path)
+        target = tmp_path / "fresh.par"
+
+        result = dm.save_document(str(target))
+        assert result["status"] == "saved"
+        dm.active_document.SaveAs.assert_called_once_with(str(target))

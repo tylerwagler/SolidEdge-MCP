@@ -83,6 +83,9 @@ def export_file(
 
 def add_drawing_view(
     type: Literal[
+        "part",
+        "sheet_metal",
+        "weldment",
         "assembly",
         "assembly_ex",
         "with_config",
@@ -92,7 +95,7 @@ def add_drawing_view(
         "draft",
         "by_draft_view",
         "section",
-    ] = "assembly",
+    ] = "part",
     x: float = 0.15,
     y: float = 0.15,
     orientation: DrawingViewOrientation = "Isometric",
@@ -109,7 +112,8 @@ def add_drawing_view(
 ) -> dict[str, Any]:
     """Add a drawing view to the active draft. Positions/radii in meters.
 
-    x,y place the view on the sheet. assembly/assembly_ex/with_config:
+    x,y place the view on the sheet. part/sheet_metal/weldment and
+    assembly/assembly_ex/with_config:
     orientation + scale (assembly_ex adds config; with_config adds
     configuration). projected/auxiliary: 0-based parent_view_index +
     fold_direction. detail: parent_view_index + circle center_x/center_y/radius.
@@ -117,6 +121,8 @@ def add_drawing_view(
     section_type (raw SectionTypeConstants int).
     """
     match type:
+        case "part" | "sheet_metal" | "weldment":
+            return export_manager.add_model_drawing_view(x, y, orientation, scale, model=type)
         case "assembly":
             return export_manager.add_assembly_drawing_view(x, y, orientation, scale)
         case "assembly_ex":

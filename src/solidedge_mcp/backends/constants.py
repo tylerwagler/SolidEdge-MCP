@@ -100,6 +100,21 @@ class ViewOrientationConstants:
     igTopBackRightView = 10
 
 
+class PartDrawingViewTypeConstants:
+    """draft.tlb > PartDrawingViewTypeConstants."""
+
+    sePartDesignedView = 0
+    sePartSimplifiedView = 1
+
+
+class AssemblyDrawingViewTypeConstants:
+    """draft.tlb > AssemblyDrawingViewTypeConstants."""
+
+    seAssemblyDesignedView = 0
+    seAssemblySimplifiedView = 1
+    seAssemblyConfigurationSimplifiedView = 2
+
+
 class DrawingViewTypeConstants:
     """Drawing view type constants (from type library - separate enum)"""
 

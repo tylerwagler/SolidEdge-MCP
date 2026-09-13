@@ -29,24 +29,43 @@ RESOURCE_TAGS = {"query"}
 # --- Application (4) ---
 
 
+def _fallback(value: Any) -> str:
+    """Render anything json cannot, instead of failing the whole resource.
+
+    A backend that leaks a COM proxy into its result used to raise "Object of
+    type CDispatch is not JSON serializable", which turned one stray field into
+    a dead endpoint. Observed on solidedge://drawing/sheets, where
+    Sheet.Background is a Sheet object rather than a name.
+    """
+    name = getattr(value, "Name", None)
+    if isinstance(name, str):
+        return name
+    return f"<unserialisable {type(value).__name__}>"
+
+
+def dumps(payload: Any) -> str:
+    """json.dumps for resource handlers; never raises on a COM object."""
+    return json.dumps(payload, default=_fallback)
+
+
 def app_info() -> str:
     """Solid Edge application information (version, path, document count)."""
-    return json.dumps(connection.get_info())
+    return dumps(connection.get_info())
 
 
 def app_install() -> str:
     """Solid Edge installation information (path, language, version)."""
-    return json.dumps(connection.get_install_info())
+    return dumps(connection.get_install_info())
 
 
 def app_process() -> str:
     """Solid Edge process information (PID, window handle)."""
-    return json.dumps(connection.get_process_info())
+    return dumps(connection.get_process_info())
 
 
 def app_connection_status() -> str:
     """Whether Solid Edge is currently connected."""
-    return json.dumps({"connected": connection.is_connected()})
+    return dumps({"connected": connection.is_connected()})
 
 
 # --- Document (3) ---
@@ -54,17 +73,17 @@ def app_connection_status() -> str:
 
 def document_list() -> str:
     """List of all open documents."""
-    return json.dumps(doc_manager.list_documents())
+    return dumps(doc_manager.list_documents())
 
 
 def document_active_type() -> str:
     """Type of the currently active document."""
-    return json.dumps(doc_manager.get_active_document_type())
+    return dumps(doc_manager.get_active_document_type())
 
 
 def document_count() -> str:
     """Count of open documents."""
-    return json.dumps(doc_manager.get_document_count())
+    return dumps(doc_manager.get_document_count())
 
 
 # --- Model (11) ---
@@ -72,57 +91,57 @@ def document_count() -> str:
 
 def model_features() -> str:
     """All features in the active model, in tree order."""
-    return json.dumps(feature_manager.list_features())
+    return dumps(feature_manager.list_features())
 
 
 def model_ref_planes() -> str:
     """Reference planes (1-based: 1=Top/XY, 2=Right/YZ, 3=Front/XZ, 4+ user)."""
-    return json.dumps(query_manager.get_ref_planes())
+    return dumps(query_manager.get_ref_planes())
 
 
 def model_variables() -> str:
     """All variables (dimensions, parameters) in the document."""
-    return json.dumps(query_manager.get_variables())
+    return dumps(query_manager.get_variables())
 
 
 def model_custom_properties() -> str:
     """All custom properties."""
-    return json.dumps(query_manager.get_custom_properties())
+    return dumps(query_manager.get_custom_properties())
 
 
 def model_document_properties() -> str:
     """Document properties (Title, Subject, Author, etc.)."""
-    return json.dumps(query_manager.get_document_properties())
+    return dumps(query_manager.get_document_properties())
 
 
 def model_layers() -> str:
     """All layers in the active document."""
-    return json.dumps(query_manager.get_layers())
+    return dumps(query_manager.get_layers())
 
 
 def model_mode() -> str:
     """Current modeling mode (Ordered vs Synchronous)."""
-    return json.dumps(query_manager.get_modeling_mode())
+    return dumps(query_manager.get_modeling_mode())
 
 
 def model_select_set() -> str:
     """Current selection set."""
-    return json.dumps(query_manager.get_select_set())
+    return dumps(query_manager.get_select_set())
 
 
 def model_edgebar_features() -> str:
     """Full feature tree from DesignEdgebarFeatures."""
-    return json.dumps(query_manager.get_design_edgebar_features())
+    return dumps(query_manager.get_design_edgebar_features())
 
 
 def model_feature_count() -> str:
     """Total count of features."""
-    return json.dumps(query_manager.get_feature_count())
+    return dumps(query_manager.get_feature_count())
 
 
 def model_camera() -> str:
     """Current camera eye/target/up (meters), projection, and scale."""
-    return json.dumps(view_manager.get_camera())
+    return dumps(view_manager.get_camera())
 
 
 # --- Geometry (13) ---
@@ -130,27 +149,27 @@ def model_camera() -> str:
 
 def geometry_bodies() -> str:
     """All solid bodies in the active part."""
-    return json.dumps(query_manager.get_solid_bodies())
+    return dumps(query_manager.get_solid_bodies())
 
 
 def geometry_bounding_box() -> str:
     """Bounding box of the model, in meters."""
-    return json.dumps(query_manager.get_bounding_box())
+    return dumps(query_manager.get_bounding_box())
 
 
 def geometry_face_count() -> str:
     """Total face count on the body."""
-    return json.dumps(query_manager.get_face_count())
+    return dumps(query_manager.get_face_count())
 
 
 def geometry_edge_count() -> str:
     """Total edge count on the body."""
-    return json.dumps(query_manager.get_edge_count())
+    return dumps(query_manager.get_edge_count())
 
 
 def geometry_vertex_count() -> str:
     """Total vertex count on the body."""
-    return json.dumps(query_manager.get_vertex_count())
+    return dumps(query_manager.get_vertex_count())
 
 
 def geometry_faces() -> str:
@@ -160,7 +179,7 @@ def geometry_faces() -> str:
     total/offset/limit/truncated; when truncated is true, use the query_body
     tool with property="faces" and an offset to read the rest.
     """
-    return json.dumps(query_manager.get_body_faces())
+    return dumps(query_manager.get_body_faces())
 
 
 def geometry_edges() -> str:
@@ -169,39 +188,39 @@ def geometry_edges() -> str:
     Paged: see solidedge://geometry/faces. When truncated is true, page with
     the query_body tool using property="edges" and an offset.
     """
-    return json.dumps(query_manager.get_body_edges())
+    return dumps(query_manager.get_body_edges())
 
 
 def geometry_spatial_context() -> str:
     """Where the geometry sits: body count, bounding box with center, whether
     it is centered on the origin, the open sketch's plane, and the static
     plane-to-world-axis map (1=Top/XY +Z, 2=Right/YZ +X, 3=Front/XZ +Y)."""
-    return json.dumps(query_manager.get_spatial_context())
+    return dumps(query_manager.get_spatial_context())
 
 
 def geometry_body_color() -> str:
     """Current body color (RGB 0-255) of the active part."""
-    return json.dumps(query_manager.get_body_color())
+    return dumps(query_manager.get_body_color())
 
 
 def geometry_surface_area() -> str:
     """Total surface area of the active part, in square meters."""
-    return json.dumps(query_manager.get_surface_area())
+    return dumps(query_manager.get_surface_area())
 
 
 def geometry_volume() -> str:
     """Volume of the active part, in cubic meters."""
-    return json.dumps(query_manager.get_volume())
+    return dumps(query_manager.get_volume())
 
 
 def geometry_center_of_gravity() -> str:
     """Center of gravity of the active part, in meters."""
-    return json.dumps(query_manager.get_center_of_gravity())
+    return dumps(query_manager.get_center_of_gravity())
 
 
 def geometry_moments_of_inertia() -> str:
     """Moments of inertia of the active part."""
-    return json.dumps(query_manager.get_moments_of_inertia())
+    return dumps(query_manager.get_moments_of_inertia())
 
 
 # --- Material (2) ---
@@ -209,12 +228,12 @@ def geometry_moments_of_inertia() -> str:
 
 def material_list() -> str:
     """List of available materials."""
-    return json.dumps(query_manager.get_material_list())
+    return dumps(query_manager.get_material_list())
 
 
 def material_table() -> str:
     """Full material table with properties."""
-    return json.dumps(query_manager.get_material_table())
+    return dumps(query_manager.get_material_table())
 
 
 # --- Sketch (3) ---
@@ -222,17 +241,17 @@ def material_table() -> str:
 
 def sketch_info() -> str:
     """Geometry counts in the active sketch."""
-    return json.dumps(sketch_manager.get_sketch_info())
+    return dumps(sketch_manager.get_sketch_info())
 
 
 def sketch_matrix() -> str:
     """Sketch coordinate system matrix (2D-to-3D transformation)."""
-    return json.dumps(sketch_manager.get_sketch_matrix())
+    return dumps(sketch_manager.get_sketch_matrix())
 
 
 def sketch_constraints() -> str:
     """Constraints in the active sketch."""
-    return json.dumps(sketch_manager.get_sketch_constraints())
+    return dumps(sketch_manager.get_sketch_constraints())
 
 
 # --- Drawing (2) ---
@@ -240,12 +259,12 @@ def sketch_constraints() -> str:
 
 def drawing_sheets() -> str:
     """Information about the active draft sheet."""
-    return json.dumps(export_manager.get_sheet_info())
+    return dumps(export_manager.get_sheet_info())
 
 
 def drawing_view_count() -> str:
     """Number of drawing views on the active sheet."""
-    return json.dumps(export_manager.get_drawing_view_count())
+    return dumps(export_manager.get_drawing_view_count())
 
 
 # ===================================================================
@@ -257,27 +276,27 @@ def drawing_view_count() -> str:
 
 def model_feature_by_index(index: int) -> str:
     """Detailed info about a feature by 0-based index."""
-    return json.dumps(feature_manager.get_feature_info(int(index)))
+    return dumps(feature_manager.get_feature_info(int(index)))
 
 
 def model_feature_dimensions(name: str) -> str:
     """Dimensions/parameters of a named feature, in meters."""
-    return json.dumps(query_manager.get_feature_dimensions(name))
+    return dumps(query_manager.get_feature_dimensions(name))
 
 
 def model_feature_status(name: str) -> str:
     """Status of a feature (OK, suppressed, failed, etc.)."""
-    return json.dumps(query_manager.get_feature_status(name))
+    return dumps(query_manager.get_feature_status(name))
 
 
 def model_feature_profiles(name: str) -> str:
     """Sketch profiles associated with a feature."""
-    return json.dumps(query_manager.get_feature_profiles(name))
+    return dumps(query_manager.get_feature_profiles(name))
 
 
 def model_feature_parents(name: str) -> str:
     """Parent geometry/features of a named feature."""
-    return json.dumps(query_manager.get_feature_parents(name))
+    return dumps(query_manager.get_feature_parents(name))
 
 
 # --- Geometry templates (3) ---
@@ -285,17 +304,17 @@ def model_feature_parents(name: str) -> str:
 
 def geometry_face_by_index(index: int) -> str:
     """Detailed information about a face, by 0-based index."""
-    return json.dumps(query_manager.get_face_info(int(index)))
+    return dumps(query_manager.get_face_info(int(index)))
 
 
 def geometry_face_area(index: int) -> str:
     """Area of a face (square meters), by 0-based index."""
-    return json.dumps(query_manager.get_face_area(int(index)))
+    return dumps(query_manager.get_face_area(int(index)))
 
 
 def geometry_edge_by_face(face: int, edge: int) -> str:
     """Detailed info about an edge: 0-based face index, 0-based edge on it."""
-    return json.dumps(query_manager.get_edge_info(int(face), int(edge)))
+    return dumps(query_manager.get_edge_info(int(face), int(edge)))
 
 
 # --- Variable templates (3) ---
@@ -303,17 +322,17 @@ def geometry_edge_by_face(face: int, edge: int) -> str:
 
 def model_variable_by_name(name: str) -> str:
     """Value of a specific variable by name."""
-    return json.dumps(query_manager.get_variable(name))
+    return dumps(query_manager.get_variable(name))
 
 
 def model_variable_formula(name: str) -> str:
     """Formula of a variable by name."""
-    return json.dumps(query_manager.get_variable_formula(name))
+    return dumps(query_manager.get_variable_formula(name))
 
 
 def model_variable_names(name: str) -> str:
     """DisplayName and SystemName of a variable."""
-    return json.dumps(query_manager.get_variable_names(name))
+    return dumps(query_manager.get_variable_names(name))
 
 
 # --- Drawing templates (2) ---
@@ -321,12 +340,12 @@ def model_variable_names(name: str) -> str:
 
 def drawing_view_scale(index: int) -> str:
     """Scale of a drawing view, by 0-based index."""
-    return json.dumps(export_manager.get_drawing_view_scale(int(index)))
+    return dumps(export_manager.get_drawing_view_scale(int(index)))
 
 
 def drawing_view_info(index: int) -> str:
     """Detailed info about a drawing view, by 0-based index."""
-    return json.dumps(export_manager.get_drawing_view_info(int(index)))
+    return dumps(export_manager.get_drawing_view_info(int(index)))
 
 
 # --- Material template (1) ---
@@ -334,7 +353,7 @@ def drawing_view_info(index: int) -> str:
 
 def material_property(name: str, index: int) -> str:
     """One property of a named material, by 0-based property index."""
-    return json.dumps(query_manager.get_material_property(name, int(index)))
+    return dumps(query_manager.get_material_property(name, int(index)))
 
 
 # --- Mass properties template (1) ---
@@ -342,7 +361,7 @@ def material_property(name: str, index: int) -> str:
 
 def geometry_mass_properties(density: float) -> str:
     """Mass properties for a given density (kg/m3)."""
-    return json.dumps(query_manager.get_mass_properties(float(density)))
+    return dumps(query_manager.get_mass_properties(float(density)))
 
 
 # ===================================================================

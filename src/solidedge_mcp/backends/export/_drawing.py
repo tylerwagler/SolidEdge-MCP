@@ -6,11 +6,24 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import DrawingViewOrientationConstants
+from ..constants import DrawingViewOrientationConstants, PartDrawingViewTypeConstants
 from ..logging import get_logger
 from ._base import NOT_A_DRAFT, com_get
 
 _logger = get_logger(__name__)
+
+#: constant.tlb > ViewOrientationConstants values accepted by the DrawingViews
+#: Add* methods, keyed by the names this server exposes.
+VIEW_ORIENTATIONS: dict[str, int] = {
+    "Front": 5,
+    "Back": 8,
+    "Top": 6,
+    "Bottom": 9,
+    "Right": 7,
+    "Left": 10,
+    "Isometric": 12,
+    "Iso": 12,
+}
 
 
 class DrawingMixin:
@@ -120,6 +133,85 @@ class DrawingMixin:
         except Exception as e:
             return error_result(e)
 
+    def add_model_drawing_view(
+        self,
+        x: float = 0.15,
+        y: float = 0.15,
+        orientation: str = "Isometric",
+        scale: float = 1.0,
+        model: str = "part",
+    ) -> dict[str, Any]:
+        """Add a drawing view of a part, sheet metal part, or weldment.
+
+        draft.tlb exposes a separate DrawingViews method per model kind:
+        AddPartView, AddSheetMetalView and AddWeldmentView, each
+        ``(From, Orientation, Scale, x, y, ViewType)``. Only the assembly one
+        was wired up, so drafting a part -- the ordinary case -- had no route
+        of its own and depended on an untyped fallback.
+
+        Args:
+            x: View centre X on the sheet, in meters.
+            y: View centre Y on the sheet, in meters.
+            orientation: 'Front', 'Back', 'Top', 'Bottom', 'Right', 'Left',
+                'Isometric'.
+            scale: View scale factor.
+            model: 'part', 'sheet_metal' or 'weldment'.
+
+        Returns:
+            Dict with status and view info.
+        """
+        try:
+            import win32com.client.dynamic as dyn
+
+            doc = self.doc_manager.get_active_document()
+
+            err = self._require_draft(doc)
+            if err:
+                return err
+
+            methods = {
+                "part": "AddPartView",
+                "sheet_metal": "AddSheetMetalView",
+                "weldment": "AddWeldmentView",
+            }
+            method_name = methods.get(model)
+            if method_name is None:
+                return {
+                    "error": f"Unknown model kind: {model}. Valid: {', '.join(methods)}",
+                }
+
+            if not com_get(com_get(doc, "ModelLinks"), "Count", 0):
+                return {
+                    "error": "No model link found. Create a drawing with create_drawing() first."
+                }
+            model_link = doc.ModelLinks.Item(1)
+
+            orient = VIEW_ORIENTATIONS.get(orientation)
+            if orient is None:
+                valid = ", ".join(VIEW_ORIENTATIONS)
+                return {"error": f"Invalid orientation: {orientation}. Valid: {valid}"}
+
+            sheet = doc.ActiveSheet
+            dvs = dyn.Dispatch(sheet.DrawingViews._oleobj_)
+            getattr(dvs, method_name)(
+                model_link,
+                orient,
+                scale,
+                x,
+                y,
+                PartDrawingViewTypeConstants.sePartDesignedView,
+            )
+
+            return {
+                "status": "added",
+                "model": model,
+                "orientation": orientation,
+                "scale": scale,
+                "position": [x, y],
+            }
+        except Exception as e:
+            return error_result(e)
+
     def add_assembly_drawing_view(
         self, x: float = 0.15, y: float = 0.15, orientation: str = "Isometric", scale: float = 1.0
     ) -> dict[str, Any]:
@@ -179,8 +271,12 @@ class DrawingMixin:
             try:
                 dvs.AddAssemblyView(model_link, orient, scale, x, y, 0)
             except Exception:
-                # Fall back to AddPartView if AddAssemblyView not available
-                dvs.AddPartView(model_link, orient, scale, x, y, 0)
+                # A model link to a part rejects AddAssemblyView. Use the
+                # matching API rather than reporting a failure; add_part_view
+                # is the explicit route.
+                dvs.AddPartView(
+                    model_link, orient, scale, x, y, PartDrawingViewTypeConstants.sePartDesignedView
+                )
 
             return {
                 "status": "added",
@@ -480,9 +576,12 @@ class DrawingMixin:
             except Exception:
                 pass
 
-            # Try to get background name
+            # Sheet.Background is a Sheet object, not a string. Putting the
+            # proxy in the result made json.dumps raise "Object of type
+            # CDispatch is not JSON serializable" for the whole resource.
             with contextlib.suppress(Exception):
-                info["background"] = sheet.Background
+                background = sheet.Background
+                info["background"] = com_get(background, "Name", str(background))
 
             # Count drawing objects
             with contextlib.suppress(Exception):

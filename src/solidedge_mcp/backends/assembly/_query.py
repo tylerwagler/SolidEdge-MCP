@@ -214,13 +214,11 @@ class QueryMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            # GetRangeBox returns two arrays via out params
-            import array
-
-            min_point = array.array("d", [0.0, 0.0, 0.0])
-            max_point = array.array("d", [0.0, 0.0, 0.0])
-
-            occurrence.GetRangeBox(min_point, max_point)
+            # GetRangeBox(MinRangePoint, MaxRangePoint), both [in,out]
+            # SAFEARRAY(VT_R8). pywin32 fills a copy and hands the points back
+            # in the return value; the buffers we pass are never written to.
+            # Reading them back gave every component a zero-sized box.
+            min_point, max_point = occurrence.GetRangeBox([0.0] * 3, [0.0] * 3)
 
             return {
                 "component_index": component_index,
@@ -715,8 +713,6 @@ class QueryMixin:
                     "message": "Need at least 2 components for interference check",
                 }
 
-            import ctypes
-
             # Build set1 - single component or all
             if component_index is not None:
                 if component_index < 0 or component_index >= occurrences.Count:
@@ -729,27 +725,30 @@ class QueryMixin:
             # seInterferenceComparisonSet1vsAllOther = 1
             comparison_method = 1
 
-            # Prepare out parameters
-            interference_status = ctypes.c_int(0)
-            num_interferences = ctypes.c_int(0)
-
+            # Status is a pure [out] parameter and NumInterferences is
+            # [out, optional]: pywin32 returns both rather than accepting them.
+            # Passing ctypes buffers made pywin32 try to parse them as integers.
             try:
-                doc.CheckInterference(
-                    NumElementsSet1=len(set1),
-                    Set1=set1,
-                    Status=interference_status,
+                returned = doc.CheckInterference(
+                    len(set1),
+                    set1,
                     ComparisonMethod=comparison_method,
                     NumElementsSet2=0,
                     AddInterferenceAsOccurrence=False,
-                    NumInterferences=num_interferences,
                 )
+                values = returned if isinstance(returned, tuple) else (returned,)
+                status_value = values[0] if values else None
+                count = values[1] if len(values) > 1 else None
 
-                return {
+                result: dict[str, Any] = {
                     "status": "checked",
-                    "interference_found": interference_status.value != 0,
-                    "num_interferences": num_interferences.value,
+                    "interference_found": bool(status_value),
+                    "interference_status": status_value,
                     "component_checked": component_index,
                 }
+                if isinstance(count, int):
+                    result["num_interferences"] = count
+                return result
             except Exception as e:
                 # CheckInterference has complex COM signature; report what we can
                 return error_result(

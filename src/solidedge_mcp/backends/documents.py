@@ -6,6 +6,7 @@ Handles creating, opening, saving, and closing documents.
 
 import contextlib
 import os
+from pathlib import Path
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -151,13 +152,48 @@ class DocumentManager:
             _logger.error(f"Failed to open document {file_path}: {e}")
             return error_result(e)
 
-    def save_document(self, file_path: str | None = None) -> dict[str, Any]:
-        """Save the active document"""
+    def save_document(
+        self, file_path: str | None = None, overwrite: bool = False
+    ) -> dict[str, Any]:
+        """Save the active document, optionally to a new path.
+
+        Saving over an existing file makes Solid Edge raise a modal "This file
+        exists. Do you want to overwrite it?" prompt, which blocks the COM call
+        until somebody clicks it. Application.DisplayAlerts does not suppress
+        that one, so an automation client hangs with no error and no timeout.
+
+        Rather than answer a prompt nobody can see, refuse up front unless the
+        caller passes overwrite=True, in which case the existing file is
+        removed before the save.
+
+        Args:
+            file_path: Target path. Omit to save in place.
+            overwrite: Permit replacing an existing file at ``file_path``.
+        """
         try:
             if not self.active_document:
                 return {"error": "No active document"}
 
             if file_path:
+                target = Path(file_path)
+                if target.exists():
+                    if not overwrite:
+                        return {
+                            "error": (
+                                f"{target} already exists. Solid Edge would raise a modal "
+                                "overwrite prompt, which blocks the server. Pass "
+                                "overwrite=true to replace it, or choose another path."
+                            ),
+                            "path": str(target),
+                            "exists": True,
+                        }
+                    try:
+                        target.unlink()
+                    except OSError as exc:
+                        return {
+                            "error": f"Cannot replace {target}: {exc}",
+                            "path": str(target),
+                        }
                 self.active_document.SaveAs(file_path)
                 _logger.info(f"Saved document to: {file_path}")
                 return {"status": "saved", "path": file_path, "name": self.active_document.Name}

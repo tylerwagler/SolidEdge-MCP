@@ -51,14 +51,15 @@ def asm_mgr_with_sketch():
 
 class TestGetOccurrenceBoundingBox:
     def test_success(self, asm_mgr):
+        """GetRangeBox returns the points; it does not fill the buffers.
+
+        This test used to mock it as mutating its arguments, which is not what
+        pywin32 does with an [in,out] SAFEARRAY. Real components therefore came
+        back with a zero-sized box, verified against Solid Edge 2026.
+        """
         am, doc = asm_mgr
         occ = MagicMock()
-
-        def mock_get_range_box(min_pt, max_pt):
-            min_pt[0], min_pt[1], min_pt[2] = 0.0, 0.0, 0.0
-            max_pt[0], max_pt[1], max_pt[2] = 0.1, 0.2, 0.3
-
-        occ.GetRangeBox = mock_get_range_box
+        occ.GetRangeBox.return_value = ((0.0, 0.0, 0.0), (0.1, 0.2, 0.3))
 
         occurrences = MagicMock()
         occurrences.Count = 2
@@ -70,6 +71,10 @@ class TestGetOccurrenceBoundingBox:
         assert result["min"] == [0.0, 0.0, 0.0]
         assert result["max"] == [0.1, 0.2, 0.3]
         assert result["size"] == pytest.approx([0.1, 0.2, 0.3])
+        # Two plain lists, sized 3, and nothing else.
+        args, kwargs = occ.GetRangeBox.call_args
+        assert args == ([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+        assert not kwargs
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
@@ -402,6 +407,39 @@ class TestGetSubOccurrences:
 
 
 class TestCheckInterference:
+    def test_status_is_read_from_the_return_value(self, asm_mgr):
+        """Status is [out] and NumInterferences is [out, optional].
+
+        pywin32 returns both. Passing ctypes buffers for them made it try to
+        parse the buffer as an integer, so every interference check failed.
+        """
+        am, doc = asm_mgr
+        occ1, occ2 = MagicMock(), MagicMock()
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.side_effect = lambda i: [None, occ1, occ2][i]
+        doc.Occurrences = occurrences
+        doc.CheckInterference.return_value = (1, 3)
+
+        result = am.check_interference()
+        assert result["status"] == "checked"
+        assert result["interference_found"] is True
+        assert result["num_interferences"] == 3
+        _, kwargs = doc.CheckInterference.call_args
+        assert "Status" not in kwargs
+        assert "NumInterferences" not in kwargs
+
+    def test_no_interference_reported(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.side_effect = lambda i: MagicMock()
+        doc.Occurrences = occurrences
+        doc.CheckInterference.return_value = (0, 0)
+
+        result = am.check_interference()
+        assert result["interference_found"] is False
+
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
         doc.Type = IG_PART_DOCUMENT

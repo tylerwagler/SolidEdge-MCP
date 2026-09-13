@@ -91,11 +91,15 @@ def close_document(
 def save_document(
     method: Literal["save", "copy_as"] = "save",
     file_path: str | None = None,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """Save the active document.
 
     save: in place, or Save As when file_path is given.
     copy_as: write a copy to file_path (required) and keep the current file active.
+    overwrite: required to replace an existing file. Without it the call is
+    refused, because Solid Edge would raise a modal overwrite prompt that
+    blocks the server until someone clicks it.
     """
     if file_path:
         file_path, err = validate_path(file_path, must_exist=False)
@@ -103,7 +107,7 @@ def save_document(
             return err
     match method:
         case "save":
-            return doc_manager.save_document(file_path)
+            return doc_manager.save_document(file_path, overwrite=overwrite)
         case "copy_as":
             if file_path is None:
                 return {"error": "file_path is required for 'copy_as' method"}
