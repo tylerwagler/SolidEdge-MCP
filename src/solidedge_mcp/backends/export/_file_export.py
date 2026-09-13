@@ -217,9 +217,12 @@ class FileExportMixin:
                     "FlatPatternModels not available."
                 }
 
-            # SaveAsFlatDXFEx(filename, face, edge, vertex, useFlatPattern)
-            # Pass None for face/edge/vertex to export all
-            flat_models.SaveAsFlatDXFEx(file_path, None, None, None, True)
+            # SaveAsFlatDXFEx(FileName, Face, Edge, Vertex, UseFlatPatternModel)
+            # is on Models, not on FlatPatternModels; calling it on the latter
+            # always raised. FlatPatternModels is still the right thing to look
+            # for: a document without one is not sheet metal.
+            del flat_models
+            doc.Models.SaveAsFlatDXFEx(file_path, None, None, None, True)
 
             return {
                 "status": "exported",
@@ -311,6 +314,21 @@ class FileExportMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+
+            # SaveAsPLMXML is declared only on the SolidEdgeDocument
+            # interface, and a PartDocument does not answer it: hasattr reads
+            # False on Solid Edge 2026. Say so rather than let the call raise
+            # a bare COM error.
+            if not hasattr(doc, "SaveAsPLMXML"):
+                return {
+                    "error": (
+                        "This document does not support PLMXML export. Solid Edge "
+                        "declares SaveAsPLMXML on the generic SolidEdgeDocument "
+                        "interface, and the part, sheet metal, assembly and draft "
+                        "documents do not answer it."
+                    ),
+                    "unsupported": True,
+                }
 
             doc.SaveAsPLMXML(file_path, ini_file_path)
 

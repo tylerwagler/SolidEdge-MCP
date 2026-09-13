@@ -167,14 +167,14 @@ class TestRevolvedSurface:
 
 class TestLoftedSurface:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+        _, sketch_mgr, doc, _, model, _ = managers
         p1, p2 = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
         result = feature_mgr.create_lofted_surface()
         assert result["status"] == "created"
         assert result["type"] == "lofted_surface"
         assert result["num_profiles"] == 2
-        model.LoftedSurfaces.Add.assert_called_once()
+        doc.Constructions.LoftedSurfaces.Add.assert_called_once()
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -200,14 +200,14 @@ class TestLoftedSurface:
 
 class TestSweptSurface:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+        _, sketch_mgr, doc, _, model, _ = managers
         path, cs = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
         result = feature_mgr.create_swept_surface()
         assert result["status"] == "created"
         assert result["type"] == "swept_surface"
         assert result["num_cross_sections"] == 1
-        model.SweptSurfaces.Add.assert_called_once()
+        doc.Constructions.SweptSurfaces.Add.assert_called_once()
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -445,7 +445,7 @@ class TestCreateLoftedSurfaceV2:
         p1, p2 = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
         loft_surfaces = MagicMock()
-        model.LoftedSurfaces = loft_surfaces
+        doc.Constructions.LoftedSurfaces = loft_surfaces
 
         result = feature_mgr.create_lofted_surface_v2()
         assert result["status"] == "created"
@@ -483,7 +483,7 @@ class TestCreateSweptSurfaceEx:
         path, cs = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
         swept_surfaces = MagicMock()
-        model.SweptSurfaces = swept_surfaces
+        doc.Constructions.SweptSurfaces = swept_surfaces
 
         result = feature_mgr.create_swept_surface_ex()
         assert result["status"] == "created"

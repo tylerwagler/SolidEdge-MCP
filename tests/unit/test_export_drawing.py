@@ -458,19 +458,25 @@ class TestGetSheetSections:
         em, doc = export_mgr
         sheet = MagicMock()
         sec = MagicMock()
-        sec.Label = "A-A"
+        # Section has no Label; Name, Type and Sheets are what it reports.
+        del sec.Label
         sec.Name = "Section1"
         sec.Type = 1
+        sec.Sheets.Count = 2
 
         sections = MagicMock()
         sections.Count = 1
         sections.Item.return_value = sec
-        sheet.Sections = sections
+        # Sections is on DraftDocument, not on Sheet.
+        del sheet.Sections
+        doc.Sections = sections
         doc.ActiveSheet = sheet
 
         result = em.get_sheet_sections()
         assert result["count"] == 1
-        assert result["sections"][0]["label"] == "A-A"
+        assert result["sections"][0]["name"] == "Section1"
+        assert result["sections"][0]["sheet_count"] == 2
+        assert "label" not in result["sections"][0]
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
@@ -484,7 +490,9 @@ class TestGetSheetSections:
         sheet = MagicMock()
         sections = MagicMock()
         sections.Count = 0
-        sheet.Sections = sections
+        # Sections is on DraftDocument, not on Sheet.
+        del sheet.Sections
+        doc.Sections = sections
         doc.ActiveSheet = sheet
 
         result = em.get_sheet_sections()
@@ -511,7 +519,9 @@ class TestCreatePartsList:
         parts_lists = MagicMock()
         parts_lists.Count = 1
         parts_lists.Add.return_value = MagicMock()
-        sheet.PartsLists = parts_lists
+        # PartsLists is on DraftDocument, not on Sheet.
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
@@ -556,7 +566,9 @@ class TestCreatePartsList:
         parts_lists = MagicMock()
         parts_lists.Count = 1
         parts_lists.Add.return_value = MagicMock()
-        sheet.PartsLists = parts_lists
+        # PartsLists is on DraftDocument, not on Sheet.
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 

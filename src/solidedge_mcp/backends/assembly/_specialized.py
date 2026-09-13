@@ -6,6 +6,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
@@ -15,6 +16,28 @@ class SpecializedMixin:
     """Mixin providing specialized assembly subsystem methods."""
 
     # -- Virtual Components --------------------------------------------------
+
+    def _active_harness(self, doc: Any) -> tuple[Any, dict[str, Any] | None]:
+        """The assembly's harness, creating one when there is none.
+
+        Wires, cables, splices and bundles hang off a Harness, which hangs off
+        AssemblyDocument.Harnesses. Reading them straight from the document
+        raised every time.
+        """
+        harnesses = com_get(doc, "Harnesses")
+        if harnesses is None:
+            return None, {
+                "error": (
+                    "This assembly has no Harnesses collection, so wiring cannot "
+                    "be added. Harness work needs Solid Edge Wire Harness Design."
+                )
+            }
+        try:
+            if int(com_get(harnesses, "Count", 0) or 0):
+                return harnesses.Item(1), None
+            return harnesses.Add(), None
+        except Exception as exc:
+            return None, error_result(exc, context="Could not open a wire harness")
 
     def add_virtual_component(
         self,
@@ -462,7 +485,13 @@ class SpecializedMixin:
 
             v_conductors = conductors
 
-            splices = doc.Splices
+            # Splices belongs to a Harness, not to the document; reading it
+            # off the document always raised. A harness is created on
+            # demand so the first wire in an assembly has somewhere to go.
+            harness, err = self._active_harness(doc)
+            if err:
+                return err
+            splices = harness.Splices
             splice = splices.Add(
                 x,
                 y,
@@ -532,7 +561,13 @@ class SpecializedMixin:
             v_paths = paths
             v_dirs = path_directions
 
-            wires = doc.Wires
+            # Wires belongs to a Harness, not to the document; reading it
+            # off the document always raised. A harness is created on
+            # demand so the first wire in an assembly has somewhere to go.
+            harness, err = self._active_harness(doc)
+            if err:
+                return err
+            wires = harness.Wires
             wire = wires.Add(len(paths), v_paths, v_dirs, description)
 
             result: dict[str, Any] = {
@@ -615,7 +650,13 @@ class SpecializedMixin:
             v_split_paths = split_paths
             v_split_dirs = split_dirs
 
-            cables = doc.Cables
+            # Cables belongs to a Harness, not to the document; reading it
+            # off the document always raised. A harness is created on
+            # demand so the first wire in an assembly has somewhere to go.
+            harness, err = self._active_harness(doc)
+            if err:
+                return err
+            cables = harness.Cables
             cable = cables.Add(
                 len(paths),
                 v_paths,
@@ -712,7 +753,13 @@ class SpecializedMixin:
             v_split_paths = split_paths
             v_split_dirs = split_dirs
 
-            bundles = doc.Bundles
+            # Bundles belongs to a Harness, not to the document; reading it
+            # off the document always raised. A harness is created on
+            # demand so the first wire in an assembly has somewhere to go.
+            harness, err = self._active_harness(doc)
+            if err:
+                return err
+            bundles = harness.Bundles
             bundle = bundles.Add(
                 len(paths),
                 v_paths,

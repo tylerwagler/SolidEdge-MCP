@@ -142,11 +142,16 @@ class SolidEdgeConnection:
                 "documents_count": self.application.Documents.Count,
             }
 
-            # Path property may not exist in all Solid Edge versions
-            try:
-                info["path"] = self.application.Path
-            except Exception:
-                info["path"] = "N/A"
+            # Application has no Path property on Solid Edge 2026, so this
+            # always fell through to "N/A". AppDataFolder and RegistryPath are
+            # what it does report about where it lives.
+            for key, member in (
+                ("app_data_folder", "AppDataFolder"),
+                ("registry_path", "RegistryPath"),
+            ):
+                value = com_get(self.application, member)
+                if value is not None:
+                    info[key] = value
 
             return info
         except Exception as e:

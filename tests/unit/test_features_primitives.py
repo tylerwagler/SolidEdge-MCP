@@ -73,7 +73,7 @@ class TestBoxCutout:
         ref_planes = MagicMock()
         doc.RefPlanes = ref_planes
         box_features = MagicMock()
-        models.BoxFeatures = box_features
+        models.Item(1).BoxFeatures = box_features
 
         result = feature_mgr.create_box_cutout_by_two_points(0, 0, 0, 0.05, 0.05, 0.05)
         assert result["status"] == "created"
@@ -119,7 +119,7 @@ class TestBoxCutoutByCenter:
         ref_planes = MagicMock()
         doc.RefPlanes = ref_planes
         box_features = MagicMock()
-        models.BoxFeatures = box_features
+        models.Item(1).BoxFeatures = box_features
 
         result = feature_mgr.create_box_cutout_by_center(0, 0, 0, 0.1, 0.1, 0.05)
         assert result["status"] == "created"
@@ -164,7 +164,7 @@ class TestBoxCutoutByThreePoints:
         ref_planes = MagicMock()
         doc.RefPlanes = ref_planes
         box_features = MagicMock()
-        models.BoxFeatures = box_features
+        models.Item(1).BoxFeatures = box_features
 
         result = feature_mgr.create_box_cutout_by_three_points(0, 0, 0, 0.1, 0, 0, 0, 0.1, 0)
         assert result["status"] == "created"
@@ -211,7 +211,7 @@ class TestCylinderCutout:
         ref_planes = MagicMock()
         doc.RefPlanes = ref_planes
         cyl_features = MagicMock()
-        models.CylinderFeatures = cyl_features
+        models.Item(1).CylinderFeatures = cyl_features
 
         result = feature_mgr.create_cylinder_cutout(0, 0, 0, 0.01, 0.05)
         assert result["status"] == "created"
@@ -239,7 +239,7 @@ class TestSphereCutout:
         ref_planes = MagicMock()
         doc.RefPlanes = ref_planes
         sph_features = MagicMock()
-        models.SphereFeatures = sph_features
+        models.Item(1).SphereFeatures = sph_features
 
         result = feature_mgr.create_sphere_cutout(0, 0, 0, 0.02)
         assert result["status"] == "created"

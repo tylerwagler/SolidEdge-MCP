@@ -42,7 +42,10 @@ class TestExportFlatDxf:
         result = em.export_flat_dxf("C:/output/flat.dxf")
         assert result["status"] == "exported"
         assert result["format"] == "Flat DXF"
-        flat_models.SaveAsFlatDXFEx.assert_called_once()
+        # SaveAsFlatDXFEx is on Models; FlatPatternModels only proves the
+        # document is sheet metal.
+        doc.Models.SaveAsFlatDXFEx.assert_called_once()
+        flat_models.SaveAsFlatDXFEx.assert_not_called()
 
     def test_not_sheet_metal(self, export_mgr):
         em, doc = export_mgr

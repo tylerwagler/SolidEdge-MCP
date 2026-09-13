@@ -134,7 +134,7 @@ class TestCreateBoundedSurface:
         p1, p2 = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
         blue_surfs = MagicMock()
-        model.BlueSurfs = blue_surfs
+        doc.Constructions.BlueSurfs = blue_surfs
 
         result = feature_mgr.create_bounded_surface()
         assert result["status"] == "created"
@@ -150,7 +150,7 @@ class TestCreateBoundedSurface:
         p1, p2, p3 = MagicMock(), MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, p2, p3]
         blue_surfs = MagicMock()
-        model.BlueSurfs = blue_surfs
+        doc.Constructions.BlueSurfs = blue_surfs
 
         result = feature_mgr.create_bounded_surface(want_end_caps=False, periodic=True)
         assert result["status"] == "created"

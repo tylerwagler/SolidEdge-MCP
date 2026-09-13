@@ -346,7 +346,7 @@ class PrimitiveMixin:
             depth = abs(z2 - z1) if abs(z2 - z1) > 0 else abs(y2 - y1)
 
             # BoxFeatures is on the Models collection level
-            box_features = models.BoxFeatures if hasattr(models, "BoxFeatures") else None
+            box_features = models.Item(1).BoxFeatures if hasattr(models, "BoxFeatures") else None
             if box_features is None:
                 # Try via the model object
                 model = models.Item(1)
@@ -423,7 +423,7 @@ class PrimitiveMixin:
 
             top_plane = self._get_ref_plane(doc, plane_index)
 
-            box_features = models.BoxFeatures if hasattr(models, "BoxFeatures") else None
+            box_features = models.Item(1).BoxFeatures if hasattr(models, "BoxFeatures") else None
             if box_features is None:
                 model = models.Item(1)
                 box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
@@ -505,7 +505,7 @@ class PrimitiveMixin:
             if depth == 0:
                 depth = 0.01
 
-            box_features = models.BoxFeatures if hasattr(models, "BoxFeatures") else None
+            box_features = models.Item(1).BoxFeatures if hasattr(models, "BoxFeatures") else None
             if box_features is None:
                 model = models.Item(1)
                 box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
@@ -582,7 +582,9 @@ class PrimitiveMixin:
             top_plane = self._get_ref_plane(doc, plane_index)
 
             # CylinderFeatures collection - try on Models first, then model
-            cyl_features = models.CylinderFeatures if hasattr(models, "CylinderFeatures") else None
+            cyl_features = (
+                models.Item(1).CylinderFeatures if hasattr(models, "CylinderFeatures") else None
+            )
             if cyl_features is None:
                 model = models.Item(1)
                 cyl_features = (
@@ -649,7 +651,9 @@ class PrimitiveMixin:
             top_plane = self._get_ref_plane(doc, plane_index)
 
             # SphereFeatures collection
-            sph_features = models.SphereFeatures if hasattr(models, "SphereFeatures") else None
+            sph_features = (
+                models.Item(1).SphereFeatures if hasattr(models, "SphereFeatures") else None
+            )
             if sph_features is None:
                 model = models.Item(1)
                 sph_features = model.SphereFeatures if hasattr(model, "SphereFeatures") else None

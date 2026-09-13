@@ -395,7 +395,13 @@ class TestCreateGusset:
         result = feature_mgr.create_gusset(0.002)
         assert result["status"] == "created"
         assert result["type"] == "gusset"
-        gussets.Add.assert_called_once_with(profile, 2, 0.002)
+        # Gussets has no Add; AddByProfile is the real one.
+        gussets.Add.assert_not_called()
+        gussets.AddByProfile.assert_called_once()
+        args = gussets.AddByProfile.call_args.args
+        assert args[0] is profile
+        assert args[1] == 2  # igRight
+        assert args[3] == 0.002  # gusset width
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers

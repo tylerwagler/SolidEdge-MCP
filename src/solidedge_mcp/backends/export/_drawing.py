@@ -327,11 +327,9 @@ class DrawingMixin:
 
             dv = dvs.Item(1)
 
-            # Get PartsLists collection
-            parts_lists = com_get(sheet, "PartsLists")
-            if parts_lists is None:
-                # Try from document level
-                parts_lists = com_get(doc, "PartsLists")
+            # PartsLists is on DraftDocument, not on Sheet; the sheet
+            # lookup could only ever return None.
+            parts_lists = com_get(doc, "PartsLists")
 
             if parts_lists is None:
                 return {"error": "PartsLists collection not available"}
@@ -592,12 +590,12 @@ class DrawingMixin:
                 "sheet_count": sheets.Count,
             }
 
-            # Try to get sheet dimensions
-            try:
-                info["width"] = sheet.SheetWidth
-                info["height"] = sheet.SheetHeight
-            except Exception:
-                pass
+            # SheetWidth and SheetHeight are on SheetSetup, not on Sheet, so
+            # both keys were always missing from the result.
+            with contextlib.suppress(Exception):
+                setup = sheet.SheetSetup
+                info["width"] = setup.SheetWidth
+                info["height"] = setup.SheetHeight
 
             # Sheet.Background is a Sheet object, not a string. Putting the
             # proxy in the result made json.dumps raise "Object of type
@@ -862,18 +860,20 @@ class DrawingMixin:
             err = self._require_draft(doc, NOT_A_DRAFT)
             if err:
                 return err
-            sheet = doc.ActiveSheet
-            sections = sheet.Sections
+            # Sections is on DraftDocument, not on Sheet.
+            sections = doc.Sections
             items = []
             for i in range(1, sections.Count + 1):
                 sec = sections.Item(i)
                 info: dict[str, Any] = {"index": i - 1}
-                with contextlib.suppress(Exception):
-                    info["label"] = sec.Label
+                # Section has Name, Index, Type and Sheets. It has no Label,
+                # so that key was always missing.
                 with contextlib.suppress(Exception):
                     info["name"] = sec.Name
                 with contextlib.suppress(Exception):
                     info["type"] = sec.Type
+                with contextlib.suppress(Exception):
+                    info["sheet_count"] = sec.Sheets.Count
                 items.append(info)
             return {"count": len(items), "sections": items}
         except Exception as e:

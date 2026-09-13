@@ -311,10 +311,10 @@ class QueryMixin:
 
             result: dict[str, Any] = {"component_index": component_index}
 
-            try:
-                result["display_name"] = occurrence.DisplayName
-            except Exception:
-                result["display_name"] = None
+            # Occurrence has no DisplayName. Name already reads as
+            # "part.par:1", which is the display name Solid Edge shows.
+            with contextlib.suppress(Exception):
+                result["display_name"] = occurrence.Name
 
             with contextlib.suppress(Exception):
                 result["name"] = occurrence.Name
@@ -417,8 +417,11 @@ class QueryMixin:
                                 child_info["name"] = child.Name
                             except Exception:
                                 child_info["name"] = f"SubOcc_{j}"
+                            # A SubOccurrence names its file
+                            # SubOccurrenceFileName; OccurrenceFileName is on
+                            # Occurrence, so this key was always missing.
                             with contextlib.suppress(Exception):
-                                child_info["file"] = child.OccurrenceFileName
+                                child_info["file"] = child.SubOccurrenceFileName
                             children.append(child_info)
                         except Exception:
                             children.append({"index": j - 1, "name": f"SubOcc_{j}"})

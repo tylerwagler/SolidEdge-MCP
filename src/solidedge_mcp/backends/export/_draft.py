@@ -18,6 +18,25 @@ class DraftMixin:
     # SMART FRAMES
     # =================================================================
 
+    def _print_utility(self) -> Any:
+        """The draft print utility, or None.
+
+        ``Document.DraftPrintUtility`` does not exist on any Solid Edge
+        document, so reading it there returned None every time and each of
+        these four tools took its "not available" branch.
+        ``Application.GetDraftPrintUtility()`` is the real route, verified on
+        Solid Edge 2026: the object it returns answers Copies, Printer,
+        PaperWidth, RemoveAllDocuments and AddSheet.
+        """
+        try:
+            app = self.doc_manager.connection.get_application()
+        except Exception:
+            return None
+        try:
+            return app.GetDraftPrintUtility()
+        except Exception:
+            return None
+
     def add_smart_frame(
         self, style_name: str, x1: float, y1: float, x2: float, y2: float
     ) -> dict[str, Any]:
@@ -468,14 +487,14 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            sheet = doc.ActiveSheet
             dvs = self._get_drawing_views()
             if dvs is None:
                 return {"error": "No drawing views available"}
 
             dv = dvs.Item(view_index + 1)
 
-            bend_tables = sheet.DraftBendTables
+            # DraftBendTables is on DraftDocument, not on Sheet.
+            bend_tables = doc.DraftBendTables
             bend_tables.Add(
                 dv,
                 saved_settings,
@@ -512,7 +531,7 @@ class DraftMixin:
             doc = self.doc_manager.get_active_document()
 
             # DraftPrintUtility gives more control than Document.PrintOut.
-            dpu = com_get(doc, "DraftPrintUtility")
+            dpu = self._print_utility()
             if dpu is not None:
                 with contextlib.suppress(Exception):
                     dpu.Copies = copies
@@ -553,11 +572,16 @@ class DraftMixin:
             Dict with status and printer name
         """
         try:
-            doc = self.doc_manager.get_active_document()
+            self.doc_manager.get_active_document()  # refuse with no document
 
-            dpu = com_get(doc, "DraftPrintUtility")
+            dpu = self._print_utility()
             if dpu is None:
-                return {"error": "Active document does not have DraftPrintUtility"}
+                return {
+                    "error": (
+                        "Solid Edge did not hand out a print utility. It comes "
+                        "from Application.GetDraftPrintUtility()."
+                    )
+                }
             dpu.Printer = printer_name
 
             return {"status": "set", "printer": printer_name}
@@ -574,11 +598,16 @@ class DraftMixin:
             Dict with printer name
         """
         try:
-            doc = self.doc_manager.get_active_document()
+            self.doc_manager.get_active_document()  # refuse with no document
 
-            dpu = com_get(doc, "DraftPrintUtility")
+            dpu = self._print_utility()
             if dpu is None:
-                return {"error": "Active document does not have DraftPrintUtility"}
+                return {
+                    "error": (
+                        "Solid Edge did not hand out a print utility. It comes "
+                        "from Application.GetDraftPrintUtility()."
+                    )
+                }
             printer_name = dpu.Printer
 
             return {"printer": printer_name}
@@ -602,11 +631,16 @@ class DraftMixin:
             Dict with status and paper settings
         """
         try:
-            doc = self.doc_manager.get_active_document()
+            self.doc_manager.get_active_document()  # refuse with no document
 
-            dpu = com_get(doc, "DraftPrintUtility")
+            dpu = self._print_utility()
             if dpu is None:
-                return {"error": "Active document does not have DraftPrintUtility"}
+                return {
+                    "error": (
+                        "Solid Edge did not hand out a print utility. It comes "
+                        "from Application.GetDraftPrintUtility()."
+                    )
+                }
 
             with contextlib.suppress(Exception):
                 dpu.PaperWidth = width

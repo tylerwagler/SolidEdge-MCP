@@ -26,6 +26,9 @@ def export_mgr():
     doc = MagicMock()
     doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
+    # No document has a DraftPrintUtility property; the print utility comes
+    # from Application.GetDraftPrintUtility().
+    del doc.DraftPrintUtility
     return ExportManager(dm), doc
 
 
@@ -38,7 +41,9 @@ class TestPrintDrawing:
     def test_with_draft_print_utility(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.print_drawing(copies=2, all_sheets=False)
         assert result["status"] == "printed"
@@ -47,14 +52,18 @@ class TestPrintDrawing:
 
     def test_fallback_printout(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
         result = em.print_drawing()
         assert result["status"] == "printed"
 
     def test_no_print_support(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
         del doc.PrintOut
 
         result = em.print_drawing()
@@ -65,7 +74,9 @@ class TestSetPrinter:
     def test_success(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.set_printer("HP LaserJet")
         assert result["status"] == "set"
@@ -74,7 +85,9 @@ class TestSetPrinter:
 
     def test_no_dpu(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
         result = em.set_printer("HP LaserJet")
         assert "error" in result
@@ -82,7 +95,9 @@ class TestSetPrinter:
     def test_different_printer(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.set_printer("PDF Printer")
         assert result["printer"] == "PDF Printer"
@@ -93,14 +108,18 @@ class TestGetPrinter:
         em, doc = export_mgr
         dpu = MagicMock()
         dpu.Printer = "HP LaserJet"
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.get_printer()
         assert result["printer"] == "HP LaserJet"
 
     def test_no_dpu(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
         result = em.get_printer()
         assert "error" in result
@@ -109,7 +128,9 @@ class TestGetPrinter:
         em, doc = export_mgr
         dpu = MagicMock()
         dpu.Printer = "PDF Printer"
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.get_printer()
         assert result["printer"] == "PDF Printer"
@@ -119,7 +140,9 @@ class TestSetPaperSize:
     def test_landscape(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.set_paper_size(0.297, 0.210, "Landscape")
         assert result["status"] == "set"
@@ -129,7 +152,9 @@ class TestSetPaperSize:
     def test_portrait(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.set_paper_size(0.210, 0.297, "Portrait")
         assert result["status"] == "set"
@@ -137,7 +162,9 @@ class TestSetPaperSize:
 
     def test_no_dpu(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
         result = em.set_paper_size(0.297, 0.210)
         assert "error" in result
@@ -254,7 +281,9 @@ class TestCreateBendTable:
         sheet = MagicMock()
         bend_tables = MagicMock()
         bend_tables.Count = 1
-        sheet.DraftBendTables = bend_tables
+        # DraftBendTables is on DraftDocument, not on Sheet.
+        del sheet.DraftBendTables
+        doc.DraftBendTables = bend_tables
         doc.ActiveSheet = sheet
 
         result = em.create_bend_table(view_index=0)

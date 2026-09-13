@@ -401,7 +401,14 @@ class TestAddSplice:
         splice.Name = "Splice_1"
         splices = MagicMock()
         splices.Add.return_value = splice
-        doc.Splices = splices
+        # Splices belongs to a Harness, reached through doc.Harnesses.
+        del doc.Splices
+        harness = MagicMock()
+        harness.Splices = splices
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         occurrences = MagicMock()
         occurrences.Count = 3
@@ -447,7 +454,14 @@ class TestAddWire:
         wire.Name = "Wire_1"
         wires = MagicMock()
         wires.Add.return_value = wire
-        doc.Wires = wires
+        # Wires belongs to a Harness, reached through doc.Harnesses.
+        del doc.Wires
+        harness = MagicMock()
+        harness.Wires = wires
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         occurrences = MagicMock()
         occurrences.Count = 3
@@ -500,7 +514,14 @@ class TestAddCable:
         cable.Name = "Cable_1"
         cables = MagicMock()
         cables.Add.return_value = cable
-        doc.Cables = cables
+        # Cables belongs to a Harness, reached through doc.Harnesses.
+        del doc.Cables
+        harness = MagicMock()
+        harness.Cables = cables
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         occurrences = MagicMock()
         occurrences.Count = 3
@@ -554,7 +575,14 @@ class TestAddBundle:
         bundle.Name = "Bundle_1"
         bundles = MagicMock()
         bundles.Add.return_value = bundle
-        doc.Bundles = bundles
+        # Bundles belongs to a Harness, reached through doc.Harnesses.
+        del doc.Bundles
+        harness = MagicMock()
+        harness.Bundles = bundles
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         occurrences = MagicMock()
         occurrences.Count = 3

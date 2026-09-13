@@ -261,7 +261,8 @@ class TestGetComponentDisplayName:
     def test_success(self, asm_mgr):
         am, doc = asm_mgr
         occ = MagicMock()
-        occ.DisplayName = "Bolt M10x30"
+        # Occurrence has no DisplayName; Name is what Solid Edge shows.
+        del occ.DisplayName
         occ.Name = "Bolt_1"
         occ.OccurrenceFileName = "C:/parts/bolt.par"
         occurrences = MagicMock()
@@ -270,7 +271,7 @@ class TestGetComponentDisplayName:
         doc.Occurrences = occurrences
 
         result = am.get_component_display_name(0)
-        assert result["display_name"] == "Bolt M10x30"
+        assert result["display_name"] == "Bolt_1"
         assert result["name"] == "Bolt_1"
         assert result["file_name"] == "C:/parts/bolt.par"
 
@@ -344,13 +345,17 @@ class TestGetOccurrenceDocument:
 class TestGetSubOccurrences:
     def test_with_children(self, asm_mgr):
         am, doc = asm_mgr
+        # A SubOccurrence names its file SubOccurrenceFileName;
+        # OccurrenceFileName is on Occurrence, so the key was always missing.
         child1 = MagicMock()
         child1.Name = "SubPart_1"
-        child1.OccurrenceFileName = "C:/parts/sub1.par"
+        child1.SubOccurrenceFileName = "C:/parts/sub1.par"
+        del child1.OccurrenceFileName
 
         child2 = MagicMock()
         child2.Name = "SubPart_2"
-        child2.OccurrenceFileName = "C:/parts/sub2.par"
+        child2.SubOccurrenceFileName = "C:/parts/sub2.par"
+        del child2.OccurrenceFileName
 
         sub_occs = MagicMock()
         sub_occs.Count = 2

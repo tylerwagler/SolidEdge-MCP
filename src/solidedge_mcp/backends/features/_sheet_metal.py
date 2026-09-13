@@ -888,8 +888,25 @@ class SheetMetalMixin:
             # igLeft=1, igRight=2
             side = 2 if direction == "Normal" else 1
 
+            # Gussets has no Add. Part.tlb gives AddByProfile(pGussetProfile,
+            # fpcMaterialSide, fpcThicknessSide, dGussetWidth, dTaperAngle,
+            # gcGussetShape, dFormedRadius, gcRounding, dPunchRadius,
+            # dDieRadius) and AddByBend; the profile form is the one a drawn
+            # sketch fits. igUserDrawnProfile = 2, igRoundShape = 3,
+            # igGussetNone = 0, from constant.tlb > GussetConstants.
             gussets = model.Gussets
-            gussets.Add(profile, side, thickness)
+            gussets.AddByProfile(
+                profile,  # pGussetProfile
+                side,  # fpcMaterialSide
+                side,  # fpcThicknessSide
+                thickness,  # dGussetWidth
+                0.0,  # dTaperAngle
+                2,  # gcGussetShape: igUserDrawnProfile
+                0.0,  # dFormedRadius
+                0,  # gcRounding: igGussetNone
+                0.0,  # dPunchRadius
+                0.0,  # dDieRadius
+            )
 
             return {
                 "status": "created",

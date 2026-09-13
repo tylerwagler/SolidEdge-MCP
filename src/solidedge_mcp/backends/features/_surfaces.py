@@ -210,8 +210,11 @@ class SurfacesMixin:
             ]
 
             if models.Count > 0:
-                model = models.Item(1)
-                loft_surfaces = model.LoftedSurfaces
+                # Proves a base feature exists; the surface goes on Constructions.
+                models.Item(1)
+                # Surfaces live on doc.Constructions; Model has no
+                # LoftedSurfaces property, so this always raised.
+                loft_surfaces = doc.Constructions.LoftedSurfaces
                 loft_surfaces.Add(
                     len(all_profiles),
                     v_sections,
@@ -264,7 +267,8 @@ class SurfacesMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
 
-            model = models.Item(1)
+            # Proves a base feature exists; the surface goes on Constructions.
+            models.Item(1)
 
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
@@ -283,7 +287,9 @@ class SurfacesMixin:
             v_paths = [path_profile]
             v_sections = cross_sections
 
-            swept_surfaces = model.SweptSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # SweptSurfaces property, so this always raised.
+            swept_surfaces = doc.Constructions.SweptSurfaces
             swept_surfaces.Add(
                 1,
                 v_paths,
@@ -649,7 +655,8 @@ class SurfacesMixin:
             if models.Count == 0:
                 return {"error": "Lofted surface requires an existing base feature."}
 
-            model = models.Item(1)
+            # Proves a base feature exists; the surface goes on Constructions.
+            models.Item(1)
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
@@ -661,7 +668,9 @@ class SurfacesMixin:
                 VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles
             ]
 
-            loft_surfaces = model.LoftedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # LoftedSurfaces property, so this always raised.
+            loft_surfaces = doc.Constructions.LoftedSurfaces
             loft_surfaces.Add2(
                 len(all_profiles),  # NumSections
                 v_sections,  # CrossSections
@@ -713,7 +722,8 @@ class SurfacesMixin:
             if models.Count == 0:
                 return {"error": "Swept surface requires an existing base feature."}
 
-            model = models.Item(1)
+            # Proves a base feature exists; the surface goes on Constructions.
+            models.Item(1)
 
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
@@ -738,7 +748,9 @@ class SurfacesMixin:
                 VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
             ]
 
-            swept_surfaces = model.SweptSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # SweptSurfaces property, so this always raised.
+            swept_surfaces = doc.Constructions.SweptSurfaces
             swept_surfaces.AddEx(
                 1,  # NumCurves
                 v_paths,  # TraceCurves
@@ -977,7 +989,8 @@ class SurfacesMixin:
             models = doc.Models
             if models.Count == 0:
                 return {"error": "Bounded surface requires an existing base feature."}
-            model = models.Item(1)
+            # Proves a base feature exists; the surface goes on Constructions.
+            models.Item(1)
 
             all_profiles = self.sketch_manager.get_accumulated_profiles()
             if len(all_profiles) < 2:
@@ -989,7 +1002,9 @@ class SurfacesMixin:
             v_sections = all_profiles
             v_origins = [None] * len(all_profiles)
 
-            blue_surfs = model.BlueSurfs
+            # Surfaces live on doc.Constructions; Model has no
+            # BlueSurfs property, so this always raised.
+            blue_surfs = doc.Constructions.BlueSurfs
             blue_surfs.Add(
                 len(all_profiles),  # NumSections
                 v_sections,  # CrossSections
