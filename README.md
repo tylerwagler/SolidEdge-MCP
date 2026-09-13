@@ -109,13 +109,25 @@ Every tool and resource is marshalled onto one COM worker thread (`CoInitializeE
 uv sync --all-extras
 uv run pytest              # unit tests (mocked COM); integration tests deselected
 uv run pytest -m integration   # needs a running, licensed Solid Edge
+uv run pytest --cov        # coverage
 uv run ruff check . && uv run ruff format --check .
 uv run mypy src/
 ```
 
-CI runs the same four steps on `windows-latest` for every push and pull request.
+CI runs lint, format, type check, and unit tests on `windows-latest` for every push and pull request.
 
-`scripts/scrape_typelibs.py` regenerates `reference/typelib_dump.json` (gitignored, ~19 MB) from the installed Solid Edge type libraries. `reference/typelib_summary.md` is the committed digest. `scripts/manual/` holds hand-run COM experiments; they are not tests.
+### COM conformance
+
+Unit tests mock COM with objects that answer to any attribute, so a misspelled member or a wrong argument count passes them and only fails against real Solid Edge. Three checks close that gap using the scraped type libraries:
+
+```bash
+uv run python scripts/audit_com_signatures.py --by-file
+uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.py
+```
+
+`tests/unit/test_constants_typelib.py` verifies every COM enum value in `constants.py`. `tests/unit/test_com_members.py` fails on any COM member name absent from the type libraries. Both skip when the dump is missing, so a fresh clone and CI stay green.
+
+`scripts/scrape_typelibs.py` regenerates `reference/typelib_dump.json` (gitignored, ~20 MB) from the installed Solid Edge type libraries. `reference/typelib_summary.md` is the committed digest. `scripts/manual/` holds hand-run COM experiments; they are not tests.
 
 ## License
 

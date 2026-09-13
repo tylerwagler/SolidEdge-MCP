@@ -15,8 +15,14 @@ uv run solidedge-mcp          # run the server (stdio)
 uv run pytest                 # unit tests; integration tests are deselected by default
 uv run pytest -m integration  # needs a running, licensed Solid Edge
 uv run pytest tests/unit/test_features_extrude.py::TestCreateExtrude::test_success
+uv run pytest --cov           # coverage report
 uv run ruff check . && uv run ruff format .
 uv run mypy src/
+
+# COM conformance against the scraped type libraries
+uv run python scripts/audit_com_signatures.py --by-file
+uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.py
+uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid Edge)
 ```
 
 CI (`.github/workflows/ci.yml`, windows-latest) runs ruff check, ruff format --check, mypy, pytest. Keep all four green.
@@ -82,6 +88,33 @@ Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{
 `reference/typelib_dump.json` is the source of truth for COM signatures and enum values but is **gitignored and absent from a fresh clone**. Regenerate it with `uv run python scripts/scrape_typelibs.py` (requires Solid Edge installed). Until then use `reference/typelib_summary.md` (truncated to the first values of each enum) and `reference/TYPELIB_IMPLEMENTATION_MAP.md`.
 
 Rules: never guess a constant or signature. Look it up, copy the exact value into `constants.py` with a comment naming the enum, and prefer collection-level `Add*` methods.
+
+Three checks enforce this, and all three skip when the dump is absent:
+
+| Check | What it catches |
+|---|---|
+| `tests/unit/test_constants_typelib.py` | A constant whose value disagrees with its enum. Classes that are our own vocabulary go in `LOCAL_GROUPINGS` with a note. |
+| `tests/unit/test_com_members.py` | A COM member name that exists in no type library. A ratchet: new names fail, and fixing one fails until you delete it from `UNVERIFIED`. |
+| `scripts/audit_com_signatures.py` | A call with the wrong number of arguments. Run `--filter <path>` to see the full parameter list for each finding, `--by-file` for counts. |
+
+The signature audit resolves the receiver, so `cutouts = model.ExtrudedCutouts` followed by `cutouts.AddFiniteMulti(...)` is checked against `ExtrudedCutouts` specifically rather than against every interface with that method name.
+
+### When a COM call cannot be formed
+
+Some methods require an object this server cannot obtain: a `KeyPoint`, a specific `Face`, a tangent face, a user selection. Do not pass `None` or guess. Return an error without touching COM, and keep the method signature so tool dispatch still works:
+
+```python
+return {
+    "error": (
+        "Normal cutout to a keypoint needs a KeyPoint or tangent face object, "
+        "which this server cannot select. Use create_normal_cutout(distance) "
+        "or the Solid Edge UI."
+    ),
+    "unsupported": True,
+}
+```
+
+The same applies to APIs Solid Edge blocks for automation, such as `AssemblyFeaturesPatterns.Add` and `AssemblyFeaturesMirrors.Add` (both `E_ACCESSDENIED` on 2025/2026). An honest error beats a call that always fails.
 
 ## Testing notes
 
