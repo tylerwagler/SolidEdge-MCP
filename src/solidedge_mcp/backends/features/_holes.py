@@ -8,10 +8,12 @@ from ..constants import (
     FaceQueryConstants,
 )
 from ..logging import get_logger
+from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
 
+@verify_geometry_on_creators
 class HolesMixin:
     """Mixin providing hole creation methods."""
 

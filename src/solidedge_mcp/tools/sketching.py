@@ -17,6 +17,7 @@ def manage_sketch(
     x2: float = 0.0,
     y2: float = 0.0,
     visible: bool = False,
+    closed: bool = True,
 ) -> dict[str, Any]:
     """Create, close, or configure a 2D sketch.
 
@@ -25,6 +26,11 @@ def manage_sketch(
 
     Named planes: 'Top','Front','Right','XY','XZ','YZ'.
     Coordinates in meters.
+
+    For action='close': closed=True (default) validates the profile as a
+    closed region (required for solids; welds polyline rectangles into a
+    region). The result includes 'validation_code' (0 = clean close; other
+    values are a hint, not a hard failure). Pass closed=False for open profiles.
     """
     err = validate_numerics(x1=x1, y1=y1, x2=x2, y2=y2)
     if err:
@@ -33,7 +39,7 @@ def manage_sketch(
         case "create":
             return sketch_manager.create_sketch(plane)
         case "close":
-            return sketch_manager.close_sketch()
+            return sketch_manager.close_sketch(closed=closed)
         case "create_on_plane":
             return sketch_manager.create_sketch_on_plane_index(plane_index)
         case "set_axis":

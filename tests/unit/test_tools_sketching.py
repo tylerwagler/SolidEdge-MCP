@@ -48,6 +48,16 @@ class TestManageSketch:
         manage_sketch(action="set_axis", x1=0.0, y1=0.0, x2=0.1, y2=0.0)
         mock_mgr.set_axis_of_revolution.assert_called_once_with(0.0, 0.0, 0.1, 0.0)
 
+    def test_close_defaults_to_closed(self, mock_mgr):
+        mock_mgr.close_sketch.return_value = {"status": "closed"}
+        manage_sketch(action="close")
+        mock_mgr.close_sketch.assert_called_once_with(closed=True)
+
+    def test_close_passes_closed_false(self, mock_mgr):
+        mock_mgr.close_sketch.return_value = {"status": "closed"}
+        manage_sketch(action="close", closed=False)
+        mock_mgr.close_sketch.assert_called_once_with(closed=False)
+
     def test_unknown(self, mock_mgr):
         result = manage_sketch(action="bogus")
         assert "error" in result

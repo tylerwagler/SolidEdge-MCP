@@ -29,7 +29,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             Dict with volume, mass, surface area, center of gravity, moments of inertia
         """
         try:
-            _logger.info(f"Computing mass properties with density={density} kg/m³")
+            _logger.info(f"Computing mass properties with density={density} kg/m^3")
             doc, model = self._get_first_model()
 
             # ComputePhysicalPropertiesWithSpecifiedDensity(Density, Accuracy)
@@ -267,39 +267,58 @@ class PhysicalPropsMixin(QueryManagerBase):
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def get_user_physical_properties(self) -> dict[str, Any]:
+    def get_user_physical_properties(self, density: float = 7850.0) -> dict[str, Any]:
         """
-        Get user-overridden physical properties from the active part document.
+        Get physical properties of the active part.
 
-        Uses PartDocument.GetUserPhysicalProperties() which returns properties
-        that have been manually set via PutUserPhysicalProperties.
+        Prefers user-overridden values from PartDocument.GetUserPhysicalProperties()
+        (set via PutUserPhysicalProperties). On a part with no such overrides that
+        COM call FAULTS, so we fall back to properties COMPUTED from geometry via
+        ComputePhysicalPropertiesWithSpecifiedDensity (the same path the working
+        solidedge://geometry/* resources use). The returned dict carries a
+        ``source`` of "user_override" or "computed".
+
+        Args:
+            density: Density (kg/m³) used only for the computed fallback
+                (default 7850 = steel). Ignored when user overrides exist.
 
         Returns:
-            Dict with volume, area, mass, center of gravity, moments of inertia
+            Dict with volume, area, mass, center of gravity, etc.
         """
         try:
             doc = self.doc_manager.get_active_document()
-            result = doc.GetUserPhysicalProperties()
+            try:
+                result = doc.GetUserPhysicalProperties()
+            except Exception as e:
+                _logger.info(
+                    f"GetUserPhysicalProperties unavailable ({e}); "
+                    f"computing properties from geometry."
+                )
+                result = None
 
             # Result is a tuple: (Volume, Area, Mass, CoG[3], CoV[3],
             #   GlobalMOI[6], PrincipalMOI[3], PrincipalAxes[9], RadiiOfGyration[3])
-            props: dict[str, Any] = {"status": "success"}
             if isinstance(result, tuple) and len(result) >= 3:
+                props: dict[str, Any] = {"status": "success", "source": "user_override"}
                 props["volume"] = result[0]
                 props["surface_area"] = result[1]
                 props["mass"] = result[2]
-                if len(result) > 3:
-                    cog = result[3]
-                    if hasattr(cog, "__iter__"):
-                        props["center_of_gravity"] = list(cog)[:3]
-                if len(result) > 4:
-                    cov = result[4]
-                    if hasattr(cov, "__iter__"):
-                        props["center_of_volume"] = list(cov)[:3]
-            else:
-                props["raw_result"] = str(result)
+                if len(result) > 3 and hasattr(result[3], "__iter__"):
+                    props["center_of_gravity"] = list(result[3])[:3]
+                if len(result) > 4 and hasattr(result[4], "__iter__"):
+                    props["center_of_volume"] = list(result[4])[:3]
+                return props
 
-            return props
+            # No usable user-set overrides -> compute from geometry.
+            computed = self.get_mass_properties(density)
+            if "error" not in computed:
+                computed["source"] = "computed"
+                computed["note"] = (
+                    "No user-set physical properties were found; values were "
+                    f"computed from geometry at density={density} kg/m³. Assign a "
+                    "material/density for an exact mass."
+                )
+            return computed
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 

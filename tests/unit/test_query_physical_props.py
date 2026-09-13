@@ -212,6 +212,7 @@ class TestGetUserPhysicalProperties:
 
         result = qm.get_user_physical_properties()
         assert result["status"] == "success"
+        assert result["source"] == "user_override"
         assert result["volume"] == 1.5e-5
         assert result["surface_area"] == 0.001
         assert result["mass"] == 0.12
@@ -224,21 +225,42 @@ class TestGetUserPhysicalProperties:
 
         result = qm.get_user_physical_properties()
         assert result["status"] == "success"
+        assert result["source"] == "user_override"
         assert result["volume"] == 1.0e-5
         assert result["surface_area"] == 0.002
         assert result["mass"] == 0.05
 
-    def test_non_tuple_result(self, query_mgr):
+    def test_non_tuple_result_falls_back_to_computed(self, query_mgr):
         qm, doc = query_mgr
         doc.GetUserPhysicalProperties.return_value = "unexpected"
+        qm.get_mass_properties = MagicMock(
+            return_value={"status": "computed", "mass": 0.44, "volume": 5.6e-5}
+        )
 
         result = qm.get_user_physical_properties()
-        assert result["status"] == "success"
-        assert "raw_result" in result
+        qm.get_mass_properties.assert_called_once()
+        assert result["source"] == "computed"
+        assert result["mass"] == 0.44
+        assert "note" in result
 
-    def test_com_error(self, query_mgr):
+    def test_com_fault_falls_back_to_computed(self, query_mgr):
+        # GetUserPhysicalProperties faults on a part with no user overrides;
+        # the method must compute from geometry instead of erroring.
         qm, doc = query_mgr
         doc.GetUserPhysicalProperties.side_effect = Exception("Not a part doc")
+        qm.get_mass_properties = MagicMock(
+            return_value={"status": "computed", "mass": 0.44}
+        )
+
+        result = qm.get_user_physical_properties(density=2700.0)
+        qm.get_mass_properties.assert_called_once_with(2700.0)
+        assert result["source"] == "computed"
+        assert "error" not in result
+
+    def test_fallback_error_propagates(self, query_mgr):
+        qm, doc = query_mgr
+        doc.GetUserPhysicalProperties.side_effect = Exception("no overrides")
+        qm.get_mass_properties = MagicMock(return_value={"error": "no body"})
 
         result = qm.get_user_physical_properties()
         assert "error" in result

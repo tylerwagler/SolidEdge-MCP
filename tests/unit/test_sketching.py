@@ -22,6 +22,66 @@ def sketch_mgr():
 
 
 # ============================================================================
+# CLOSE SKETCH  (validation-flag + honest validation-code reporting)
+# ============================================================================
+
+
+class TestCloseSketch:
+    def _profile(self, sm, end_ret=0):
+        profile = MagicMock()
+        profile.End.return_value = end_ret
+        sm.active_profile = profile
+        return profile
+
+    def test_no_active_sketch(self, sketch_mgr):
+        sm, _ = sketch_mgr
+        sm.active_profile = None
+        assert "error" in sm.close_sketch()
+
+    def test_closed_true_uses_igProfileClosed(self, sketch_mgr):
+        sm, _ = sketch_mgr
+        profile = self._profile(sm, end_ret=0)
+        result = sm.close_sketch(closed=True)
+        profile.End.assert_called_once_with(1)  # igProfileClosed
+        assert result["status"] == "closed"
+        assert result["validation_code"] == 0
+        assert "note" not in result  # clean close -> no hint
+
+    def test_closed_false_uses_igProfileDefault(self, sketch_mgr):
+        sm, _ = sketch_mgr
+        profile = self._profile(sm, end_ret=0)
+        sm.close_sketch(closed=False)
+        profile.End.assert_called_once_with(0)  # igProfileDefault
+
+    def test_refaxis_forces_revolve_flag(self, sketch_mgr):
+        sm, _ = sketch_mgr
+        profile = self._profile(sm, end_ret=0)
+        sm.active_refaxis = MagicMock()
+        sm.close_sketch(closed=True)
+        profile.End.assert_called_once_with(17)  # igProfileForRevolve
+
+    def test_nonzero_code_is_informational_not_failure(self, sketch_mgr):
+        # End() returns -103 for a polyline whose endpoints igProfileClosed
+        # auto-connects -- it still extrudes, so this must NOT be flagged as a
+        # failure. We surface the code as a hint only.
+        sm, _ = sketch_mgr
+        self._profile(sm, end_ret=-103)
+        result = sm.close_sketch(closed=True)
+        assert result["status"] == "closed"
+        assert result["validation_code"] == -103
+        assert "note" in result
+        assert "valid" not in result
+
+    def test_end_exception_surfaced(self, sketch_mgr):
+        sm, _ = sketch_mgr
+        profile = MagicMock()
+        profile.End.side_effect = Exception("COM boom")
+        sm.active_profile = profile
+        result = sm.close_sketch()
+        assert "error" in result
+
+
+# ============================================================================
 # PROJECT REF PLANE
 # ============================================================================
 

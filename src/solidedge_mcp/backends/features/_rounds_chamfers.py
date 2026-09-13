@@ -10,6 +10,7 @@ from ..constants import (
     FaceQueryConstants,
 )
 from ..logging import get_logger
+from ._base import verifies_geometry
 
 _logger = get_logger(__name__)
 
@@ -17,6 +18,7 @@ _logger = get_logger(__name__)
 class RoundsChamfersMixin:
     """Mixin providing round, chamfer, and blend methods."""
 
+    @verifies_geometry
     def create_round(self, radius: float) -> dict[str, Any]:
         """
         Create a round (fillet) feature on all body edges.
@@ -79,6 +81,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    @verifies_geometry
     def create_round_on_face(self, radius: float, face_index: int) -> dict[str, Any]:
         """
         Create a round (fillet) on edges of a specific face.
@@ -217,6 +220,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    @verifies_geometry
     def create_chamfer(self, distance: float) -> dict[str, Any]:
         """
         Create an equal-setback chamfer on all body edges.
@@ -268,6 +272,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    @verifies_geometry
     def create_chamfer_on_face(self, distance: float, face_index: int) -> dict[str, Any]:
         """
         Create a chamfer on edges of a specific face.
@@ -423,6 +428,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
+    @verifies_geometry
     def create_chamfer_angle(
         self, distance: float, angle: float, face_index: int = 0
     ) -> dict[str, Any]:

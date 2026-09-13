@@ -8,10 +8,12 @@ from ..constants import (
     FeatureOperationConstants,
 )
 from ..logging import get_logger
+from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
 
+@verify_geometry_on_creators
 class ExtrudeMixin:
     """Mixin providing extrude protrusion methods."""
 

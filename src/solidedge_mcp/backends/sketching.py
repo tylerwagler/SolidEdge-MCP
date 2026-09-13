@@ -749,7 +749,11 @@ class SketchManager:
         """
         Add a keypoint constraint connecting two sketch elements at specific points.
 
-        Keypoint indices: 0=start, 1=end for lines/arcs; 0=center for circles.
+        Keypoint indices are GEOMETRIC, 0-based: 0=start, 1=end, 2=midpoint for
+        lines/arcs; 0=center for circles. (Verified live: AddKeypoint(line, 1,
+        other, 0) welds line's end to other's start.) These are NOT the
+        KeyPointType enum values igKeyPointStart=1/igKeyPointEnd=2 -- that enum
+        belongs to other (extent/revolve) APIs and must not be used here.
 
         Args:
             element1_type: Type of first element ('line', 'circle', 'arc', etc.)
@@ -783,23 +787,47 @@ class SketchManager:
         except Exception as e:
             return {"error": str(e), "traceback": traceback.format_exc()}
 
-    def close_sketch(self) -> dict[str, Any]:
-        """Close/finish the active sketch"""
+    def close_sketch(self, closed: bool = True) -> dict[str, Any]:
+        """Close/finish the active sketch and report whether it validated.
+
+        Profile.End(flags) returns 0 on success and a negative status code
+        when the profile fails validation (e.g. an open loop). We surface that
+        code instead of swallowing it, so callers can tell BEFORE building a
+        feature whether the profile actually forms a region.
+
+        Args:
+            closed: If True (default) the profile is validated as a CLOSED
+                region (igProfileClosed). This is required for solid features
+                and, crucially, welds the coincident endpoints of a polyline
+                (e.g. a rectangle drawn as 4 separate lines) into a single
+                region -- with the old igProfileDefault flag such polylines
+                silently produced no geometry. Set False for intentionally
+                open profiles (sweep paths, open surfaces).
+        """
         try:
             if not self.active_profile:
                 return {"error": "No active sketch to close"}
 
-            # Use correct End() flags based on whether axis of revolution is set
+            # Choose validation flags. A revolve profile already implies closed
+            # (igProfileForRevolve = igProfileClosed | igProfileRefAxisRequired).
             if self.active_refaxis is not None:
-                # Revolve profile needs igProfileClosed | igProfileRefAxisRequired
                 end_flags = ProfileValidationConstants.igProfileForRevolve  # 17
+            elif closed:
+                end_flags = ProfileValidationConstants.igProfileClosed  # 1
             else:
-                # Standard profile (extrude, etc.)
                 end_flags = ProfileValidationConstants.igProfileDefault  # 0
 
-            # Validate the profile
-            with contextlib.suppress(BaseException):
-                self.active_profile.End(end_flags)
+            # Validate the profile. End() returns a status: 0 = OK, < 0 = invalid.
+            # Do NOT suppress -- the validation result is the whole point.
+            try:
+                validation_code = self.active_profile.End(end_flags)
+            except Exception as e:
+                _logger.error(f"Profile.End({end_flags}) raised: {e}")
+                return {
+                    "error": f"Profile validation failed: {e}",
+                    "end_flags": end_flags,
+                    "traceback": traceback.format_exc(),
+                }
 
             # Add to accumulated profiles for loft/sweep operations
             self.accumulated_profiles.append(self.active_profile)
@@ -807,12 +835,26 @@ class SketchManager:
             sketch_id = "sketch"
             if self.active_sketch is not None and hasattr(self.active_sketch, "Name"):
                 sketch_id = self.active_sketch.Name
-            result = {
+            result: dict[str, Any] = {
                 "status": "closed",
+                "validation_code": validation_code,
                 "sketch_id": sketch_id,
                 "has_revolution_axis": self.active_refaxis is not None,
                 "accumulated_profiles": len(self.accumulated_profiles),
             }
+            # End() returns 0 for a cleanly closed profile. A non-zero code is
+            # NOT a reliable pass/fail signal: igProfileClosed auto-connects a
+            # polyline's coincident endpoints and reports a non-zero code (e.g.
+            # -103) even though the resulting region extrudes fine -- the same
+            # code also appears for a genuinely open profile that builds nothing.
+            # So we surface the code as a hint and tell callers to verify that
+            # the downstream feature actually produced geometry.
+            if isinstance(validation_code, int) and validation_code != 0:
+                result["note"] = (
+                    f"Profile.End returned {validation_code} (0 = clean close). "
+                    f"Often benign (e.g. auto-connected polyline endpoints), but "
+                    f"verify the next feature actually created geometry."
+                )
 
             # NOTE: We keep active_profile valid after closing so it can be used
             # by feature operations (extrude, revolve, etc.). The profile object
@@ -820,8 +862,8 @@ class SketchManager:
             # Only clear it when a new sketch is created.
 
             _logger.info(
-                f"Sketch closed (end_flags={end_flags}, "
-                f"accumulated_profiles={len(self.accumulated_profiles)})"
+                f"Sketch closed (end_flags={end_flags}, code={validation_code}, "
+                f"accumulated={len(self.accumulated_profiles)})"
             )
             return result
         except Exception as e:

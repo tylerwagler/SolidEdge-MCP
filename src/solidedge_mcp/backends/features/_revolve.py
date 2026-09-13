@@ -16,10 +16,12 @@ from ..constants import (
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
+from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
 
+@verify_geometry_on_creators
 class RevolveMixin:
     """Mixin providing revolve protrusion methods."""
 

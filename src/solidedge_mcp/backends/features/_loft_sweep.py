@@ -12,12 +12,19 @@ from ..constants import (
     LoftSweepConstants,
 )
 from ..logging import get_logger
+from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
 
+@verify_geometry_on_creators
 class LoftSweepMixin:
-    """Mixin providing loft, sweep, and helix protrusion methods."""
+    """Mixin providing loft, sweep, and helix protrusion methods.
+
+    All methods here are solid protrusions (loft/sweep/helix and their
+    thin-wall variants), so geometry verification applies uniformly. Surface
+    builders live in _surfaces.py and are intentionally excluded.
+    """
 
     def create_loft(self, profile_indices: list[int] | None = None) -> dict[str, Any]:
         """

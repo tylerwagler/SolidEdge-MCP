@@ -5,10 +5,12 @@ from typing import Any
 
 from ..constants import DirectionConstants
 from ..logging import get_logger
+from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
 
+@verify_geometry_on_creators
 class PrimitiveMixin:
     """Mixin providing primitive solid creation methods."""
 
