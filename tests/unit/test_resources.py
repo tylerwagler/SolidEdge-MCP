@@ -125,22 +125,22 @@ class TestResourceReads:
     def test_template_resource_passes_int_index(self, mcp, managers):
         managers["query_manager"].get_face_area.return_value = {"area": 0.01}
         assert _read(mcp, "solidedge://geometry/face/3/area") == {"area": 0.01}
-        managers["query_manager"].get_face_area.assert_called_once_with(3)
+        managers["query_manager"].get_face_area.assert_called_once_with(face_index=3)
 
     def test_two_parameter_template_passes_both(self, mcp, managers):
         managers["query_manager"].get_edge_info.return_value = {"length": 0.05}
         assert _read(mcp, "solidedge://geometry/face/2/edge/1") == {"length": 0.05}
-        managers["query_manager"].get_edge_info.assert_called_once_with(2, 1)
+        managers["query_manager"].get_edge_info.assert_called_once_with(face_index=2, edge_index=1)
 
     def test_float_template_passes_density(self, mcp, managers):
         managers["query_manager"].get_mass_properties.return_value = {"mass": 1.5}
         assert _read(mcp, "solidedge://geometry/mass-properties/7850.0") == {"mass": 1.5}
-        managers["query_manager"].get_mass_properties.assert_called_once_with(7850.0)
+        managers["query_manager"].get_mass_properties.assert_called_once_with(density=7850.0)
 
     def test_named_template_passes_string(self, mcp, managers):
         managers["query_manager"].get_variable.return_value = {"value": 0.1}
         assert _read(mcp, "solidedge://model/variable/Width") == {"value": 0.1}
-        managers["query_manager"].get_variable.assert_called_once_with("Width")
+        managers["query_manager"].get_variable.assert_called_once_with(name="Width")
 
     def test_export_manager_backed_resource(self, mcp, managers):
         managers["export_manager"].get_drawing_view_count.return_value = {"count": 4}

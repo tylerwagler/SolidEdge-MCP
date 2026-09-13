@@ -73,12 +73,16 @@ class TestExportFile:
     def test_plmxml_passes_ini(self, mock_export, mock_view):
         mock_export.export_to_plmxml.return_value = {"status": "ok"}
         export_file(format="plmxml", file_path="out.xml", ini_file_path="cfg.ini")
-        mock_export.export_to_plmxml.assert_called_once_with("out.xml", "cfg.ini")
+        mock_export.export_to_plmxml.assert_called_once_with(
+            file_path="out.xml", ini_file_path="cfg.ini"
+        )
 
     def test_image_passes_dimensions(self, mock_export, mock_view):
         mock_export.capture_screenshot.return_value = {"status": "ok"}
         export_file(format="image", file_path="out.png", width=1920, height=1080)
-        mock_export.capture_screenshot.assert_called_once_with("out.png", 1920, 1080)
+        mock_export.capture_screenshot.assert_called_once_with(
+            file_path="out.png", width=1920, height=1080
+        )
 
     def test_unknown(self, mock_export, mock_view):
         result = export_file(format="bogus")
@@ -273,23 +277,31 @@ class TestCameraControl:
     def test_set_orientation_passes_view(self, mock_export, mock_view):
         mock_view.set_view.return_value = {"status": "ok"}
         camera_control(action="set_orientation", view="Top")
-        mock_view.set_view.assert_called_once_with("Top")
+        mock_view.set_view.assert_called_once_with(view="Top")
 
     def test_rotate_converts_degrees_to_radians(self, mock_export, mock_view):
         """The tool takes degrees; View.RotateCamera underneath takes radians."""
         mock_view.rotate_camera.return_value = {"status": "ok"}
         camera_control(action="rotate", angle=90.0, axis_x=0.0, axis_y=0.0, axis_z=1.0)
-        mock_view.rotate_camera.assert_called_once_with(math.pi / 2, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+        mock_view.rotate_camera.assert_called_once_with(
+            angle=math.pi / 2,
+            center_x=0.0,
+            center_y=0.0,
+            center_z=0.0,
+            axis_x=0.0,
+            axis_y=0.0,
+            axis_z=1.0,
+        )
 
     def test_rotate_zero_degrees_stays_zero(self, mock_export, mock_view):
         mock_view.rotate_camera.return_value = {"status": "ok"}
         camera_control(action="rotate", angle=0.0)
-        assert mock_view.rotate_camera.call_args.args[0] == 0.0
+        assert mock_view.rotate_camera.call_args.kwargs["angle"] == 0.0
 
     def test_zoom_passes_factor(self, mock_export, mock_view):
         mock_view.zoom_camera.return_value = {"status": "ok"}
         camera_control(action="zoom", factor=2.0)
-        mock_view.zoom_camera.assert_called_once_with(2.0)
+        mock_view.zoom_camera.assert_called_once_with(factor=2.0)
 
     def test_unknown(self, mock_export, mock_view):
         result = camera_control(action="bogus")
@@ -304,7 +316,17 @@ class TestSetCamera:
         mock_view.set_camera.return_value = {"status": "ok"}
         result = set_camera(eye_x=1.0, eye_z=5.0)
         mock_view.set_camera.assert_called_once_with(
-            1.0, 0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, False, 1.0
+            eye_x=1.0,
+            eye_y=0.0,
+            eye_z=5.0,
+            target_x=0.0,
+            target_y=0.0,
+            target_z=0.0,
+            up_x=0.0,
+            up_y=1.0,
+            up_z=0.0,
+            perspective=False,
+            scale_or_angle=1.0,
         )
         assert result == {"status": "ok"}
 
@@ -312,9 +334,9 @@ class TestSetCamera:
         mock_view.set_camera.return_value = {"status": "ok"}
         result = set_camera(perspective=True, scale_or_angle=45.0)
         mock_view.set_camera.assert_called_once()
-        call_args = mock_view.set_camera.call_args[0]
-        assert call_args[9] is True
-        assert call_args[10] == 45.0
+        kwargs = mock_view.set_camera.call_args.kwargs
+        assert kwargs["perspective"] is True
+        assert kwargs["scale_or_angle"] == 45.0
         assert result == {"status": "ok"}
 
 
@@ -342,7 +364,7 @@ class TestDisplayControl:
     def test_set_texture_passes_args(self, mock_export, mock_view):
         mock_export.set_face_texture.return_value = {"status": "ok"}
         display_control(action="set_texture", face_index=2, texture_name="wood")
-        mock_export.set_face_texture.assert_called_once_with(2, "wood")
+        mock_export.set_face_texture.assert_called_once_with(face_index=2, texture_name="wood")
 
     def test_unknown(self, mock_export, mock_view):
         result = display_control(action="bogus")

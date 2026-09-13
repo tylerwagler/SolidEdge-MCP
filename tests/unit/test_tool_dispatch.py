@@ -1,9 +1,9 @@
 """Fail when a tool-layer call lands in the wrong backend parameter.
 
-The tool layer calls backend managers positionally. When a backend signature
-gains or reorders a parameter, those positional arguments shift, the call still
-type-checks, the mocked test still passes, and Solid Edge receives the wrong
-values.
+The tool layer now calls backend managers by keyword, so this should stay at
+zero. It did not always: a positional call shifts silently when a backend
+signature gains or reorders a parameter, the call still type-checks, the mocked
+test still passes, and Solid Edge receives the wrong values.
 
 That is not hypothetical. ``create_extrude(distance, direction)`` was calling
 ``create_extrude(distance, operation="Add", direction="Normal")``, so the
@@ -27,45 +27,11 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 AUDIT_SCRIPT = REPO_ROOT / "scripts" / "audit_tool_dispatch.py"
 
-#: Positional arguments whose tool-side name differs from the backend parameter
-#: but which fill the right slot. Each is a naming difference, not a mismatch.
-#: Shrink this list; never add to it without checking the call really is right.
-KNOWN_RENAMES: frozenset[tuple[str, str, int]] = frozenset(
-    {
-        # (backend method, tool-side argument name, positional index)
-        ("add_family_with_matrix", "file_path", 0),
-        ("add_family_with_matrix", "family_member_name", 1),
-        ("add_tube", "file_path", 1),
-        ("add_section_cut", "parent_view_index", 0),
-        ("align_drawing_views", "view_index", 0),
-        ("add_body_feature", "import_file_path", 0),
-        ("create_cylinder", "depth", 4),
-        ("create_ref_plane_normal_at_distance_along_v2", "distance_along", 2),
-        ("rename_variable", "name", 0),
-        ("rename_feature", "feature_name", 0),
-        ("add_layer", "name_or_index", 0),
-        ("get_material_property", "name", 0),
-    }
-)
-
-#: Whole-parameter renames that appear on many call sites at once.
-KNOWN_RENAME_PAIRS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("idx", "component_index"),  # assembly loops over occurrences
-        ("name", "feature_name"),  # feature resources take a URI segment
-        ("x1", "center_x"),  # primitives use corner-style tool params
-        ("y1", "center_y"),
-        ("z1", "center_z"),
-        ("x1", "base_center_x"),  # cylinder names its origin the base centre
-        ("y1", "base_center_y"),
-        ("z1", "base_center_z"),
-        ("x1", "start_x"),  # 3-point arc
-        ("y1", "start_y"),
-        ("x2", "end_x"),
-        ("y2", "end_y"),
-        ("normal_side_int", "normal_side"),  # raw COM int at the tool boundary
-    }
-)
+#: Kept empty on purpose. The tool layer calls backends by keyword, so there is
+#: no positional argument left to land in the wrong parameter. If this list ever
+#: needs an entry again, something has gone back to positional calls.
+KNOWN_RENAMES: frozenset[tuple[str, str, int]] = frozenset()
+KNOWN_RENAME_PAIRS: frozenset[tuple[str, str]] = frozenset()
 
 pytestmark = pytest.mark.skipif(
     not AUDIT_SCRIPT.exists(), reason="scripts/audit_tool_dispatch.py missing"

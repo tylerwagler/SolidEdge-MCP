@@ -46,7 +46,7 @@ class TestManageConnection:
     def test_connect_passes_start_if_needed(self, mock_mgr):
         mock_mgr.connect.return_value = {"status": "ok"}
         manage_connection(action="connect", start_if_needed=False)
-        mock_mgr.connect.assert_called_once_with(False)
+        mock_mgr.connect.assert_called_once_with(start_if_needed=False)
 
     def test_unknown(self, mock_mgr):
         result = manage_connection(action="bogus")
@@ -74,7 +74,7 @@ class TestAppCommand:
     def test_start_passes_command_id(self, mock_mgr):
         mock_mgr.start_command.return_value = {"status": "ok"}
         app_command(action="start", command_id=42)
-        mock_mgr.start_command.assert_called_once_with(42)
+        mock_mgr.start_command.assert_called_once_with(command_id=42)
 
     def test_unknown(self, mock_mgr):
         result = app_command(action="bogus")
@@ -115,12 +115,16 @@ class TestAppConfig:
             interactive=True,
             display_alerts=False,
         )
-        mock_mgr.set_performance_mode.assert_called_once_with(True, False, True, False)
+        mock_mgr.set_performance_mode.assert_called_once_with(
+            delay_compute=True, screen_updating=False, interactive=True, display_alerts=False
+        )
 
     def test_set_template_passes_args(self, mock_mgr):
         mock_mgr.set_default_template_path.return_value = {"status": "ok"}
         app_config(property="set_template", doc_type=3, template_path="/t.asm")
-        mock_mgr.set_default_template_path.assert_called_once_with(3, "/t.asm")
+        mock_mgr.set_default_template_path.assert_called_once_with(
+            doc_type=3, template_path="/t.asm"
+        )
 
     def test_unknown(self, mock_mgr):
         result = app_config(property="bogus")
@@ -134,13 +138,15 @@ class TestStandaloneConnection:
     def test_convert_by_file_path(self, mock_mgr):
         mock_mgr.convert_by_file_path.return_value = {"status": "ok"}
         result = convert_by_file_path("in.par", "out.step")
-        mock_mgr.convert_by_file_path.assert_called_once_with("in.par", "out.step")
+        mock_mgr.convert_by_file_path.assert_called_once_with(
+            input_path="in.par", output_path="out.step"
+        )
         assert result == {"status": "ok"}
 
     def test_arrange_windows(self, mock_mgr):
         mock_mgr.arrange_windows.return_value = {"status": "ok"}
         result = arrange_windows(style=2)
-        mock_mgr.arrange_windows.assert_called_once_with(2)
+        mock_mgr.arrange_windows.assert_called_once_with(style=2)
         assert result == {"status": "ok"}
 
     def test_get_active_command(self, mock_mgr):
@@ -152,7 +158,7 @@ class TestStandaloneConnection:
     def test_run_macro(self, mock_mgr):
         mock_mgr.run_macro.return_value = {"status": "ok"}
         result = run_macro("test.vba")
-        mock_mgr.run_macro.assert_called_once_with("test.vba")
+        mock_mgr.run_macro.assert_called_once_with(filename="test.vba")
         assert result == {"status": "ok"}
 
 

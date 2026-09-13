@@ -37,36 +37,42 @@ def create_helix(
         return err
     match method:
         case "finite":
-            return feature_manager.create_helix(pitch, height, revolutions, direction)
+            return feature_manager.create_helix(
+                pitch=pitch, height=height, revolutions=revolutions, direction=direction
+            )
         case "sync":
-            return feature_manager.create_helix_sync(pitch, height, revolutions)
+            return feature_manager.create_helix_sync(
+                pitch=pitch, height=height, revolutions=revolutions
+            )
         case "thin_wall":
             return feature_manager.create_helix_thin_wall(
-                pitch, height, wall_thickness, revolutions
+                pitch=pitch, height=height, wall_thickness=wall_thickness, revolutions=revolutions
             )
         case "sync_thin_wall":
             return feature_manager.create_helix_sync_thin_wall(
-                pitch, height, wall_thickness, revolutions
+                pitch=pitch, height=height, wall_thickness=wall_thickness, revolutions=revolutions
             )
         case "from_to":
-            return feature_manager.create_helix_from_to(from_plane_index, to_plane_index, pitch)
+            return feature_manager.create_helix_from_to(
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index, pitch=pitch
+            )
         case "from_to_thin_wall":
             return feature_manager.create_helix_from_to_thin_wall(
-                from_plane_index,
-                to_plane_index,
-                pitch,
-                wall_thickness,
+                from_plane_index=from_plane_index,
+                to_plane_index=to_plane_index,
+                pitch=pitch,
+                wall_thickness=wall_thickness,
             )
         case "from_to_sync":
             return feature_manager.create_helix_from_to_sync(
-                from_plane_index, to_plane_index, pitch
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index, pitch=pitch
             )
         case "from_to_sync_thin_wall":
             return feature_manager.create_helix_from_to_sync_thin_wall(
-                from_plane_index,
-                to_plane_index,
-                pitch,
-                wall_thickness,
+                from_plane_index=from_plane_index,
+                to_plane_index=to_plane_index,
+                pitch=pitch,
+                wall_thickness=wall_thickness,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -89,11 +95,15 @@ def create_loft(
         return err
     match method:
         case "solid":
-            return feature_manager.create_loft(profile_indices)
+            return feature_manager.create_loft(profile_indices=profile_indices)
         case "thin_wall":
-            return feature_manager.create_loft_thin_wall(wall_thickness, profile_indices)
+            return feature_manager.create_loft_thin_wall(
+                wall_thickness=wall_thickness, profile_indices=profile_indices
+            )
         case "with_guides":
-            return feature_manager.create_loft_with_guides(guide_profile_indices, profile_indices)
+            return feature_manager.create_loft_with_guides(
+                guide_profile_indices=guide_profile_indices, profile_indices=profile_indices
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -113,8 +123,10 @@ def create_sweep(
         return err
     match method:
         case "solid":
-            return feature_manager.create_sweep(path_profile_index)
+            return feature_manager.create_sweep(path_profile_index=path_profile_index)
         case "thin_wall":
-            return feature_manager.create_sweep_thin_wall(wall_thickness, path_profile_index)
+            return feature_manager.create_sweep_thin_wall(
+                wall_thickness=wall_thickness, path_profile_index=path_profile_index
+            )
         case _:
             return {"error": f"Unknown method: {method}"}

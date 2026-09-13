@@ -116,7 +116,9 @@ class TestMeasure:
     def test_distance_passes_coords(self, mock_mgr):
         mock_mgr.measure_distance.return_value = {"distance": 1.0}
         measure(type="distance", x1=0.0, y1=0.0, z1=0.0, x2=1.0, y2=0.0, z2=0.0)
-        mock_mgr.measure_distance.assert_called_once_with(0.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+        mock_mgr.measure_distance.assert_called_once_with(
+            x1=0.0, y1=0.0, z1=0.0, x2=1.0, y2=0.0, z2=0.0
+        )
 
     def test_unknown(self, mock_mgr):
         result = measure(type="bogus")
@@ -149,7 +151,7 @@ class TestManageVariable:
     def test_set_passes_name_value(self, mock_mgr):
         mock_mgr.set_variable.return_value = {"status": "ok"}
         manage_variable(action="set", name="Width", value=0.1)
-        mock_mgr.set_variable.assert_called_once_with("Width", 0.1)
+        mock_mgr.set_variable.assert_called_once_with(name="Width", value=0.1)
 
     def test_unknown(self, mock_mgr):
         result = manage_variable(action="bogus")
@@ -225,12 +227,12 @@ class TestSetAppearance:
     def test_body_color_passes_rgb(self, mock_mgr):
         mock_mgr.set_body_color.return_value = {"status": "ok"}
         set_appearance(target="body_color", red=255, green=128, blue=0)
-        mock_mgr.set_body_color.assert_called_once_with(255, 128, 0)
+        mock_mgr.set_body_color.assert_called_once_with(red=255, green=128, blue=0)
 
     def test_face_color_passes_args(self, mock_mgr):
         mock_mgr.set_face_color.return_value = {"status": "ok"}
         set_appearance(target="face_color", face_index=2, red=100, green=200, blue=50)
-        mock_mgr.set_face_color.assert_called_once_with(2, 100, 200, 50)
+        mock_mgr.set_face_color.assert_called_once_with(face_index=2, red=100, green=200, blue=50)
 
     def test_unknown(self, mock_mgr):
         result = set_appearance(target="bogus")
@@ -289,7 +291,7 @@ class TestSelectSet:
     def test_add_passes_args(self, mock_mgr):
         mock_mgr.select_add.return_value = {"status": "ok"}
         select_set(action="add", object_type="Face", index=3)
-        mock_mgr.select_add.assert_called_once_with("Face", 3)
+        mock_mgr.select_add.assert_called_once_with(object_type="Face", index=3)
 
     def test_unknown(self, mock_mgr):
         result = select_set(action="bogus")
@@ -334,7 +336,10 @@ class TestEditFeatureExtent:
             distance=0.05,
         )
         mock_mgr.set_direction1_extent.assert_called_once_with(
-            "Extrude1", ExtentTypeConstants.igFinite, 0.05, DirectionConstants.igRight
+            feature_name="Extrude1",
+            extent_type=ExtentTypeConstants.igFinite,
+            distance=0.05,
+            extent_side=DirectionConstants.igRight,
         )
 
     @pytest.mark.parametrize(
@@ -355,7 +360,10 @@ class TestEditFeatureExtent:
             extent_side=name,
         )
         mock_mgr.set_direction1_extent.assert_called_once_with(
-            "Extrude1", ExtentTypeConstants.igFinite, 0.05, constant
+            feature_name="Extrude1",
+            extent_type=ExtentTypeConstants.igFinite,
+            distance=0.05,
+            extent_side=constant,
         )
 
     def test_set_thin_wall_maps_to_the_com_argument_order(self, mock_mgr):
@@ -368,7 +376,12 @@ class TestEditFeatureExtent:
             add_end_caps=True,
         )
         mock_mgr.set_thin_wall_options.assert_called_once_with(
-            "Extrude1", 0.002, DirectionConstants.igLeft, True, True, False
+            feature_name="Extrude1",
+            thickness=0.002,
+            thickness_side=DirectionConstants.igLeft,
+            thin_wall=True,
+            add_end_caps=True,
+            remove_inside_material=False,
         )
 
     def test_set_body_array_passes_the_multi_body_flag(self, mock_mgr):
@@ -379,7 +392,9 @@ class TestEditFeatureExtent:
             body_indices=[0, 2],
             multi_body_cut=False,
         )
-        mock_mgr.set_body_array.assert_called_once_with("Cut1", [0, 2], False)
+        mock_mgr.set_body_array.assert_called_once_with(
+            feature_name="Cut1", body_indices=[0, 2], multi_body_cut=False
+        )
 
     @pytest.mark.parametrize(
         "name, constant",
@@ -395,7 +410,10 @@ class TestEditFeatureExtent:
             property="set_direction2", feature_name="Cut1", extent_type=name, distance=0.01
         )
         mock_mgr.set_direction2_extent.assert_called_once_with(
-            "Cut1", constant, 0.01, DirectionConstants.igRight
+            feature_name="Cut1",
+            extent_type=constant,
+            distance=0.01,
+            extent_side=DirectionConstants.igRight,
         )
 
     @pytest.mark.parametrize(
@@ -410,7 +428,9 @@ class TestEditFeatureExtent:
         edit_feature_extent(
             property="set_to_face", feature_name="Extrude1", offset_side=name, distance=0.02
         )
-        mock_mgr.set_to_face_offset.assert_called_once_with("Extrude1", constant, 0.02)
+        mock_mgr.set_to_face_offset.assert_called_once_with(
+            feature_name="Extrude1", offset_side=constant, distance=0.02
+        )
 
     def test_unknown(self, mock_mgr):
         result = edit_feature_extent(property="bogus")
@@ -439,7 +459,7 @@ class TestManageFeatureTree:
     def test_rename_passes_args(self, mock_mgr):
         mock_mgr.rename_feature.return_value = {"status": "ok"}
         manage_feature_tree(action="rename", feature_name="Extrude1", new_name="Base")
-        mock_mgr.rename_feature.assert_called_once_with("Extrude1", "Base")
+        mock_mgr.rename_feature.assert_called_once_with(old_name="Extrude1", new_name="Base")
 
     def test_unknown(self, mock_mgr):
         result = manage_feature_tree(action="bogus")
@@ -470,7 +490,7 @@ class TestQueryEdge:
     def test_tangent_passes_param(self, mock_mgr):
         mock_mgr.get_edge_tangent.return_value = {"status": "ok"}
         query_edge(property="tangent", face_index=1, edge_index=2, param=0.75)
-        mock_mgr.get_edge_tangent.assert_called_once_with(1, 2, 0.75)
+        mock_mgr.get_edge_tangent.assert_called_once_with(face_index=1, edge_index=2, param=0.75)
 
     def test_unknown(self, mock_mgr):
         result = query_edge(property="bogus")
@@ -499,7 +519,7 @@ class TestQueryFace:
     def test_normal_passes_uv(self, mock_mgr):
         mock_mgr.get_face_normal.return_value = {"status": "ok"}
         query_face(property="normal", face_index=1, u=0.3, v=0.7)
-        mock_mgr.get_face_normal.assert_called_once_with(1, 0.3, 0.7)
+        mock_mgr.get_face_normal.assert_called_once_with(face_index=1, u=0.3, v=0.7)
 
     def test_unknown(self, mock_mgr):
         result = query_face(property="bogus")
@@ -548,7 +568,7 @@ class TestQueryBody:
     def test_paged_properties_forward_offset_and_limit(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"total": 0, "items": []}
         query_body(property=disc, offset=400, limit=50)
-        getattr(mock_mgr, method).assert_called_once_with(400, 50)
+        getattr(mock_mgr, method).assert_called_once_with(offset=400, limit=50)
 
     @pytest.mark.parametrize(
         "disc, method",
@@ -564,7 +584,7 @@ class TestQueryBody:
 
         getattr(mock_mgr, method).return_value = {"total": 0, "items": []}
         query_body(property=disc)
-        getattr(mock_mgr, method).assert_called_once_with(0, DEFAULT_PAGE_LIMIT)
+        getattr(mock_mgr, method).assert_called_once_with(offset=0, limit=DEFAULT_PAGE_LIMIT)
 
     def test_spatial_context_takes_no_arguments(self, mock_mgr):
         mock_mgr.get_spatial_context.return_value = {"body_count": 0}
@@ -592,7 +612,7 @@ class TestQueryBspline:
     def test_curve_passes_indices(self, mock_mgr):
         mock_mgr.get_bspline_curve_info.return_value = {"status": "ok"}
         query_bspline(type="curve", face_index=1, edge_index=2)
-        mock_mgr.get_bspline_curve_info.assert_called_once_with(1, 2)
+        mock_mgr.get_bspline_curve_info.assert_called_once_with(face_index=1, edge_index=2)
 
     def test_unknown(self, mock_mgr):
         result = query_bspline(type="bogus")

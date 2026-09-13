@@ -28,15 +28,19 @@ def create_round(
         return err
     match method:
         case "all_edges":
-            return feature_manager.create_round(radius)
+            return feature_manager.create_round(radius=radius)
         case "on_face":
-            return feature_manager.create_round_on_face(radius, face_index or 0)
+            return feature_manager.create_round_on_face(radius=radius, face_index=face_index or 0)
         case "variable":
-            return feature_manager.create_variable_round(radii or [], face_index)
+            return feature_manager.create_variable_round(radii=radii or [], face_index=face_index)
         case "blend":
-            return feature_manager.create_round_blend(face_index1, face_index2, radius)
+            return feature_manager.create_round_blend(
+                face_index1=face_index1, face_index2=face_index2, radius=radius
+            )
         case "surface_blend":
-            return feature_manager.create_round_surface_blend(face_index1, face_index2, radius)
+            return feature_manager.create_round_surface_blend(
+                face_index1=face_index1, face_index2=face_index2, radius=radius
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -66,15 +70,21 @@ def create_chamfer(
         return err
     match method:
         case "equal":
-            return feature_manager.create_chamfer(distance)
+            return feature_manager.create_chamfer(distance=distance)
         case "on_face":
-            return feature_manager.create_chamfer_on_face(distance, face_index)
+            return feature_manager.create_chamfer_on_face(distance=distance, face_index=face_index)
         case "unequal":
-            return feature_manager.create_chamfer_unequal(distance1, distance2, face_index)
+            return feature_manager.create_chamfer_unequal(
+                distance1=distance1, distance2=distance2, face_index=face_index
+            )
         case "unequal_on_face":
-            return feature_manager.create_chamfer_unequal_on_face(distance1, distance2, face_index)
+            return feature_manager.create_chamfer_unequal_on_face(
+                distance1=distance1, distance2=distance2, face_index=face_index
+            )
         case "angle":
-            return feature_manager.create_chamfer_angle(distance, angle, face_index)
+            return feature_manager.create_chamfer_angle(
+                distance=distance, angle=angle, face_index=face_index
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -101,11 +111,15 @@ def create_blend(
         return err
     match method:
         case "basic":
-            return feature_manager.create_blend(radius, face_index)
+            return feature_manager.create_blend(radius=radius, face_index=face_index)
         case "variable":
-            return feature_manager.create_blend_variable(radius1, radius2, face_index)
+            return feature_manager.create_blend_variable(
+                radius1=radius1, radius2=radius2, face_index=face_index
+            )
         case "surface":
-            return feature_manager.create_blend_surface(face_index1, face_index2, radius)
+            return feature_manager.create_blend_surface(
+                face_index1=face_index1, face_index2=face_index2, radius=radius
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -132,12 +146,14 @@ def delete_topology(
         return err
     match type:
         case "hole":
-            return feature_manager.create_delete_hole(max_diameter, hole_type)
+            return feature_manager.create_delete_hole(
+                max_diameter=max_diameter, hole_type=hole_type
+            )
         case "hole_by_face":
-            return feature_manager.delete_hole_by_face(face_index)
+            return feature_manager.delete_hole_by_face(face_index=face_index)
         case "blend":
-            return feature_manager.create_delete_blend(face_index)
+            return feature_manager.create_delete_blend(face_index=face_index)
         case "faces":
-            return feature_manager.delete_faces(face_indices or [])
+            return feature_manager.delete_faces(face_indices=face_indices or [])
         case _:
             return {"error": f"Unknown type: {type}"}

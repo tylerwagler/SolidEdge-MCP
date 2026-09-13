@@ -64,12 +64,14 @@ class TestAddAssemblyComponent:
     def test_family_with_matrix_defaults_empty(self, mock_mgr):
         mock_mgr.add_family_with_matrix.return_value = {"status": "ok"}
         add_assembly_component(method="family_with_matrix", file_path="p.par")
-        mock_mgr.add_family_with_matrix.assert_called_once_with("p.par", "", [])
+        mock_mgr.add_family_with_matrix.assert_called_once_with(
+            family_file_path="p.par", member_name="", matrix=[]
+        )
 
     def test_tube_defaults_empty(self, mock_mgr):
         mock_mgr.add_tube.return_value = {"status": "ok"}
         add_assembly_component(method="tube", file_path="tube.par")
-        mock_mgr.add_tube.assert_called_once_with([], "tube.par")
+        mock_mgr.add_tube.assert_called_once_with(segment_indices=[], part_filename="tube.par")
 
     def test_unknown(self, mock_mgr):
         result = add_assembly_component(method="bogus")
@@ -147,17 +149,17 @@ class TestQueryComponent:
         """Component 0 is a real component; only an omitted index means 'all pairs'."""
         mock_mgr.check_interference.return_value = {"status": "ok"}
         query_component(property="interference", component_index=0)
-        mock_mgr.check_interference.assert_called_once_with(0)
+        mock_mgr.check_interference.assert_called_once_with(component_index=0)
 
     def test_interference_omitted_index_passes_none(self, mock_mgr):
         mock_mgr.check_interference.return_value = {"status": "ok"}
         query_component(property="interference")
-        mock_mgr.check_interference.assert_called_once_with(None)
+        mock_mgr.check_interference.assert_called_once_with(component_index=None)
 
     def test_interference_nonzero_index_passes_value(self, mock_mgr):
         mock_mgr.check_interference.return_value = {"status": "ok"}
         query_component(property="interference", component_index=5)
-        mock_mgr.check_interference.assert_called_once_with(5)
+        mock_mgr.check_interference.assert_called_once_with(component_index=5)
 
     def test_unknown(self, mock_mgr):
         result = query_component(property="bogus")
@@ -184,7 +186,9 @@ class TestSetComponentAppearance:
     def test_color_passes_rgb(self, mock_mgr):
         mock_mgr.set_component_color.return_value = {"status": "ok"}
         set_component_appearance(property="color", component_index=1, red=255, green=0, blue=128)
-        mock_mgr.set_component_color.assert_called_once_with(1, 255, 0, 128)
+        mock_mgr.set_component_color.assert_called_once_with(
+            component_index=1, red=255, green=0, blue=128
+        )
 
     def test_unknown(self, mock_mgr):
         result = set_component_appearance(property="bogus")
@@ -213,7 +217,9 @@ class TestTransformComponent:
     def test_update_position_passes_xyz(self, mock_mgr):
         mock_mgr.update_component_position.return_value = {"status": "ok"}
         transform_component(method="update_position", component_index=2, x=0.1, y=0.2, z=0.3)
-        mock_mgr.update_component_position.assert_called_once_with(2, 0.1, 0.2, 0.3)
+        mock_mgr.update_component_position.assert_called_once_with(
+            component_index=2, x=0.1, y=0.2, z=0.3
+        )
 
     def test_unknown(self, mock_mgr):
         result = transform_component(method="bogus")
@@ -250,13 +256,13 @@ class TestSetComponentOrientation:
             angle_z=30,
         )
         mock_mgr.set_component_transform.assert_called_once_with(
-            1,
-            0.1,
-            0.2,
-            0.3,
-            10,
-            20,
-            30,
+            component_index=1,
+            origin_x=0.1,
+            origin_y=0.2,
+            origin_z=0.3,
+            angle_x=10,
+            angle_y=20,
+            angle_z=30,
         )
 
     def test_put_euler_passes_args(self, mock_mgr):
@@ -272,13 +278,7 @@ class TestSetComponentOrientation:
             rz=180,
         )
         mock_mgr.put_transform_euler.assert_called_once_with(
-            2,
-            0.1,
-            0.2,
-            0.3,
-            45,
-            90,
-            180,
+            component_index=2, x=0.1, y=0.2, z=0.3, rx=45, ry=90, rz=180
         )
 
     def test_unknown(self, mock_mgr):
@@ -303,14 +303,14 @@ class TestRotateComponent:
             angle=90,
         )
         mock_mgr.occurrence_rotate.assert_called_once_with(
-            1,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            90,
+            component_index=1,
+            axis_x1=0,
+            axis_y1=0,
+            axis_z1=0,
+            axis_x2=0,
+            axis_y2=0,
+            axis_z2=1,
+            angle=90,
         )
         assert result == {"status": "ok"}
 
@@ -426,14 +426,13 @@ class TestAssemblyFeature:
     def test_extruded_cutout_defaults_empty_scope(self, mock_mgr):
         mock_mgr.create_assembly_extruded_cutout.return_value = {"status": "ok"}
         assembly_feature(type="extruded_cutout")
-        args = mock_mgr.create_assembly_extruded_cutout.call_args[0]
-        assert args[0] == []  # scope_parts or []
+        # The tool calls backends by keyword, so read the keyword.
+        assert mock_mgr.create_assembly_extruded_cutout.call_args.kwargs["scope_parts"] == []
 
     def test_mirror_defaults_empty_features(self, mock_mgr):
         mock_mgr.create_assembly_mirror.return_value = {"status": "ok"}
         assembly_feature(type="mirror")
-        args = mock_mgr.create_assembly_mirror.call_args[0]
-        assert args[0] == []  # feature_indices or []
+        assert mock_mgr.create_assembly_mirror.call_args.kwargs["feature_indices"] == []
 
     def test_unknown(self, mock_mgr):
         result = assembly_feature(type="bogus")
@@ -483,7 +482,9 @@ class TestStructuralFrame:
     def test_basic_defaults_empty_paths(self, mock_mgr):
         mock_mgr.add_structural_frame.return_value = {"status": "ok"}
         structural_frame(method="basic", part_filename="frame.par")
-        mock_mgr.add_structural_frame.assert_called_once_with("frame.par", [])
+        mock_mgr.add_structural_frame.assert_called_once_with(
+            part_filename="frame.par", path_indices=[]
+        )
 
     def test_unknown(self, mock_mgr):
         result = structural_frame(method="bogus")
@@ -512,12 +513,16 @@ class TestWiring:
     def test_wire_defaults_empty_lists(self, mock_mgr):
         mock_mgr.add_wire.return_value = {"status": "ok"}
         wiring(type="wire")
-        mock_mgr.add_wire.assert_called_once_with([], [], "")
+        mock_mgr.add_wire.assert_called_once_with(
+            path_indices=[], path_directions=[], description=""
+        )
 
     def test_splice_defaults_empty_conductors(self, mock_mgr):
         mock_mgr.add_splice.return_value = {"status": "ok"}
         wiring(type="splice", x=0.1, y=0.2, z=0.3)
-        mock_mgr.add_splice.assert_called_once_with(0.1, 0.2, 0.3, [], "")
+        mock_mgr.add_splice.assert_called_once_with(
+            x=0.1, y=0.2, z=0.3, conductor_indices=[], description=""
+        )
 
     def test_unknown(self, mock_mgr):
         result = wiring(type="bogus")

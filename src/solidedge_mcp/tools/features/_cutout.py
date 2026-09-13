@@ -36,29 +36,35 @@ def create_extruded_cutout(
         return err
     match method:
         case "finite":
-            return feature_manager.create_extruded_cutout(distance, direction)
+            return feature_manager.create_extruded_cutout(distance=distance, direction=direction)
         case "through_all":
-            return feature_manager.create_extruded_cutout_through_all(direction)
+            return feature_manager.create_extruded_cutout_through_all(direction=direction)
         case "through_next":
-            return feature_manager.create_extruded_cutout_through_next(direction)
+            return feature_manager.create_extruded_cutout_through_next(direction=direction)
         case "from_to":
-            return feature_manager.create_extruded_cutout_from_to(from_plane_index, to_plane_index)
+            return feature_manager.create_extruded_cutout_from_to(
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
+            )
         case "from_to_v2":
             return feature_manager.create_extruded_cutout_from_to_v2(
-                from_plane_index, to_plane_index
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
             )
         case "by_keypoint":
-            return feature_manager.create_extruded_cutout_by_keypoint(direction)
+            return feature_manager.create_extruded_cutout_by_keypoint(direction=direction)
         case "through_next_single":
-            return feature_manager.create_extruded_cutout_through_next_single(direction)
+            return feature_manager.create_extruded_cutout_through_next_single(direction=direction)
         case "multi_body":
-            return feature_manager.create_extruded_cutout_multi_body(distance, direction)
+            return feature_manager.create_extruded_cutout_multi_body(
+                distance=distance, direction=direction
+            )
         case "from_to_multi_body":
             return feature_manager.create_extruded_cutout_from_to_multi_body(
-                from_plane_index, to_plane_index
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
             )
         case "through_all_multi_body":
-            return feature_manager.create_extruded_cutout_through_all_multi_body(direction)
+            return feature_manager.create_extruded_cutout_through_all_multi_body(
+                direction=direction
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -77,17 +83,17 @@ def create_revolved_cutout(
         return err
     match method:
         case "finite":
-            return feature_manager.create_revolved_cutout(angle)
+            return feature_manager.create_revolved_cutout(angle=angle)
         case "sync":
-            return feature_manager.create_revolved_cutout_sync(angle)
+            return feature_manager.create_revolved_cutout_sync(angle=angle)
         case "by_keypoint":
             return feature_manager.create_revolved_cutout_by_keypoint()
         case "multi_body":
-            return feature_manager.create_revolved_cutout_multi_body(angle)
+            return feature_manager.create_revolved_cutout_multi_body(angle=angle)
         case "full":
-            return feature_manager.create_revolved_cutout_full(angle)
+            return feature_manager.create_revolved_cutout_full(angle=angle)
         case "full_sync":
-            return feature_manager.create_revolved_cutout_full_sync(angle)
+            return feature_manager.create_revolved_cutout_full_sync(angle=angle)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -111,15 +117,17 @@ def create_normal_cutout(
         return err
     match method:
         case "finite":
-            return feature_manager.create_normal_cutout(distance, direction)
+            return feature_manager.create_normal_cutout(distance=distance, direction=direction)
         case "through_all":
-            return feature_manager.create_normal_cutout_through_all(direction)
+            return feature_manager.create_normal_cutout_through_all(direction=direction)
         case "from_to":
-            return feature_manager.create_normal_cutout_from_to(from_plane_index, to_plane_index)
+            return feature_manager.create_normal_cutout_from_to(
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
+            )
         case "through_next":
-            return feature_manager.create_normal_cutout_through_next(direction)
+            return feature_manager.create_normal_cutout_through_next(direction=direction)
         case "by_keypoint":
-            return feature_manager.create_normal_cutout_by_keypoint(direction)
+            return feature_manager.create_normal_cutout_by_keypoint(direction=direction)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -135,9 +143,9 @@ def create_lofted_cutout(
     """
     match method:
         case "basic":
-            return feature_manager.create_lofted_cutout(profile_indices)
+            return feature_manager.create_lofted_cutout(profile_indices=profile_indices)
         case "full":
-            return feature_manager.create_lofted_cutout_full(profile_indices)
+            return feature_manager.create_lofted_cutout_full(profile_indices=profile_indices)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -155,7 +163,9 @@ def create_swept_cutout(
         case "basic":
             return feature_manager.create_swept_cutout()
         case "multi_body":
-            return feature_manager.create_swept_cutout_multi_body(path_profile_index)
+            return feature_manager.create_swept_cutout_multi_body(
+                path_profile_index=path_profile_index
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -180,16 +190,20 @@ def create_helix_cutout(
         return err
     match method:
         case "finite":
-            return feature_manager.create_helix_cutout(pitch, height, revolutions, direction)
+            return feature_manager.create_helix_cutout(
+                pitch=pitch, height=height, revolutions=revolutions, direction=direction
+            )
         case "sync":
-            return feature_manager.create_helix_cutout_sync(pitch, height, revolutions, direction)
+            return feature_manager.create_helix_cutout_sync(
+                pitch=pitch, height=height, revolutions=revolutions, direction=direction
+            )
         case "from_to":
             return feature_manager.create_helix_cutout_from_to(
-                from_plane_index, to_plane_index, pitch
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index, pitch=pitch
             )
         case "from_to_sync":
             return feature_manager.create_helix_cutout_from_to_sync(
-                from_plane_index, to_plane_index, pitch
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index, pitch=pitch
             )
         case _:
             return {"error": f"Unknown method: {method}"}

@@ -29,19 +29,25 @@ def create_extruded_surface(
         return err
     match method:
         case "finite":
-            return feature_manager.create_extruded_surface(distance, direction, end_caps)
+            return feature_manager.create_extruded_surface(
+                distance=distance, direction=direction, end_caps=end_caps
+            )
         case "from_to":
-            return feature_manager.create_extruded_surface_from_to(from_plane_index, to_plane_index)
+            return feature_manager.create_extruded_surface_from_to(
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
+            )
         case "by_keypoint":
-            return feature_manager.create_extruded_surface_by_keypoint(keypoint_type)
+            return feature_manager.create_extruded_surface_by_keypoint(keypoint_type=keypoint_type)
         case "by_curves":
-            return feature_manager.create_extruded_surface_by_curves(distance, direction)
+            return feature_manager.create_extruded_surface_by_curves(
+                distance=distance, direction=direction
+            )
         case "full":
             return feature_manager.create_extruded_surface_full(
-                distance,
-                direction,
-                treatment_type,
-                draft_angle,
+                distance=distance,
+                direction=direction,
+                treatment_type=treatment_type,
+                draft_angle=draft_angle,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -62,15 +68,23 @@ def create_revolved_surface(
         return err
     match method:
         case "finite":
-            return feature_manager.create_revolved_surface(angle, want_end_caps)
+            return feature_manager.create_revolved_surface(angle=angle, want_end_caps=want_end_caps)
         case "sync":
-            return feature_manager.create_revolved_surface_sync(angle, want_end_caps)
+            return feature_manager.create_revolved_surface_sync(
+                angle=angle, want_end_caps=want_end_caps
+            )
         case "by_keypoint":
-            return feature_manager.create_revolved_surface_by_keypoint(keypoint_type, want_end_caps)
+            return feature_manager.create_revolved_surface_by_keypoint(
+                keypoint_type=keypoint_type, want_end_caps=want_end_caps
+            )
         case "full":
-            return feature_manager.create_revolved_surface_full(angle, want_end_caps)
+            return feature_manager.create_revolved_surface_full(
+                angle=angle, want_end_caps=want_end_caps
+            )
         case "full_sync":
-            return feature_manager.create_revolved_surface_full_sync(angle, want_end_caps)
+            return feature_manager.create_revolved_surface_full_sync(
+                angle=angle, want_end_caps=want_end_caps
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -82,9 +96,9 @@ def create_lofted_surface(
     """Create a lofted surface through the accumulated sketch profiles."""
     match method:
         case "basic":
-            return feature_manager.create_lofted_surface(want_end_caps)
+            return feature_manager.create_lofted_surface(want_end_caps=want_end_caps)
         case "v2":
-            return feature_manager.create_lofted_surface_v2(want_end_caps)
+            return feature_manager.create_lofted_surface_v2(want_end_caps=want_end_caps)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -100,9 +114,13 @@ def create_swept_surface(
     """
     match method:
         case "basic":
-            return feature_manager.create_swept_surface(path_profile_index, want_end_caps)
+            return feature_manager.create_swept_surface(
+                path_profile_index=path_profile_index, want_end_caps=want_end_caps
+            )
         case "ex":
-            return feature_manager.create_swept_surface_ex(path_profile_index, want_end_caps)
+            return feature_manager.create_swept_surface_ex(
+                path_profile_index=path_profile_index, want_end_caps=want_end_caps
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -112,4 +130,4 @@ def create_bounded_surface(
     periodic: bool = False,
 ) -> dict[str, Any]:
     """Create a bounded (blue) surface from the accumulated sketch profiles."""
-    return feature_manager.create_bounded_surface(want_end_caps, periodic)
+    return feature_manager.create_bounded_surface(want_end_caps=want_end_caps, periodic=periodic)

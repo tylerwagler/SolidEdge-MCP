@@ -44,27 +44,35 @@ def create_extrude(
     match method:
         case "finite":
             return feature_manager.create_extrude(
-                distance, operation=operation, direction=direction
+                distance=distance, operation=operation, direction=direction
             )
         case "infinite":
-            return feature_manager.create_extrude_infinite(direction)
+            return feature_manager.create_extrude_infinite(direction=direction)
         case "through_next":
-            return feature_manager.create_extrude_through_next(direction)
+            return feature_manager.create_extrude_through_next(direction=direction)
         case "from_to":
-            return feature_manager.create_extrude_from_to(from_plane_index, to_plane_index)
+            return feature_manager.create_extrude_from_to(
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
+            )
         case "thin_wall":
-            return feature_manager.create_extrude_thin_wall(distance, wall_thickness, direction)
+            return feature_manager.create_extrude_thin_wall(
+                distance=distance, wall_thickness=wall_thickness, direction=direction
+            )
         case "symmetric":
-            return feature_manager.create_extrude_symmetric(distance)
+            return feature_manager.create_extrude_symmetric(distance=distance)
         case "through_next_v2":
-            return feature_manager.create_extrude_through_next_v2(direction)
+            return feature_manager.create_extrude_through_next_v2(direction=direction)
         case "from_to_v2":
-            return feature_manager.create_extrude_from_to_v2(from_plane_index, to_plane_index)
+            return feature_manager.create_extrude_from_to_v2(
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
+            )
         case "by_keypoint":
-            return feature_manager.create_extrude_by_keypoint(direction)
+            return feature_manager.create_extrude_by_keypoint(direction=direction)
         case "from_to_single":
-            return feature_manager.create_extrude_from_to_single(from_plane_index, to_plane_index)
+            return feature_manager.create_extrude_from_to_single(
+                from_plane_index=from_plane_index, to_plane_index=to_plane_index
+            )
         case "through_next_single":
-            return feature_manager.create_extrude_through_next_single(direction)
+            return feature_manager.create_extrude_through_next_single(direction=direction)
         case _:
             return {"error": f"Unknown method: {method}"}

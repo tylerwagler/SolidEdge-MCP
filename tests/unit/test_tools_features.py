@@ -120,12 +120,16 @@ class TestCreateExtrude:
         # positional second argument silently became the operation and every
         # extrude failed with "Unknown operation: 'Reverse'". Caught only by
         # driving real Solid Edge.
-        mock_mgr.create_extrude.assert_called_once_with(0.05, operation="Add", direction="Reverse")
+        mock_mgr.create_extrude.assert_called_once_with(
+            distance=0.05, operation="Add", direction="Reverse"
+        )
 
     def test_finite_forwards_the_operation(self, mock_mgr):
         mock_mgr.create_extrude.return_value = {"status": "ok"}
         create_extrude(method="finite", distance=0.05, operation="Cut")
-        mock_mgr.create_extrude.assert_called_once_with(0.05, operation="Cut", direction="Normal")
+        mock_mgr.create_extrude.assert_called_once_with(
+            distance=0.05, operation="Cut", direction="Normal"
+        )
 
     def test_direction_never_lands_in_operation(self, mock_mgr):
         mock_mgr.create_extrude.return_value = {"status": "ok"}
@@ -657,7 +661,9 @@ class TestCreateBlend:
         """Blends.AddSurfaceBlend needs a positive Radius."""
         mock_mgr.create_blend_surface.return_value = {"status": "ok"}
         create_blend(method="surface", face_index1=1, face_index2=4, radius=0.002)
-        mock_mgr.create_blend_surface.assert_called_once_with(1, 4, 0.002)
+        mock_mgr.create_blend_surface.assert_called_once_with(
+            face_index1=1, face_index2=4, radius=0.002
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_blend(method="bogus")
@@ -715,7 +721,9 @@ class TestCreateRefPlane:
             distance=0.01,
             normal_side="Reverse",
         )
-        mock_mgr.create_ref_plane_by_offset.assert_called_once_with(2, 0.01, "Reverse")
+        mock_mgr.create_ref_plane_by_offset.assert_called_once_with(
+            parent_plane_index=2, distance=0.01, normal_side="Reverse"
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_ref_plane(method="bogus")
@@ -802,21 +810,23 @@ class TestCreateFlange:
         """inside_radius=None should default to 0.001."""
         mock_mgr.create_flange_by_match_face.return_value = {"status": "ok"}
         create_flange(method="by_match_face", inside_radius=None)
-        args = mock_mgr.create_flange_by_match_face.call_args[0]
-        assert args[4] == 0.001  # inside_radius or 0.001
+        # The tool calls backends by keyword, so read the keyword.
+        assert mock_mgr.create_flange_by_match_face.call_args.kwargs["inside_radius"] == 0.001
 
     def test_sync_defaults_radius(self, mock_mgr):
         """inside_radius=None should default to 0.001."""
         mock_mgr.create_flange_sync.return_value = {"status": "ok"}
         create_flange(method="sync", inside_radius=None)
-        args = mock_mgr.create_flange_sync.call_args[0]
-        assert args[3] == 0.001  # inside_radius or 0.001
+        # The tool calls backends by keyword, so read the keyword.
+        assert mock_mgr.create_flange_sync.call_args.kwargs["inside_radius"] == 0.001
 
     def test_match_face_with_bend_defaults_radius(self, mock_mgr):
         mock_mgr.create_flange_match_face_with_bend.return_value = {"status": "ok"}
         create_flange(method="match_face_with_bend", inside_radius=None)
-        args = mock_mgr.create_flange_match_face_with_bend.call_args[0]
-        assert args[4] == 0.001  # inside_radius or 0.001
+        # The tool calls backends by keyword, so read the keyword.
+        assert (
+            mock_mgr.create_flange_match_face_with_bend.call_args.kwargs["inside_radius"] == 0.001
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_flange(method="bogus")
@@ -871,14 +881,16 @@ class TestCreateSheetMetalBase:
         """width=None should default to 0.0."""
         mock_mgr.create_base_flange.return_value = {"status": "ok"}
         create_sheet_metal_base(type="flange", width=None, thickness=0.001)
-        mock_mgr.create_base_flange.assert_called_once_with(0.0, 0.001, None)
+        mock_mgr.create_base_flange.assert_called_once_with(
+            width=0.0, thickness=0.001, bend_radius=None
+        )
 
     def test_contour_advanced_none_bend_radius_defaults(self, mock_mgr):
         """bend_radius=None should default to 0.001, width=None to 0.0."""
         mock_mgr.create_base_contour_flange_advanced.return_value = {"status": "ok"}
         create_sheet_metal_base(type="contour_advanced", bend_radius=None, thickness=0.002)
         mock_mgr.create_base_contour_flange_advanced.assert_called_once_with(
-            0.002, 0.001, "Default", 0.0
+            thickness=0.002, bend_radius=0.001, relief_type="Default", width=0.0
         )
 
     def test_contour_advanced_forwards_width(self, mock_mgr):
@@ -892,7 +904,7 @@ class TestCreateSheetMetalBase:
             relief_type="Round",
         )
         mock_mgr.create_base_contour_flange_advanced.assert_called_once_with(
-            0.002, 0.003, "Round", 0.05
+            thickness=0.002, bend_radius=0.003, relief_type="Round", width=0.05
         )
 
     def test_unknown(self, mock_mgr):
@@ -990,12 +1002,16 @@ class TestCreateThread:
     def test_zero_diameter_becomes_none(self, mock_mgr):
         mock_mgr.create_thread.return_value = {"status": "ok"}
         create_thread(method="basic", face_index=1, thread_diameter=0.0, thread_depth=0.0)
-        mock_mgr.create_thread.assert_called_once_with(1, thread_diameter=None, thread_depth=None)
+        mock_mgr.create_thread.assert_called_once_with(
+            face_index=1, thread_diameter=None, thread_depth=None
+        )
 
     def test_positive_diameter_passed(self, mock_mgr):
         mock_mgr.create_thread.return_value = {"status": "ok"}
         create_thread(method="basic", face_index=1, thread_diameter=0.01, thread_depth=0.02)
-        mock_mgr.create_thread.assert_called_once_with(1, thread_diameter=0.01, thread_depth=0.02)
+        mock_mgr.create_thread.assert_called_once_with(
+            face_index=1, thread_diameter=0.01, thread_depth=0.02
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_thread(method="bogus")
@@ -1067,7 +1083,9 @@ class TestCreateLouver:
         """Louvers.Add needs a positive height, so the tool must forward it."""
         mock_mgr.create_louver.return_value = {"status": "ok"}
         create_louver(method="basic", depth=0.004, height=0.01, direction="Reverse")
-        mock_mgr.create_louver.assert_called_once_with(0.004, "Reverse", 0.01)
+        mock_mgr.create_louver.assert_called_once_with(
+            depth=0.004, direction="Reverse", height=0.01
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_louver(method="bogus")
@@ -1123,7 +1141,13 @@ class TestCreatePattern:
             rectangle_angle=30.0,
         )
         mock_mgr.create_pattern_rectangular_ex.assert_called_once_with(
-            "Protrusion 1", 3, 2, 0.01, 0.02, 2, 30.0
+            feature_name="Protrusion 1",
+            x_count=3,
+            y_count=2,
+            x_spacing=0.01,
+            y_spacing=0.02,
+            plane_index=2,
+            rectangle_angle=30.0,
         )
 
     def test_rectangular_ex_plane_and_angle_default(self, mock_mgr):
@@ -1131,7 +1155,13 @@ class TestCreatePattern:
         mock_mgr.create_pattern_rectangular_ex.return_value = {"status": "ok"}
         create_pattern(method="rectangular_ex", feature_name="Protrusion 1")
         mock_mgr.create_pattern_rectangular_ex.assert_called_once_with(
-            "Protrusion 1", 1, 1, 0.0, 0.0, 1, 0.0
+            feature_name="Protrusion 1",
+            x_count=1,
+            y_count=1,
+            x_spacing=0.0,
+            y_spacing=0.0,
+            plane_index=1,
+            rectangle_angle=0.0,
         )
 
     def test_unknown(self, mock_mgr):
@@ -1161,7 +1191,9 @@ class TestCreateMirror:
         """The default plane is 3 (Front/XZ) and is passed through as-is."""
         mock_mgr.save_as_mirror_part.return_value = {"status": "ok"}
         create_mirror(method="save_as_part", new_file_name="mirror.par")
-        mock_mgr.save_as_mirror_part.assert_called_once_with("mirror.par", 3, True)
+        mock_mgr.save_as_mirror_part.assert_called_once_with(
+            new_file_name="mirror.par", mirror_plane_index=3, link_to_original=True
+        )
 
     @pytest.mark.parametrize("disc", ["basic", "sync_ex", "save_as_part"])
     @pytest.mark.parametrize("bad_index", [0, -1])
@@ -1181,7 +1213,9 @@ class TestCreateMirror:
             mirror_plane_index=2,
             link_to_original=False,
         )
-        mock_mgr.save_as_mirror_part.assert_called_once_with("m.par", 2, False)
+        mock_mgr.save_as_mirror_part.assert_called_once_with(
+            new_file_name="m.par", mirror_plane_index=2, link_to_original=False
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_mirror(method="bogus")
@@ -1234,17 +1268,17 @@ class TestAddBody:
         """Models.AddBody(igBodyType, BodyName) takes both arguments."""
         mock_mgr.add_body.return_value = {"status": "ok"}
         add_body(method="basic", body_type="SheetMetal", body_name="Skin")
-        mock_mgr.add_body.assert_called_once_with("SheetMetal", "Skin")
+        mock_mgr.add_body.assert_called_once_with(body_type="SheetMetal", body_name="Skin")
 
     def test_feature_passes_import_path(self, mock_mgr):
         mock_mgr.add_body_feature.return_value = {"status": "ok"}
         add_body(method="feature", import_file_path="C:/parts/insert.x_t")
-        mock_mgr.add_body_feature.assert_called_once_with("C:/parts/insert.x_t")
+        mock_mgr.add_body_feature.assert_called_once_with(import_file_name="C:/parts/insert.x_t")
 
     def test_construction_passes_index(self, mock_mgr):
         mock_mgr.add_by_construction.return_value = {"status": "ok"}
         add_body(method="construction", construction_index=2)
-        mock_mgr.add_by_construction.assert_called_once_with(2)
+        mock_mgr.add_by_construction.assert_called_once_with(construction_index=2)
 
     def test_unknown(self, mock_mgr):
         result = add_body(method="bogus")
@@ -1324,8 +1358,7 @@ class TestSheetMetalMisc:
     def test_multi_edge_flange_defaults_empty_edges(self, mock_mgr):
         mock_mgr.create_multi_edge_flange.return_value = {"status": "ok"}
         sheet_metal_misc(action="multi_edge_flange")
-        args = mock_mgr.create_multi_edge_flange.call_args[0]
-        assert args[1] == []  # edge_indices or []
+        assert mock_mgr.create_multi_edge_flange.call_args.kwargs["edge_indices"] == []
 
     def test_unknown(self, mock_mgr):
         result = sheet_metal_misc(action="bogus")
@@ -1374,7 +1407,9 @@ class TestCreateSurfaceMark:
     def test_emboss_defaults_empty_faces(self, mock_mgr):
         mock_mgr.create_emboss.return_value = {"status": "ok"}
         create_surface_mark(type="emboss")
-        mock_mgr.create_emboss.assert_called_once_with([], 0.001, 0.0, False, True)
+        mock_mgr.create_emboss.assert_called_once_with(
+            face_indices=[], clearance=0.001, thickness=0.0, thicken=False, default_side=True
+        )
 
     def test_unknown(self, mock_mgr):
         result = create_surface_mark(type="bogus")
@@ -1401,7 +1436,7 @@ class TestCreateReinforcement:
     def test_rib_passes_args(self, mock_mgr):
         mock_mgr.create_rib.return_value = {"status": "ok"}
         create_reinforcement(type="rib", thickness=0.005, direction="Reverse")
-        mock_mgr.create_rib.assert_called_once_with(0.005, "Reverse")
+        mock_mgr.create_rib.assert_called_once_with(thickness=0.005, direction="Reverse")
 
     def test_unknown(self, mock_mgr):
         result = create_reinforcement(type="bogus")
@@ -1415,7 +1450,9 @@ class TestStandaloneFeatures:
     def test_create_web_network(self, mock_mgr):
         mock_mgr.create_web_network.return_value = {"status": "ok"}
         result = create_web_network(thickness=0.003, depth=0.02, direction="Reverse")
-        mock_mgr.create_web_network.assert_called_once_with(0.003, 0.02, "Reverse")
+        mock_mgr.create_web_network.assert_called_once_with(
+            thickness=0.003, depth=0.02, direction="Reverse"
+        )
         assert result == {"status": "ok"}
 
     def test_create_web_network_rejects_non_numeric_thickness(self, mock_mgr):
@@ -1432,13 +1469,13 @@ class TestStandaloneFeatures:
     def test_create_draft_angle(self, mock_mgr):
         mock_mgr.create_draft_angle.return_value = {"status": "ok"}
         result = create_draft_angle(face_index=0, angle=5.0, plane_index=2)
-        mock_mgr.create_draft_angle.assert_called_once_with(0, 5.0, 2)
+        mock_mgr.create_draft_angle.assert_called_once_with(face_index=0, angle=5.0, plane_index=2)
         assert result == {"status": "ok"}
 
     def test_create_bounded_surface(self, mock_mgr):
         mock_mgr.create_bounded_surface.return_value = {"status": "ok"}
         result = create_bounded_surface(want_end_caps=False, periodic=True)
-        mock_mgr.create_bounded_surface.assert_called_once_with(False, True)
+        mock_mgr.create_bounded_surface.assert_called_once_with(want_end_caps=False, periodic=True)
         assert result == {"status": "ok"}
 
 

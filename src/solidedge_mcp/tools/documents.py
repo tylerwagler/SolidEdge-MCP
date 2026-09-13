@@ -19,15 +19,15 @@ def create_document(
     """
     match type:
         case "part":
-            return doc_manager.create_part(template)
+            return doc_manager.create_part(template=template)
         case "assembly":
-            return doc_manager.create_assembly(template)
+            return doc_manager.create_assembly(template=template)
         case "sheet_metal":
-            return doc_manager.create_sheet_metal(template)
+            return doc_manager.create_sheet_metal(template=template)
         case "draft":
-            return doc_manager.create_draft(template)
+            return doc_manager.create_draft(template=template)
         case "weldment":
-            return doc_manager.create_weldment(template)
+            return doc_manager.create_weldment(template=template)
         case _:
             return {"error": f"Unknown document type: {type}"}
 
@@ -54,13 +54,15 @@ def open_document(
             return err
     match method:
         case "foreground":
-            return doc_manager.open_document(file_path)
+            return doc_manager.open_document(file_path=file_path)
         case "background":
-            return doc_manager.open_in_background(file_path)
+            return doc_manager.open_in_background(file_path=file_path)
         case "with_template":
-            return doc_manager.open_with_template(file_path, template)
+            return doc_manager.open_with_template(file_path=file_path, template=template)
         case "dialog":
-            return doc_manager.open_with_file_open_dialog(filename, dialog_title)
+            return doc_manager.open_with_file_open_dialog(
+                filename=filename, dialog_title=dialog_title
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -78,9 +80,9 @@ def close_document(
     """
     match scope:
         case "active":
-            return doc_manager.close_document(save)
+            return doc_manager.close_document(save=save)
         case "all":
-            return doc_manager.close_all_documents(save)
+            return doc_manager.close_all_documents(save=save)
         case _:
             return {"error": f"Unknown scope: {scope}"}
 
@@ -107,11 +109,11 @@ def save_document(
             return err
     match method:
         case "save":
-            return doc_manager.save_document(file_path, overwrite=overwrite)
+            return doc_manager.save_document(file_path=file_path, overwrite=overwrite)
         case "copy_as":
             if file_path is None:
                 return {"error": "file_path is required for 'copy_as' method"}
-            return doc_manager.save_copy_as(file_path)
+            return doc_manager.save_copy_as(file_path=file_path)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -135,7 +137,7 @@ def undo_redo(action: Literal["undo", "redo"] = "undo") -> dict[str, Any]:
 
 def activate_document(name_or_index: str | int) -> dict[str, Any]:
     """Make an open document active, by document name or 0-based index."""
-    return doc_manager.activate_document(name_or_index)
+    return doc_manager.activate_document(name_or_index=name_or_index)
 
 
 def import_file(file_path: str) -> dict[str, Any]:
@@ -143,7 +145,7 @@ def import_file(file_path: str) -> dict[str, Any]:
     file_path, err = validate_path(file_path, must_exist=True)
     if err:
         return err
-    return doc_manager.import_file(file_path)
+    return doc_manager.import_file(file_path=file_path)
 
 
 # === Registration ===

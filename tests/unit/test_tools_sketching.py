@@ -47,12 +47,12 @@ class TestManageSketch:
     def test_create_passes_plane(self, mock_mgr):
         mock_mgr.create_sketch.return_value = {"status": "ok"}
         manage_sketch(action="create", plane="Front")
-        mock_mgr.create_sketch.assert_called_once_with("Front")
+        mock_mgr.create_sketch.assert_called_once_with(plane="Front")
 
     def test_set_axis_passes_coords(self, mock_mgr):
         mock_mgr.set_axis_of_revolution.return_value = {"status": "ok"}
         manage_sketch(action="set_axis", x1=0.0, y1=0.0, x2=0.1, y2=0.0)
-        mock_mgr.set_axis_of_revolution.assert_called_once_with(0.0, 0.0, 0.1, 0.0)
+        mock_mgr.set_axis_of_revolution.assert_called_once_with(x1=0.0, y1=0.0, x2=0.1, y2=0.0)
 
     def test_close_defaults_to_closed(self, mock_mgr):
         mock_mgr.close_sketch.return_value = {"status": "closed"}
@@ -99,23 +99,23 @@ class TestDraw:
     def test_line_passes_coords(self, mock_mgr):
         mock_mgr.draw_line.return_value = {"status": "ok"}
         draw(shape="line", x1=0.1, y1=0.2, x2=0.3, y2=0.4)
-        mock_mgr.draw_line.assert_called_once_with(0.1, 0.2, 0.3, 0.4)
+        mock_mgr.draw_line.assert_called_once_with(x1=0.1, y1=0.2, x2=0.3, y2=0.4)
 
     def test_circle_passes_params(self, mock_mgr):
         mock_mgr.draw_circle.return_value = {"status": "ok"}
         draw(shape="circle", center_x=0.1, center_y=0.2, radius=0.05)
-        mock_mgr.draw_circle.assert_called_once_with(0.1, 0.2, 0.05)
+        mock_mgr.draw_circle.assert_called_once_with(center_x=0.1, center_y=0.2, radius=0.05)
 
     def test_spline_defaults_empty_list(self, mock_mgr):
         mock_mgr.draw_spline.return_value = {"status": "ok"}
         draw(shape="spline")
-        mock_mgr.draw_spline.assert_called_once_with([])
+        mock_mgr.draw_spline.assert_called_once_with(points=[])
 
     def test_spline_passes_points(self, mock_mgr):
         mock_mgr.draw_spline.return_value = {"status": "ok"}
         pts = [[0, 0], [1, 1]]
         draw(shape="spline", points=pts)
-        mock_mgr.draw_spline.assert_called_once_with(pts)
+        mock_mgr.draw_spline.assert_called_once_with(points=pts)
 
     def test_unknown(self, mock_mgr):
         result = draw(shape="bogus")
@@ -147,12 +147,14 @@ class TestSketchModify:
     def test_fillet_passes_radius(self, mock_mgr):
         mock_mgr.sketch_fillet.return_value = {"status": "ok"}
         sketch_modify(action="fillet", radius=0.005)
-        mock_mgr.sketch_fillet.assert_called_once_with(0.005)
+        mock_mgr.sketch_fillet.assert_called_once_with(radius=0.005)
 
     def test_rotate_passes_args(self, mock_mgr):
         mock_mgr.sketch_rotate.return_value = {"status": "ok"}
         sketch_modify(action="rotate", center_x=0.1, center_y=0.2, angle_degrees=45.0)
-        mock_mgr.sketch_rotate.assert_called_once_with(0.1, 0.2, 45.0)
+        mock_mgr.sketch_rotate.assert_called_once_with(
+            center_x=0.1, center_y=0.2, angle_degrees=45.0
+        )
 
     def test_unknown(self, mock_mgr):
         result = sketch_modify(action="bogus")
@@ -187,7 +189,9 @@ class TestSketchAdvancedModify:
             axis_y2=0.0,
             copy=False,
         )
-        mock_mgr.mirror_spline.assert_called_once_with(0.0, 0.0, 1.0, 0.0, False)
+        mock_mgr.mirror_spline.assert_called_once_with(
+            axis_x1=0.0, axis_y1=0.0, axis_x2=1.0, axis_y2=0.0, copy=False
+        )
 
     def test_offset_2d_passes_args(self, mock_mgr):
         mock_mgr.offset_sketch_2d.return_value = {"status": "ok"}
@@ -197,7 +201,9 @@ class TestSketchAdvancedModify:
             offset_side_y=0.0,
             offset_distance=0.01,
         )
-        mock_mgr.offset_sketch_2d.assert_called_once_with(1.0, 0.0, 0.01)
+        mock_mgr.offset_sketch_2d.assert_called_once_with(
+            offset_side_x=1.0, offset_side_y=0.0, offset_distance=0.01
+        )
 
     def test_clean_passes_args(self, mock_mgr):
         mock_mgr.clean_sketch_geometry.return_value = {"status": "ok"}
@@ -210,11 +216,11 @@ class TestSketchAdvancedModify:
             small_tolerance=0.01,
         )
         mock_mgr.clean_sketch_geometry.assert_called_once_with(
-            False,
-            True,
-            False,
-            True,
-            0.01,
+            clean_points=False,
+            clean_splines=True,
+            clean_identical=False,
+            clean_small=True,
+            small_tolerance=0.01,
         )
 
     def test_unknown(self, mock_mgr):
@@ -242,12 +248,14 @@ class TestSketchConstraint:
     def test_geometric_defaults_empty_elements(self, mock_mgr):
         mock_mgr.add_constraint.return_value = {"status": "ok"}
         sketch_constraint(type="geometric", constraint_type="Horizontal")
-        mock_mgr.add_constraint.assert_called_once_with("Horizontal", [])
+        mock_mgr.add_constraint.assert_called_once_with(constraint_type="Horizontal", elements=[])
 
     def test_geometric_passes_elements(self, mock_mgr):
         mock_mgr.add_constraint.return_value = {"status": "ok"}
         sketch_constraint(type="geometric", constraint_type="Horizontal", elements=[1, 2])
-        mock_mgr.add_constraint.assert_called_once_with("Horizontal", [1, 2])
+        mock_mgr.add_constraint.assert_called_once_with(
+            constraint_type="Horizontal", elements=[1, 2]
+        )
 
     def test_unknown(self, mock_mgr):
         result = sketch_constraint(type="bogus")
@@ -279,12 +287,12 @@ class TestSketchProject:
     def test_region_faces_defaults_empty(self, mock_mgr):
         mock_mgr.include_region_faces.return_value = {"status": "ok"}
         sketch_project(source="region_faces")
-        mock_mgr.include_region_faces.assert_called_once_with([])
+        mock_mgr.include_region_faces.assert_called_once_with(face_indices=[])
 
     def test_region_faces_passes_list(self, mock_mgr):
         mock_mgr.include_region_faces.return_value = {"status": "ok"}
         sketch_project(source="region_faces", face_indices=[1, 2])
-        mock_mgr.include_region_faces.assert_called_once_with([1, 2])
+        mock_mgr.include_region_faces.assert_called_once_with(face_indices=[1, 2])
 
     def test_unknown(self, mock_mgr):
         result = sketch_project(source="bogus")

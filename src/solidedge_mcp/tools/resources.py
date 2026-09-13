@@ -276,27 +276,27 @@ def drawing_view_count() -> str:
 
 def model_feature_by_index(index: int) -> str:
     """Detailed info about a feature by 0-based index."""
-    return dumps(feature_manager.get_feature_info(int(index)))
+    return dumps(feature_manager.get_feature_info(feature_index=int(index)))
 
 
 def model_feature_dimensions(name: str) -> str:
     """Dimensions/parameters of a named feature, in meters."""
-    return dumps(query_manager.get_feature_dimensions(name))
+    return dumps(query_manager.get_feature_dimensions(feature_name=name))
 
 
 def model_feature_status(name: str) -> str:
     """Status of a feature (OK, suppressed, failed, etc.)."""
-    return dumps(query_manager.get_feature_status(name))
+    return dumps(query_manager.get_feature_status(feature_name=name))
 
 
 def model_feature_profiles(name: str) -> str:
     """Sketch profiles associated with a feature."""
-    return dumps(query_manager.get_feature_profiles(name))
+    return dumps(query_manager.get_feature_profiles(feature_name=name))
 
 
 def model_feature_parents(name: str) -> str:
     """Parent geometry/features of a named feature."""
-    return dumps(query_manager.get_feature_parents(name))
+    return dumps(query_manager.get_feature_parents(feature_name=name))
 
 
 # --- Geometry templates (3) ---
@@ -304,17 +304,17 @@ def model_feature_parents(name: str) -> str:
 
 def geometry_face_by_index(index: int) -> str:
     """Detailed information about a face, by 0-based index."""
-    return dumps(query_manager.get_face_info(int(index)))
+    return dumps(query_manager.get_face_info(face_index=int(index)))
 
 
 def geometry_face_area(index: int) -> str:
     """Area of a face (square meters), by 0-based index."""
-    return dumps(query_manager.get_face_area(int(index)))
+    return dumps(query_manager.get_face_area(face_index=int(index)))
 
 
 def geometry_edge_by_face(face: int, edge: int) -> str:
     """Detailed info about an edge: 0-based face index, 0-based edge on it."""
-    return dumps(query_manager.get_edge_info(int(face), int(edge)))
+    return dumps(query_manager.get_edge_info(face_index=int(face), edge_index=int(edge)))
 
 
 # --- Variable templates (3) ---
@@ -322,17 +322,17 @@ def geometry_edge_by_face(face: int, edge: int) -> str:
 
 def model_variable_by_name(name: str) -> str:
     """Value of a specific variable by name."""
-    return dumps(query_manager.get_variable(name))
+    return dumps(query_manager.get_variable(name=name))
 
 
 def model_variable_formula(name: str) -> str:
     """Formula of a variable by name."""
-    return dumps(query_manager.get_variable_formula(name))
+    return dumps(query_manager.get_variable_formula(name=name))
 
 
 def model_variable_names(name: str) -> str:
     """DisplayName and SystemName of a variable."""
-    return dumps(query_manager.get_variable_names(name))
+    return dumps(query_manager.get_variable_names(name=name))
 
 
 # --- Drawing templates (2) ---
@@ -340,12 +340,12 @@ def model_variable_names(name: str) -> str:
 
 def drawing_view_scale(index: int) -> str:
     """Scale of a drawing view, by 0-based index."""
-    return dumps(export_manager.get_drawing_view_scale(int(index)))
+    return dumps(export_manager.get_drawing_view_scale(view_index=int(index)))
 
 
 def drawing_view_info(index: int) -> str:
     """Detailed info about a drawing view, by 0-based index."""
-    return dumps(export_manager.get_drawing_view_info(int(index)))
+    return dumps(export_manager.get_drawing_view_info(view_index=int(index)))
 
 
 # --- Material template (1) ---
@@ -353,7 +353,7 @@ def drawing_view_info(index: int) -> str:
 
 def material_property(name: str, index: int) -> str:
     """One property of a named material, by 0-based property index."""
-    return dumps(query_manager.get_material_property(name, int(index)))
+    return dumps(query_manager.get_material_property(material_name=name, property_index=int(index)))
 
 
 # --- Mass properties template (1) ---
@@ -361,7 +361,7 @@ def material_property(name: str, index: int) -> str:
 
 def geometry_mass_properties(density: float) -> str:
     """Mass properties for a given density (kg/m3)."""
-    return dumps(query_manager.get_mass_properties(float(density)))
+    return dumps(query_manager.get_mass_properties(density=float(density)))
 
 
 # ===================================================================

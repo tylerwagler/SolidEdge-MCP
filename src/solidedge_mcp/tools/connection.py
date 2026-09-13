@@ -20,7 +20,7 @@ def manage_connection(
     """
     match action:
         case "connect":
-            return connection.connect(start_if_needed)
+            return connection.connect(start_if_needed=start_if_needed)
         case "disconnect":
             return connection.disconnect()
         case "quit":
@@ -47,9 +47,9 @@ def app_command(
     """
     match action:
         case "start":
-            return connection.start_command(command_id)
+            return connection.start_command(command_id=command_id)
         case "abort":
-            return connection.abort_command(abort_all)
+            return connection.abort_command(abort_all=abort_all)
         case "idle":
             return connection.do_idle()
         case _:
@@ -94,29 +94,31 @@ def app_config(
     match property:
         case "set_performance":
             return connection.set_performance_mode(
-                delay_compute,
-                screen_updating,
-                interactive,
-                display_alerts,
+                delay_compute=delay_compute,
+                screen_updating=screen_updating,
+                interactive=interactive,
+                display_alerts=display_alerts,
             )
         case "get_environment":
             return connection.get_active_environment()
         case "get_status_bar":
             return connection.get_status_bar()
         case "set_status_bar":
-            return connection.set_status_bar(text)
+            return connection.set_status_bar(text=text)
         case "get_visible":
             return connection.get_visible()
         case "set_visible":
-            return connection.set_visible(visible)
+            return connection.set_visible(visible=visible)
         case "get_global":
-            return connection.get_global_parameter(parameter)
+            return connection.get_global_parameter(parameter=parameter)
         case "set_global":
-            return connection.set_global_parameter(parameter, value)
+            return connection.set_global_parameter(parameter=parameter, value=value)
         case "get_template":
-            return connection.get_default_template_path(doc_type)
+            return connection.get_default_template_path(doc_type=doc_type)
         case "set_template":
-            return connection.set_default_template_path(doc_type, template_path)
+            return connection.set_default_template_path(
+                doc_type=doc_type, template_path=template_path
+            )
         case _:
             return {"error": f"Unknown property: {property}"}
 
@@ -126,12 +128,12 @@ def app_config(
 
 def convert_by_file_path(input_path: str, output_path: str) -> dict[str, Any]:
     """Convert a CAD file to another format by extension (e.g. .par -> .step)."""
-    return connection.convert_by_file_path(input_path, output_path)
+    return connection.convert_by_file_path(input_path=input_path, output_path=output_path)
 
 
 def arrange_windows(style: int = 1) -> dict[str, Any]:
     """Arrange open document windows. style: 1=Tiled, 2=Horizontal, 4=Vertical, 8=Cascade."""
-    return connection.arrange_windows(style)
+    return connection.arrange_windows(style=style)
 
 
 def get_active_command() -> dict[str, Any]:
@@ -141,7 +143,7 @@ def get_active_command() -> dict[str, Any]:
 
 def run_macro(filename: str) -> dict[str, Any]:
     """Run a VBA macro file (.vba/.exe path) in Solid Edge."""
-    return connection.run_macro(filename)
+    return connection.run_macro(filename=filename)
 
 
 # === Registration ===

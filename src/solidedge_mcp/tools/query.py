@@ -37,9 +37,11 @@ def measure(
     """
     match type:
         case "distance":
-            return query_manager.measure_distance(x1, y1, z1, x2, y2, z2)
+            return query_manager.measure_distance(x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2)
         case "angle":
-            return query_manager.measure_angle(x1, y1, z1, x2, y2, z2, x3, y3, z3)
+            return query_manager.measure_angle(
+                x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2, x3=x3, y3=y3, z3=z3
+            )
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -77,27 +79,27 @@ def manage_variable(
         case "set":
             if value is None:
                 return {"error": "value is required for 'set' action"}
-            return query_manager.set_variable(name, value)
+            return query_manager.set_variable(name=name, value=value)
         case "add":
             if formula is None:
                 return {"error": "formula is required for 'add' action"}
-            return query_manager.add_variable(name, formula, units_type)
+            return query_manager.add_variable(name=name, formula=formula, units_type=units_type)
         case "query":
-            return query_manager.query_variables(pattern, case_insensitive)
+            return query_manager.query_variables(pattern=pattern, case_insensitive=case_insensitive)
         case "rename":
             if new_name is None:
                 return {"error": "new_name is required for 'rename' action"}
-            return query_manager.rename_variable(name, new_name)
+            return query_manager.rename_variable(old_name=name, new_name=new_name)
         case "translate":
-            return query_manager.translate_variable(name)
+            return query_manager.translate_variable(name=name)
         case "copy_clipboard":
-            return query_manager.copy_variable_to_clipboard(name)
+            return query_manager.copy_variable_to_clipboard(name=name)
         case "add_from_clipboard":
-            return query_manager.add_variable_from_clipboard(name, units_type)
+            return query_manager.add_variable_from_clipboard(name=name, units_type=units_type)
         case "set_formula":
             if formula is None:
                 return {"error": "formula is required for 'set_formula' action"}
-            return query_manager.set_variable_formula(name, formula)
+            return query_manager.set_variable_formula(name=name, formula=formula)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -113,11 +115,11 @@ def manage_property(
     """Set a document (Title, Author, ...) or custom property, or delete a custom one."""
     match action:
         case "set_document":
-            return query_manager.set_document_property(name, value)
+            return query_manager.set_document_property(name=name, value=value)
         case "set_custom":
-            return query_manager.set_custom_property(name, value)
+            return query_manager.set_custom_property(name=name, value=value)
         case "delete_custom":
-            return query_manager.delete_custom_property(name)
+            return query_manager.delete_custom_property(name=name)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -137,11 +139,11 @@ def manage_material(
     """
     match action:
         case "set":
-            return query_manager.set_material(material_name)
+            return query_manager.set_material(material_name=material_name)
         case "set_density":
-            return query_manager.set_material_density(density)
+            return query_manager.set_material_density(density=density)
         case "set_by_name":
-            return query_manager.set_material_by_name(material_name)
+            return query_manager.set_material_by_name(material_name=material_name)
         case "get_library":
             return query_manager.get_material_library()
         case _:
@@ -167,13 +169,15 @@ def set_appearance(
     """
     match target:
         case "body_color":
-            return query_manager.set_body_color(red, green, blue)
+            return query_manager.set_body_color(red=red, green=green, blue=blue)
         case "face_color":
-            return query_manager.set_face_color(face_index, red, green, blue)
+            return query_manager.set_face_color(
+                face_index=face_index, red=red, green=green, blue=blue
+            )
         case "opacity":
-            return query_manager.set_body_opacity(opacity)
+            return query_manager.set_body_opacity(opacity=opacity)
         case "reflectivity":
-            return query_manager.set_body_reflectivity(reflectivity)
+            return query_manager.set_body_reflectivity(reflectivity=reflectivity)
         case _:
             return {"error": f"Unknown target: {target}"}
 
@@ -196,13 +200,15 @@ def manage_layer(
         case "add":
             if not isinstance(name_or_index, str):
                 return {"error": "name_or_index must be a string for 'add' action"}
-            return query_manager.add_layer(name_or_index)
+            return query_manager.add_layer(name=name_or_index)
         case "activate":
-            return query_manager.activate_layer(name_or_index)
+            return query_manager.activate_layer(name_or_index=name_or_index)
         case "set_properties":
-            return query_manager.set_layer_properties(name_or_index, show, selectable)
+            return query_manager.set_layer_properties(
+                name_or_index=name_or_index, show=show, selectable=selectable
+            )
         case "delete":
-            return query_manager.delete_layer(name_or_index)
+            return query_manager.delete_layer(name_or_index=name_or_index)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -235,9 +241,9 @@ def select_set(
         case "clear":
             return query_manager.clear_select_set()
         case "add":
-            return query_manager.select_add(object_type, index)
+            return query_manager.select_add(object_type=object_type, index=index)
         case "remove":
-            return query_manager.select_remove(index)
+            return query_manager.select_remove(index=index)
         case "all":
             return query_manager.select_all()
         case "copy":
@@ -329,61 +335,67 @@ def edit_feature_extent(
     """
     match property:
         case "get_direction1":
-            return query_manager.get_direction1_extent(feature_name)
+            return query_manager.get_direction1_extent(feature_name=feature_name)
         case "set_direction1":
             return query_manager.set_direction1_extent(
-                feature_name,
-                _EXTENT_TYPE_CONSTANTS[extent_type],
-                distance,
-                _SIDE_CONSTANTS[extent_side],
+                feature_name=feature_name,
+                extent_type=_EXTENT_TYPE_CONSTANTS[extent_type],
+                distance=distance,
+                extent_side=_SIDE_CONSTANTS[extent_side],
             )
         case "get_direction2":
-            return query_manager.get_direction2_extent(feature_name)
+            return query_manager.get_direction2_extent(feature_name=feature_name)
         case "set_direction2":
             return query_manager.set_direction2_extent(
-                feature_name,
-                _EXTENT_TYPE_CONSTANTS[extent_type],
-                distance,
-                _SIDE_CONSTANTS[extent_side],
+                feature_name=feature_name,
+                extent_type=_EXTENT_TYPE_CONSTANTS[extent_type],
+                distance=distance,
+                extent_side=_SIDE_CONSTANTS[extent_side],
             )
         case "get_thin_wall":
-            return query_manager.get_thin_wall_options(feature_name)
+            return query_manager.get_thin_wall_options(feature_name=feature_name)
         case "set_thin_wall":
             return query_manager.set_thin_wall_options(
-                feature_name,
-                thickness,
-                _SIDE_CONSTANTS[thickness_side],
-                thin_wall,
-                add_end_caps,
-                remove_inside_material,
+                feature_name=feature_name,
+                thickness=thickness,
+                thickness_side=_SIDE_CONSTANTS[thickness_side],
+                thin_wall=thin_wall,
+                add_end_caps=add_end_caps,
+                remove_inside_material=remove_inside_material,
             )
         case "get_from_face":
-            return query_manager.get_from_face_offset(feature_name)
+            return query_manager.get_from_face_offset(feature_name=feature_name)
         case "set_from_face":
-            return query_manager.set_from_face_offset(feature_name, offset)
+            return query_manager.set_from_face_offset(feature_name=feature_name, offset=offset)
         case "get_body_array":
-            return query_manager.get_body_array(feature_name)
+            return query_manager.get_body_array(feature_name=feature_name)
         case "set_body_array":
-            return query_manager.set_body_array(feature_name, body_indices or [], multi_body_cut)
+            return query_manager.set_body_array(
+                feature_name=feature_name,
+                body_indices=body_indices or [],
+                multi_body_cut=multi_body_cut,
+            )
         case "get_to_face":
-            return query_manager.get_to_face_offset(feature_name)
+            return query_manager.get_to_face_offset(feature_name=feature_name)
         case "set_to_face":
             return query_manager.set_to_face_offset(
-                feature_name, _OFFSET_SIDE_CONSTANTS[offset_side], distance
+                feature_name=feature_name,
+                offset_side=_OFFSET_SIDE_CONSTANTS[offset_side],
+                distance=distance,
             )
         case "get_direction1_treatment":
-            return query_manager.get_direction1_treatment(feature_name)
+            return query_manager.get_direction1_treatment(feature_name=feature_name)
         case "apply_direction1_treatment":
             return query_manager.apply_direction1_treatment(
-                feature_name,
-                treatment_type,
-                draft_side,
-                draft_angle,
-                crown_type,
-                crown_side,
-                crown_curvature_side,
-                crown_radius_or_offset,
-                crown_takeoff_angle,
+                feature_name=feature_name,
+                treatment_type=treatment_type,
+                draft_side=draft_side,
+                draft_angle=draft_angle,
+                crown_type=crown_type,
+                crown_side=crown_side,
+                crown_curvature_side=crown_curvature_side,
+                crown_radius_or_offset=crown_radius_or_offset,
+                crown_takeoff_angle=crown_takeoff_angle,
             )
         case _:
             return {"error": f"Unknown property: {property}"}
@@ -404,13 +416,13 @@ def manage_feature_tree(
     """
     match action:
         case "rename":
-            return query_manager.rename_feature(feature_name, new_name)
+            return query_manager.rename_feature(old_name=feature_name, new_name=new_name)
         case "suppress":
-            return query_manager.suppress_feature(feature_name)
+            return query_manager.suppress_feature(feature_name=feature_name)
         case "unsuppress":
-            return query_manager.unsuppress_feature(feature_name)
+            return query_manager.unsuppress_feature(feature_name=feature_name)
         case "set_mode":
-            return query_manager.set_modeling_mode(mode)
+            return query_manager.set_modeling_mode(mode=mode)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -432,17 +444,23 @@ def query_edge(
     """
     match property:
         case "endpoints":
-            return query_manager.get_edge_endpoints(face_index, edge_index)
+            return query_manager.get_edge_endpoints(face_index=face_index, edge_index=edge_index)
         case "length":
-            return query_manager.get_edge_length(face_index, edge_index)
+            return query_manager.get_edge_length(face_index=face_index, edge_index=edge_index)
         case "tangent":
-            return query_manager.get_edge_tangent(face_index, edge_index, param)
+            return query_manager.get_edge_tangent(
+                face_index=face_index, edge_index=edge_index, param=param
+            )
         case "geometry":
-            return query_manager.get_edge_geometry(face_index, edge_index)
+            return query_manager.get_edge_geometry(face_index=face_index, edge_index=edge_index)
         case "curvature":
-            return query_manager.get_edge_curvature(face_index, edge_index, param)
+            return query_manager.get_edge_curvature(
+                face_index=face_index, edge_index=edge_index, param=param
+            )
         case "vertex":
-            return query_manager.get_vertex_point(face_index, edge_index, which)
+            return query_manager.get_vertex_point(
+                face_index=face_index, edge_index=edge_index, which=which
+            )
         case _:
             return {"error": f"Unknown property: {property}"}
 
@@ -462,13 +480,13 @@ def query_face(
     """
     match property:
         case "normal":
-            return query_manager.get_face_normal(face_index, u, v)
+            return query_manager.get_face_normal(face_index=face_index, u=u, v=v)
         case "geometry":
-            return query_manager.get_face_geometry(face_index)
+            return query_manager.get_face_geometry(face_index=face_index)
         case "loops":
-            return query_manager.get_face_loops(face_index)
+            return query_manager.get_face_loops(face_index=face_index)
         case "curvature":
-            return query_manager.get_face_curvature(face_index, u, v)
+            return query_manager.get_face_curvature(face_index=face_index, u=u, v=v)
         case _:
             return {"error": f"Unknown property: {property}"}
 
@@ -521,34 +539,36 @@ def query_body(
     """
     match property:
         case "extreme_point":
-            return query_manager.get_body_extreme_point(direction_x, direction_y, direction_z)
+            return query_manager.get_body_extreme_point(
+                direction_x=direction_x, direction_y=direction_y, direction_z=direction_z
+            )
         case "faces_by_ray":
             return query_manager.get_faces_by_ray(
-                origin_x,
-                origin_y,
-                origin_z,
-                direction_x,
-                direction_y,
-                direction_z,
+                origin_x=origin_x,
+                origin_y=origin_y,
+                origin_z=origin_z,
+                direction_x=direction_x,
+                direction_y=direction_y,
+                direction_z=direction_z,
             )
         case "faces":
-            return query_manager.get_body_faces(offset, limit)
+            return query_manager.get_body_faces(offset=offset, limit=limit)
         case "edges":
-            return query_manager.get_body_edges(offset, limit)
+            return query_manager.get_body_edges(offset=offset, limit=limit)
         case "shells":
-            return query_manager.get_body_shells(offset, limit)
+            return query_manager.get_body_shells(offset=offset, limit=limit)
         case "vertices":
-            return query_manager.get_body_vertices(offset, limit)
+            return query_manager.get_body_vertices(offset=offset, limit=limit)
         case "spatial_context":
             return query_manager.get_spatial_context()
         case "shell_info":
-            return query_manager.get_shell_info(shell_index)
+            return query_manager.get_shell_info(shell_index=shell_index)
         case "point_inside":
-            return query_manager.is_point_inside_body(x, y, z)
+            return query_manager.is_point_inside_body(x=x, y=y, z=z)
         case "user_physical_properties":
             return query_manager.get_user_physical_properties()
         case "facet_data":
-            return query_manager.get_body_facet_data(tolerance)
+            return query_manager.get_body_facet_data(tolerance=tolerance)
         case _:
             return {"error": f"Unknown property: {property}"}
 
@@ -567,9 +587,11 @@ def query_bspline(
     """
     match type:
         case "curve":
-            return query_manager.get_bspline_curve_info(face_index, edge_index)
+            return query_manager.get_bspline_curve_info(
+                face_index=face_index, edge_index=edge_index
+            )
         case "surface":
-            return query_manager.get_bspline_surface_info(face_index)
+            return query_manager.get_bspline_surface_info(face_index=face_index)
         case _:
             return {"error": f"Unknown type: {type}"}
 

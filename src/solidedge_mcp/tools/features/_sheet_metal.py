@@ -46,68 +46,68 @@ def create_flange(
     match method:
         case "basic":
             return feature_manager.create_flange(
-                face_index,
-                edge_index,
-                flange_length,
-                side,
-                inside_radius,
-                bend_angle,
+                face_index=face_index,
+                edge_index=edge_index,
+                flange_length=flange_length,
+                side=side,
+                inside_radius=inside_radius,
+                bend_angle=bend_angle,
             )
         case "by_match_face":
             return feature_manager.create_flange_by_match_face(
-                face_index,
-                edge_index,
-                flange_length,
-                side,
-                inside_radius or 0.001,
+                face_index=face_index,
+                edge_index=edge_index,
+                flange_length=flange_length,
+                side=side,
+                inside_radius=inside_radius or 0.001,
             )
         case "sync":
             return feature_manager.create_flange_sync(
-                face_index,
-                edge_index,
-                flange_length,
-                inside_radius or 0.001,
+                face_index=face_index,
+                edge_index=edge_index,
+                flange_length=flange_length,
+                inside_radius=inside_radius or 0.001,
             )
         case "by_face":
             return feature_manager.create_flange_by_face(
-                face_index,
-                edge_index,
-                ref_face_index,
-                flange_length,
-                side,
-                bend_radius,
+                face_index=face_index,
+                edge_index=edge_index,
+                ref_face_index=ref_face_index,
+                flange_length=flange_length,
+                side=side,
+                bend_radius=bend_radius,
             )
         case "with_bend_calc":
             return feature_manager.create_flange_with_bend_calc(
-                face_index,
-                edge_index,
-                flange_length,
-                side,
-                bend_deduction,
+                face_index=face_index,
+                edge_index=edge_index,
+                flange_length=flange_length,
+                side=side,
+                bend_deduction=bend_deduction,
             )
         case "sync_with_bend_calc":
             return feature_manager.create_flange_sync_with_bend_calc(
-                face_index,
-                edge_index,
-                flange_length,
-                bend_deduction,
+                face_index=face_index,
+                edge_index=edge_index,
+                flange_length=flange_length,
+                bend_deduction=bend_deduction,
             )
         case "match_face_with_bend":
             return feature_manager.create_flange_match_face_with_bend(
-                face_index,
-                edge_index,
-                flange_length,
-                side,
-                inside_radius or 0.001,
+                face_index=face_index,
+                edge_index=edge_index,
+                flange_length=flange_length,
+                side=side,
+                inside_radius=inside_radius or 0.001,
             )
         case "by_face_with_bend":
             return feature_manager.create_flange_by_face_with_bend(
-                face_index,
-                edge_index,
-                ref_face_index,
-                flange_length,
-                side,
-                bend_radius,
+                face_index=face_index,
+                edge_index=edge_index,
+                ref_face_index=ref_face_index,
+                flange_length=flange_length,
+                side=side,
+                bend_radius=bend_radius,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -138,33 +138,37 @@ def create_contour_flange(
         return err
     match method:
         case "ex":
-            return feature_manager.create_contour_flange_ex(thickness, bend_radius, direction)
+            return feature_manager.create_contour_flange_ex(
+                thickness=thickness, bend_radius=bend_radius, direction=direction
+            )
         case "sync":
             return feature_manager.create_contour_flange_sync(
-                face_index,
-                edge_index,
-                thickness,
-                bend_radius,
-                direction,
+                face_index=face_index,
+                edge_index=edge_index,
+                thickness=thickness,
+                bend_radius=bend_radius,
+                direction=direction,
             )
         case "sync_with_bend":
             return feature_manager.create_contour_flange_sync_with_bend(
-                face_index,
-                edge_index,
-                thickness,
-                bend_radius,
-                direction,
-                bend_deduction,
+                face_index=face_index,
+                edge_index=edge_index,
+                thickness=thickness,
+                bend_radius=bend_radius,
+                direction=direction,
+                bend_deduction=bend_deduction,
             )
         case "v3":
-            return feature_manager.create_contour_flange_v3(thickness, bend_radius, direction)
+            return feature_manager.create_contour_flange_v3(
+                thickness=thickness, bend_radius=bend_radius, direction=direction
+            )
         case "sync_ex":
             return feature_manager.create_contour_flange_sync_ex(
-                face_index,
-                edge_index,
-                thickness,
-                bend_radius,
-                direction,
+                face_index=face_index,
+                edge_index=edge_index,
+                thickness=thickness,
+                bend_radius=bend_radius,
+                direction=direction,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -190,18 +194,20 @@ def create_sheet_metal_base(
         return err
     match type:
         case "flange":
-            return feature_manager.create_base_flange(width or 0.0, thickness, bend_radius)
+            return feature_manager.create_base_flange(
+                width=width or 0.0, thickness=thickness, bend_radius=bend_radius
+            )
         case "tab":
-            return feature_manager.create_base_tab(thickness, width)
+            return feature_manager.create_base_tab(thickness=thickness, width=width)
         case "contour_advanced":
             return feature_manager.create_base_contour_flange_advanced(
-                thickness,
-                bend_radius or 0.001,
-                relief_type,
-                width or 0.0,
+                thickness=thickness,
+                bend_radius=bend_radius or 0.001,
+                relief_type=relief_type,
+                width=width or 0.0,
             )
         case "tab_multi_profile":
-            return feature_manager.create_base_tab_multi_profile(thickness)
+            return feature_manager.create_base_tab_multi_profile(thickness=thickness)
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -224,11 +230,13 @@ def create_lofted_flange(
         return err
     match method:
         case "basic":
-            return feature_manager.create_lofted_flange(thickness)
+            return feature_manager.create_lofted_flange(thickness=thickness)
         case "advanced":
-            return feature_manager.create_lofted_flange_advanced(thickness, bend_radius)
+            return feature_manager.create_lofted_flange_advanced(
+                thickness=thickness, bend_radius=bend_radius
+            )
         case "ex":
-            return feature_manager.create_lofted_flange_ex(thickness)
+            return feature_manager.create_lofted_flange_ex(thickness=thickness)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -251,13 +259,15 @@ def create_bend(
         return err
     match method:
         case "basic":
-            return feature_manager.create_bend(bend_angle, direction, moving_side)
+            return feature_manager.create_bend(
+                bend_angle=bend_angle, direction=direction, moving_side=moving_side
+            )
         case "with_calc":
             return feature_manager.create_bend_with_calc(
-                bend_angle,
-                direction,
-                moving_side,
-                bend_deduction,
+                bend_angle=bend_angle,
+                direction=direction,
+                moving_side=moving_side,
+                bend_deduction=bend_deduction,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -283,13 +293,17 @@ def create_slot(
         case "basic":
             return feature_manager.create_slot(depth=depth, direction=direction)
         case "ex":
-            return feature_manager.create_slot_ex(width, depth, direction)
+            return feature_manager.create_slot_ex(width=width, depth=depth, direction=direction)
         case "sync":
-            return feature_manager.create_slot_sync(width, depth)
+            return feature_manager.create_slot_sync(width=width, depth=depth)
         case "multi_body":
-            return feature_manager.create_slot_multi_body(width, depth, direction)
+            return feature_manager.create_slot_multi_body(
+                width=width, depth=depth, direction=direction
+            )
         case "sync_multi_body":
-            return feature_manager.create_slot_sync_multi_body(width, depth, direction)
+            return feature_manager.create_slot_sync_multi_body(
+                width=width, depth=depth, direction=direction
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -314,11 +328,11 @@ def create_thread(
     match method:
         case "basic":
             return feature_manager.create_thread(
-                face_index, thread_diameter=diameter, thread_depth=depth
+                face_index=face_index, thread_diameter=diameter, thread_depth=depth
             )
         case "physical":
             return feature_manager.create_thread_ex(
-                face_index, thread_diameter=diameter, thread_depth=depth
+                face_index=face_index, thread_diameter=diameter, thread_depth=depth
             )
         case _:
             return {"error": f"Unknown method: {method}. Use 'basic' or 'physical'."}
@@ -339,9 +353,9 @@ def create_drawn_cutout(
         return err
     match method:
         case "basic":
-            return feature_manager.create_drawn_cutout(depth, direction)
+            return feature_manager.create_drawn_cutout(depth=depth, direction=direction)
         case "ex":
-            return feature_manager.create_drawn_cutout_ex(depth, direction)
+            return feature_manager.create_drawn_cutout_ex(depth=depth, direction=direction)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -362,9 +376,11 @@ def create_dimple(
         return err
     match method:
         case "basic":
-            return feature_manager.create_dimple(depth, direction)
+            return feature_manager.create_dimple(depth=depth, direction=direction)
         case "ex":
-            return feature_manager.create_dimple_ex(depth, direction, punch_tool_diameter)
+            return feature_manager.create_dimple_ex(
+                depth=depth, direction=direction, punch_tool_diameter=punch_tool_diameter
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -388,9 +404,9 @@ def create_louver(
         return err
     match method:
         case "basic":
-            return feature_manager.create_louver(depth, direction, height)
+            return feature_manager.create_louver(depth=depth, direction=direction, height=height)
         case "sync":
-            return feature_manager.create_louver_sync(depth)
+            return feature_manager.create_louver_sync(depth=depth)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -436,18 +452,32 @@ def sheet_metal_misc(
     match action:
         case "hem":
             return feature_manager.create_hem(
-                face_index, edge_index, hem_width, bend_radius, hem_type
+                face_index=face_index,
+                edge_index=edge_index,
+                hem_width=hem_width,
+                bend_radius=bend_radius,
+                hem_type=hem_type,
             )
         case "jog":
-            return feature_manager.create_jog(jog_offset, jog_angle, direction, moving_side)
+            return feature_manager.create_jog(
+                jog_offset=jog_offset,
+                jog_angle=jog_angle,
+                direction=direction,
+                moving_side=moving_side,
+            )
         case "close_corner":
-            return feature_manager.create_close_corner(face_index, edge_index, closure_type)
+            return feature_manager.create_close_corner(
+                face_index=face_index, edge_index=edge_index, closure_type=closure_type
+            )
         case "multi_edge_flange":
             return feature_manager.create_multi_edge_flange(
-                face_index, edge_indices or [], flange_length, side
+                face_index=face_index,
+                edge_indices=edge_indices or [],
+                flange_length=flange_length,
+                side=side,
             )
         case "convert":
-            return feature_manager.convert_part_to_sheet_metal(thickness)
+            return feature_manager.convert_part_to_sheet_metal(thickness=thickness)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -468,7 +498,7 @@ def create_stamped(
         return err
     match type:
         case "bead":
-            return feature_manager.create_bead(depth)
+            return feature_manager.create_bead(depth=depth)
         case "gusset":
             # The backend parameter is the plate thickness; this tool only
             # exposes `depth`, which is what Solid Edge uses for it here.
@@ -497,7 +527,11 @@ def create_surface_mark(
     match type:
         case "emboss":
             return feature_manager.create_emboss(
-                face_indices or [], clearance, thickness, thicken, default_side
+                face_indices=face_indices or [],
+                clearance=clearance,
+                thickness=thickness,
+                thicken=thicken,
+                default_side=default_side,
             )
         case "etch":
             return feature_manager.create_etch()
@@ -523,7 +557,7 @@ def create_reinforcement(
         return err
     match type:
         case "rib":
-            return feature_manager.create_rib(thickness, direction)
+            return feature_manager.create_rib(thickness=thickness, direction=direction)
         case "lip":
             return feature_manager.create_lip(depth=thickness)
         case _:
@@ -544,7 +578,7 @@ def create_web_network(
     err = validate_numerics(thickness=thickness, depth=depth)
     if err:
         return err
-    return feature_manager.create_web_network(thickness, depth, direction)
+    return feature_manager.create_web_network(thickness=thickness, depth=depth, direction=direction)
 
 
 def create_split() -> dict[str, Any]:

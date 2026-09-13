@@ -24,9 +24,9 @@ def thicken(
         return err
     match method:
         case "basic":
-            return feature_manager.thicken_surface(thickness, direction)
+            return feature_manager.thicken_surface(thickness=thickness, direction=direction)
         case "sync":
-            return feature_manager.create_thicken_sync(thickness, direction)
+            return feature_manager.create_thicken_sync(thickness=thickness, direction=direction)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -81,54 +81,51 @@ def create_pattern(
     match method:
         case "rectangular_ex":
             return feature_manager.create_pattern_rectangular_ex(
-                feature_name,
-                x_count,
-                y_count,
-                x_spacing,
-                y_spacing,
-                plane_index,
-                rectangle_angle,
+                feature_name=feature_name,
+                x_count=x_count,
+                y_count=y_count,
+                x_spacing=x_spacing,
+                y_spacing=y_spacing,
+                plane_index=plane_index,
+                rectangle_angle=rectangle_angle,
             )
         case "circular_ex":
             return feature_manager.create_pattern_circular_ex(
-                feature_name,
-                count,
-                angle,
-                axis_face_index,
+                feature_name=feature_name, count=count, angle=angle, axis_face_index=axis_face_index
             )
         case "duplicate":
-            return feature_manager.create_pattern_duplicate(feature_name)
+            return feature_manager.create_pattern_duplicate(feature_name=feature_name)
         case "by_fill":
             return feature_manager.create_pattern_by_fill(
-                feature_name,
-                fill_region_face_index,
-                x_spacing,
-                y_spacing,
+                feature_name=feature_name,
+                fill_region_face_index=fill_region_face_index,
+                x_spacing=x_spacing,
+                y_spacing=y_spacing,
             )
         case "by_table":
             return feature_manager.create_pattern_by_table(
-                feature_name, x_offsets or [], y_offsets or []
+                feature_name=feature_name, x_offsets=x_offsets or [], y_offsets=y_offsets or []
             )
         case "by_table_sync":
             return feature_manager.create_pattern_by_table_sync(
-                feature_name, x_offsets or [], y_offsets or []
+                feature_name=feature_name, x_offsets=x_offsets or [], y_offsets=y_offsets or []
             )
         case "by_fill_ex":
             return feature_manager.create_pattern_by_fill_ex(
-                feature_name,
-                fill_region_face_index,
-                x_spacing,
-                y_spacing,
+                feature_name=feature_name,
+                fill_region_face_index=fill_region_face_index,
+                x_spacing=x_spacing,
+                y_spacing=y_spacing,
             )
         case "by_curve_ex":
             return feature_manager.create_pattern_by_curve_ex(
-                feature_name,
-                curve_edge_index,
-                count,
-                spacing,
+                feature_name=feature_name,
+                curve_edge_index=curve_edge_index,
+                count=count,
+                spacing=spacing,
             )
         case "user_defined":
-            return feature_manager.create_user_defined_pattern(feature_name)
+            return feature_manager.create_user_defined_pattern(feature_name=feature_name)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -159,13 +156,19 @@ def create_mirror(
     match method:
         case "basic":
             return feature_manager.create_mirror(
-                feature_name, mirror_plane_index, allow_mode_switch=allow_mode_switch
+                feature_name=feature_name,
+                mirror_plane_index=mirror_plane_index,
+                allow_mode_switch=allow_mode_switch,
             )
         case "sync_ex":
-            return feature_manager.create_mirror_sync_ex(feature_name, mirror_plane_index)
+            return feature_manager.create_mirror_sync_ex(
+                feature_name=feature_name, mirror_plane_index=mirror_plane_index
+            )
         case "save_as_part":
             return feature_manager.save_as_mirror_part(
-                new_file_name, mirror_plane_index, link_to_original
+                new_file_name=new_file_name,
+                mirror_plane_index=mirror_plane_index,
+                link_to_original=link_to_original,
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -190,13 +193,15 @@ def face_operation(
     match type:
         case "rotate_by_points":
             return feature_manager.create_face_rotate_by_points(
-                face_index,
-                vertex1_index,
-                vertex2_index,
-                angle,
+                face_index=face_index,
+                vertex1_index=vertex1_index,
+                vertex2_index=vertex2_index,
+                angle=angle,
             )
         case "rotate_by_edge":
-            return feature_manager.create_face_rotate_by_edge(face_index, edge_index, angle)
+            return feature_manager.create_face_rotate_by_edge(
+                face_index=face_index, edge_index=edge_index, angle=angle
+            )
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -220,15 +225,15 @@ def add_body(
     """
     match method:
         case "basic":
-            return feature_manager.add_body(body_type, body_name)
+            return feature_manager.add_body(body_type=body_type, body_name=body_name)
         case "by_mesh":
             return feature_manager.add_body_by_mesh()
         case "feature":
-            return feature_manager.add_body_feature(import_file_path)
+            return feature_manager.add_body_feature(import_file_name=import_file_path)
         case "construction":
-            return feature_manager.add_by_construction(construction_index)
+            return feature_manager.add_by_construction(construction_index=construction_index)
         case "by_tag":
-            return feature_manager.add_body_by_tag(tag)
+            return feature_manager.add_body_by_tag(tag=tag)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -275,17 +280,21 @@ def manage_feature(
     """
     match action:
         case "delete":
-            return feature_manager.delete_feature(index)
+            return feature_manager.delete_feature(index=index)
         case "suppress":
-            return feature_manager.feature_suppress(index)
+            return feature_manager.feature_suppress(index=index)
         case "unsuppress":
-            return feature_manager.feature_unsuppress(index)
+            return feature_manager.feature_unsuppress(index=index)
         case "reorder":
-            return feature_manager.feature_reorder(index, target_index, after)
+            return feature_manager.feature_reorder(
+                index=index, target_index=target_index, after=after
+            )
         case "rename":
-            return feature_manager.feature_rename(index, new_name)
+            return feature_manager.feature_rename(index=index, new_name=new_name)
         case "convert":
-            return feature_manager.convert_feature_type(feature_name, target_type)
+            return feature_manager.convert_feature_type(
+                feature_name=feature_name, target_type=target_type
+            )
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -303,4 +312,6 @@ def create_draft_angle(
     err = validate_numerics(angle=angle)
     if err:
         return err
-    return feature_manager.create_draft_angle(face_index, angle, plane_index)
+    return feature_manager.create_draft_angle(
+        face_index=face_index, angle=angle, plane_index=plane_index
+    )

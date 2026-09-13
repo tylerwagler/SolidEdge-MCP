@@ -36,19 +36,21 @@ def create_revolve(
         return err
     match method:
         case "full":
-            return feature_manager.create_revolve(angle)
+            return feature_manager.create_revolve(angle=angle)
         case "finite":
-            return feature_manager.create_revolve_finite(angle, axis_type)
+            return feature_manager.create_revolve_finite(angle=angle, axis_type=axis_type)
         case "sync":
-            return feature_manager.create_revolve_sync(angle)
+            return feature_manager.create_revolve_sync(angle=angle)
         case "finite_sync":
-            return feature_manager.create_revolve_finite_sync(angle)
+            return feature_manager.create_revolve_finite_sync(angle=angle)
         case "thin_wall":
-            return feature_manager.create_revolve_thin_wall(angle, wall_thickness)
+            return feature_manager.create_revolve_thin_wall(
+                angle=angle, wall_thickness=wall_thickness
+            )
         case "by_keypoint":
             return feature_manager.create_revolve_by_keypoint()
         case "full_360":
-            return feature_manager.create_revolve_full(angle, treatment_type)
+            return feature_manager.create_revolve_full(angle=angle, treatment_type=treatment_type)
         case "by_keypoint_sync":
             return feature_manager.create_revolve_by_keypoint_sync()
         case _:

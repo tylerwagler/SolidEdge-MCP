@@ -46,7 +46,7 @@ class TestCreateDocument:
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = create_document(type=disc, template="t.par")
-        getattr(mock_mgr, method).assert_called_once_with("t.par")
+        getattr(mock_mgr, method).assert_called_once_with(template="t.par")
         assert result == {"status": "ok"}
 
     def test_unknown(self, mock_mgr):
@@ -80,12 +80,12 @@ class TestOpenDocument:
     def test_foreground_passes_path(self, mock_mgr):
         mock_mgr.open_document.return_value = {"status": "ok"}
         open_document(method="foreground", file_path="test.par")
-        mock_mgr.open_document.assert_called_once_with("test.par")
+        mock_mgr.open_document.assert_called_once_with(file_path="test.par")
 
     def test_with_template_passes_args(self, mock_mgr):
         mock_mgr.open_with_template.return_value = {"status": "ok"}
         open_document(method="with_template", file_path="f.par", template="t.par")
-        mock_mgr.open_with_template.assert_called_once_with("f.par", "t.par")
+        mock_mgr.open_with_template.assert_called_once_with(file_path="f.par", template="t.par")
 
 
 # === close_document ===
@@ -102,7 +102,7 @@ class TestCloseDocument:
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = close_document(scope=disc, save=False)
-        getattr(mock_mgr, method).assert_called_once_with(False)
+        getattr(mock_mgr, method).assert_called_once_with(save=False)
         assert result == {"status": "ok"}
 
     def test_unknown(self, mock_mgr):
@@ -127,15 +127,15 @@ class TestSaveDocument:
         if method == "save_document":
             # overwrite defaults to False: saving over an existing file would
             # raise a modal Solid Edge prompt that blocks the server.
-            getattr(mock_mgr, method).assert_called_once_with("out.par", overwrite=False)
+            getattr(mock_mgr, method).assert_called_once_with(file_path="out.par", overwrite=False)
         else:
-            getattr(mock_mgr, method).assert_called_once_with("out.par")
+            getattr(mock_mgr, method).assert_called_once_with(file_path="out.par")
         assert result == {"status": "ok"}
 
     def test_overwrite_is_forwarded(self, mock_mgr):
         mock_mgr.save_document.return_value = {"status": "ok"}
         save_document(method="save", file_path="out.par", overwrite=True)
-        mock_mgr.save_document.assert_called_once_with("out.par", overwrite=True)
+        mock_mgr.save_document.assert_called_once_with(file_path="out.par", overwrite=True)
 
     def test_unknown(self, mock_mgr):
         result = save_document(method="bogus")
@@ -171,13 +171,13 @@ class TestStandaloneDocuments:
     def test_activate_document(self, mock_mgr):
         mock_mgr.activate_document.return_value = {"status": "ok"}
         result = activate_document("MyDoc")
-        mock_mgr.activate_document.assert_called_once_with("MyDoc")
+        mock_mgr.activate_document.assert_called_once_with(name_or_index="MyDoc")
         assert result == {"status": "ok"}
 
     def test_import_file(self, mock_mgr):
         mock_mgr.import_file.return_value = {"status": "ok"}
         result = import_file("test.step")
-        mock_mgr.import_file.assert_called_once_with("test.step")
+        mock_mgr.import_file.assert_called_once_with(file_path="test.step")
         assert result == {"status": "ok"}
 
 

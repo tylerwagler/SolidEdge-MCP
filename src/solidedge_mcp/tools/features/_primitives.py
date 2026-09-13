@@ -54,38 +54,47 @@ def create_primitive(
         return err
     match shape:
         case "box_two_points":
-            return feature_manager.create_box_by_two_points(x1, y1, z1, x2, y2, z2, plane_index)
+            return feature_manager.create_box_by_two_points(
+                x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2, plane_index=plane_index
+            )
         case "box_center":
             return feature_manager.create_box_by_center(
-                x1,
-                y1,
-                z1,
-                length,
-                width,
-                height,
-                plane_index,
+                center_x=x1,
+                center_y=y1,
+                center_z=z1,
+                length=length,
+                width=width,
+                height=height,
+                plane_index=plane_index,
             )
         case "box_three_points":
             return feature_manager.create_box_by_three_points(
-                x1,
-                y1,
-                z1,
-                x2,
-                y2,
-                z2,
-                x3,
-                y3,
-                z3,
-                plane_index,
+                x1=x1,
+                y1=y1,
+                z1=z1,
+                x2=x2,
+                y2=y2,
+                z2=z2,
+                x3=x3,
+                y3=y3,
+                z3=z3,
+                plane_index=plane_index,
             )
         case "cylinder":
             # A cylinder's axial length is "height" to most callers; "depth" is
             # accepted too because that is what the COM parameter is called.
             return feature_manager.create_cylinder(
-                x1, y1, z1, radius=radius, height=(height or depth), plane_index=plane_index
+                base_center_x=x1,
+                base_center_y=y1,
+                base_center_z=z1,
+                radius=radius,
+                height=height or depth,
+                plane_index=plane_index,
             )
         case "sphere":
-            return feature_manager.create_sphere(x1, y1, z1, radius, plane_index)
+            return feature_manager.create_sphere(
+                center_x=x1, center_y=y1, center_z=z1, radius=radius, plane_index=plane_index
+            )
         case _:
             return {"error": f"Unknown shape: {shape}"}
 
@@ -123,11 +132,20 @@ def create_primitive_cutout(
     match shape:
         case "box":
             return feature_manager.create_box_cutout_by_two_points(
-                x1, y1, z1, x2, y2, z2, plane_index
+                x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2, plane_index=plane_index
             )
         case "cylinder":
-            return feature_manager.create_cylinder_cutout(x1, y1, z1, radius, height, plane_index)
+            return feature_manager.create_cylinder_cutout(
+                center_x=x1,
+                center_y=y1,
+                center_z=z1,
+                radius=radius,
+                height=height,
+                plane_index=plane_index,
+            )
         case "sphere":
-            return feature_manager.create_sphere_cutout(x1, y1, z1, radius, plane_index)
+            return feature_manager.create_sphere_cutout(
+                center_x=x1, center_y=y1, center_z=z1, radius=radius, plane_index=plane_index
+            )
         case _:
             return {"error": f"Unknown shape: {shape}"}
