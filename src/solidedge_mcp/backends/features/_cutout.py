@@ -8,6 +8,7 @@ from win32com.client import VARIANT
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
+    AxisEndConstants,
     DirectionConstants,
     ExtentTypeConstants,
     KeyPointExtentConstants,
@@ -18,10 +19,6 @@ from ..logging import get_logger
 from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
-
-# constant.tlb > FeaturePropertyConstants.igStart. Names the end of the helix
-# axis the helix grows from. Not yet exposed by backends/constants.py.
-_IG_START = 29
 
 
 @verify_geometry_on_creators
@@ -1244,7 +1241,7 @@ class CutoutMixin:
             helix_cutouts = model.HelixCutouts
             helix_cutouts.AddFromTo(
                 refaxis,  # HelixAxis
-                _IG_START,  # AxisStart
+                AxisEndConstants.igStart,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide

@@ -4,16 +4,14 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import DirectionConstants
+from ..constants import (
+    DirectionConstants,
+    ThicknessSideConstants,
+)
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
-
-# constant.tlb > FeaturePropertyConstants.igInside. The BoxFeatures cutout calls
-# take a ProfileSide argument the protrusion calls do not have; a box cutout
-# removes the material inside its profile.
-_IG_INSIDE = 4
 
 
 @verify_geometry_on_creators
@@ -341,7 +339,7 @@ class PrimitiveMixin:
                 0,  # dAngle
                 depth,  # dDepth
                 top_plane,  # pPlane
-                _IG_INSIDE,  # ProfileSide
+                ThicknessSideConstants.igInside,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj
@@ -413,7 +411,7 @@ class PrimitiveMixin:
                 0,  # dAngle
                 height,  # dDepth
                 top_plane,  # pPlane
-                _IG_INSIDE,  # ProfileSide
+                ThicknessSideConstants.igInside,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj
@@ -498,7 +496,7 @@ class PrimitiveMixin:
                 z3,
                 depth,  # dDepth
                 top_plane,  # pPlane
-                _IG_INSIDE,  # ProfileSide
+                ThicknessSideConstants.igInside,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj

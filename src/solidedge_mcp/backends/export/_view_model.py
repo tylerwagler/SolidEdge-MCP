@@ -4,15 +4,14 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import RenderModeConstants
+from ..constants import (
+    RenderModeConstants,
+    SeGradientType,
+)
 from ..logging import get_logger
 from ._base import com_get, resolve_view
 
 _logger = get_logger(__name__)
-
-# From Program/constant.tlb > SeGradientType. Both gradient stops are set
-# to the same colour to get a flat background.
-_GRADIENT_TYPE_VERTICAL = 2  # seGradientTypeVertical
 
 
 class ViewModel:
@@ -165,7 +164,9 @@ class ViewModel:
             if view_style is None:
                 return {"error": "View does not expose a ViewStyle"}
 
-            view_style.SetGradientBackground(_GRADIENT_TYPE_VERTICAL, ole_color, ole_color)
+            view_style.SetGradientBackground(
+                SeGradientType.seGradientTypeVertical, ole_color, ole_color
+            )
 
             return {"status": "updated", "color": [red, green, blue]}
         except Exception as e:

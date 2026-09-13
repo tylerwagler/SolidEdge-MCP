@@ -8,22 +8,17 @@ from win32com.client import VARIANT
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
+    AxisEndConstants,
     DirectionConstants,
     ExtentTypeConstants,
     LoftSweepConstants,
+    ThicknessSideConstants,
 )
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
-# constant.tlb > FeaturePropertyConstants.igStart -- names the end of the helix
-# axis the helix grows from. Not yet exposed by backends/constants.py.
-_IG_START = 29
-# constant.tlb > FeaturePropertyConstants.igInside -- ThicknessSide of a
-# thin-wall feature (the wall grows inside the profile). Likewise not yet in
-# backends/constants.py.
-_IG_INSIDE = 4
 
 _NO_AXIS_ERROR = (
     "No axis of revolution set. Use set_axis_of_revolution() before closing the sketch."
@@ -261,7 +256,7 @@ class LoftSweepMixin:
 
             models.AddFiniteBaseHelix(
                 refaxis,  # HelixAxis
-                _IG_START,  # AxisStart
+                AxisEndConstants.igStart,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
@@ -344,7 +339,7 @@ class LoftSweepMixin:
                 False,  # AddEndCaps
                 True,  # RemoveInsideMaterial
                 wall_thickness,  # Thickness
-                _IG_INSIDE,  # ThicknessSide
+                ThicknessSideConstants.igInside,  # ThicknessSide
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -430,7 +425,7 @@ class LoftSweepMixin:
                 False,  # AddEndCaps
                 True,  # RemoveInsideMaterial
                 wall_thickness,  # Thickness
-                _IG_INSIDE,  # ThicknessSide
+                ThicknessSideConstants.igInside,  # ThicknessSide
             )
 
             self.sketch_manager.clear_accumulated_profiles()
@@ -476,7 +471,7 @@ class LoftSweepMixin:
 
             models.AddFiniteBaseHelixSync(
                 refaxis,  # HelixAxis
-                _IG_START,  # AxisStart
+                AxisEndConstants.igStart,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
@@ -530,7 +525,7 @@ class LoftSweepMixin:
 
             models.AddFiniteBaseHelixWithThinWall(
                 refaxis,  # HelixAxis
-                _IG_START,  # AxisStart
+                AxisEndConstants.igStart,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
@@ -542,7 +537,7 @@ class LoftSweepMixin:
                 False,  # AddEndCaps
                 True,  # RemoveInsideMaterial
                 wall_thickness,  # Thickness
-                _IG_INSIDE,  # ThicknessSide
+                ThicknessSideConstants.igInside,  # ThicknessSide
             )
 
             return {
@@ -589,7 +584,7 @@ class LoftSweepMixin:
 
             models.AddFiniteBaseHelixSyncWithThinWall(
                 refaxis,  # HelixAxis
-                _IG_START,  # AxisStart
+                AxisEndConstants.igStart,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
@@ -601,7 +596,7 @@ class LoftSweepMixin:
                 False,  # AddEndCaps
                 True,  # RemoveInsideMaterial
                 wall_thickness,  # Thickness
-                _IG_INSIDE,  # ThicknessSide
+                ThicknessSideConstants.igInside,  # ThicknessSide
             )
 
             return {
@@ -679,7 +674,7 @@ class LoftSweepMixin:
             helix = model.HelixProtrusions
             helix.AddFromTo(
                 refaxis,  # HelixAxis
-                _IG_START,  # AxisStart
+                AxisEndConstants.igStart,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
@@ -772,7 +767,7 @@ class LoftSweepMixin:
             helix = model.HelixProtrusions
             helix.AddFromToWithThinWall(
                 refaxis,  # HelixAxis
-                _IG_START,  # AxisStart
+                AxisEndConstants.igStart,  # AxisStart
                 1,  # NumCrossSections
                 v_profiles,  # CrossSectionArray
                 DirectionConstants.igRight,  # ProfileSide
@@ -786,7 +781,7 @@ class LoftSweepMixin:
                 False,  # AddEndCaps
                 True,  # RemoveInsideMaterial
                 wall_thickness,  # Thickness
-                _IG_INSIDE,  # ThicknessSide
+                ThicknessSideConstants.igInside,  # ThicknessSide
             )
 
             self.sketch_manager.clear_accumulated_profiles()

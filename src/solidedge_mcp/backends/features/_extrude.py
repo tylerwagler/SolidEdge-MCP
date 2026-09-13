@@ -10,6 +10,7 @@ from ..constants import (
     ExtentTypeConstants,
     KeyPointExtentConstants,
     OffsetSideConstants,
+    ThicknessSideConstants,
     TreatmentCrownCurvatureSideConstants,
     TreatmentCrownSideConstants,
     TreatmentCrownTypeConstants,
@@ -21,11 +22,6 @@ from ._base import verify_geometry_on_creators
 _logger = get_logger(__name__)
 
 _EXTRUDE_OPERATIONS = ("Add", "Cut", "Intersect")
-
-# constant.tlb > FeaturePropertyConstants.igInside. Used as ThicknessSide of a
-# thin-wall feature (the wall grows inside the profile). Not yet exposed by
-# backends/constants.py.
-_IG_INSIDE = 4
 
 
 @verify_geometry_on_creators
@@ -240,7 +236,7 @@ class ExtrudeMixin:
                 False,  # AddEndCaps
                 True,  # RemoveInsideMaterial
                 wall_thickness,  # Thickness
-                _IG_INSIDE,  # ThicknessSide
+                ThicknessSideConstants.igInside,  # ThicknessSide
             )
 
             return {
