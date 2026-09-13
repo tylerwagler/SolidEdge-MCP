@@ -556,7 +556,10 @@ class TestGetSketchInfo:
         profile.Arcs2d.Count = 0
         profile.Ellipses2d.Count = 0
         profile.BSplineCurves2d.Count = 0
-        profile.Holes2d.Count = 2
+        # Points2d holds sketch points; Holes2d holds hole positions. This
+        # used to count Holes2d as points.
+        profile.Points2d.Count = 2
+        profile.Holes2d.Count = 3
         sm.active_profile = profile
 
         result = sm.get_sketch_info()
@@ -564,7 +567,8 @@ class TestGetSketchInfo:
         assert result["lines"] == 4
         assert result["circles"] == 1
         assert result["points"] == 2
-        assert result["total_elements"] == 7
+        assert result["hole_positions"] == 3
+        assert result["total_elements"] == 10
 
     def test_no_active_sketch(self):
         from solidedge_mcp.backends.sketching import SketchManager

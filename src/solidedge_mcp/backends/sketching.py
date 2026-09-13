@@ -1094,7 +1094,11 @@ class SketchManager:
                 "arcs": "Arcs2d",
                 "ellipses": "Ellipses2d",
                 "splines": "BSplineCurves2d",
-                "points": "Holes2d",
+                # Points2d holds sketch points. Holes2d, which this counted, is
+                # the hole-position collection, so a sketch full of points
+                # reported none and one with hole positions reported points.
+                "points": "Points2d",
+                "hole_positions": "Holes2d",
             }
 
             total = 0
@@ -1462,14 +1466,41 @@ class SketchManager:
             profile = self.active_profile
             line = profile.Lines2d.AddBy2Points(x1, y1, x2, y2)
 
-            with contextlib.suppress(Exception):
+            # ToggleConstruction flips the element in place; it stays in
+            # Lines2d and IsConstructionElement reports the new state.
+            # Suppressing the toggle silently left an ordinary line that would
+            # be treated as part of the profile by the next feature.
+            try:
                 profile.ToggleConstruction(line)
+            except Exception as exc:
+                with contextlib.suppress(Exception):
+                    line.Delete()
+                return {
+                    "error": (
+                        "The line was drawn but could not be turned into "
+                        f"construction geometry, so it was removed rather than "
+                        f"left to be extruded: {describe_exception(exc)}"
+                    )
+                }
+
+            is_construction = None
+            with contextlib.suppress(Exception):
+                is_construction = bool(profile.IsConstructionElement(line))
+            if is_construction is False:
+                return {
+                    "error": (
+                        "Solid Edge accepted the toggle but the line is still "
+                        "ordinary profile geometry, so the next feature would "
+                        "try to use it."
+                    )
+                }
 
             return {
                 "status": "created",
                 "type": "construction_line",
                 "start": [x1, y1],
                 "end": [x2, y2],
+                "is_construction": is_construction,
             }
         except Exception as e:
             return error_result(e)
