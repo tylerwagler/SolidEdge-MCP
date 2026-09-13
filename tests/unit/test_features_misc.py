@@ -556,76 +556,93 @@ class TestDoIdle:
 # ============================================================================
 
 
+def _two_meeting_lines(profile):
+    """Two lines sharing the corner at (0, 0), as Solid Edge reports them."""
+    from unittest.mock import MagicMock
+
+    line1, line2 = MagicMock(), MagicMock()
+    line1.GetStartPoint.return_value = (0.0, 0.0)
+    line1.GetEndPoint.return_value = (0.08, 0.0)
+    line2.GetStartPoint.return_value = (0.0, 0.0)
+    line2.GetEndPoint.return_value = (0.0, 0.05)
+    lines = MagicMock()
+    lines.Count = 2
+    lines.Item.side_effect = lambda i: [None, line1, line2][i]
+    profile.Lines2d = lines
+    return line1, line2
+
+
 class TestSketchFillet:
     def test_success(self):
+        """Arcs2d.AddAsFillet, not AddByFillet, which does not exist.
+
+        The old loop swallowed the failure per pair and returned "created"
+        with a count of zero, so a fillet never appeared and nothing said so.
+        """
         from solidedge_mcp.backends.sketching import SketchManager
 
         dm = MagicMock()
         sm = SketchManager(dm)
-
         profile = MagicMock()
-        line1 = MagicMock()
-        line2 = MagicMock()
-        lines = MagicMock()
-        lines.Count = 2
-        lines.Item.side_effect = lambda i: [None, line1, line2][i]
-        profile.Lines2d = lines
+        line1, line2 = _two_meeting_lines(profile)
         sm.active_profile = profile
 
         result = sm.sketch_fillet(0.005)
         assert result["status"] == "created"
-        assert result["type"] == "sketch_fillet"
-        profile.Arcs2d.AddByFillet.assert_called_once_with(line1, line2, 0.005)
+        assert result["fillet_count"] == 1
+        # The vertex itself is accepted for a fillet.
+        profile.Arcs2d.AddAsFillet.assert_called_once_with(line1, line2, 0.005, 0.0, 0.0)
+        profile.Arcs2d.AddByFillet.assert_not_called()
 
-    def test_no_sketch(self):
+    def test_reports_when_nothing_could_be_filleted(self):
         from solidedge_mcp.backends.sketching import SketchManager
 
         dm = MagicMock()
         sm = SketchManager(dm)
+        profile = MagicMock()
+        _two_meeting_lines(profile)
+        profile.Arcs2d.AddAsFillet.side_effect = Exception("radius too large")
+        sm.active_profile = profile
 
         result = sm.sketch_fillet(0.005)
         assert "error" in result
+        assert result["failures"]
 
+    def test_rejects_a_non_positive_radius(self):
+        from solidedge_mcp.backends.sketching import SketchManager
 
-# ============================================================================
-# SKETCH CHAMFER
-# ============================================================================
+        dm = MagicMock()
+        sm = SketchManager(dm)
+        profile = MagicMock()
+        _two_meeting_lines(profile)
+        sm.active_profile = profile
+
+        assert "must be positive" in sm.sketch_fillet(0.0)["error"]
 
 
 class TestSketchChamfer:
     def test_success(self):
+        """Lines2d.AddAsChamfer wants a point nudged inside the corner.
+
+        The vertex itself gives E_INVALIDARG, unlike the fillet. Verified
+        against Solid Edge 2026.
+        """
         from solidedge_mcp.backends.sketching import SketchManager
 
         dm = MagicMock()
         sm = SketchManager(dm)
-
         profile = MagicMock()
-        line1 = MagicMock()
-        line2 = MagicMock()
-        lines = MagicMock()
-        lines.Count = 2
-        lines.Item.side_effect = lambda i: [None, line1, line2][i]
-        profile.Lines2d = lines
+        line1, line2 = _two_meeting_lines(profile)
         sm.active_profile = profile
 
-        result = sm.sketch_chamfer(0.003)
+        result = sm.sketch_chamfer(0.005)
         assert result["status"] == "created"
-        assert result["type"] == "sketch_chamfer"
-        profile.Lines2d.AddByChamfer.assert_called_once_with(line1, line2, 0.003, 0.003)
-
-    def test_no_sketch(self):
-        from solidedge_mcp.backends.sketching import SketchManager
-
-        dm = MagicMock()
-        sm = SketchManager(dm)
-
-        result = sm.sketch_chamfer(0.003)
-        assert "error" in result
-
-
-# ============================================================================
-# SKETCH MIRROR
-# ============================================================================
+        assert result["chamfer_count"] == 1
+        args = profile.Lines2d.AddAsChamfer.call_args[0]
+        assert args[0] is line1 and args[1] is line2
+        assert (args[2], args[3]) != (0.0, 0.0)  # nudged off the vertex
+        assert args[4:] == (0.005, 0.005)
+        profile.Lines2d.AddByChamfer.assert_not_called()
 
 
 class TestSketchMirror:

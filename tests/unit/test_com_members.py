@@ -62,8 +62,6 @@ UNVERIFIED: frozenset[str] = frozenset(
         # only through interfaces the type libraries do not describe, or they
         # are wrong. Treat a failure here as a real bug until proven otherwise.
         "AddAssemblyViewWithConfiguration",
-        "AddByChamfer",
-        "AddByFillet",
         "AddDiameter",
         "AddFiniteRevolvedSurface",
         "AddOrdinate",
@@ -190,6 +188,9 @@ def test_unverified_list_has_no_stale_entries(typelib_members, referenced_member
         ("GetActiveCommand", "a method; Application.ActiveCommand does not exist"),
         ("AddDistanceBetweenObjects", "dimensions measure between objects, not points"),
         ("ModelMembers", "ShowTangentEdges lives on the member, not the view"),
+        ("AddAsFillet", "sketch fillet; AddByFillet does not exist"),
+        ("AddAsChamfer", "sketch chamfer; AddByChamfer does not exist"),
+        ("GetStartPoint", "line endpoints, for locating the corner to fillet"),
     ],
 )
 def test_corrected_names_are_real(typelib_members, member, reason):

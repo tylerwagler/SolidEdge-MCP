@@ -8,12 +8,56 @@ import contextlib
 import math
 from typing import Any
 
-from solidedge_mcp.backends.errors import error_result
+from solidedge_mcp.backends.errors import describe_exception, error_result
 
 from .constants import FaceQueryConstants, ProfileValidationConstants
 from .logging import get_logger
 
 _logger = get_logger(__name__)
+
+
+def _corner_points(
+    line1: Any, line2: Any
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """Where two lines meet, and a point just inside that corner.
+
+    AddAsFillet and AddAsChamfer take a point saying which corner to work on.
+    The fillet accepts the vertex itself; the chamfer rejects it with
+    E_INVALIDARG and wants a point nudged into the corner, verified against
+    Solid Edge 2026. The inward point steps from the vertex toward the middle
+    of the two far ends, which needs no knowledge of the shape.
+
+    Returns (corner, inward), or None when the lines do not meet.
+    """
+    try:
+        ends1 = (line1.GetStartPoint(), line1.GetEndPoint())
+        ends2 = (line2.GetStartPoint(), line2.GetEndPoint())
+    except Exception:
+        return None
+
+    best = None
+    for a in ends1:
+        for b in ends2:
+            gap = abs(a[0] - b[0]) + abs(a[1] - b[1])
+            if best is None or gap < best[0]:
+                best = (gap, a, b)
+    if best is None or best[0] > 1e-6:
+        return None
+
+    _, near1, _ = best
+    corner = (float(near1[0]), float(near1[1]))
+    far1 = max(ends1, key=lambda e: abs(e[0] - corner[0]) + abs(e[1] - corner[1]))
+    far2 = max(ends2, key=lambda e: abs(e[0] - corner[0]) + abs(e[1] - corner[1]))
+    toward = ((float(far1[0]) + float(far2[0])) / 2, (float(far1[1]) + float(far2[1])) / 2)
+
+    dx, dy = toward[0] - corner[0], toward[1] - corner[1]
+    length = math.hypot(dx, dy)
+    if length < 1e-12:
+        return corner, corner
+    step = min(1e-3, length / 4)
+    inward = (corner[0] + dx / length * step, corner[1] + dy / length * step)
+    return corner, inward
+
 
 #: Orientation argument of Ellipses2d.AddByCenter: 1 sweeps counterclockwise.
 CURVE_COUNTERCLOCKWISE = 1
@@ -1012,23 +1056,46 @@ class SketchManager:
             if lines.Count < 2:
                 return {"error": "Need at least 2 lines to create a fillet"}
 
-            fillet_count = 0
-            # Try to fillet between consecutive line pairs
-            for i in range(1, lines.Count):
-                try:
-                    line1 = lines.Item(i)
-                    line2 = lines.Item(i + 1)
-                    profile.Arcs2d.AddByFillet(line1, line2, radius)
-                    fillet_count += 1
-                except Exception:
-                    pass
+            if radius <= 0:
+                return {"error": f"radius must be positive (got {radius}); it is in meters"}
 
-            return {
+            fillet_count = 0
+            failures: list[str] = []
+            # Arcs2d.AddAsFillet(Obj1, Obj2, Radius, xDirection, yDirection).
+            # There is no AddByFillet, which is what this used to call, so every
+            # pair raised and the count silently stayed at zero.
+            for i in range(1, lines.Count):
+                line1 = lines.Item(i)
+                line2 = lines.Item(i + 1)
+                points = _corner_points(line1, line2)
+                if points is None:
+                    continue  # these two do not meet; nothing to round
+                corner, _inward = points
+                try:
+                    profile.Arcs2d.AddAsFillet(line1, line2, radius, corner[0], corner[1])
+                    fillet_count += 1
+                except Exception as exc:
+                    failures.append(f"lines {i - 1}/{i}: {describe_exception(exc)}")
+
+            if not fillet_count:
+                return {
+                    "error": (
+                        "No fillet could be created. Consecutive lines must meet at a "
+                        "corner and the radius must fit between them."
+                    ),
+                    "radius": radius,
+                    "failures": failures[:5],
+                }
+
+            result: dict[str, Any] = {
                 "status": "created",
                 "type": "sketch_fillet",
                 "radius": radius,
                 "fillet_count": fillet_count,
             }
+            if failures:
+                result["partial_failures"] = failures[:5]
+            return result
         except Exception as e:
             return error_result(e)
 
@@ -1054,22 +1121,47 @@ class SketchManager:
             if lines.Count < 2:
                 return {"error": "Need at least 2 lines to create a chamfer"}
 
-            chamfer_count = 0
-            for i in range(1, lines.Count):
-                try:
-                    line1 = lines.Item(i)
-                    line2 = lines.Item(i + 1)
-                    profile.Lines2d.AddByChamfer(line1, line2, distance, distance)
-                    chamfer_count += 1
-                except Exception:
-                    pass
+            if distance <= 0:
+                return {"error": f"distance must be positive (got {distance}); it is in meters"}
 
-            return {
+            chamfer_count = 0
+            failures: list[str] = []
+            # Lines2d.AddAsChamfer(Obj1, Obj2, xDirection, yDirection, SetBackA,
+            # SetBackB). There is no AddByChamfer.
+            for i in range(1, lines.Count):
+                line1 = lines.Item(i)
+                line2 = lines.Item(i + 1)
+                points = _corner_points(line1, line2)
+                if points is None:
+                    continue
+                _corner, inward = points
+                try:
+                    profile.Lines2d.AddAsChamfer(
+                        line1, line2, inward[0], inward[1], distance, distance
+                    )
+                    chamfer_count += 1
+                except Exception as exc:
+                    failures.append(f"lines {i - 1}/{i}: {describe_exception(exc)}")
+
+            if not chamfer_count:
+                return {
+                    "error": (
+                        "No chamfer could be created. Consecutive lines must meet at a "
+                        "corner and the setback must fit along both."
+                    ),
+                    "distance": distance,
+                    "failures": failures[:5],
+                }
+
+            result: dict[str, Any] = {
                 "status": "created",
                 "type": "sketch_chamfer",
                 "distance": distance,
                 "chamfer_count": chamfer_count,
             }
+            if failures:
+                result["partial_failures"] = failures[:5]
+            return result
         except Exception as e:
             return error_result(e)
 
