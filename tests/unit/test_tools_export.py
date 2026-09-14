@@ -74,14 +74,14 @@ class TestExportFile:
         mock_export.export_to_plmxml.return_value = {"status": "ok"}
         export_file(format="plmxml", file_path="out.xml", ini_file_path="cfg.ini")
         mock_export.export_to_plmxml.assert_called_once_with(
-            file_path="out.xml", ini_file_path="cfg.ini"
+            file_path="out.xml", ini_file_path="cfg.ini", overwrite=False
         )
 
     def test_image_passes_dimensions(self, mock_export, mock_view):
         mock_export.capture_screenshot.return_value = {"status": "ok"}
         export_file(format="image", file_path="out.png", width=1920, height=1080)
         mock_export.capture_screenshot.assert_called_once_with(
-            file_path="out.png", width=1920, height=1080
+            file_path="out.png", width=1920, height=1080, overwrite=False
         )
 
     def test_unknown(self, mock_export, mock_view):
@@ -573,3 +573,50 @@ class TestBackendSignatureAgreement:
             {"export_manager": ExportManager, "view_manager": ViewModel},
         )
         assert violations == []
+
+
+class TestExportOverwrite:
+    """An export over an existing file must be refused, not left to Solid Edge.
+
+    Solid Edge answers one with a modal "This file exists. Do you want to
+    overwrite it?" prompt that DisplayAlerts does not suppress. Its single UI
+    thread means the COM call never returns and the whole server stops
+    answering. Reproduced and photographed on Solid Edge 2026.
+    """
+
+    def test_overwrite_defaults_to_refusing(self, mock_export, mock_view):
+        mock_export.export_step.return_value = {"status": "ok"}
+
+        export_file(format="step", file_path="out.step")
+
+        assert mock_export.export_step.call_args.kwargs["overwrite"] is False
+
+    def test_overwrite_is_passed_through(self, mock_export, mock_view):
+        mock_export.export_step.return_value = {"status": "ok"}
+
+        export_file(format="step", file_path="out.step", overwrite=True)
+
+        assert mock_export.export_step.call_args.kwargs["overwrite"] is True
+
+    def test_every_format_takes_it(self, mock_export, mock_view):
+        formats = {
+            "step": "export_step",
+            "stl": "export_stl",
+            "iges": "export_iges",
+            "pdf": "export_pdf",
+            "dxf": "export_dxf",
+            "parasolid": "export_parasolid",
+            "jt": "export_jt",
+            "flat_dxf": "export_flat_dxf",
+            "prc": "export_to_prc",
+            "plmxml": "export_to_plmxml",
+            "image": "capture_screenshot",
+        }
+        for fmt, method in formats.items():
+            getattr(mock_export, method).reset_mock()
+            getattr(mock_export, method).return_value = {"status": "ok"}
+
+            export_file(format=fmt, file_path=f"out.{fmt}", overwrite=True)
+
+            kwargs = getattr(mock_export, method).call_args.kwargs
+            assert kwargs["overwrite"] is True, f"{fmt} dropped overwrite"

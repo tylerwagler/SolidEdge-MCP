@@ -39,9 +39,12 @@ def export_file(
     ini_file_path: str = "",
     width: int = 800,
     height: int = 600,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """Export the active document to file_path.
 
+    Writing over an existing file is refused unless overwrite=true: Solid Edge
+    answers one with a modal prompt that blocks every later call.
     plmxml: also ini_file_path. image: screenshot at width x height pixels.
     flat_dxf needs a sheet metal part; pdf/dxf work best on drafts.
     """
@@ -51,28 +54,30 @@ def export_file(
             return err
     match format:
         case "step":
-            return export_manager.export_step(file_path=file_path)
+            return export_manager.export_step(file_path=file_path, overwrite=overwrite)
         case "stl":
-            return export_manager.export_stl(file_path=file_path)
+            return export_manager.export_stl(file_path=file_path, overwrite=overwrite)
         case "iges":
-            return export_manager.export_iges(file_path=file_path)
+            return export_manager.export_iges(file_path=file_path, overwrite=overwrite)
         case "pdf":
-            return export_manager.export_pdf(file_path=file_path)
+            return export_manager.export_pdf(file_path=file_path, overwrite=overwrite)
         case "dxf":
-            return export_manager.export_dxf(file_path=file_path)
+            return export_manager.export_dxf(file_path=file_path, overwrite=overwrite)
         case "parasolid":
-            return export_manager.export_parasolid(file_path=file_path)
+            return export_manager.export_parasolid(file_path=file_path, overwrite=overwrite)
         case "jt":
-            return export_manager.export_jt(file_path=file_path)
+            return export_manager.export_jt(file_path=file_path, overwrite=overwrite)
         case "flat_dxf":
-            return export_manager.export_flat_dxf(file_path=file_path)
+            return export_manager.export_flat_dxf(file_path=file_path, overwrite=overwrite)
         case "prc":
-            return export_manager.export_to_prc(file_path=file_path)
+            return export_manager.export_to_prc(file_path=file_path, overwrite=overwrite)
         case "plmxml":
-            return export_manager.export_to_plmxml(file_path=file_path, ini_file_path=ini_file_path)
+            return export_manager.export_to_plmxml(
+                file_path=file_path, ini_file_path=ini_file_path, overwrite=overwrite
+            )
         case "image":
             return export_manager.capture_screenshot(
-                file_path=file_path, width=width, height=height
+                file_path=file_path, width=width, height=height, overwrite=overwrite
             )
         case _:
             return {"error": f"Unknown format: {format}"}

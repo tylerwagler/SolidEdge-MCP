@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+from pathlib import Path
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -11,10 +12,47 @@ from ..logging import get_logger
 _logger = get_logger(__name__)
 
 
+def guard_target(file_path: str, overwrite: bool) -> dict[str, Any] | None:
+    """Refuse to write over an existing file, or clear the way for it.
+
+    Solid Edge raises a modal overwrite prompt that DisplayAlerts does not
+    suppress, and its single UI thread means the COM call never returns. This
+    is the same guard save_document uses.
+    """
+    target = Path(file_path)
+    if not target.exists():
+        return None
+    if not overwrite:
+        return {
+            "error": (
+                f"{target} already exists. Solid Edge would raise a modal overwrite "
+                f"prompt, which blocks the server until somebody clicks it. Pass "
+                f"overwrite=true to replace the file, or choose another path."
+            ),
+            "path": str(target),
+            "exists": True,
+        }
+    try:
+        target.unlink()
+    except OSError as exc:
+        return {
+            "error": (
+                f"{target} exists and could not be removed, so the export would "
+                f"stop on an overwrite prompt: {exc}"
+            ),
+            "path": str(target),
+        }
+    return None
+
+
 class FileExportMixin:
     """Mixin providing file export methods."""
 
-    def export_to_step(self, file_path: str) -> dict[str, Any]:
+    def export_to_step(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """
         Export the active document to STEP format.
 
@@ -32,6 +70,10 @@ class FileExportMixin:
                 file_path += ".step"
 
             # Save as STEP
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             doc.SaveCopyAs(file_path)
 
             _logger.info(f"Exported to STEP: {file_path}")
@@ -45,7 +87,9 @@ class FileExportMixin:
             _logger.error(f"STEP export failed: {e}")
             return error_result(e)
 
-    def export_to_stl(self, file_path: str, quality: str = "Medium") -> dict[str, Any]:
+    def export_to_stl(
+        self, file_path: str, quality: str = "Medium", overwrite: bool = False
+    ) -> dict[str, Any]:
         """
         Export the active document to STL format (for 3D printing).
 
@@ -72,20 +116,39 @@ class FileExportMixin:
             # Some Solid Edge versions expose other export entry points; there
             # is no working fallback here, so a failure is swallowed exactly as
             # before rather than probed for with hasattr.
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             with contextlib.suppress(Exception):
                 doc.SaveCopyAs(file_path)
+
+            # The write above is suppressed because some Solid Edge versions
+            # expose other entry points, so the file is what proves it worked.
+            if not os.path.exists(file_path):
+                return {
+                    "error": (
+                        "Solid Edge wrote no STL file. This document type may not "
+                        "export to STL; try STEP or Parasolid."
+                    ),
+                    "path": file_path,
+                }
 
             return {
                 "status": "exported",
                 "format": "STL",
                 "path": file_path,
                 "quality": quality,
-                "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                "size_bytes": os.path.getsize(file_path),
             }
         except Exception as e:
             return error_result(e)
 
-    def export_to_iges(self, file_path: str) -> dict[str, Any]:
+    def export_to_iges(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """
         Export the active document to IGES format.
 
@@ -103,6 +166,10 @@ class FileExportMixin:
                 file_path += ".iges"
 
             # Save as IGES
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             doc.SaveCopyAs(file_path)
 
             return {
@@ -114,7 +181,11 @@ class FileExportMixin:
         except Exception as e:
             return error_result(e)
 
-    def export_to_pdf(self, file_path: str) -> dict[str, Any]:
+    def export_to_pdf(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """Export drawing to PDF"""
         try:
             doc = self.doc_manager.get_active_document()
@@ -123,19 +194,31 @@ class FileExportMixin:
                 file_path += ".pdf"
 
             # PDF export typically works for draft documents
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             doc.SaveCopyAs(file_path)
 
             return {"status": "exported", "format": "PDF", "path": file_path}
         except Exception as e:
             return error_result(e)
 
-    def export_to_dxf(self, file_path: str) -> dict[str, Any]:
+    def export_to_dxf(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """Export to DXF format"""
         try:
             doc = self.doc_manager.get_active_document()
 
             if not file_path.lower().endswith(".dxf"):
                 file_path += ".dxf"
+
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
 
             doc.SaveCopyAs(file_path)
 
@@ -148,13 +231,21 @@ class FileExportMixin:
         except Exception as e:
             return error_result(e)
 
-    def export_to_parasolid(self, file_path: str) -> dict[str, Any]:
+    def export_to_parasolid(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """Export to Parasolid format (X_T or X_B)"""
         try:
             doc = self.doc_manager.get_active_document()
 
             if not (file_path.lower().endswith(".x_t") or file_path.lower().endswith(".x_b")):
                 file_path += ".x_t"
+
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
 
             doc.SaveCopyAs(file_path)
 
@@ -167,13 +258,21 @@ class FileExportMixin:
         except Exception as e:
             return error_result(e)
 
-    def export_to_jt(self, file_path: str) -> dict[str, Any]:
+    def export_to_jt(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """Export to JT format"""
         try:
             doc = self.doc_manager.get_active_document()
 
             if not file_path.lower().endswith(".jt"):
                 file_path += ".jt"
+
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
 
             doc.SaveCopyAs(file_path)
 
@@ -186,7 +285,11 @@ class FileExportMixin:
         except Exception as e:
             return error_result(e)
 
-    def export_flat_dxf(self, file_path: str) -> dict[str, Any]:
+    def export_flat_dxf(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """
         Export sheet metal flat pattern to DXF format.
 
@@ -222,6 +325,10 @@ class FileExportMixin:
             # always raised. FlatPatternModels is still the right thing to look
             # for: a document without one is not sheet metal.
             del flat_models
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             doc.Models.SaveAsFlatDXFEx(file_path, None, None, None, True)
 
             return {
@@ -234,7 +341,11 @@ class FileExportMixin:
             return error_result(e)
 
     def capture_screenshot(
-        self, file_path: str, width: int = 1920, height: int = 1080
+        self,
+        file_path: str,
+        width: int = 1920,
+        height: int = 1080,
+        overwrite: bool = False,
     ) -> dict[str, Any]:
         """
         Capture a screenshot of the current view.
@@ -263,6 +374,10 @@ class FileExportMixin:
                 return err
 
             # View.SaveAsImage(Filename, Width, Height)
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             view.SaveAsImage(file_path, width, height)
 
             return {
@@ -274,7 +389,11 @@ class FileExportMixin:
         except Exception as e:
             return error_result(e)
 
-    def export_to_prc(self, file_path: str) -> dict[str, Any]:
+    def export_to_prc(
+        self,
+        file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """
         Export the active document to PRC format (3D PDF).
 
@@ -290,6 +409,10 @@ class FileExportMixin:
             if not file_path.lower().endswith(".prc"):
                 file_path += ".prc"
 
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             doc.SaveAsPRC(file_path)
 
             return {
@@ -301,7 +424,12 @@ class FileExportMixin:
         except Exception as e:
             return error_result(e)
 
-    def export_to_plmxml(self, file_path: str, ini_file_path: str) -> dict[str, Any]:
+    def export_to_plmxml(
+        self,
+        file_path: str,
+        ini_file_path: str,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
         """
         Export the active document to PLMXML format.
 
@@ -330,6 +458,10 @@ class FileExportMixin:
                     "unsupported": True,
                 }
 
+            err = guard_target(file_path, overwrite)
+            if err:
+                return err
+
             doc.SaveAsPLMXML(file_path, ini_file_path)
 
             return {
@@ -343,30 +475,32 @@ class FileExportMixin:
             return error_result(e)
 
     # Aliases for consistency with MCP tool names
-    def export_step(self, file_path: str) -> dict[str, Any]:
+    def export_step(self, file_path: str, overwrite: bool = False) -> dict[str, Any]:
         """Alias for export_to_step"""
-        return self.export_to_step(file_path)
+        return self.export_to_step(file_path, overwrite=overwrite)
 
-    def export_stl(self, file_path: str, quality: str = "Medium") -> dict[str, Any]:
+    def export_stl(
+        self, file_path: str, quality: str = "Medium", overwrite: bool = False
+    ) -> dict[str, Any]:
         """Alias for export_to_stl"""
-        return self.export_to_stl(file_path, quality)
+        return self.export_to_stl(file_path, quality, overwrite=overwrite)
 
-    def export_iges(self, file_path: str) -> dict[str, Any]:
+    def export_iges(self, file_path: str, overwrite: bool = False) -> dict[str, Any]:
         """Alias for export_to_iges"""
-        return self.export_to_iges(file_path)
+        return self.export_to_iges(file_path, overwrite=overwrite)
 
-    def export_pdf(self, file_path: str) -> dict[str, Any]:
+    def export_pdf(self, file_path: str, overwrite: bool = False) -> dict[str, Any]:
         """Alias for export_to_pdf"""
-        return self.export_to_pdf(file_path)
+        return self.export_to_pdf(file_path, overwrite=overwrite)
 
-    def export_dxf(self, file_path: str) -> dict[str, Any]:
+    def export_dxf(self, file_path: str, overwrite: bool = False) -> dict[str, Any]:
         """Alias for export_to_dxf"""
-        return self.export_to_dxf(file_path)
+        return self.export_to_dxf(file_path, overwrite=overwrite)
 
-    def export_parasolid(self, file_path: str) -> dict[str, Any]:
+    def export_parasolid(self, file_path: str, overwrite: bool = False) -> dict[str, Any]:
         """Alias for export_to_parasolid"""
-        return self.export_to_parasolid(file_path)
+        return self.export_to_parasolid(file_path, overwrite=overwrite)
 
-    def export_jt(self, file_path: str) -> dict[str, Any]:
+    def export_jt(self, file_path: str, overwrite: bool = False) -> dict[str, Any]:
         """Alias for export_to_jt"""
-        return self.export_to_jt(file_path)
+        return self.export_to_jt(file_path, overwrite=overwrite)
