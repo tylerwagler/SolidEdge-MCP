@@ -1068,17 +1068,22 @@ class SheetMetalMixin:
 
             cyl_face = faces.Item(face_index + 1)
 
-            # Auto-detect diameter from cylindrical face geometry
+            # A thread runs around a cylinder. Only a cylindrical face reports
+            # a Radius, and naming a flat one used to reach COM anyway and come
+            # back with a bare E_INVALIDARG that named nothing.
+            radius = com_get(com_get(cyl_face, "Geometry"), "Radius")
+            if not isinstance(radius, int | float) or isinstance(radius, bool):
+                return {
+                    "error": (
+                        f"Face {face_index} is not cylindrical, so it cannot carry a "
+                        f"thread. Read solidedge://geometry/face/N to find the "
+                        f"cylindrical face of the hole or boss you mean."
+                    ),
+                    "face_index": face_index,
+                }
+
             if thread_diameter is None:
-                try:
-                    geom = cyl_face.Geometry
-                    thread_diameter = geom.Radius * 2
-                except Exception:
-                    return {
-                        "error": "Could not determine diameter from face geometry. "
-                        "Provide thread_diameter explicitly, or ensure face_index "
-                        "points to a cylindrical face."
-                    }
+                thread_diameter = float(radius) * 2
 
             # Find the end face adjacent to the cylinder
             end_face = self._find_cylinder_end_face(body, cyl_face)
@@ -1101,7 +1106,9 @@ class SheetMetalMixin:
             if thread_depth is not None:
                 hole_data.ThreadDepth = thread_depth
 
-            # Build VARIANT arrays for the COM call
+            # Plain lists. The VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper
+            # that Rounds.Add wants makes no difference here; both forms reach
+            # the same E_INVALIDARG, so the argument shape is not the problem.
             cyl_arr = [cyl_face]
             end_arr = [end_face]
 
@@ -1123,7 +1130,16 @@ class SheetMetalMixin:
 
             return result
         except Exception as e:
-            return error_result(e)
+            return error_result(
+                e,
+                context=(
+                    "Solid Edge would not thread this face. Threads.Add wants the "
+                    "HoleData of a tapped hole, and a bare diameter is not enough "
+                    "for every thread standard; cut the hole with "
+                    "create_hole(method='threaded') so the thread data comes with "
+                    "it, or add the thread in the Solid Edge UI"
+                ),
+            )
 
     def create_slot(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """

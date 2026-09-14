@@ -981,3 +981,51 @@ class TestRequireOpenProfile:
         manager = self._manager()
 
         assert manager._require_open_profile(MagicMock(), "bend") is None
+
+
+class TestThreadNeedsACylinder:
+    """A thread runs around a cylinder, and only a cylinder reports a Radius.
+
+    Naming a flat face used to reach COM anyway and come back with a bare
+    E_INVALIDARG that named nothing. Verified on Solid Edge 2026 against a
+    box with a through hole: face 0 is a plane, face 6 is the cylinder.
+    """
+
+    def _part(self, managers, radius):
+        _, _, _doc, _models, model, _ = managers
+        faces = MagicMock()
+        faces.Count = 7
+        face = MagicMock()
+        if radius is None:
+            del face.Geometry.Radius
+        else:
+            face.Geometry.Radius = radius
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+        return model, face
+
+    def test_a_flat_face_is_refused_before_com(self, feature_mgr, managers):
+        model, _face = self._part(managers, radius=None)
+
+        result = feature_mgr.create_thread(face_index=0, thread_diameter=0.008)
+
+        assert "not cylindrical" in result["error"]
+        assert result["face_index"] == 0
+        model.Threads.Add.assert_not_called()
+
+    def test_an_index_out_of_range_is_still_caught_first(self, feature_mgr, managers):
+        model, _face = self._part(managers, radius=0.004)
+
+        result = feature_mgr.create_thread(face_index=99)
+
+        assert "Invalid face index" in result["error"]
+        model.Threads.Add.assert_not_called()
+
+    def test_a_cylinder_gets_past_the_guard(self, feature_mgr, managers):
+        """It goes on to look for the end cap rather than stopping here."""
+        model, _face = self._part(managers, radius=0.004)
+
+        result = feature_mgr.create_thread(face_index=6)
+
+        assert "not cylindrical" not in result.get("error", "")
+        model.Threads.Add.assert_not_called()  # the mock has no end cap to find
