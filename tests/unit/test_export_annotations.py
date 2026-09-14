@@ -683,7 +683,13 @@ class TestAddWeldSymbol:
 
 
 class TestAddGeometricTolerance:
-    """The collection is FeatureControlFrames; sheet.FCFs does not exist."""
+    """The collection is FeatureControlFrames; sheet.FCFs does not exist.
+
+    And the frame's content is PrimaryFrame, not Text. FeatureControlFrame has
+    no Text at all -- Solid Edge 2026 answers "Property 'Add.Text' can not be
+    set." -- and the write sat inside a suppress, so every frame was placed
+    empty while the result reported the tolerance it had been given.
+    """
 
     def test_success(self, export_mgr):
         em, doc = export_mgr
@@ -702,7 +708,23 @@ class TestAddGeometricTolerance:
         assert result["type"] == "geometric_tolerance"
         assert result["text"] == "0.05 A B"
         frames.Add.assert_called_once_with(0.1, 0.1, 0)
-        assert frame.Text == "0.05 A B"
+        assert frame.PrimaryFrame == "0.05 A B"
+
+    def test_the_text_the_frame_kept_is_reported(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        frames = MagicMock()
+        frame = MagicMock()
+        type(frame).PrimaryFrame = PropertyMock(return_value="")
+        frames.Add.return_value = frame
+        frames.Count = 1
+        sheet.FeatureControlFrames = frames
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_geometric_tolerance(0.1, 0.1, "0.05 A B")
+
+        assert result["text"] == ""
 
     def test_no_longer_silently_writes_a_text_box(self, export_mgr):
         """The old fallback made every tolerance a plain text box."""

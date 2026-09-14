@@ -908,14 +908,19 @@ class AnnotationsMixin:
                 }
             frame = frames.Add(x, y, 0)
             if tolerance_text:
-                with contextlib.suppress(Exception):
-                    frame.Text = tolerance_text
+                # FeatureControlFrame has no Text: Solid Edge 2026 answers
+                # "Property 'Add.Text' can not be set." Its content lives in
+                # PrimaryFrame (and the Secondary/Tertiary/Quaternary ones),
+                # each a settable string. The old write sat inside a suppress,
+                # so every frame was placed empty and the result reported the
+                # tolerance it had been given.
+                frame.PrimaryFrame = tolerance_text
 
             return {
                 "status": "added",
                 "type": "geometric_tolerance",
                 "position": [x, y],
-                "text": tolerance_text,
+                "text": com_get(frame, "PrimaryFrame", tolerance_text),
                 "total_frames": com_get(frames, "Count"),
             }
         except Exception as e:
