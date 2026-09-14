@@ -11,6 +11,7 @@ from ..constants import (
     FaceQueryConstants,
 )
 from ..logging import get_logger
+from ..validation import guard_overwrite
 
 _logger = get_logger(__name__)
 
@@ -1209,6 +1210,7 @@ class MiscFeaturesMixin:
         new_file_name: str,
         mirror_plane_index: int = 3,
         link_to_original: bool = True,
+        overwrite: bool = False,
     ) -> dict[str, Any]:
         """
         Save the active part as a mirrored copy.
@@ -1238,6 +1240,10 @@ class MiscFeaturesMixin:
                 }
 
             mirror_plane = ref_planes.Item(mirror_plane_index)
+
+            err = guard_overwrite(new_file_name, overwrite)
+            if err:
+                return err
 
             models.SaveAsMirrorPart(new_file_name, mirror_plane, link_to_original)
 

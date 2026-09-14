@@ -116,7 +116,7 @@ def save_document(
         case "copy_as":
             if file_path is None:
                 return {"error": "file_path is required for 'copy_as' method"}
-            return doc_manager.save_copy_as(file_path=file_path)
+            return doc_manager.save_copy_as(file_path=file_path, overwrite=overwrite)
         case _:
             return {"error": f"Unknown method: {method}"}
 

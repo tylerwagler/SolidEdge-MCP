@@ -2,47 +2,14 @@
 
 import contextlib
 import os
-from pathlib import Path
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
+from ..validation import guard_overwrite
 
 _logger = get_logger(__name__)
-
-
-def guard_target(file_path: str, overwrite: bool) -> dict[str, Any] | None:
-    """Refuse to write over an existing file, or clear the way for it.
-
-    Solid Edge raises a modal overwrite prompt that DisplayAlerts does not
-    suppress, and its single UI thread means the COM call never returns. This
-    is the same guard save_document uses.
-    """
-    target = Path(file_path)
-    if not target.exists():
-        return None
-    if not overwrite:
-        return {
-            "error": (
-                f"{target} already exists. Solid Edge would raise a modal overwrite "
-                f"prompt, which blocks the server until somebody clicks it. Pass "
-                f"overwrite=true to replace the file, or choose another path."
-            ),
-            "path": str(target),
-            "exists": True,
-        }
-    try:
-        target.unlink()
-    except OSError as exc:
-        return {
-            "error": (
-                f"{target} exists and could not be removed, so the export would "
-                f"stop on an overwrite prompt: {exc}"
-            ),
-            "path": str(target),
-        }
-    return None
 
 
 class FileExportMixin:
@@ -70,7 +37,7 @@ class FileExportMixin:
                 file_path += ".step"
 
             # Save as STEP
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -116,7 +83,7 @@ class FileExportMixin:
             # Some Solid Edge versions expose other export entry points; there
             # is no working fallback here, so a failure is swallowed exactly as
             # before rather than probed for with hasattr.
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -166,7 +133,7 @@ class FileExportMixin:
                 file_path += ".iges"
 
             # Save as IGES
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -194,7 +161,7 @@ class FileExportMixin:
                 file_path += ".pdf"
 
             # PDF export typically works for draft documents
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -216,7 +183,7 @@ class FileExportMixin:
             if not file_path.lower().endswith(".dxf"):
                 file_path += ".dxf"
 
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -243,7 +210,7 @@ class FileExportMixin:
             if not (file_path.lower().endswith(".x_t") or file_path.lower().endswith(".x_b")):
                 file_path += ".x_t"
 
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -270,7 +237,7 @@ class FileExportMixin:
             if not file_path.lower().endswith(".jt"):
                 file_path += ".jt"
 
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -325,7 +292,7 @@ class FileExportMixin:
             # always raised. FlatPatternModels is still the right thing to look
             # for: a document without one is not sheet metal.
             del flat_models
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -374,7 +341,7 @@ class FileExportMixin:
                 return err
 
             # View.SaveAsImage(Filename, Width, Height)
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -409,7 +376,7 @@ class FileExportMixin:
             if not file_path.lower().endswith(".prc"):
                 file_path += ".prc"
 
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 
@@ -458,7 +425,7 @@ class FileExportMixin:
                     "unsupported": True,
                 }
 
-            err = guard_target(file_path, overwrite)
+            err = guard_overwrite(file_path, overwrite)
             if err:
                 return err
 

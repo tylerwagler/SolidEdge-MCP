@@ -1192,7 +1192,10 @@ class TestCreateMirror:
         mock_mgr.save_as_mirror_part.return_value = {"status": "ok"}
         create_mirror(method="save_as_part", new_file_name="mirror.par")
         mock_mgr.save_as_mirror_part.assert_called_once_with(
-            new_file_name="mirror.par", mirror_plane_index=3, link_to_original=True
+            new_file_name="mirror.par",
+            mirror_plane_index=3,
+            link_to_original=True,
+            overwrite=False,
         )
 
     @pytest.mark.parametrize("disc", ["basic", "sync_ex", "save_as_part"])
@@ -1214,7 +1217,10 @@ class TestCreateMirror:
             link_to_original=False,
         )
         mock_mgr.save_as_mirror_part.assert_called_once_with(
-            new_file_name="m.par", mirror_plane_index=2, link_to_original=False
+            new_file_name="m.par",
+            mirror_plane_index=2,
+            link_to_original=False,
+            overwrite=False,
         )
 
     def test_unknown(self, mock_mgr):

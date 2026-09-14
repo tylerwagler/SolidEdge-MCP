@@ -129,12 +129,9 @@ class TestSaveDocument:
     def test_dispatch(self, mock_mgr, disc, method):
         getattr(mock_mgr, method).return_value = {"status": "ok"}
         result = save_document(method=disc, file_path="out.par")
-        if method == "save_document":
-            # overwrite defaults to False: saving over an existing file would
-            # raise a modal Solid Edge prompt that blocks the server.
-            getattr(mock_mgr, method).assert_called_once_with(file_path="out.par", overwrite=False)
-        else:
-            getattr(mock_mgr, method).assert_called_once_with(file_path="out.par")
+        # overwrite defaults to False for both: writing over an existing file
+        # would raise a modal Solid Edge prompt that blocks the server.
+        getattr(mock_mgr, method).assert_called_once_with(file_path="out.par", overwrite=False)
         assert result == {"status": "ok"}
 
     def test_overwrite_is_forwarded(self, mock_mgr):

@@ -6,7 +6,6 @@ Handles creating, opening, saving, and closing documents.
 
 import contextlib
 import os
-from pathlib import Path
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -14,6 +13,7 @@ from solidedge_mcp.backends.errors import error_result
 from .comutil import com_get
 from .constants import DocumentTypeConstants
 from .logging import get_logger
+from .validation import guard_overwrite
 
 _logger = get_logger(__name__)
 
@@ -176,25 +176,9 @@ class DocumentManager:
                 return {"error": "No active document"}
 
             if file_path:
-                target = Path(file_path)
-                if target.exists():
-                    if not overwrite:
-                        return {
-                            "error": (
-                                f"{target} already exists. Solid Edge would raise a modal "
-                                "overwrite prompt, which blocks the server. Pass "
-                                "overwrite=true to replace it, or choose another path."
-                            ),
-                            "path": str(target),
-                            "exists": True,
-                        }
-                    try:
-                        target.unlink()
-                    except OSError as exc:
-                        return {
-                            "error": f"Cannot replace {target}: {exc}",
-                            "path": str(target),
-                        }
+                err = guard_overwrite(file_path, overwrite)
+                if err:
+                    return err
                 self.active_document.SaveAs(file_path)
                 _logger.info(f"Saved document to: {file_path}")
                 return {"status": "saved", "path": file_path, "name": self.active_document.Name}
@@ -612,21 +596,27 @@ class DocumentManager:
                 pass
             return error_result(e)
 
-    def save_copy_as(self, file_path: str) -> dict[str, Any]:
-        """
-        Save a copy of the active document to a new file without changing the active file.
+    def save_copy_as(self, file_path: str, overwrite: bool = False) -> dict[str, Any]:
+        """Write a copy of the active document, leaving the current file active.
 
-        Unlike SaveAs, this does not change the active document's filename.
+        Unlike SaveAs this does not repoint the active document. Like every
+        other write, it refuses an existing target rather than let Solid Edge
+        raise the modal overwrite prompt that blocks the server.
 
         Args:
-            file_path: Full path for the copy (must include extension, e.g. .par, .asm)
+            file_path: Full path for the copy, extension included (.par, .asm).
+            overwrite: Permit replacing an existing file at ``file_path``.
 
         Returns:
-            Dict with status and file info
+            Dict with status and file info.
         """
         try:
             if not self.active_document:
                 return {"error": "No active document"}
+
+            err = guard_overwrite(file_path, overwrite)
+            if err:
+                return err
 
             self.active_document.SaveCopyAs(file_path)
 
