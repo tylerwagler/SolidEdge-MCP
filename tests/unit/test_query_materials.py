@@ -343,6 +343,7 @@ class TestGetLayers:
     def test_no_layers(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.get_layers()
         assert "error" in result
@@ -370,6 +371,7 @@ class TestAddLayer:
     def test_no_layers_support(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.add_layer("Test")
         assert "error" in result
@@ -435,6 +437,7 @@ class TestActivateLayer:
     def test_no_layers_support(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.activate_layer(0)
         assert "error" in result
@@ -504,6 +507,7 @@ class TestSetLayerProperties:
     def test_no_layers_support(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.set_layer_properties(0, show=True)
         assert "error" in result
@@ -544,6 +548,73 @@ class TestDeleteLayer:
     def test_no_layers(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.delete_layer("Layer1")
         assert "error" in result
+
+
+# ============================================================================
+# LAYERS: WHERE THEY LIVE
+# ============================================================================
+
+
+class TestLayersOnADraft:
+    """A DraftDocument has no Layers of its own; a Sheet does.
+
+    The gate here used to be hasattr(doc, "Layers"), the probe CLAUDE.md
+    forbids, so every layer call on a draft answered "Active document does not
+    support layers" -- for the document type where layers matter most.
+    """
+
+    def test_a_draft_uses_the_active_sheet(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.Layers
+
+        layer = MagicMock()
+        layer.Name = "SheetLayer"
+        layer.Show = True
+        layer.Locatable = True
+        layer.IsEmpty = False
+        sheet_layers = MagicMock()
+        sheet_layers.Count = 1
+        sheet_layers.Item.return_value = layer
+        doc.ActiveSheet.Layers = sheet_layers
+
+        result = qm.get_layers()
+
+        assert result["count"] == 1
+        assert result["layers"][0]["name"] == "SheetLayer"
+
+    def test_adding_to_a_draft_goes_to_the_sheet(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.Layers
+        sheet_layers = MagicMock()
+        sheet_layers.Count = 2
+        doc.ActiveSheet.Layers = sheet_layers
+
+        result = qm.add_layer("ProbeLayer")
+
+        assert result["status"] == "added"
+        sheet_layers.Add.assert_called_once_with("ProbeLayer")
+
+    def test_a_document_own_layers_win(self, query_mgr):
+        """A part has its own; the sheet fallback must not shadow them."""
+        qm, doc = query_mgr
+        own = MagicMock()
+        own.Count = 0
+        doc.Layers = own
+
+        qm.get_layers()
+
+        doc.ActiveSheet.Layers.Item.assert_not_called()
+
+    def test_neither_is_an_honest_error(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.Layers
+        del doc.ActiveSheet
+
+        result = qm.get_layers()
+
+        assert "error" in result
+        assert "active sheet" in result["error"]

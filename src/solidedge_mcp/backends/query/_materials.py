@@ -5,6 +5,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import MatTablePropIndexConstants
 from ..logging import get_logger
 from ._base import QueryManagerBase
@@ -364,6 +365,41 @@ class MaterialsMixin(QueryManagerBase):
     # LAYER MANAGEMENT
     # =================================================================
 
+    @staticmethod
+    def _layers_of(doc: Any) -> tuple[Any, dict[str, Any] | None]:
+        """The Layers collection for this document, wherever it lives.
+
+        A DraftDocument has no ``Layers`` of its own -- the type library gives
+        it to PartDocument, SheetMetalDocument, WeldmentDocument and
+        AssemblyDocument, and to ``Sheet``. Draft layers are per sheet, so they
+        come from the active sheet.
+
+        This used to gate on ``hasattr(doc, "Layers")``, which is the probe
+        CLAUDE.md forbids: it reads False both for a member that is genuinely
+        absent and for one whose getter merely raised, and either way every
+        layer call on a draft answered "Active document does not support
+        layers" -- for a document type whose layers are a core drafting
+        feature.
+
+        Returns ``(layers, error_dict)``.
+        """
+        layers = com_get(doc, "Layers")
+        if layers is not None:
+            return layers, None
+
+        sheet = com_get(doc, "ActiveSheet")
+        layers = com_get(sheet, "Layers")
+        if layers is not None:
+            return layers, None
+
+        return None, {
+            "error": (
+                "This document has no layers. Parts, sheet metal, weldments and "
+                "assemblies carry them on the document; a draft carries them on "
+                "its active sheet."
+            )
+        }
+
     def get_layers(self) -> dict[str, Any]:
         """
         Get all layers in the active document.
@@ -376,10 +412,9 @@ class MaterialsMixin(QueryManagerBase):
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Layers"):
-                return {"error": "Active document does not support layers"}
-
-            layers_col = doc.Layers
+            layers_col, err = self._layers_of(doc)
+            if err:
+                return err
             layers = []
 
             for i in range(1, layers_col.Count + 1):
@@ -419,10 +454,9 @@ class MaterialsMixin(QueryManagerBase):
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Layers"):
-                return {"error": "Active document does not support layers"}
-
-            layers = doc.Layers
+            layers, err = self._layers_of(doc)
+            if err:
+                return err
             layers.Add(name)
 
             return {"status": "added", "name": name, "total_layers": layers.Count}
@@ -444,10 +478,9 @@ class MaterialsMixin(QueryManagerBase):
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Layers"):
-                return {"error": "Active document does not support layers"}
-
-            layers = doc.Layers
+            layers, err = self._layers_of(doc)
+            if err:
+                return err
 
             if isinstance(name_or_index, int):
                 if name_or_index < 0 or name_or_index >= layers.Count:
@@ -491,10 +524,9 @@ class MaterialsMixin(QueryManagerBase):
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Layers"):
-                return {"error": "Active document does not support layers"}
-
-            layers = doc.Layers
+            layers, err = self._layers_of(doc)
+            if err:
+                return err
 
             if isinstance(name_or_index, int):
                 if name_or_index < 0 or name_or_index >= layers.Count:
@@ -542,10 +574,9 @@ class MaterialsMixin(QueryManagerBase):
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Layers"):
-                return {"error": "Active document does not support layers"}
-
-            layers = doc.Layers
+            layers, err = self._layers_of(doc)
+            if err:
+                return err
 
             if isinstance(name_or_index, int):
                 if name_or_index < 0 or name_or_index >= layers.Count:
