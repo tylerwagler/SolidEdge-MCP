@@ -481,6 +481,7 @@ class TestSetBodyColor:
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.Style = None
         doc.FaceStyles = None
 
         assert "error" in qm.set_body_color(255, 0, 0)
@@ -598,6 +599,7 @@ class TestSetBodyOpacity:
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.Style = None
         doc.FaceStyles = None
 
         assert "error" in qm.set_body_opacity(0.5)

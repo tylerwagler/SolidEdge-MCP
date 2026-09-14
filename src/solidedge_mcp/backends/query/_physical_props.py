@@ -8,12 +8,9 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
 from ..logging import get_logger
-from ._base import QueryManagerBase, all_faces, body_of, r8_array
+from ._base import _OWNED_STYLE_PREFIX, QueryManagerBase, all_faces, body_of, r8_array
 
 _logger = get_logger(__name__)
-
-#: Styles this server creates and is therefore free to modify.
-_OWNED_STYLE_PREFIX = "MCP "
 
 
 class PhysicalPropsMixin(QueryManagerBase):
@@ -444,6 +441,27 @@ class PhysicalPropsMixin(QueryManagerBase):
         except Exception as e:
             return error_result(e)
 
+    @staticmethod
+    def _style_named(doc: Any, name: str) -> tuple[Any, dict[str, Any] | None]:
+        """Fetch or create a FaceStyle by name on this document.
+
+        ``FaceStyles.Item`` raises rather than returning None for a name that
+        is not there, so the lookup has to be guarded.
+        """
+        styles = com_get(doc, "FaceStyles")
+        if styles is None:
+            return None, {
+                "error": (
+                    "This document has no FaceStyles collection, so appearance cannot be set."
+                )
+            }
+        style = None
+        with contextlib.suppress(Exception):
+            style = styles.Item(name)
+        if style is None:
+            style = styles.Add(name, "")
+        return style, None
+
     def _owned_face_style(self, doc: Any, body: Any) -> tuple[Any, dict[str, Any] | None]:
         """Return a FaceStyle this server owns, assigned to ``body``.
 
@@ -462,26 +480,15 @@ class PhysicalPropsMixin(QueryManagerBase):
         interface, so every opacity and reflectivity call raised
         ``AttributeError: Body.FaceStyle``.
         """
-        styles = com_get(doc, "FaceStyles")
-        if styles is None:
-            return None, {
-                "error": (
-                    "This document has no FaceStyles collection, so appearance cannot be set."
-                )
-            }
-
         current = com_get(body, "Style")
         current_name = com_get(current, "StyleName", "") or ""
         if current_name.startswith(_OWNED_STYLE_PREFIX):
             return current, None
 
         display_name = com_get(body, "DisplayName", "Body") or "Body"
-        name = f"{_OWNED_STYLE_PREFIX}{display_name}"
-        style = None
-        with contextlib.suppress(Exception):
-            style = styles.Item(name)
-        if style is None:
-            style = styles.Add(name, "")
+        style, err = self._style_named(doc, f"{_OWNED_STYLE_PREFIX}{display_name}")
+        if err:
+            return None, err
 
         # Carry over what the body already looked like, so this reads as a
         # change to one property rather than a reset of all three.

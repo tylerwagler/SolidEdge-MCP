@@ -7,6 +7,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..logging import get_logger
 from ._base import (
+    _OWNED_STYLE_PREFIX,
     DEFAULT_PAGE_LIMIT,
     all_faces,
     body_of,
@@ -437,17 +438,26 @@ class BRepMixin:
             return error_result(e)
 
     def set_face_color(self, face_index: int, red: int, green: int, blue: int) -> dict[str, Any]:
-        """
-        Set the color of a specific face.
+        """Set the colour of one face.
+
+        ``Face.SetColor`` and ``Face.Color`` are on no Solid Edge interface.
+        This tried both, then a third spelling of the same missing property,
+        and Solid Edge 2026 answered "Property 'Item.Color' can not be set."
+        every time -- the three nested try/excepts hid which of them failed.
+
+        ``Face.Style`` is a get/put ``FaceStyle``, exactly like ``Body.Style``,
+        so a face is coloured the same way a body is: by assigning it a style
+        whose diffuse colour is the one you want. Faces sharing a colour share
+        one style, which is why it is named after the colour.
 
         Args:
-            face_index: 0-based face index
-            red: Red component (0-255)
-            green: Green component (0-255)
-            blue: Blue component (0-255)
+            face_index: 0-based face index.
+            red: Red channel, 0-255.
+            green: Green channel, 0-255.
+            blue: Blue channel, 0-255.
 
         Returns:
-            Dict with status
+            Dict with status, the colour, and the style carrying it.
         """
         try:
             doc, model = self._get_first_model()
@@ -457,21 +467,26 @@ class BRepMixin:
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
 
-            face = faces.Item(face_index + 1)
+            red = max(0, min(255, red))
+            green = max(0, min(255, green))
+            blue = max(0, min(255, blue))
 
-            # SetFaceStyle or put color directly
-            try:
-                face.SetColor(red, green, blue)
-            except Exception:
-                # Try alternative: FaceStyle
-                try:
-                    face.Color = (red << 0) | (green << 8) | (blue << 16)
-                except Exception:
-                    # Final fallback using OLE color
-                    ole_color = red | (green << 8) | (blue << 16)
-                    face.Color = ole_color
+            name = f"{_OWNED_STYLE_PREFIX}Face {red:02X}{green:02X}{blue:02X}"
+            style, err = self._style_named(doc, name)
+            if err:
+                return err
 
-            return {"status": "updated", "face_index": face_index, "color": [red, green, blue]}
+            # SetDiffuse takes 0.0-1.0 per channel, not 0-255.
+            style.SetDiffuse(red / 255.0, green / 255.0, blue / 255.0)
+            faces.Item(face_index + 1).Style = style
+
+            return {
+                "status": "updated",
+                "face_index": face_index,
+                "color": [red, green, blue],
+                "hex": f"#{red:02x}{green:02x}{blue:02x}",
+                "style": name,
+            }
         except Exception as e:
             return error_result(e)
 

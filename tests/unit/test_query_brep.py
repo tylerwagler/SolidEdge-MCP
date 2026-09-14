@@ -1517,8 +1517,15 @@ class TestGetBodyExtremePoint:
 
 
 class TestSetFaceColor:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+    """A face is coloured by assigning it a FaceStyle, exactly like a body.
+
+    Face.SetColor and Face.Color are on no Solid Edge interface. The old code
+    tried both inside nested try/excepts and Solid Edge 2026 answered
+    "Property 'Item.Color' can not be set." to all of them, so no face this
+    server was asked to colour ever changed.
+    """
+
+    def _part(self, doc, face_count=6):
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
@@ -1527,13 +1534,61 @@ class TestSetFaceColor:
 
         face = MagicMock()
         faces = MagicMock()
-        faces.Count = 6
+        faces.Count = face_count
         faces.Item.return_value = face
         model.Body.Faces.return_value = faces
 
+        style = MagicMock()
+        style.StyleName = "MCP Face FF0000"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return face, styles, style
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        face, styles, style = self._part(doc)
+
         result = qm.set_face_color(0, 255, 0, 0)
+
         assert result["status"] == "updated"
         assert result["color"] == [255, 0, 0]
+        assert result["hex"] == "#ff0000"
+        styles.Add.assert_called_once_with("MCP Face FF0000", "")
+        # SetDiffuse takes 0.0-1.0, not 0-255.
+        style.SetDiffuse.assert_called_once_with(1.0, 0.0, 0.0)
+        assert face.Style is style
+        face.SetColor.assert_not_called()
+
+    def test_faces_of_one_colour_share_a_style(self, query_mgr):
+        qm, doc = query_mgr
+        _face, styles, _style = self._part(doc)
+        existing = MagicMock()
+        styles.Item.side_effect = None
+        styles.Item.return_value = existing
+
+        qm.set_face_color(2, 255, 0, 0)
+
+        styles.Add.assert_not_called()
+        existing.SetDiffuse.assert_called_once_with(1.0, 0.0, 0.0)
+
+    def test_uses_a_one_based_face_index(self, query_mgr):
+        qm, doc = query_mgr
+        self._part(doc)
+
+        qm.set_face_color(2, 0, 0, 255)
+
+        doc.Models.Item.return_value.Body.Faces.return_value.Item.assert_called_once_with(3)
+
+    def test_clamps_values(self, query_mgr):
+        qm, doc = query_mgr
+        _face, styles, _style = self._part(doc)
+
+        result = qm.set_face_color(0, 300, -10, 128)
+
+        assert result["color"] == [255, 0, 128]
+        styles.Add.assert_called_once_with("MCP Face FF0080", "")
 
     def test_invalid_face(self, query_mgr):
         qm, doc = query_mgr
@@ -1549,6 +1604,13 @@ class TestSetFaceColor:
 
         result = qm.set_face_color(5, 0, 0, 255)
         assert "error" in result
+
+    def test_a_document_without_face_styles(self, query_mgr):
+        qm, doc = query_mgr
+        self._part(doc)
+        doc.FaceStyles = None
+
+        assert "error" in qm.set_face_color(0, 255, 0, 0)
 
 
 # ============================================================================
