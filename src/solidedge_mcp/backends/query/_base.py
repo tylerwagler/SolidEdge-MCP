@@ -117,10 +117,6 @@ def all_faces(body: Any) -> Any:
     return faces
 
 
-#: Styles this server creates and is therefore free to modify.
-_OWNED_STYLE_PREFIX = "MCP "
-
-
 class BodyNotReachableError(Exception):
     """The body exists but the current modelling mode hides it."""
 

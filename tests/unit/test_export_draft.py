@@ -56,15 +56,21 @@ class TestPrintDrawing:
             Exception("no print utility")
         )
 
-        result = em.print_drawing()
+        result = em.print_drawing(copies=3)
+
+        # Document.PrintOut's parameter is NumCopies. This passed Copies,
+        # which is a parameter of nothing, so the call raised and a bare retry
+        # printed one copy while the result still claimed three.
+        doc.PrintOut.assert_called_once_with(NumCopies=3)
         assert result["status"] == "printed"
+        assert result["copies"] == 3
 
     def test_no_print_support(self, export_mgr):
         em, doc = export_mgr
         em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
             Exception("no print utility")
         )
-        del doc.PrintOut
+        doc.PrintOut.side_effect = Exception("not supported")
 
         result = em.print_drawing()
         assert "error" in result
@@ -239,9 +245,24 @@ class TestSetFaceTexture:
         models.Item.return_value = model
         doc.Models = models
 
+        face.Style = None
+        style = MagicMock()
+        style.StyleName = "MCP Face 1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+
         result = em.set_face_texture(1, "Wood")
+
         assert result["status"] == "set"
         assert result["texture_name"] == "Wood"
+        # TextureFileName belongs to FaceStyle. Face has no such member, so
+        # the attempt this used to make first could never have worked, and
+        # writing to a style the face shares would texture other faces too.
+        assert style.TextureFileName == "Wood"
+        assert face.Style is style
+        styles.Add.assert_called_once_with("MCP Face 1", "")
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr

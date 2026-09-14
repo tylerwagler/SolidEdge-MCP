@@ -6,7 +6,9 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import owned_style_for
 from ..logging import get_logger
+from ..query._base import BodyNotReachableError, all_faces, body_of
 from ._base import NOT_A_DRAFT, com_get
 
 _logger = get_logger(__name__)
@@ -418,17 +420,21 @@ class DraftMixin:
     # =================================================================
 
     def set_face_texture(self, face_index: int, texture_name: str) -> dict[str, Any]:
-        """
-        Apply a texture to a face by index.
+        """Apply a texture to one face.
 
-        Uses face style properties to set the texture name.
+        ``Face.TextureFileName`` is on no Solid Edge interface, so the first
+        attempt always raised and only the fallback ever ran. ``TextureFileName``
+        belongs to ``FaceStyle``, which is what ``Face.Style`` holds, and that
+        style may be a stock one shared across the document -- writing the
+        texture onto it would texture every face using it. The face gets a
+        style of its own instead, the same way its colour does.
 
         Args:
-            face_index: 0-based face index
-            texture_name: Name of the texture to apply
+            face_index: 0-based face index.
+            texture_name: Texture file name to apply.
 
         Returns:
-            Dict with status
+            Dict with status and the texture Solid Edge reports afterwards.
         """
         try:
             doc = self.doc_manager.get_active_document()
@@ -439,31 +445,26 @@ class DraftMixin:
             if models.Count == 0:
                 return {"error": "No models in document"}
 
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(1)  # igQueryAll = 1
+            body = body_of(models.Item(1))
+            faces = all_faces(body)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face_index: {face_index}. Count: {faces.Count}"}
 
             face = faces.Item(face_index + 1)
-
-            # Try to set texture via face style
-            try:
-                face.TextureFileName = texture_name
-            except Exception:
-                # Alternative: use Style object
-                try:
-                    style = face.Style
-                    style.TextureFileName = texture_name
-                except Exception as inner_e:
-                    return error_result(inner_e, context="Cannot set texture")
+            style, err = owned_style_for(doc, face, f"Face {face_index}")
+            if err:
+                return err
+            style.TextureFileName = texture_name
 
             return {
                 "status": "set",
                 "face_index": face_index,
                 "texture_name": texture_name,
+                "reads_back": com_get(com_get(face, "Style"), "TextureFileName"),
             }
+        except BodyNotReachableError as e:
+            return {"error": str(e)}
         except Exception as e:
             return error_result(e)
 
@@ -521,7 +522,8 @@ class DraftMixin:
         """
         Print the active draft document.
 
-        Tries doc.PrintOut first, then falls back to DraftPrintUtility.
+        Prefers DraftPrintUtility, which gives more control, and falls back to
+        Document.PrintOut(Printer, NumCopies, ...).
 
         Args:
             copies: Number of copies to print
@@ -550,14 +552,11 @@ class DraftMixin:
                 dpu.PrintOut()
                 return {"status": "printed", "copies": copies, "all_sheets": all_sheets}
 
-            # Fall back to simple PrintOut
-            try:
-                doc.PrintOut(Copies=copies)
-            except Exception:
-                try:
-                    doc.PrintOut()
-                except Exception:
-                    return {"error": "Active document does not support printing"}
+            # Fall back to Document.PrintOut(Printer, NumCopies, ...). The
+            # keyword was Copies, which is not a parameter of anything, so the
+            # call raised and the bare retry below printed a single copy while
+            # the result still claimed the number asked for.
+            doc.PrintOut(NumCopies=copies)
             return {"status": "printed", "copies": copies}
         except Exception as e:
             return error_result(e)

@@ -5,9 +5,9 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import OWNED_STYLE_PREFIX, face_style_named
 from ..logging import get_logger
 from ._base import (
-    _OWNED_STYLE_PREFIX,
     DEFAULT_PAGE_LIMIT,
     all_faces,
     body_of,
@@ -471,8 +471,8 @@ class BRepMixin:
             green = max(0, min(255, green))
             blue = max(0, min(255, blue))
 
-            name = f"{_OWNED_STYLE_PREFIX}Face {red:02X}{green:02X}{blue:02X}"
-            style, err = self._style_named(doc, name)
+            name = f"{OWNED_STYLE_PREFIX}Face {red:02X}{green:02X}{blue:02X}"
+            style, err = face_style_named(doc, name)
             if err:
                 return err
 

@@ -1,14 +1,13 @@
 """Physical properties, measurements, and body appearance operations."""
 
-import contextlib
 import math
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..comutil import com_get
+from ..comutil import com_get, owned_style_for
 from ..logging import get_logger
-from ._base import _OWNED_STYLE_PREFIX, QueryManagerBase, all_faces, body_of, r8_array
+from ._base import QueryManagerBase, all_faces, body_of, r8_array
 
 _logger = get_logger(__name__)
 
@@ -441,67 +440,6 @@ class PhysicalPropsMixin(QueryManagerBase):
         except Exception as e:
             return error_result(e)
 
-    @staticmethod
-    def _style_named(doc: Any, name: str) -> tuple[Any, dict[str, Any] | None]:
-        """Fetch or create a FaceStyle by name on this document.
-
-        ``FaceStyles.Item`` raises rather than returning None for a name that
-        is not there, so the lookup has to be guarded.
-        """
-        styles = com_get(doc, "FaceStyles")
-        if styles is None:
-            return None, {
-                "error": (
-                    "This document has no FaceStyles collection, so appearance cannot be set."
-                )
-            }
-        style = None
-        with contextlib.suppress(Exception):
-            style = styles.Item(name)
-        if style is None:
-            style = styles.Add(name, "")
-        return style, None
-
-    def _owned_face_style(self, doc: Any, body: Any) -> tuple[Any, dict[str, Any] | None]:
-        """Return a FaceStyle this server owns, assigned to ``body``.
-
-        Colour, opacity and reflectivity are three properties of one
-        ``FaceStyle``, so they have to share one. Giving each its own style
-        meant the last call won and the earlier ones silently vanished from
-        the model while still reporting success.
-
-        A body's existing style may be a stock Solid Edge style shared with
-        every other body using it, so it is never written to. The body gets
-        its own, named after it and seeded from whatever it had, which is why
-        setting opacity does not discard a colour set earlier.
-
-        Verified on Solid Edge 2026: ``Body`` has ``Style``, not
-        ``FaceStyle`` -- the member this used to reach for, which exists on no
-        interface, so every opacity and reflectivity call raised
-        ``AttributeError: Body.FaceStyle``.
-        """
-        current = com_get(body, "Style")
-        current_name = com_get(current, "StyleName", "") or ""
-        if current_name.startswith(_OWNED_STYLE_PREFIX):
-            return current, None
-
-        display_name = com_get(body, "DisplayName", "Body") or "Body"
-        style, err = self._style_named(doc, f"{_OWNED_STYLE_PREFIX}{display_name}")
-        if err:
-            return None, err
-
-        # Carry over what the body already looked like, so this reads as a
-        # change to one property rather than a reset of all three.
-        if current is not None:
-            with contextlib.suppress(Exception):
-                style.SetDiffuse(*current.GetDiffuse()[:3])
-            for prop in ("Opacity", "Reflectivity"):
-                with contextlib.suppress(Exception):
-                    setattr(style, prop, getattr(current, prop))
-
-        body.Style = style
-        return style, None
-
     def set_body_color(self, red: int, green: int, blue: int) -> dict[str, Any]:
         """Set the body colour of the active part.
 
@@ -528,7 +466,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             green = max(0, min(255, green))
             blue = max(0, min(255, blue))
 
-            style, err = self._owned_face_style(doc, body)
+            style, err = owned_style_for(doc, body, com_get(body, "DisplayName", "Body") or "Body")
             if err:
                 return err
 
@@ -590,7 +528,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """Set the body opacity.
 
         Opacity lives on the body's FaceStyle, alongside its colour and
-        reflectivity; see ``_owned_face_style``.
+        reflectivity; see ``comutil.owned_style_for``.
 
         Args:
             opacity: 0.0 (fully transparent) to 1.0 (fully opaque).
@@ -603,7 +541,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             body = body_of(model)
 
             opacity = max(0.0, min(1.0, opacity))
-            style, err = self._owned_face_style(doc, body)
+            style, err = owned_style_for(doc, body, com_get(body, "DisplayName", "Body") or "Body")
             if err:
                 return err
             style.Opacity = opacity
@@ -620,7 +558,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """Set the body reflectivity.
 
         Reflectivity lives on the body's FaceStyle, alongside its colour and
-        opacity; see ``_owned_face_style``.
+        opacity; see ``comutil.owned_style_for``.
 
         Args:
             reflectivity: 0.0 to 1.0.
@@ -633,7 +571,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             body = body_of(model)
 
             reflectivity = max(0.0, min(1.0, reflectivity))
-            style, err = self._owned_face_style(doc, body)
+            style, err = owned_style_for(doc, body, com_get(body, "DisplayName", "Body") or "Body")
             if err:
                 return err
             style.Reflectivity = reflectivity
