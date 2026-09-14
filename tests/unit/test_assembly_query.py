@@ -317,7 +317,9 @@ class TestGetOccurrenceDocument:
         result = am.get_occurrence_document(0)
         assert result["document_name"] == "bolt.par"
         assert result["full_name"] == "C:/parts/bolt.par"
-        assert result["type"] == 1
+        # A bare 1 does not say "part"; the name leads and the code follows.
+        assert result["type"] == "part"
+        assert result["type_code"] == 1
         assert result["read_only"] is False
 
     def test_invalid_index(self, asm_mgr):

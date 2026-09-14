@@ -5,6 +5,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import describe_feature_type
 from ..constants import DirectionConstants, FeatureStatusConstants, OffsetSideConstants
 from ..logging import get_logger
 from ._base import all_faces, body_of, dispatch_array
@@ -76,7 +77,7 @@ class FeatureQueryMixin:
                     except Exception:
                         entry["name"] = f"Feature_{i}"
                     with contextlib.suppress(Exception):
-                        entry["type"] = feat.Type
+                        entry.update(describe_feature_type(feat.Type))
                     with contextlib.suppress(Exception):
                         entry["suppressed"] = feat.Suppress
                     feature_list.append(entry)
@@ -249,7 +250,7 @@ class FeatureQueryMixin:
                         except Exception:
                             pass
                         with contextlib.suppress(Exception):
-                            result["type"] = feat.Type
+                            result.update(describe_feature_type(feat.Type))
                         return result
                 except Exception:
                     continue

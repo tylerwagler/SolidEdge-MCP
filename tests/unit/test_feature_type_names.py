@@ -62,20 +62,20 @@ class TestNamesAreReadable:
 
 class TestDescribeType:
     def test_a_known_type_gets_a_name_and_keeps_the_code(self):
-        from solidedge_mcp.backends.features._base import _describe_type
+        from solidedge_mcp.backends.comutil import describe_feature_type
 
-        assert _describe_type(462094706) == {
+        assert describe_feature_type(462094706) == {
             "type": "extruded protrusion",
             "type_code": 462094706,
         }
 
     def test_an_unknown_number_is_passed_through(self):
-        from solidedge_mcp.backends.features._base import _describe_type
+        from solidedge_mcp.backends.comutil import describe_feature_type
 
-        assert _describe_type(12345) == {"type": 12345}
+        assert describe_feature_type(12345) == {"type": 12345}
 
     def test_something_that_is_not_a_number_reads_as_unknown(self):
-        from solidedge_mcp.backends.features._base import _describe_type
+        from solidedge_mcp.backends.comutil import describe_feature_type
 
-        assert _describe_type(None) == {"type": "Unknown"}
-        assert _describe_type("x") == {"type": "Unknown"}
+        assert describe_feature_type(None) == {"type": "Unknown"}
+        assert describe_feature_type("x") == {"type": "Unknown"}

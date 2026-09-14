@@ -763,3 +763,22 @@ FEATURE_TYPE_NAMES: dict[int, str] = {
     2113150981: "delete face",
     2137685236: "assembly weldment",
 }
+
+
+#: Document.Type values, from constant.tlb > DocumentTypeConstants. Reported
+#: by name because a bare 4 does not say "sheet metal".
+DOCUMENT_TYPE_NAMES: dict[int, str] = {
+    1: "part",
+    2: "draft",
+    3: "assembly",
+    4: "sheet metal",
+    5: "unknown",
+    6: "weldment",
+    7: "weldment assembly",
+    8: "synchronous part",
+    9: "synchronous sheet metal",
+    10: "synchronous assembly",
+    11: "assembly viewer",
+    12: "part viewer",
+    13: "draft viewer",
+}

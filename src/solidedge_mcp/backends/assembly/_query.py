@@ -6,6 +6,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import describe_document_type
 from ..logging import get_logger
 from ._base import com_get
 
@@ -362,7 +363,7 @@ class QueryMixin:
                 with contextlib.suppress(Exception):
                     result["full_name"] = occ_doc.FullName
                 with contextlib.suppress(Exception):
-                    result["type"] = occ_doc.Type
+                    result.update(describe_document_type(occ_doc.Type))
                 with contextlib.suppress(Exception):
                     result["read_only"] = occ_doc.ReadOnly
             except Exception:
