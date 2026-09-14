@@ -6,7 +6,7 @@ smart frames, symbols, PMI, draft global parameters, and symbol file origins.
 Uses unittest.mock to simulate COM objects.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
@@ -143,28 +143,68 @@ class TestGetPrinter:
 
 
 class TestSetPaperSize:
-    def test_landscape(self, export_mgr):
-        em, doc = export_mgr
+    """PaperWidth/PaperHeight are millimetres, and this passed meters.
+
+    0.42 read back as the untouched default, so the size never changed while
+    the result reported what was asked for. Orientation was passed as 1 for
+    Portrait and 2 for Landscape; the enum is Portrait=0, Landscape=1, so
+    "Portrait" selected landscape and 2 is rejected outright.
+    """
+
+    def _dpu(self, em, width_mm=297.0, height_mm=210.0, orientation=1):
         dpu = MagicMock()
+        dpu.PaperWidth = width_mm
+        dpu.PaperHeight = height_mm
+        dpu.Orientation = orientation
         em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
             dpu
         )
+        return dpu
+
+    def test_meters_are_sent_as_millimetres(self, export_mgr):
+        em, doc = export_mgr
+        dpu = self._dpu(em)
 
         result = em.set_paper_size(0.297, 0.210, "Landscape")
+
+        assert dpu.PaperWidth == 297.0
+        assert dpu.PaperHeight == 210.0
         assert result["status"] == "set"
-        assert result["orientation"] == "Landscape"
         assert result["width"] == 0.297
 
-    def test_portrait(self, export_mgr):
+    def test_landscape_uses_the_real_constant(self, export_mgr):
         em, doc = export_mgr
-        dpu = MagicMock()
-        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
-            dpu
-        )
+        dpu = self._dpu(em)
+
+        result = em.set_paper_size(0.297, 0.210, "Landscape")
+
+        assert dpu.Orientation == 1  # igDraftPrintLandscape, never 2
+        assert result["orientation"] == "Landscape"
+
+    def test_portrait_uses_the_real_constant(self, export_mgr):
+        em, doc = export_mgr
+        dpu = self._dpu(em, orientation=0)
 
         result = em.set_paper_size(0.210, 0.297, "Portrait")
-        assert result["status"] == "set"
+
+        assert dpu.Orientation == 0  # igDraftPrintPortrait, never 1
         assert result["orientation"] == "Portrait"
+
+    def test_the_size_the_printer_kept_is_reported(self, export_mgr):
+        """The driver clamps to what it can print, so echoing the request lies.
+
+        Verified on Solid Edge 2026: asking for 420 mm on this printer reads
+        back as 297.01.
+        """
+        em, doc = export_mgr
+        dpu = self._dpu(em)
+        # A driver that accepts the write and keeps its own value.
+        type(dpu).PaperWidth = PropertyMock(return_value=279.4)
+
+        result = em.set_paper_size(0.42, 0.297, "Landscape")
+
+        assert result["width"] == 0.2794
+        assert result["requested"]["width"] == 0.42
 
     def test_no_dpu(self, export_mgr):
         em, doc = export_mgr

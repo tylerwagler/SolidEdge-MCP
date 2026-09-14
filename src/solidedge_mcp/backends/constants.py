@@ -137,6 +137,19 @@ class DrawingViewTypeConstants:
     igIsoXSectionView = 6
 
 
+class DraftPrintOrientationConstants:
+    """draft.tlb > DraftPrintOrientationConstants.
+
+    The print code used to pass 1 for Portrait and 2 for Landscape, calling
+    them "typical COM constants". Portrait is 0 and Landscape is 1, so
+    "Portrait" set landscape, and 2 is not a member at all -- Solid Edge 2026
+    rejects it and leaves the orientation as it was.
+    """
+
+    igDraftPrintPortrait = 0
+    igDraftPrintLandscape = 1
+
+
 class VariableNameBy:
     """constant.tlb > VariableNameBy: which name Variables.Query matches on."""
 

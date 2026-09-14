@@ -7,6 +7,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import owned_style_for
+from ..constants import DraftPrintOrientationConstants
 from ..logging import get_logger
 from ..query._base import BodyNotReachableError, all_faces, body_of
 from ._base import NOT_A_DRAFT, com_get
@@ -538,8 +539,8 @@ class DraftMixin:
             # DraftPrintUtility gives more control than Document.PrintOut.
             dpu = self._print_utility()
             if dpu is not None:
-                with contextlib.suppress(Exception):
-                    dpu.Copies = copies
+                # Verified on Solid Edge 2026: Copies is get/put and takes.
+                dpu.Copies = copies
                 # There is no PrintAllSheets property; setting it did nothing
                 # and every print silently used whatever was already queued.
                 # AddDocument queues the whole document, AddSheet just one.
@@ -550,7 +551,11 @@ class DraftMixin:
                 else:
                     dpu.AddSheet(doc.ActiveSheet)
                 dpu.PrintOut()
-                return {"status": "printed", "copies": copies, "all_sheets": all_sheets}
+                return {
+                    "status": "printed",
+                    "copies": com_get(dpu, "Copies", copies),
+                    "all_sheets": all_sheets,
+                }
 
             # Fall back to Document.PrintOut(Printer, NumCopies, ...). The
             # keyword was Copies, which is not a parameter of anything, so the
@@ -619,18 +624,32 @@ class DraftMixin:
     def set_paper_size(
         self, width: float, height: float, orientation: str = "Landscape"
     ) -> dict[str, Any]:
-        """
-        Set the paper size and orientation for printing.
+        """Set the paper size and orientation for printing.
 
-        Uses DraftPrintUtility paper width/height and orientation.
+        ``DraftPrintUtility.PaperWidth`` and ``PaperHeight`` are in
+        **millimetres**, and this passed meters: 0.42 was read back as the
+        untouched default, so the size never changed while the result reported
+        the requested one. The tool boundary stays meters and the conversion
+        happens here.
+
+        Orientation was passed as 1 for Portrait and 2 for Landscape, called
+        "typical COM constants" in a comment.
+        ``DraftPrintOrientationConstants`` has Portrait at 0 and Landscape at
+        1, so "Portrait" selected landscape and 2 is not a member -- Solid Edge
+        2026 rejects it and leaves the orientation alone.
+
+        The printer driver constrains what it will accept: asking for A3 on a
+        letter-size printer comes back as something else entirely. The result
+        therefore reports what Solid Edge holds afterwards, in meters, not what
+        was asked for.
 
         Args:
-            width: Paper width in meters
-            height: Paper height in meters
-            orientation: 'Landscape' or 'Portrait'
+            width: Paper width in meters.
+            height: Paper height in meters.
+            orientation: 'Landscape' or 'Portrait'.
 
         Returns:
-            Dict with status and paper settings
+            Dict with status and the paper settings Solid Edge kept.
         """
         try:
             self.doc_manager.get_active_document()  # refuse with no document
@@ -644,25 +663,33 @@ class DraftMixin:
                     )
                 }
 
-            with contextlib.suppress(Exception):
-                dpu.PaperWidth = width
-            with contextlib.suppress(Exception):
-                dpu.PaperHeight = height
-
-            # Set orientation: 1=Portrait, 2=Landscape (typical COM constants)
             if orientation.lower() == "portrait":
-                with contextlib.suppress(Exception):
-                    dpu.Orientation = 1
+                orient = DraftPrintOrientationConstants.igDraftPrintPortrait
             else:
-                with contextlib.suppress(Exception):
-                    dpu.Orientation = 2
+                orient = DraftPrintOrientationConstants.igDraftPrintLandscape
+            dpu.Orientation = orient
 
-            return {
+            dpu.PaperWidth = width * 1000.0
+            dpu.PaperHeight = height * 1000.0
+
+            kept_width = com_get(dpu, "PaperWidth")
+            kept_height = com_get(dpu, "PaperHeight")
+            kept_orient = com_get(dpu, "Orientation")
+
+            result: dict[str, Any] = {
                 "status": "set",
-                "width": width,
-                "height": height,
-                "orientation": orientation,
+                "requested": {"width": width, "height": height, "orientation": orientation},
+                "orientation": (
+                    "Portrait"
+                    if kept_orient == DraftPrintOrientationConstants.igDraftPrintPortrait
+                    else "Landscape"
+                ),
             }
+            if kept_width is not None:
+                result["width"] = kept_width / 1000.0
+            if kept_height is not None:
+                result["height"] = kept_height / 1000.0
+            return result
         except Exception as e:
             return error_result(e)
 
