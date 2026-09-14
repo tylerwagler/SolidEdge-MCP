@@ -12,12 +12,35 @@ Every registration goes through here so that:
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from typing import Any
 
 from solidedge_mcp.backends.com_thread import on_com_thread
+from solidedge_mcp.backends.errors import error_result
 
 JSON_MIME = "application/json"
+
+
+def _never_raises(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Turn an escaped exception into the error dict every tool promises.
+
+    Backend methods catch their own COM errors, but a tool that reaches COM
+    itself can still raise -- diagnose_api did, and FastMCP turned that into a
+    protocol-level failure with a traceback instead of the
+    ``{"error": ...}`` shape callers handle. One tool breaking that contract
+    is one too many, so the guarantee is enforced here rather than trusted to
+    every author.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - the whole point is to catch all
+            return error_result(exc, context=f"{fn.__name__} failed")
+
+    return wrapper
 
 
 def tool_annotations(
@@ -46,7 +69,7 @@ def register_tool(
 ) -> Any:
     """Register ``fn`` as an MCP tool, run on the COM thread, with annotations."""
     return mcp.tool(
-        on_com_thread(fn),
+        on_com_thread(_never_raises(fn)),
         tags=tags,
         annotations=tool_annotations(
             read_only=read_only, destructive=destructive, idempotent=idempotent

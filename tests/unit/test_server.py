@@ -125,3 +125,59 @@ class TestEndToEnd:
         result = _run(go())
         assert result["status"] == "connected"
         fake.connect.assert_called_once()
+
+
+class TestNoToolCanBreakTheContract:
+    """Every tool returns {"error": ...}; none may raise out to the protocol.
+
+    diagnose_api did: it reached COM itself without a try/except, so with no
+    document open FastMCP answered with a protocol-level failure and a
+    traceback rather than the shape callers handle.
+    """
+
+    def test_an_escaped_exception_becomes_an_error_dict(self):
+        from solidedge_mcp.tools._registry import _never_raises
+
+        def boom() -> dict:
+            raise RuntimeError("no active document")
+
+        result = _never_raises(boom)()
+
+        assert result["error"].startswith("boom failed")
+        assert "no active document" in result["error"]
+
+    def test_a_normal_return_is_untouched(self):
+        from solidedge_mcp.tools._registry import _never_raises
+
+        def fine(a, b=2) -> dict:
+            return {"status": "ok", "sum": a + b}
+
+        assert _never_raises(fine)(1, b=3) == {"status": "ok", "sum": 4}
+
+    def test_the_wrapper_keeps_the_signature_fastmcp_reads(self):
+        import inspect
+
+        from solidedge_mcp.tools._registry import _never_raises
+
+        def sample(first: int, second: str = "x") -> dict:
+            """Docstring that becomes the tool description."""
+            return {}
+
+        wrapped = _never_raises(sample)
+
+        assert wrapped.__name__ == "sample"
+        assert wrapped.__doc__ == sample.__doc__
+        assert list(inspect.signature(wrapped).parameters) == ["first", "second"]
+
+    def test_diagnose_api_answers_with_an_error_not_a_raise(self, monkeypatch):
+        from solidedge_mcp.tools import diagnostics
+
+        def boom():
+            raise RuntimeError("No active document")
+
+        monkeypatch.setattr(diagnostics.doc_manager, "get_active_document", boom)
+
+        result = diagnostics.diagnose_api()
+
+        assert "error" in result
+        assert "No active document" in result["error"]

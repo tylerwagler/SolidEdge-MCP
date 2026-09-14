@@ -2,6 +2,7 @@
 
 from typing import Any, Literal
 
+from solidedge_mcp.backends.validation import guard_overwrite, validate_path
 from solidedge_mcp.managers import connection
 from solidedge_mcp.tools._registry import register_tool
 
@@ -126,8 +127,24 @@ def app_config(
 # === Standalone tools ===
 
 
-def convert_by_file_path(input_path: str, output_path: str) -> dict[str, Any]:
-    """Convert a CAD file to another format by extension (e.g. .par -> .step)."""
+def convert_by_file_path(
+    input_path: str, output_path: str, overwrite: bool = False
+) -> dict[str, Any]:
+    """Convert a CAD file to another format by extension (e.g. .par -> .step).
+
+    input_path must exist and output_path must not, unless overwrite=true:
+    Solid Edge answers a missing input or an existing output with a modal
+    prompt that blocks every later call.
+    """
+    input_path, err = validate_path(input_path, must_exist=True)
+    if err:
+        return err
+    output_path, err = validate_path(output_path, must_exist=False)
+    if err:
+        return err
+    err = guard_overwrite(output_path, overwrite)
+    if err:
+        return err
     return connection.convert_by_file_path(input_path=input_path, output_path=output_path)
 
 
@@ -142,7 +159,14 @@ def get_active_command() -> dict[str, Any]:
 
 
 def run_macro(filename: str) -> dict[str, Any]:
-    """Run a VBA macro file (.vba/.exe path) in Solid Edge."""
+    """Run a VBA macro file (.vba/.exe path) in Solid Edge.
+
+    The file must exist. Solid Edge answers a missing one with a modal dialog
+    titled with the path, which blocks the server until somebody clicks it.
+    """
+    filename, err = validate_path(filename, must_exist=True)
+    if err:
+        return err
     return connection.run_macro(filename=filename)
 
 

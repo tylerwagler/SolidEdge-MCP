@@ -1291,6 +1291,26 @@ class BRepMixin:
     # B-SPLINE
     # =================================================================
 
+    def _not_a_bspline(self, entity: Any, kind: str, **where: Any) -> dict[str, Any] | None:
+        """Refuse a GetBSplineInfo call on geometry that is not a spline.
+
+        Only BSplineCurve and BSplineSurface carry GetBSplineInfo, so a planar
+        face or a straight edge answers with a bare attribute error naming a
+        member the reader then cannot find. Say what the geometry is instead.
+        """
+        form = self._geometry_form_name(entity)
+        if form in ("bspline_curve", "bspline_surface", "unknown"):
+            return None
+        return {
+            "error": (
+                f"This {kind} is a {form.replace('_', ' ')}, not a B-spline, so it "
+                f"has no NURBS data. Read solidedge://geometry/face/N to see what "
+                f"each face is."
+            ),
+            "geometry": form,
+            **where,
+        }
+
     def get_bspline_curve_info(self, face_index: int, edge_index: int) -> dict[str, Any]:
         """
         Get NURBS curve metadata from an edge's underlying geometry.
@@ -1307,6 +1327,10 @@ class BRepMixin:
         """
         try:
             _doc, _model, _body, _face, edge = self._get_face_edge(face_index, edge_index)
+
+            err = self._not_a_bspline(edge, "edge", face_index=face_index, edge_index=edge_index)
+            if err:
+                return err
 
             geom = edge.Geometry
             bspline_info = self._bspline_curve_info(geom)
@@ -1353,6 +1377,10 @@ class BRepMixin:
         """
         try:
             _doc, _model, _body, face = self._get_face(face_index)
+
+            err = self._not_a_bspline(face, "face", face_index=face_index)
+            if err:
+                return err
 
             geom = face.Geometry
             bspline_info = self._bspline_surface_info(geom)

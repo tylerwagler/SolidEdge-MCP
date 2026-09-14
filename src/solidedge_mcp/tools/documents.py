@@ -15,8 +15,13 @@ def create_document(
 ) -> dict[str, Any]:
     """Create a new document of the given type; it becomes the active document.
 
-    template: optional template file path (None uses the Solid Edge default).
+    template: optional template file path, which must exist (None uses the
+    Solid Edge default).
     """
+    if template:
+        template, err = validate_path(template, must_exist=True)
+        if err:
+            return err
     match type:
         case "part":
             return doc_manager.create_part(template=template)
@@ -50,6 +55,12 @@ def open_document(
     """
     if method in ("foreground", "background", "with_template") and file_path:
         file_path, err = validate_path(file_path, must_exist=True)
+        if err:
+            return err
+    # A template Solid Edge cannot find raises a modal dialog rather than an
+    # error, and that blocks the server.
+    if method == "with_template" and template:
+        template, err = validate_path(template, must_exist=True)
         if err:
             return err
     match method:

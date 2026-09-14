@@ -1473,10 +1473,23 @@ class TestStandaloneFeatures:
         assert result == {"status": "ok"}
 
     def test_create_draft_angle(self, mock_mgr):
+        """DraftSide is inside or outside.
+
+        It was passing igRight (2), which is not a side a draft has, so every
+        draft failed with a bare E_FAIL whatever face or plane was named.
+        Verified on Solid Edge 2026.
+        """
         mock_mgr.create_draft_angle.return_value = {"status": "ok"}
         result = create_draft_angle(face_index=0, angle=5.0, plane_index=2)
-        mock_mgr.create_draft_angle.assert_called_once_with(face_index=0, angle=5.0, plane_index=2)
+        mock_mgr.create_draft_angle.assert_called_once_with(
+            face_index=0, angle=5.0, plane_index=2, side="inside"
+        )
         assert result == {"status": "ok"}
+
+    def test_create_draft_angle_outside(self, mock_mgr):
+        mock_mgr.create_draft_angle.return_value = {"status": "ok"}
+        create_draft_angle(face_index=0, angle=5.0, side="outside")
+        assert mock_mgr.create_draft_angle.call_args.kwargs["side"] == "outside"
 
     def test_create_bounded_surface(self, mock_mgr):
         mock_mgr.create_bounded_surface.return_value = {"status": "ok"}

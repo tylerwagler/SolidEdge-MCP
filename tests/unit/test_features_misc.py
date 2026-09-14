@@ -4,6 +4,7 @@ Unit tests for FeatureManager backend methods.
 Uses unittest.mock to simulate COM objects so tests run without Solid Edge.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -1848,3 +1849,55 @@ class TestSimplify:
         assert result["unsupported"] is True
         assert "topology proxy" in result["error"]
         models.AddLocalSimplifyEnclosure.assert_not_called()
+
+
+class TestDraftSide:
+    """Drafts.Add takes igInside (4) or igOutside (5), never igLeft or igRight.
+
+    Verified on Solid Edge 2026: 4 and 5 both work on every face of a box,
+    while 1, 2 and 3 fail with a bare E_FAIL whatever plane is named. The
+    face array goes as a plain list; no VARIANT wrapper is needed.
+    """
+
+    def _part(self, managers):
+        _, _, doc, models, model, _ = managers
+        faces = MagicMock()
+        faces.Count = 6
+        face = MagicMock()
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+        doc.RefPlanes.Count = 3
+        return model, face
+
+    def test_inside_is_the_default(self, feature_mgr, managers):
+        model, face = self._part(managers)
+
+        result = feature_mgr.create_draft_angle(face_index=0, angle=3.0)
+
+        assert result["status"] == "created"
+        assert result["side"] == "inside"
+        args = model.Drafts.Add.call_args.args
+        assert args[2] == [face]  # a plain list, not a VARIANT
+        assert args[4] == 4  # igInside
+
+    def test_outside_is_five(self, feature_mgr, managers):
+        model, _face = self._part(managers)
+
+        feature_mgr.create_draft_angle(face_index=0, angle=3.0, side="outside")
+
+        assert model.Drafts.Add.call_args.args[4] == 5  # igOutside
+
+    def test_the_angle_reaches_com_in_radians(self, feature_mgr, managers):
+        model, _face = self._part(managers)
+
+        feature_mgr.create_draft_angle(face_index=0, angle=90.0)
+
+        assert model.Drafts.Add.call_args.args[3] == [pytest.approx(math.pi / 2)]
+
+    def test_an_unknown_side_is_refused(self, feature_mgr, managers):
+        model, _face = self._part(managers)
+
+        result = feature_mgr.create_draft_angle(face_index=0, angle=3.0, side="sideways")
+
+        assert "error" in result
+        model.Drafts.Add.assert_not_called()

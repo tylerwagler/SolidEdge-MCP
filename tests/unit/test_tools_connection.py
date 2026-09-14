@@ -135,13 +135,37 @@ class TestAppConfig:
 
 
 class TestStandaloneConnection:
-    def test_convert_by_file_path(self, mock_mgr):
+    def test_convert_by_file_path(self, mock_mgr, tmp_path):
+        """The input must exist: Solid Edge answers a missing one with a modal."""
         mock_mgr.convert_by_file_path.return_value = {"status": "ok"}
-        result = convert_by_file_path("in.par", "out.step")
+        source = tmp_path / "in.par"
+        source.write_text("x", encoding="utf-8")
+        target = tmp_path / "out.step"
+
+        result = convert_by_file_path(str(source), str(target))
+
         mock_mgr.convert_by_file_path.assert_called_once_with(
-            input_path="in.par", output_path="out.step"
+            input_path=str(source), output_path=str(target)
         )
         assert result == {"status": "ok"}
+
+    def test_convert_refuses_a_missing_input(self, mock_mgr, tmp_path):
+        result = convert_by_file_path(str(tmp_path / "gone.par"), str(tmp_path / "out.step"))
+
+        assert "error" in result
+        mock_mgr.convert_by_file_path.assert_not_called()
+
+    def test_convert_refuses_to_replace_the_output(self, mock_mgr, tmp_path):
+        source = tmp_path / "in.par"
+        source.write_text("x", encoding="utf-8")
+        target = tmp_path / "out.step"
+        target.write_text("old", encoding="utf-8")
+
+        result = convert_by_file_path(str(source), str(target))
+
+        assert "already exists" in result["error"]
+        mock_mgr.convert_by_file_path.assert_not_called()
+        assert target.exists()
 
     def test_arrange_windows(self, mock_mgr):
         mock_mgr.arrange_windows.return_value = {"status": "ok"}
@@ -155,11 +179,26 @@ class TestStandaloneConnection:
         mock_mgr.get_active_command.assert_called_once()
         assert result == {"status": "ok"}
 
-    def test_run_macro(self, mock_mgr):
+    def test_run_macro(self, mock_mgr, tmp_path):
         mock_mgr.run_macro.return_value = {"status": "ok"}
-        result = run_macro("test.vba")
-        mock_mgr.run_macro.assert_called_once_with(filename="test.vba")
+        macro = tmp_path / "test.vba"
+        macro.write_text("x", encoding="utf-8")
+
+        result = run_macro(str(macro))
+
+        mock_mgr.run_macro.assert_called_once_with(filename=str(macro))
         assert result == {"status": "ok"}
+
+    def test_run_macro_refuses_a_missing_file(self, mock_mgr, tmp_path):
+        """A missing macro raises a modal dialog titled with the path.
+
+        Reproduced on Solid Edge 2026: the dialog blocked the single UI thread
+        and the whole server stopped answering.
+        """
+        result = run_macro(str(tmp_path / "no_such_macro.bas"))
+
+        assert "error" in result
+        mock_mgr.run_macro.assert_not_called()
 
 
 # === Literal discriminator drift ===

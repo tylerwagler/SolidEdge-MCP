@@ -306,15 +306,17 @@ def create_draft_angle(
     face_index: int,
     angle: float,
     plane_index: int = 1,
+    side: Literal["inside", "outside"] = "inside",
 ) -> dict[str, Any]:
     """Add a draft (taper) to a face, pulled from a reference plane.
 
     angle in degrees. face_index is 0-based. plane_index is the 1-based draft
-    (parting) plane: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    (parting) plane: 1=Top/XY, 2=Right/YZ, 3=Front/XZ. side is which way the
+    face tapers.
     """
     err = validate_numerics(angle=angle)
     if err:
         return err
     return feature_manager.create_draft_angle(
-        face_index=face_index, angle=angle, plane_index=plane_index
+        face_index=face_index, angle=angle, plane_index=plane_index, side=side
     )

@@ -37,6 +37,12 @@ _SE_SMART_PATTERN = 0
 _SE_PATTERN_FIXED_OFFSET = 2
 
 
+#: Drafts.Add takes a DraftSide from FeaturePropertyConstants. It is inside or
+#: outside; igLeft and igRight are not sides a draft has, and passing one
+#: fails with a bare E_FAIL.
+_DRAFT_SIDES = {"inside": 4, "outside": 5}  # igInside, igOutside
+
+
 class MiscFeaturesMixin:
     """Mixin providing mirror, pattern, face ops, body ops, and simplify methods."""
 
@@ -659,21 +665,29 @@ class MiscFeaturesMixin:
             return error_result(e)
 
     def create_draft_angle(
-        self, face_index: int, angle: float, plane_index: int = 1
+        self, face_index: int, angle: float, plane_index: int = 1, side: str = "inside"
     ) -> dict[str, Any]:
-        """
-        Add a draft angle to a face.
+        """Add a draft angle to a face.
 
-        Draft angles are used in injection molding to facilitate part removal
-        from the mold. Uses the model.Drafts collection.
+        Draft angles let a moulded part leave its mould.
+        ``Drafts.Add(DraftPlane, NumberOfFaceSets, FaceSetArray,
+        DraftAngleArray, DraftSide)``.
+
+        DraftSide takes igInside (4) or igOutside (5). It was passing igRight
+        (2), which is not a side a draft has, so every draft failed with a bare
+        E_FAIL whatever face or plane was named. Verified on Solid Edge 2026:
+        4 and 5 both work on every face of a box, 1, 2 and 3 all fail. The
+        face array goes as a plain list; no VARIANT wrapper is needed.
 
         Args:
-            face_index: 0-based face index to apply draft to
-            angle: Draft angle in degrees
-            plane_index: 1-based reference plane index for draft direction (default: 1 = Top)
+            face_index: 0-based face to draft.
+            angle: Draft angle in degrees.
+            plane_index: 1-based reference plane giving the pull direction
+                (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
+            side: 'inside' or 'outside'.
 
         Returns:
-            Dict with status and draft info
+            Dict with status and draft info.
         """
         try:
             doc = self.doc_manager.get_active_document()
@@ -694,9 +708,14 @@ class MiscFeaturesMixin:
 
             angle_rad = math.radians(angle)
 
-            # igRight = 2 (draft direction side)
+            side_const = _DRAFT_SIDES.get(side.strip().lower())
+            if side_const is None:
+                return {
+                    "error": f"Invalid side: {side}. Use 'inside' or 'outside'.",
+                }
+
             drafts = model.Drafts
-            drafts.Add(ref_plane, 1, [face], [angle_rad], 2)
+            drafts.Add(ref_plane, 1, [face], [angle_rad], side_const)
 
             return {
                 "status": "created",
@@ -704,6 +723,7 @@ class MiscFeaturesMixin:
                 "face_index": face_index,
                 "angle_degrees": angle,
                 "plane_index": plane_index,
+                "side": side.strip().lower(),
             }
         except Exception as e:
             return error_result(e)

@@ -9,8 +9,11 @@ from solidedge_mcp.tools._registry import register_tool
 
 def diagnose_api() -> dict[str, Any]:
     """Inspect the COM connection and active document (type, collections, methods)."""
-    doc = doc_manager.get_active_document()
-    return diagnose_document(doc)
+    try:
+        doc = doc_manager.get_active_document()
+        return diagnose_document(doc)
+    except Exception as e:
+        return error_result(e)
 
 
 def diagnose_feature_tool(feature_index: int = 0) -> dict[str, Any]:
