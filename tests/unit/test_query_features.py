@@ -8,6 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import FeatureStatusConstants
+
 
 @pytest.fixture
 def doc_mgr():
@@ -189,25 +191,75 @@ class TestDeleteFeature:
 
 
 class TestGetFeatureStatus:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+    """Feature.Status is a FeatureStatusConstants value, not a small integer.
+
+    igFeatureOK is 1216476310, which tells a caller nothing on its own.
+    """
+
+    def _feature(self, doc, status):
         feat = MagicMock()
         feat.Name = "Extrude1"
-        feat.Status = 1
+        feat.Status = status
         feat.Suppress = False
         feat.Type = 25
-
         features = MagicMock()
         features.Count = 1
         features.Item.return_value = feat
         doc.DesignEdgebarFeatures = features
+        return feat
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        self._feature(doc, FeatureStatusConstants.igFeatureOK)
 
         result = qm.get_feature_status("Extrude1")
+
         assert result["feature_name"] == "Extrude1"
         assert result["index"] == 0
-        assert result["status"] == 1
+        assert result["status"] == "ok"
+        assert result["status_code"] == FeatureStatusConstants.igFeatureOK
         assert result["is_suppressed"] is False
         assert result["type"] == 25
+
+    def test_every_named_status_is_decoded(self, query_mgr):
+        qm, doc = query_mgr
+        expected = {
+            FeatureStatusConstants.igFeatureOK: "ok",
+            FeatureStatusConstants.igFeatureFailed: "failed",
+            FeatureStatusConstants.igFeatureWarned: "warned",
+            FeatureStatusConstants.igFeatureSuppressed: "suppressed",
+            FeatureStatusConstants.igFeatureRolledBack: "rolled_back",
+        }
+        for code, name in expected.items():
+            self._feature(doc, code)
+            assert qm.get_feature_status("Extrude1")["status"] == name, name
+
+    def test_a_status_pair_is_unwrapped(self, query_mgr):
+        """pywin32 returns Status as (code, None); reading the pair decoded nothing."""
+        qm, doc = query_mgr
+        self._feature(doc, (FeatureStatusConstants.igFeatureFailed, None))
+
+        result = qm.get_feature_status("Extrude1")
+
+        assert result["status"] == "failed"
+        assert result["status_code"] == FeatureStatusConstants.igFeatureFailed
+
+    def test_an_unreadable_status_does_not_crash(self, query_mgr):
+        qm, doc = query_mgr
+        self._feature(doc, object())
+
+        result = qm.get_feature_status("Extrude1")
+
+        assert result["status"] == "unknown"
+
+    def test_an_unknown_code_is_reported_as_unknown(self, query_mgr):
+        qm, doc = query_mgr
+        self._feature(doc, 999)
+
+        result = qm.get_feature_status("Extrude1")
+
+        assert result["status"] == "unknown"
+        assert result["status_code"] == 999
 
     def test_not_found(self, query_mgr):
         qm, doc = query_mgr

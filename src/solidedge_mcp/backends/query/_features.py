@@ -5,7 +5,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import DirectionConstants, OffsetSideConstants
+from ..constants import DirectionConstants, FeatureStatusConstants, OffsetSideConstants
 from ..logging import get_logger
 from ._base import all_faces, body_of, dispatch_array
 
@@ -15,6 +15,32 @@ _logger = get_logger(__name__)
 #: every ApplyDirection*Extent overload. There is no "no keypoint" member; 0 is
 #: the null value Solid Edge uses when the extent is not keypoint-driven.
 _NO_KEYPOINT_FLAGS = 0
+
+
+def _status_code(raw: Any) -> int | None:
+    """The status value out of whatever Feature.Status hands back.
+
+    pywin32 returns it as a pair, ``(code, None)``, because the property
+    carries a second out-parameter. Reading the pair as the code left every
+    status decoding as "unknown".
+    """
+    if isinstance(raw, int):
+        return raw
+    try:
+        first = raw[0]
+    except (TypeError, IndexError, KeyError):
+        return None
+    return first if isinstance(first, int) else None
+
+
+#: Feature.Status values, named. constant.tlb > FeatureStatusConstants.
+_FEATURE_STATUS: dict[int | None, str] = {
+    FeatureStatusConstants.igFeatureOK: "ok",
+    FeatureStatusConstants.igFeatureFailed: "failed",
+    FeatureStatusConstants.igFeatureWarned: "warned",
+    FeatureStatusConstants.igFeatureSuppressed: "suppressed",
+    FeatureStatusConstants.igFeatureRolledBack: "rolled_back",
+}
 
 
 class FeatureQueryMixin:
@@ -204,9 +230,17 @@ class FeatureQueryMixin:
                 try:
                     feat = features.Item(i)
                     if hasattr(feat, "Name") and feat.Name == feature_name:
-                        result = {"feature_name": feature_name, "index": i - 1}
+                        result: dict[str, Any] = {
+                            "feature_name": feature_name,
+                            "index": i - 1,
+                        }
                         with contextlib.suppress(Exception):
-                            result["status"] = feat.Status
+                            code = _status_code(feat.Status)
+                            result["status_code"] = code
+                            # 1216476310 on its own says nothing; the enum
+                            # turns it into "ok", "failed", "warned",
+                            # "suppressed" or "rolled_back".
+                            result["status"] = _FEATURE_STATUS.get(code, "unknown")
                         with contextlib.suppress(Exception):
                             result["is_suppressed"] = feat.Suppress
                         try:

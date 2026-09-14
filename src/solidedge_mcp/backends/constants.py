@@ -617,3 +617,13 @@ class MatTablePropIndexConstants:
     seYieldStress = 29
     seUltimateStress = 30
     seElongation = 31
+
+
+class FeatureStatusConstants:
+    """Feature.Status values, from constant.tlb > FeatureStatusConstants."""
+
+    igFeatureOK = 1216476310
+    igFeatureFailed = 1216476311
+    igFeatureWarned = 1216476312
+    igFeatureSuppressed = 1216476313
+    igFeatureRolledBack = 1216476314
