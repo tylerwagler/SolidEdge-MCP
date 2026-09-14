@@ -106,7 +106,7 @@ class RevolveMixin:
         except Exception as e:
             return error_result(e)
 
-    def create_revolve_finite(self, angle: float, axis_type: str = "CenterLine") -> dict[str, Any]:
+    def create_revolve_finite(self, angle: float) -> dict[str, Any]:
         """
         Create a finite revolve feature.
 
@@ -114,7 +114,6 @@ class RevolveMixin:
 
         Args:
             angle: Revolution angle in degrees
-            axis_type: Type of revolution axis (unused, axis comes from sketch)
 
         Returns:
             Dict with status and revolve info

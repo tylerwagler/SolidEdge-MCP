@@ -298,8 +298,9 @@ class DrawingMixin:
 
         Args:
             auto_balloon: Whether to auto-generate balloon callouts
-            x: Table X position on sheet (meters, default 0.15)
-            y: Table Y position on sheet (meters, default 0.25)
+            x: Table X position on sheet, in meters, applied with
+                PartsList.SetOrigin after the table is added
+            y: Table Y position on sheet, in meters
 
         Returns:
             Dict with status
@@ -337,11 +338,24 @@ class DrawingMixin:
             # Add parts list
             # Parameters: DrawingView, SavedSettings, AutoBalloon, CreatePartsList
             # AutoBalloon: 0=No, 1=Yes; CreatePartsList: 0=No, 1=Yes
-            parts_lists.Add(dv, "", 1 if auto_balloon else 0, 1)
+            parts_list = parts_lists.Add(dv, "", 1 if auto_balloon else 0, 1)
+
+            # PartsLists.Add takes no position, so x/y were accepted and
+            # dropped: the table landed wherever Solid Edge chose and the
+            # result still reported the position the caller asked for.
+            # PartsList.SetOrigin(x, y) is the placement API.
+            placed = False
+            try:
+                parts_list.SetOrigin(x, y)
+                placed = True
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(f"Parts list created but could not be positioned: {exc}")
 
             return {
                 "status": "created",
                 "auto_balloon": auto_balloon,
+                "position": [x, y] if placed else None,
+                "positioned": placed,
                 "total_parts_lists": parts_lists.Count,
             }
         except Exception as e:

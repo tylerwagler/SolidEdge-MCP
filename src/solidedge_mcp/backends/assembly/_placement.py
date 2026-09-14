@@ -145,9 +145,9 @@ class PlacementMixin:
         Args:
             file_path: Path to the Family of Parts file (.par)
             family_member_name: Name of the family member to place
-            x: X position in meters (unused, placement is at origin)
-            y: Y position in meters (unused, placement is at origin)
-            z: Z position in meters (unused, placement is at origin)
+            x: X position in meters
+            y: Y position in meters
+            z: Z position in meters
 
         Returns:
             Dict with status and component info
@@ -166,11 +166,19 @@ class PlacementMixin:
             occurrences = doc.Occurrences
             occ = occurrences.AddFamilyByFilename(file_path, family_member_name)
 
+            # AddFamilyByFilename always places at the origin, and x/y/z used to
+            # be accepted and dropped: the caller asked for a position, the part
+            # landed at 0,0,0 and the result still said "added". Move it, the
+            # same way add_family_with_transform does.
+            if (x, y, z) != (0, 0, 0):
+                occ.PutTransform(x, y, z, 0.0, 0.0, 0.0)
+
             return {
                 "status": "added",
                 "file_path": file_path,
                 "family_member": family_member_name,
                 "name": com_get(occ, "Name", "Unknown"),
+                "position": [x, y, z],
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
@@ -349,9 +357,9 @@ class PlacementMixin:
 
         Args:
             file_path: Path to the part file (.par)
-            x: X position in meters (unused, placement is at origin)
-            y: Y position in meters (unused, placement is at origin)
-            z: Z position in meters (unused, placement is at origin)
+            x: X position in meters
+            y: Y position in meters
+            z: Z position in meters
 
         Returns:
             Dict with status and component info
@@ -368,13 +376,37 @@ class PlacementMixin:
                 return err
 
             occurrences = doc.Occurrences
-            occ = occurrences.AddAsAdjustablePart(file_path)
+            try:
+                occ = occurrences.AddAsAdjustablePart(file_path)
+            except Exception as exc:
+                # AddAsAdjustablePart answers E_INVALIDARG for any part that is
+                # not already an adjustable part, which reads as a bad argument
+                # when the argument is fine. Reproduced on Solid Edge 2026 with
+                # an ordinary .par, at the origin and offset alike.
+                if "0x80070057" in str(exc) or "-2147024809" in str(exc):
+                    return {
+                        "error": (
+                            f"{file_path} is not an adjustable part. Solid Edge only "
+                            f"accepts a part already built as one -- with adjustable "
+                            f"variables defined in the part -- and answers anything "
+                            f"else with E_INVALIDARG. Add it with method='basic', or "
+                            f"make it adjustable in the Solid Edge UI first."
+                        ),
+                        "file_path": file_path,
+                    }
+                raise
+
+            # AddAsAdjustablePart has no transform overload, so x/y/z were
+            # accepted and dropped. Place, then move.
+            if (x, y, z) != (0, 0, 0):
+                occ.PutTransform(x, y, z, 0.0, 0.0, 0.0)
 
             return {
                 "status": "added",
                 "file_path": file_path,
                 "adjustable": True,
                 "name": com_get(occ, "Name", "Unknown"),
+                "position": [x, y, z],
                 "index": occurrences.Count - 1,
             }
         except Exception as e:

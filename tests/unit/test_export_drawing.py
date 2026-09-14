@@ -577,6 +577,61 @@ class TestCreatePartsList:
         assert result["auto_balloon"] is False
         parts_lists.Add.assert_called_once_with(dv, "", 0, 1)
 
+    def test_position_is_applied(self, export_mgr):
+        """x/y were accepted and dropped: Solid Edge chose the position and
+        the result echoed the one the caller asked for."""
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dv = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = dv
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+
+        parts_list = MagicMock()
+        parts_lists = MagicMock()
+        parts_lists.Count = 1
+        parts_lists.Add.return_value = parts_list
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.create_parts_list(x=0.12, y=0.22)
+
+        # PartsLists.Add takes no position; PartsList.SetOrigin is the API.
+        parts_list.SetOrigin.assert_called_once_with(0.12, 0.22)
+        assert result["position"] == [0.12, 0.22]
+        assert result["positioned"] is True
+
+    def test_position_failure_is_reported_not_claimed(self, export_mgr):
+        """A table that could not be moved must not report a position."""
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dv = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = dv
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+
+        parts_list = MagicMock()
+        parts_list.SetOrigin.side_effect = Exception("E_FAIL")
+        parts_lists = MagicMock()
+        parts_lists.Count = 1
+        parts_lists.Add.return_value = parts_list
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.create_parts_list(x=0.12, y=0.22)
+
+        assert result["status"] == "created"
+        assert result["positioned"] is False
+        assert result["position"] is None
+
 
 # ============================================================================
 # DRAWING VIEW: GET COUNT

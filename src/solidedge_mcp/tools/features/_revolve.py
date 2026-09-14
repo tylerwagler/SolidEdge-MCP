@@ -18,15 +18,15 @@ def create_revolve(
         "by_keypoint_sync",
     ] = "full",
     angle: float = 360.0,
-    axis_type: str = "CenterLine",
     wall_thickness: float = 0.0,
     treatment_type: Literal["None", "Draft", "Crown", "CrownAndDraft"] = "None",
 ) -> dict[str, Any]:
     """Create a revolved protrusion around the sketch's revolve axis.
 
     angle in degrees (used by all but by_keypoint*). wall_thickness in meters
-    (thin_wall). axis_type is accepted but currently ignored (axis comes from
-    the sketch). 'by_keypoint' and 'by_keypoint_sync' are unsupported (they
+    (thin_wall). The revolve axis always comes from the sketch: set it with
+    manage_sketch(action='set_axis') before closing. 'by_keypoint' and
+    'by_keypoint_sync' are unsupported (they
     need a KeyPoint or tangent face object this server cannot select); use
     'full'. 'full_360' only accepts treatment_type='None' -
     RevolvedProtrusions.Add has no draft or crown slots.
@@ -38,7 +38,7 @@ def create_revolve(
         case "full":
             return feature_manager.create_revolve(angle=angle)
         case "finite":
-            return feature_manager.create_revolve_finite(angle=angle, axis_type=axis_type)
+            return feature_manager.create_revolve_finite(angle=angle)
         case "sync":
             return feature_manager.create_revolve_sync(angle=angle)
         case "finite_sync":

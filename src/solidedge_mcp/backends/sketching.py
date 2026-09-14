@@ -1893,6 +1893,8 @@ class SketchManager:
         Returns:
             Dict with status
         """
+        # No reachable COM call to pass the options to; see below.
+        del clean_points, clean_splines, clean_identical, clean_small, small_tolerance
         try:
             if not self.active_profile:
                 return {"error": "No active sketch. Call create_sketch() first"}

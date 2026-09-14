@@ -85,10 +85,12 @@ class MiscFeaturesMixin:
         Returns:
             Dict with error explaining limitation
         """
+        del remove_face_indices  # no COM call to pass them to; see above
         return {
             "error": "Shell (Thinwalls) feature requires face selection for open faces "
             "which cannot be reliably automated via COM. Use the Solid Edge UI "
             "to create shell features.",
+            "unsupported": True,
             "thickness": thickness,
         }
 

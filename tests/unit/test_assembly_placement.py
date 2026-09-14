@@ -17,6 +17,9 @@ IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
 IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
 IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
 
+SPRING = r"C:\parts\spring.par"
+FAMILY = r"C:\partsam.par"
+
 
 @pytest.fixture
 def asm_mgr():
@@ -335,6 +338,110 @@ class TestAddAdjustablePart:
         with unittest.mock.patch("os.path.exists", return_value=True):
             result = am.add_adjustable_part("C:\\parts\\spring.par")
         assert "error" in result
+
+    def test_position_is_applied(self, asm_mgr):
+        """x/y/z used to be accepted and dropped: the part landed at 0,0,0."""
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occ.Name = "AdjPart:1"
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.AddAsAdjustablePart.return_value = occ
+        doc.Occurrences = occurrences
+
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.add_adjustable_part(SPRING, 0.2, 0.1, 0.05)
+
+        occ.PutTransform.assert_called_once_with(0.2, 0.1, 0.05, 0.0, 0.0, 0.0)
+        assert result["position"] == [0.2, 0.1, 0.05]
+
+    def test_origin_needs_no_move(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.AddAsAdjustablePart.return_value = occ
+        doc.Occurrences = occurrences
+
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            am.add_adjustable_part(SPRING)
+
+        occ.PutTransform.assert_not_called()
+
+    def test_ordinary_part_is_explained(self, asm_mgr):
+        """E_INVALIDARG here means the part is not adjustable, not a bad path.
+
+        Reproduced on Solid Edge 2026: an ordinary .par is rejected the same
+        way at the origin and offset, and "COM error 0x80070057" tells the
+        caller nothing about what to do instead.
+        """
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.AddAsAdjustablePart.side_effect = Exception(
+            "(-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024809), None)"
+        )
+        doc.Occurrences = occurrences
+
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.add_adjustable_part(SPRING)
+
+        assert "not an adjustable part" in result["error"]
+        assert "method='basic'" in result["error"]
+
+    def test_other_com_errors_still_surface(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.AddAsAdjustablePart.side_effect = Exception("catastrophic failure")
+        doc.Occurrences = occurrences
+
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.add_adjustable_part(SPRING)
+
+        assert "error" in result
+        assert "not an adjustable part" not in result["error"]
+
+
+class TestAddFamilyMemberPosition:
+    def test_position_is_applied(self, asm_mgr):
+        """Same trap as the adjustable part: x/y/z were accepted and dropped."""
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occ.Name = "Family:1"
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.AddFamilyByFilename.return_value = occ
+        doc.Occurrences = occurrences
+
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.add_family_member(FAMILY, "Large", 0.2, 0.1, 0.05)
+
+        occ.PutTransform.assert_called_once_with(0.2, 0.1, 0.05, 0.0, 0.0, 0.0)
+        assert result["position"] == [0.2, 0.1, 0.05]
+
+    def test_origin_needs_no_move(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.AddFamilyByFilename.return_value = occ
+        doc.Occurrences = occurrences
+
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            am.add_family_member(FAMILY, "Large")
+
+        occ.PutTransform.assert_not_called()
 
 
 class TestReorderOccurrence:
