@@ -28,6 +28,41 @@ _P = ParamSpec("_P")
 _Creator = Callable[Concatenate[Any, _P], dict[str, Any]]
 
 
+#: Words that mark a feature as consuming the active sketch. Anything else
+#: works on existing edges or faces, where blaming the sketch profile for an
+#: empty result is simply wrong.
+_SKETCH_DRIVEN = (
+    "extrude",
+    "protrusion",
+    "cutout",
+    "revolve",
+    "loft",
+    "sweep",
+    "helix",
+    "rib",
+    "web",
+    "thicken",
+    "surface",
+    "slot",
+    "emboss",
+)
+
+
+def _why_nothing(method_name: str) -> str:
+    """The likely reason a feature built nothing, given what it works from."""
+    if any(word in method_name for word in _SKETCH_DRIVEN):
+        return (
+            "The sketch profile is most likely open or invalid; close it as a "
+            "closed region first. It can also mean the feature missed the body "
+            "entirely, or removed nothing."
+        )
+    return (
+        "This feature works on existing edges or faces rather than a sketch, so "
+        "Solid Edge most likely found nothing it could apply to: the radius or "
+        "distance may not fit, or the selected edges may already be consumed."
+    )
+
+
 def verifies_geometry(fn: _Creator[_P]) -> _Creator[_P]:
     """Decorate a feature-creation method to confirm it actually built geometry.
 
@@ -64,10 +99,8 @@ def verifies_geometry(fn: _Creator[_P]) -> _Creator[_P]:
             )
             return {
                 "error": (
-                    "Feature reported success but no geometry was created: the "
-                    "body's face count did not change. The sketch profile is most "
-                    "likely open/invalid -- close it as a closed region first -- "
-                    "or the operation had no effect on the body."
+                    f"{fn.__name__} reported success but created no geometry: the "
+                    f"body's face count did not change. {_why_nothing(fn.__name__)}"
                 ),
                 "attempted": result.get("type"),
                 "models_before": before[0],

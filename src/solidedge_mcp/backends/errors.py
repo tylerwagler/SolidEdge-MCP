@@ -121,13 +121,24 @@ def error_result(exc: BaseException, **extra: Any) -> dict[str, Any]:
 
     Extra keyword arguments are merged into the result so callers can attach
     context (``feature="extrude"``) without rebuilding the dict by hand.
+
+    A ``context`` string is treated specially: it leads the error message
+    rather than sitting in a key beside it. "COM error 0x80004005" on its own
+    tells a caller nothing, and the sentence explaining it is the whole point
+    of passing one, so it must be in the field everybody reads.
     """
-    result: dict[str, Any] = {"error": describe_exception(exc)}
+    described = describe_exception(exc)
+    context = extra.pop("context", None)
+    message = f"{context} ({described})" if context else described
+
+    result: dict[str, Any] = {"error": message}
     hresult = com_hresult(exc)
     if hresult is not None:
         result["hresult"] = f"0x{hresult:08X}"
         if hresult in DISCONNECTED_HRESULTS:
             result["disconnected"] = True
+    if context:
+        result["com_error"] = described
     if debug_enabled():
         result["traceback"] = traceback.format_exc()
     result.update(extra)

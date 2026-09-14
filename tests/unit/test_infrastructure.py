@@ -68,9 +68,28 @@ class TestErrorResult:
         assert errors.error_result(exc)["disconnected"] is True
 
     def test_extra_context_merged(self):
-        result = errors.error_result(ValueError("x"), note="hint", context="ctx")
+        result = errors.error_result(ValueError("x"), note="hint")
         assert result["note"] == "hint"
-        assert result["context"] == "ctx"
+
+    def test_context_leads_the_message(self):
+        """ "COM error 0x80004005" alone tells a caller nothing.
+
+        The sentence explaining it is the reason a caller passes context, so
+        it belongs in the field every consumer reads, not in a key beside it.
+        """
+        result = errors.error_result(
+            ValueError("boom"), context="Mirroring needs a synchronous part"
+        )
+
+        assert result["error"] == "Mirroring needs a synchronous part (boom)"
+        assert result["com_error"] == "boom"
+        assert "context" not in result
+
+    def test_without_context_the_message_is_unchanged(self):
+        result = errors.error_result(ValueError("boom"))
+
+        assert result["error"] == "boom"
+        assert "com_error" not in result
 
 
 class TestComThread:

@@ -212,3 +212,40 @@ def test_unittest_mock_document_bails_out():
     mgr = _Mgr(doc)
     assert mgr._geometry_snapshot() == (None, None)
     doc.Models.Item.assert_not_called()
+
+
+class TestNoGeometryReason:
+    """The reason offered must match what the feature works from.
+
+    Blaming an open sketch profile for a round that found no edges to apply
+    to sent the reader looking in the wrong place. Seen on a sheet metal tab,
+    where create_round(all_edges) is accepted and changes nothing.
+    """
+
+    def test_a_sketch_feature_is_told_about_the_profile(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        reason = _why_nothing("create_extrude")
+
+        assert "sketch profile" in reason
+
+    def test_an_edge_feature_is_not(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        reason = _why_nothing("create_round")
+
+        # It may mention that there is no sketch, but must not blame one.
+        assert "sketch profile" not in reason
+        assert "edges or faces" in reason
+
+    def test_cutouts_and_lofts_count_as_sketch_features(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        for name in ("create_extruded_cutout", "create_lofted_protrusion", "create_swept_surface"):
+            assert "sketch profile" in _why_nothing(name), name
+
+    def test_chamfers_and_drafts_do_not(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        for name in ("create_chamfer", "create_draft_angle", "create_thin_wall"):
+            assert "edges or faces" in _why_nothing(name), name
