@@ -23,6 +23,7 @@ uv run mypy src/
 uv run python scripts/audit_com_signatures.py --by-file
 uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.py
 uv run python scripts/audit_com_receivers.py
+uv run python scripts/audit_com_writes.py
 uv run python scripts/audit_dead_params.py  # parameters declared and never read
 uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid Edge)
 ```
@@ -95,7 +96,7 @@ Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{
 
 Rules: never guess a constant or signature. Look it up, copy the exact value into `constants.py` with a comment naming the enum, and prefer collection-level `Add*` methods.
 
-Four checks enforce this, and all four skip when the dump is absent:
+Five checks enforce this, and all five skip when the dump is absent:
 
 | Check | What it catches |
 |---|---|
@@ -103,6 +104,7 @@ Four checks enforce this, and all four skip when the dump is absent:
 | `tests/unit/test_com_members.py` | A COM member name that exists in no type library. A ratchet: new names fail, and fixing one fails until you delete it from `UNVERIFIED`. |
 | `tests/unit/test_com_receivers.py` (`scripts/audit_com_receivers.py`) | A member read off an interface that does not have it, which the name check cannot see because the name is real elsewhere. |
 | `scripts/audit_com_signatures.py` | A call with the wrong number of arguments. Run `--filter <path>` to see the full parameter list for each finding, `--by-file` for counts. |
+| `tests/unit/test_com_writes.py` (`scripts/audit_com_writes.py`) | An assignment to a member that is a method, or to a property the type library marks read-only. Solid Edge answers "Property 'Item.X' can not be set." and a surrounding try/except turns that into a reported success. |
 
 The signature audit resolves the receiver, so `cutouts = model.ExtrudedCutouts` followed by `cutouts.AddFiniteMulti(...)` is checked against `ExtrudedCutouts` specifically rather than against every interface with that method name.
 

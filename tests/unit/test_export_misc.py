@@ -277,6 +277,45 @@ class TestReplaceComponent:
 
         return AssemblyManager(dm), doc, occurrence
 
+    def test_passes_both_required_arguments(self, asm_mgr):
+        """Occurrence.Replace(NewOccurrenceFileName, ReplaceAll) takes two.
+
+        This passed one, so the call raised; the fallback then assigned to
+        Occurrence.OccurrenceFileName, which the type library marks read-only,
+        so that raised too and the caller got an error naming the wrong thing.
+        Neither path could ever have replaced anything.
+        """
+        am, _doc, occ = asm_mgr
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.replace_component(0, "C:/parts/new.par")
+
+        occ.Replace.assert_called_once_with("C:/parts/new.par", False)
+        assert result["status"] == "replaced"
+        assert result["replace_all"] is False
+
+    def test_replace_all_is_passed_through(self, asm_mgr):
+        am, _doc, occ = asm_mgr
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            am.replace_component(0, "C:/parts/new.par", replace_all=True)
+
+        occ.Replace.assert_called_once_with("C:/parts/new.par", True)
+
+    def test_no_fallback_to_the_read_only_property(self, asm_mgr):
+        """A failing Replace must surface, not be retried on a read-only member."""
+        am, _doc, occ = asm_mgr
+        occ.Replace.side_effect = Exception("E_FAIL")
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.replace_component(0, "C:/parts/new.par")
+
+        assert "error" in result
+        assert "E_FAIL" in result["error"]
+
     def test_not_assembly(self, asm_mgr):
         am, doc, occ = asm_mgr
         doc.Type = IG_PART_DOCUMENT

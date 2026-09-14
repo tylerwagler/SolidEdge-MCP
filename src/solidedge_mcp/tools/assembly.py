@@ -127,6 +127,7 @@ def manage_component(
     ],
     component_index: int = 0,
     new_file_path: str = "",
+    replace_all: bool = False,
     suppress: bool = True,
     target_index: int = 0,
     new_member_name: str = "",
@@ -138,7 +139,8 @@ def manage_component(
 ) -> dict[str, Any]:
     """Modify one assembly component (0-based component_index).
 
-    delete removes it. replace: new_file_path. suppress: suppress flag
+    delete removes it. replace: new_file_path, plus replace_all to swap every
+    occurrence of that file rather than this one. suppress: suppress flag
     (suppress=False is unsupported - COM offers no way back to the
     SuppressComponent object; unsuppress in the Solid Edge UI).
     reorder: target_index. swap_family: new_member_name. ground: ground flag.
@@ -157,7 +159,9 @@ def manage_component(
             return assembly_manager.delete_component(component_index=component_index)
         case "replace":
             return assembly_manager.replace_component(
-                component_index=component_index, new_file_path=new_file_path
+                component_index=component_index,
+                new_file_path=new_file_path,
+                replace_all=replace_all,
             )
         case "suppress":
             return assembly_manager.suppress_component(

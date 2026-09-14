@@ -235,15 +235,23 @@ class PropertiesMixin:
         except Exception as e:
             return error_result(e)
 
-    def replace_component(self, component_index: int, new_file_path: str) -> dict[str, Any]:
-        """
-        Replace a component in the assembly with a different part/assembly file.
+    def replace_component(
+        self, component_index: int, new_file_path: str, replace_all: bool = False
+    ) -> dict[str, Any]:
+        """Replace one component with a different part or assembly file.
 
-        Preserves position and attempts to maintain assembly relations.
+        ``Occurrence.Replace(NewOccurrenceFileName, ReplaceAll,
+        [NewFamilyMemberName])`` takes two required arguments. This passed one,
+        so the call raised; the fallback then assigned to
+        ``Occurrence.OccurrenceFileName``, which the type library marks
+        read-only, so that raised too and the caller got an error naming the
+        wrong thing. Neither path could ever have replaced anything.
 
         Args:
-            component_index: 0-based index of the component to replace
-            new_file_path: Path to the replacement file (.par or .asm)
+            component_index: 0-based index of the component to replace.
+            new_file_path: Path to the replacement file (.par or .asm).
+            replace_all: Replace every occurrence of the same file, not just
+                this one.
 
         Returns:
             Dict with replacement status
@@ -272,17 +280,14 @@ class PropertiesMixin:
             occurrence = occurrences.Item(component_index + 1)
             old_name = occurrence.Name
 
-            try:
-                occurrence.Replace(new_file_path)
-            except Exception:
-                # Try alternative method
-                occurrence.OccurrenceFileName = new_file_path
+            occurrence.Replace(new_file_path, replace_all)
 
             return {
                 "status": "replaced",
                 "component_index": component_index,
                 "old_name": old_name,
                 "new_file": new_file_path,
+                "replace_all": replace_all,
             }
         except Exception as e:
             return error_result(e)
