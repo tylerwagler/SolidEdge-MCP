@@ -435,73 +435,35 @@ class RoundsChamfersMixin:
             return error_result(e)
 
     def create_blend(self, radius: float, face_index: int | None = None) -> dict[str, Any]:
-        """
-        Create a blend (face-to-face fillet) feature.
+        """Report that an edge-driven blend has no COM route.
 
-        Uses model.Blends.Add(NumberOfEdgeSets, EdgeSetArray, RadiusArray).
-        Same VARIANT wrapper pattern as Rounds. Unlike Rounds which fillets edges,
-        Blends create smooth transitions between faces.
+        ``Blends.Add(NumberOfSelectSets, SelectSetArray, RadiusArray, ...)``
+        takes select sets, not edges. This passed a flat list of Edge objects
+        and failed with a bare E_FAIL for every face of a box and for the
+        whole body, with the count both as 1 and as the real length. Verified
+        on Solid Edge 2026.
+
+        ``Rounds.Add`` does take an EdgeSetArray and is what create_round
+        uses, so the same result is one call away.
 
         Args:
-            radius: Blend radius in meters
-            face_index: 0-based face index to apply to (None = all edges)
+            radius: Blend radius in meters.
+            face_index: 0-based face whose edges were to be blended.
 
         Returns:
-            Dict with status and blend info
+            Dict with an ``unsupported`` error naming what to use instead.
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "No features exist to add blends to"}
-
-            model = models.Item(1)
-            body = model.Body
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if faces.Count == 0:
-                return {"error": "No faces found on body"}
-
-            # Collect edges
-            edge_list = []
-            if face_index is not None:
-                if face_index < 0 or face_index >= faces.Count:
-                    return {
-                        "error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."
-                    }
-                face = faces.Item(face_index + 1)
-                face_edges = face.Edges
-                if hasattr(face_edges, "Count"):
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-            else:
-                for fi in range(1, faces.Count + 1):
-                    face = faces.Item(fi)
-                    face_edges = face.Edges
-                    if not hasattr(face_edges, "Count"):
-                        continue
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-
-            if not edge_list:
-                return {"error": "No edges found on body"}
-
-            # VARIANT wrappers (same pattern as Rounds)
-            edge_arr = edge_list
-            radius_arr = [radius]
-
-            blends = model.Blends
-            blends.Add(1, edge_arr, radius_arr)
-
-            return {
-                "status": "created",
-                "type": "blend",
-                "radius": radius,
-                "edge_count": len(edge_list),
-            }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "Blends.Add takes a SelectSetArray, which this server cannot "
+                "build, so an edge-driven blend is not reachable. Use "
+                "create_round(radius=...), which takes the same edges through "
+                "Rounds.Add and produces the same geometry."
+            ),
+            "unsupported": True,
+            "radius": radius,
+            "face_index": face_index,
+        }
 
     def create_blend_variable(
         self, radius1: float, radius2: float, face_index: int | None = None
@@ -601,6 +563,8 @@ class RoundsChamfersMixin:
             face2 = faces.Item(face_index2 + 1)
 
             blends = model.Blends
+            # The five trailing parameters are [in,optional], but Solid Edge
+            # answers a short call with E_POINTER, so they are supplied.
             blends.AddSurfaceBlend(
                 face1,
                 left_face_side,
@@ -609,6 +573,11 @@ class RoundsChamfersMixin:
                 radius,
                 trim_input,
                 trim_output,
+                None,  # RollOnSet
+                None,  # TangentHoldLine
+                False,  # UseFullRadius
+                0,  # BlendShapeType
+                0.0,  # BlendShapeValue
             )
 
             return {
@@ -619,7 +588,15 @@ class RoundsChamfersMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return error_result(e)
+            return error_result(
+                e,
+                context=(
+                    "Solid Edge would not blend these two faces. A surface blend "
+                    "runs between two wall faces with a gap between them, so two "
+                    "faces that already meet at an edge have nowhere for it to go; "
+                    "round that edge with create_round instead"
+                ),
+            )
 
     def create_round_blend(
         self, face_index1: int, face_index2: int, radius: float

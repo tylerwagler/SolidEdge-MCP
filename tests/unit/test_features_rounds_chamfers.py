@@ -328,33 +328,28 @@ class TestVariableRound:
 
 
 class TestBlend:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_blend(0.003)
-        assert result["status"] == "created"
-        assert result["type"] == "blend"
-        assert result["radius"] == 0.003
-        assert result["edge_count"] == 2
-        model.Blends.Add.assert_called_once()
+    """Blends.Add takes select sets, not edges.
 
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_blend(0.003)
-        assert "error" in result
-        assert "No features" in result["error"]
+    Verified on Solid Edge 2026: passing a flat list of Edge objects fails
+    with a bare E_FAIL for every face of a box and for the whole body, with
+    the count both as 1 and as the real length. Rounds.Add does take an
+    EdgeSetArray, so create_round reaches the same geometry.
+    """
 
-    def test_on_specific_face(self, feature_mgr, managers):
+    def test_it_reports_unsupported_without_touching_com(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        result = feature_mgr.create_blend(0.002, face_index=0)
-        assert result["status"] == "created"
-        assert result["edge_count"] == 2
 
-    def test_invalid_face_index(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_blend(0.002, face_index=99)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
+        result = feature_mgr.create_blend(0.002)
+
+        assert result["unsupported"] is True
+        assert "create_round" in result["error"]
+        model.Blends.Add.assert_not_called()
+
+    def test_a_named_face_is_reported_back(self, feature_mgr, managers):
+        result = feature_mgr.create_blend(0.002, face_index=3)
+
+        assert result["face_index"] == 3
+        assert result["radius"] == 0.002
 
 
 # ============================================================================
@@ -491,8 +486,14 @@ class TestCreateBlendSurface:
         assert result["type"] == "blend_surface"
         assert result["radius"] == 0.002
         # AddSurfaceBlend(LeftWallFace, LeftFaceSide, RightWallFace,
-        # RightFaceSide, Radius, TrimInput, TrimOutput); igRight = 2
-        model.Blends.AddSurfaceBlend.assert_called_once_with(face, 2, face, 2, 0.002, True, True)
+        # RightFaceSide, Radius, TrimInput, TrimOutput, [RollOnSet],
+        # [TangentHoldLine], [UseFullRadius], [BlendShapeType],
+        # [BlendShapeValue]); igRight = 2. The five trailing parameters are
+        # optional by the type library but Solid Edge answers a short call
+        # with E_POINTER, so they are supplied.
+        model.Blends.AddSurfaceBlend.assert_called_once_with(
+            face, 2, face, 2, 0.002, True, True, None, None, False, 0, 0.0
+        )
 
     def test_radius_required(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
