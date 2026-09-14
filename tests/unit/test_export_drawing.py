@@ -6,7 +6,8 @@ sheet collections, and drawing view counts/scales.
 Uses unittest.mock to simulate COM objects.
 """
 
-from unittest.mock import MagicMock
+import contextlib
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -703,3 +704,105 @@ class TestGetDrawingViewScale:
 
         result = em.get_drawing_view_scale(0)
         assert "error" in result
+
+
+# ============================================================================
+# CREATE DRAWING
+# ============================================================================
+
+
+class TestCreateDrawing:
+    """The orientation constant this passes decides what the view looks like.
+
+    It used to carry its own DrawingViewOrientationConstants, with Front=5 and
+    Top=6. DrawingViews.AddPartView declares ViewOrientationConstants, where 5
+    is igBottomView and 6 is igBackView, so every "Front" view this server
+    made was a bottom view and every "Top" a back view. Nothing caught it:
+    there was no test for this method at all, and the constants test carried an
+    exclusion calling the values "empirically verified".
+    """
+
+    @contextlib.contextmanager
+    def _draft(self, source="C:/parts/bracket.par"):
+        """An ExportManager whose draft document is entirely mocked.
+
+        create_drawing forces late binding with
+        ``dyn.Dispatch(sheet.DrawingViews._oleobj_)`` and does not guard it,
+        because on a real proxy _oleobj_ is always there. Patching Dispatch is
+        how a mock gets through that without reshaping the code to suit a test.
+        """
+        import win32com.client.dynamic as dyn
+
+        doc = MagicMock()
+        doc.Type = IG_PART_DOCUMENT
+        doc.FullName = source
+        app = MagicMock()
+        doc_mgr = MagicMock()
+        doc_mgr.get_active_document.return_value = doc
+        doc_mgr.connection.get_application.return_value = app
+
+        draft_doc = MagicMock()
+        draft_doc.Name = "Draft1"
+        app.Documents.Add.return_value = draft_doc
+        model_link = MagicMock()
+        draft_doc.ModelLinks.Add.return_value = model_link
+
+        dvs = MagicMock()
+
+        from solidedge_mcp.backends.export import ExportManager
+
+        with patch.object(dyn, "Dispatch", return_value=dvs):
+            yield ExportManager(doc_mgr), dvs, model_link
+
+    def test_orientations_match_the_type_library(self):
+        with self._draft() as (em, dvs, _link):
+            result = em.create_drawing(views=["Front", "Top", "Right", "Isometric"])
+
+            assert result["views_added"] == ["Front", "Top", "Right", "Isometric"]
+            passed = [call.args[1] for call in dvs.AddPartView.call_args_list]
+            # constant.tlb > ViewOrientationConstants: igFrontView, igTopView,
+            # igRightView, igTopFrontRightView.
+            assert passed == [4, 1, 2, 9]
+
+    def test_the_model_link_and_view_type_are_passed(self):
+        with self._draft() as (em, dvs, model_link):
+            em.create_drawing(views=["Front"])
+
+            dvs.AddPartView.assert_called_once_with(model_link, 4, 1.0, 0.10, 0.15, 0)
+
+    def test_an_unknown_orientation_is_skipped(self):
+        with self._draft() as (em, dvs, _link):
+            result = em.create_drawing(views=["Front", "Sideways"])
+
+            assert result["views_added"] == ["Front"]
+            assert dvs.AddPartView.call_count == 1
+
+    def test_a_dropped_view_says_why(self):
+        """A failed view used to leave nothing behind but its absence."""
+        with self._draft() as (em, dvs, _link):
+            dvs.AddPartView.side_effect = Exception("no part view here")
+            dvs.Add.side_effect = Exception("nor a generic one")
+
+            result = em.create_drawing(views=["Front"])
+
+            assert result["views_added"] == []
+            assert "Front" in result["views_failed"]
+            assert "no part view here" in result["views_failed"]["Front"]
+            assert "nor a generic one" in result["views_failed"]["Front"]
+
+    def test_the_generic_add_is_the_fallback(self):
+        with self._draft() as (em, dvs, model_link):
+            dvs.AddPartView.side_effect = Exception("not a part")
+
+            result = em.create_drawing(views=["Front"])
+
+            dvs.Add.assert_called_once_with(model_link, 4, 1.0, 0.10, 0.15)
+            assert result["views_added"] == ["Front"]
+            assert "views_failed" not in result
+
+    def test_an_unsaved_document_is_refused(self):
+        with self._draft(source="") as (em, _dvs, _link):
+            result = em.create_drawing()
+
+            assert "error" in result
+            assert "must be saved" in result["error"]

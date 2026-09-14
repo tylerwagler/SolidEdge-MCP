@@ -4,7 +4,7 @@ import contextlib
 import os
 from typing import Any
 
-from solidedge_mcp.backends.errors import error_result
+from solidedge_mcp.backends.errors import describe_exception, error_result
 
 from ..constants import PartDrawingViewTypeConstants, ViewOrientationConstants
 from ..logging import get_logger
@@ -96,6 +96,7 @@ class DrawingMixin:
             ]
 
             views_added = []
+            views_failed: dict[str, str] = {}
             for i, view_name in enumerate(views[:4]):
                 orient = view_orient_map.get(view_name)
                 if orient is None:
@@ -106,15 +107,21 @@ class DrawingMixin:
                 try:
                     dvs.AddPartView(model_link, orient, 1.0, x, y, 0)
                     views_added.append(view_name)
-                except Exception:
-                    # Try the generic Add method as fallback
+                except Exception as part_view_error:
+                    # DrawingViews.Add is the generic form of the same call.
                     try:
                         dvs.Add(model_link, orient, 1.0, x, y)
                         views_added.append(view_name)
-                    except Exception:
-                        pass
+                    except Exception as add_error:
+                        # A dropped view used to leave nothing behind but its
+                        # absence from views_added, so a caller could see that
+                        # a view was missing and never why.
+                        views_failed[view_name] = (
+                            f"AddPartView: {describe_exception(part_view_error)}; "
+                            f"Add: {describe_exception(add_error)}"
+                        )
 
-            return {
+            result: dict[str, Any] = {
                 "status": "created",
                 "type": "drawing",
                 "draft_name": com_get(draft_doc, "Name", "Draft"),
@@ -123,6 +130,9 @@ class DrawingMixin:
                 "views_added": views_added,
                 "total_views": len(views_added),
             }
+            if views_failed:
+                result["views_failed"] = views_failed
+            return result
         except Exception as e:
             return error_result(e)
 
