@@ -5,8 +5,8 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import FaceQueryConstants
 from ..logging import get_logger
+from ._base import all_faces, body_of
 
 _logger = get_logger(__name__)
 
@@ -104,8 +104,8 @@ class SelectionMixin:
                 if models.Count == 0:
                     return {"error": "No model features exist"}
                 model = models.Item(1)
-                body = model.Body
-                faces = body.Faces(FaceQueryConstants.igQueryAll)
+                body = body_of(model)
+                faces = all_faces(body)
                 if index < 0 or index >= faces.Count:
                     return {"error": f"Invalid face index: {index}. Count: {faces.Count}"}
                 obj = faces.Item(index + 1)

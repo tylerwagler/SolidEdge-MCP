@@ -8,7 +8,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
 from ..logging import get_logger
-from ._base import QueryManagerBase, r8_array
+from ._base import QueryManagerBase, all_faces, body_of, r8_array
 
 _logger = get_logger(__name__)
 
@@ -130,7 +130,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         try:
             doc, model = self._get_first_model()
 
-            body = model.Body
+            body = body_of(model)
             range_data = body.GetRange(r8_array(3), r8_array(3))
 
             min_pt = range_data[0]
@@ -159,14 +159,13 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
             # Body has no SurfaceArea property, so that attempt always
             # raised and the sum below was the only path that ever ran.
             # Face.Area is real, and summing it gives the true area.
-            from ..constants import FaceQueryConstants
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body)
             total_area = 0.0
             for i in range(1, faces.Count + 1):
                 try:
@@ -198,7 +197,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
             volume = body.Volume
 
             return {
@@ -220,11 +219,9 @@ class PhysicalPropsMixin(QueryManagerBase):
             Dict with face area in square meters
         """
         try:
-            from ..constants import FaceQueryConstants
-
             doc, model = self._get_first_model()
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            body = body_of(model)
+            faces = all_faces(body)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
@@ -464,7 +461,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
             red = max(0, min(255, red))
             green = max(0, min(255, green))
@@ -513,7 +510,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             _doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
             style = com_get(body, "Style")
             if style is None:
@@ -552,7 +549,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
             opacity = max(0.0, min(1.0, opacity))
             body.FaceStyle.Opacity = opacity
@@ -575,7 +572,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
             reflectivity = max(0.0, min(1.0, reflectivity))
             body.FaceStyle.Reflectivity = reflectivity

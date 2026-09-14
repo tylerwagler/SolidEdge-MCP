@@ -8,6 +8,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+IG_SHEET_METAL_DOCUMENT = DocumentTypeConstants.igSheetMetalDocument
+
 
 @pytest.fixture
 def managers():
@@ -154,8 +159,16 @@ class TestRevolvedCutout:
 
 
 class TestNormalCutout:
+    """A finite normal cutout is a sheet metal feature.
+
+    Verified on Solid Edge 2026: it cuts on a sheet metal document and
+    removes nothing from an ordinary part, while the through_all and
+    through_next variants work on both.
+    """
+
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, profile = managers
+        _, sketch_mgr, doc, _, model, profile = managers
+        doc.Type = IG_SHEET_METAL_DOCUMENT
         result = feature_mgr.create_normal_cutout(0.005)
         assert result["status"] == "created"
         assert result["type"] == "normal_cutout"
@@ -185,8 +198,19 @@ class TestNormalCutout:
         assert "error" in result
         assert "No base feature" in result["error"]
 
+    def test_refuses_an_ordinary_part(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        doc.Type = IG_PART_DOCUMENT
+
+        result = feature_mgr.create_normal_cutout(0.005)
+
+        assert "error" in result
+        assert "sheet metal feature" in result["error"]
+        model.NormalCutouts.AddFiniteMulti.assert_not_called()
+
     def test_reverse_direction(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
+        _, _, doc, _, model, profile = managers
+        doc.Type = IG_SHEET_METAL_DOCUMENT
         result = feature_mgr.create_normal_cutout(0.01, direction="Reverse")
         assert result["direction"] == "Reverse"
         model.NormalCutouts.AddFiniteMulti.assert_called_once_with(

@@ -7,7 +7,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..constants import DirectionConstants, OffsetSideConstants
 from ..logging import get_logger
-from ._base import dispatch_array
+from ._base import all_faces, body_of, dispatch_array
 
 _logger = get_logger(__name__)
 
@@ -402,12 +402,10 @@ class FeatureQueryMixin:
             Dict with vertex count
         """
         try:
-            from ..constants import FaceQueryConstants
-
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body)
             total_vertices = 0
 
             for fi in range(1, faces.Count + 1):

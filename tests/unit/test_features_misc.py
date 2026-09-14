@@ -144,10 +144,49 @@ class TestListFeatures:
         assert [f["index"] for f in result["features"]] == [0, 1]
 
     def test_no_features_collection_is_not_an_error(self, feature_mgr, managers):
-        _, _, _, models, model, _ = managers
+        _, _, doc, _models, model, _ = managers
         del model.Features
+        doc.DesignEdgebarFeatures.Count = 0
+
         result = feature_mgr.list_features()
+
         assert result == {"features": [], "count": 0}
+
+    def test_falls_back_to_the_edgebar_when_the_ordered_tree_is_empty(self, feature_mgr, managers):
+        """A part switched from ordered to synchronous empties Models.Features.
+
+        Verified on Solid Edge 2026: the Pathfinder still shows the features
+        and DesignEdgebarFeatures still lists them, so reporting none was
+        wrong. Reference planes share that collection and must stay out.
+        """
+        _, _, doc, _models, model, _ = managers
+        model.Features.Count = 0
+
+        planes = MagicMock()
+        planes.Count = 3
+        plane_names = ["RefPlane_1", "RefPlane_2", "RefPlane_3"]
+        planes.Item.side_effect = lambda i: MagicMock(Name=plane_names[i - 1])
+        doc.RefPlanes = planes
+
+        entries = [
+            MagicMock(Name="RefPlane_1"),
+            MagicMock(Name="RefPlane_2"),
+            MagicMock(Name="RefPlane_3"),
+            MagicMock(Name="ExtrudedProtrusion_1"),
+        ]
+        edgebar = MagicMock()
+        edgebar.Count = len(entries)
+        edgebar.Item.side_effect = lambda i: entries[i - 1]
+        doc.DesignEdgebarFeatures = edgebar
+
+        result = feature_mgr.list_features()
+
+        assert [f["name"] for f in result["features"]] == ["ExtrudedProtrusion_1"]
+        assert result["features"][0]["source"] == "edgebar"
+        # It must resolve to the edgebar entry, not to a reference plane.
+        found, err = feature_mgr._get_feature_by_index(0)
+        assert err is None
+        assert found is entries[3]
 
 
 class TestGetFeatureInfo:

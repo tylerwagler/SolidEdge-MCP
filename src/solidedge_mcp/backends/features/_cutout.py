@@ -7,9 +7,11 @@ from win32com.client import VARIANT
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import (
     AxisEndConstants,
     DirectionConstants,
+    DocumentTypeConstants,
     ExtentTypeConstants,
     KeyPointExtentConstants,
     LoftSweepConstants,
@@ -263,6 +265,25 @@ class CutoutMixin:
                 "Reverse": DirectionConstants.igLeft,
             }
             dir_const = direction_map.get(direction, DirectionConstants.igRight)
+
+            # The Method argument is igSMFaceCutout, a sheet metal face cutout.
+            # On an ordinary part the call succeeds and removes nothing, which
+            # @verifies_geometry then reports as an empty feature. Say why
+            # first. Verified on Solid Edge 2026: finite works on a sheet metal
+            # document and cuts nothing on a part, while the through_all and
+            # through_next variants work on both.
+            doc_type = com_get(doc, "Type")
+            if doc_type is not None and doc_type != DocumentTypeConstants.igSheetMetalDocument:
+                return {
+                    "error": (
+                        "A normal cutout to a finite depth is a sheet metal feature "
+                        "and removes no material from an ordinary part. Use "
+                        "create_extrude(operation='Cut'), or "
+                        "create_normal_cutout(method='through_all'), which does work "
+                        "on a part."
+                    ),
+                    "document_type": doc_type,
+                }
 
             cutouts = model.NormalCutouts
             # AddFiniteMulti(NumProfiles, ProfileArray, ProfilePlaneSide, Depth, Method)

@@ -5,10 +5,11 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import FaceQueryConstants
 from ..logging import get_logger
 from ._base import (
     DEFAULT_PAGE_LIMIT,
+    all_faces,
+    body_of,
     bool_array,
     i4_array,
     page_bounds,
@@ -59,9 +60,9 @@ class BRepMixin:
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body)
             total = faces.Count
             start, stop, limit = page_bounds(total, offset, limit)
 
@@ -153,9 +154,9 @@ class BRepMixin:
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
 
@@ -191,8 +192,8 @@ class BRepMixin:
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            body = body_of(model)
+            faces = all_faces(body)
             return {"face_count": faces.Count}
         except Exception as e:
             return error_result(e)
@@ -450,8 +451,8 @@ class BRepMixin:
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            body = body_of(model)
+            faces = all_faces(body)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
@@ -496,9 +497,9 @@ class BRepMixin:
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body)
             total = faces.Count
             start, stop, limit = page_bounds(total, offset, limit)
 
@@ -536,9 +537,9 @@ class BRepMixin:
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body)
             total_edges = 0
 
             for fi in range(1, faces.Count + 1):
@@ -571,8 +572,8 @@ class BRepMixin:
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            body = body_of(model)
+            faces = all_faces(body)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
@@ -892,7 +893,7 @@ class BRepMixin:
                 return {"error": "No geometry in document"}
 
             model = models.Item(1)
-            body = model.Body
+            body = body_of(model)
 
             # geometry.tlb Body.GetFacetData(
             #   Tolerance VT_R8 [in], FacetCount VT_I4* [out],
@@ -946,7 +947,7 @@ class BRepMixin:
             for i in range(1, models.Count + 1):
                 model = models.Item(i)
                 try:
-                    body = model.Body
+                    body = body_of(model)
                     body_info = {
                         "index": i - 1,
                         "type": "design",

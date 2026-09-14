@@ -113,11 +113,13 @@ class TestNormalCutout:
 
         result = feature_mgr.create_normal_cutout(0.02)
 
-        # A normal cutout is a sheet metal feature. On an ordinary part the COM
-        # call is accepted but removes no material, so the geometry check must
-        # report that rather than claiming success. Verified against SE 2026.
-        assert "error" in result, f"expected no geometry on a part, got {result}"
-        assert "no geometry" in result["error"].lower()
+        # A normal cutout to a finite depth is a sheet metal feature. On an
+        # ordinary part the COM call is accepted and removes no material, so
+        # the document type is checked before COM is touched at all. Verified
+        # against SE 2026, where the same call cuts on a sheet metal document
+        # and the through_all variant cuts on a part.
+        assert "error" in result, f"expected a refusal on a part, got {result}"
+        assert "sheet metal feature" in result["error"].lower()
 
 
 class TestLoftedCutout:

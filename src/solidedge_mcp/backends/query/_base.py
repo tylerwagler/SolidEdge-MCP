@@ -4,6 +4,7 @@ Base class for QueryManager providing constructor and shared helpers.
 
 from typing import Any
 
+from ..comutil import com_get
 from ..constants import FaceQueryConstants
 from ..logging import get_logger
 
@@ -75,6 +76,51 @@ def page_result(
     return result
 
 
+#: Why a body stops answering, in the one state where it does.
+_UNREACHABLE = (
+    "The part's body could not be read. A part built in ordered mode and then "
+    "switched to synchronous keeps its geometry on screen but puts it out of "
+    "reach of these queries; switch it back with "
+    "manage_feature_tree(action='set_mode', mode='ordered')."
+)
+
+
+def body_of(model: Any) -> Any:
+    """A model's solid body, with a readable error when it cannot be reached.
+
+    Reading Body raises a bare E_FAIL on a part that was built in ordered mode
+    and then switched to synchronous. Verified on Solid Edge 2026.
+    """
+    try:
+        body = model.Body
+    except Exception as exc:
+        raise BodyNotReachableError(_UNREACHABLE) from exc
+    if body is None:
+        raise BodyNotReachableError(_UNREACHABLE)
+    return body
+
+
+def all_faces(body: Any) -> Any:
+    """Every face of a body, with a readable error when it cannot be reached.
+
+    A part built in ordered mode and then switched to synchronous keeps its
+    geometry on screen but makes Body.Faces raise a bare E_FAIL, which told a
+    caller nothing about why a measurement suddenly stopped working. Verified
+    on Solid Edge 2026, where Models.Item(n).Features goes empty in the same
+    state.
+    """
+    try:
+        faces = body.Faces(FaceQueryConstants.igQueryAll)
+        int(faces.Count)  # the call above is lazy; this is what really asks
+    except Exception as exc:
+        raise BodyNotReachableError(_UNREACHABLE) from exc
+    return faces
+
+
+class BodyNotReachableError(Exception):
+    """The body exists but the current modelling mode hides it."""
+
+
 class QueryManagerBase:
     """Base providing __init__ and helpers shared across query mixins."""
 
@@ -84,13 +130,28 @@ class QueryManagerBase:
         self.doc_manager = document_manager
 
     def _get_first_model(self) -> tuple[Any, Any]:
-        """Get the first model from the active document."""
+        """The active document and its first model.
+
+        A part with no model at all and one whose model cannot be reached read
+        the same to a caller, so they are told apart here. The second happens
+        when a part built in ordered mode is switched to synchronous: the
+        geometry stays on screen and Models goes quiet.
+        """
         doc = self.doc_manager.get_active_document()
-        if not hasattr(doc, "Models"):
-            raise Exception("Document does not have a Models collection")
-        models = doc.Models
-        if models.Count == 0:
-            raise Exception("No features in document")
+        models = com_get(doc, "Models")
+        if models is None:
+            raise BodyNotReachableError(
+                "This document has no Models collection, so it holds no solid geometry to measure."
+            )
+        count = com_get(models, "Count", 0)
+        if not count:
+            raise BodyNotReachableError(
+                "This document reports no model. Create a base feature first. "
+                "If the part does have geometry, it was probably built in "
+                "ordered mode and then switched to synchronous, which puts the "
+                "model out of reach; switch it back with "
+                "manage_feature_tree(action='set_mode', mode='ordered')."
+            )
         return doc, models.Item(1)
 
     def _find_feature(self, feature_name: str) -> tuple[Any, Any]:
@@ -111,7 +172,7 @@ class QueryManagerBase:
     def _get_face(self, face_index: int) -> tuple[Any, Any, Any, Any]:
         """Get a specific face by 0-based index. Returns (doc, model, body, face)."""
         doc, model, body = self._get_body()
-        faces = body.Faces(FaceQueryConstants.igQueryAll)
+        faces = all_faces(body)
         if face_index < 0 or face_index >= faces.Count:
             raise IndexError(f"Invalid face index: {face_index}. Body has {faces.Count} faces.")
         face = faces.Item(face_index + 1)

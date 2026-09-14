@@ -96,6 +96,22 @@ def verify_geometry_on_creators(cls: type) -> type:
     return cls
 
 
+def _reference_plane_names(doc: Any) -> set[str]:
+    """Names of the document's reference planes, to keep them out of the list.
+
+    They share the edgebar with real features, and an unnamed plane reports an
+    empty string, so blanks are dropped too.
+    """
+    planes = com_get(doc, "RefPlanes")
+    count = int(com_get(planes, "Count", 0) or 0)
+    names = {""}
+    for i in range(1, count + 1):
+        name = com_get(planes.Item(i), "Name")
+        if name:
+            names.add(str(name))
+    return names
+
+
 class FeatureManagerBase:
     """Base providing __init__ and helpers shared across feature mixins."""
 
@@ -309,16 +325,19 @@ class FeatureManagerBase:
         return None
 
     def _enumerate_features(self, doc: Any) -> list[dict[str, Any]]:
-        """Flatten Models.Item(n).Features across every body, in tree order.
+        """The part's features, in tree order, however the document holds them.
 
-        This is the one enumeration feature indices refer to. It holds real
-        features only: reference planes and sketches live in
-        ``doc.DesignEdgebarFeatures`` and are not counted here, which is why
-        indexing that collection instead shifted every lookup.
+        This is the one enumeration feature indices refer to.
+        ``Models.Item(n).Features`` is the normal source and holds real
+        features only, which is why indexing ``DesignEdgebarFeatures`` instead
+        shifted every lookup past the reference planes.
 
-        An earlier version walked ``doc.Models`` itself, which is the list of
-        bodies rather than features, so a part always reported exactly one
-        entry called "Design Model" no matter how many features it had.
+        A part built in ordered mode and then switched to synchronous is the
+        exception: its features stay in the Pathfinder but leave
+        ``Models.Item(n).Features`` empty. Verified on Solid Edge 2026, where
+        ``Body.Faces`` raises E_FAIL in the same state. Falling back to the
+        edgebar keeps the feature list honest there, and each entry says which
+        collection it came from so the index lookup follows.
         """
         features: list[dict[str, Any]] = []
         models = com_get(doc, "Models")
@@ -334,12 +353,41 @@ class FeatureManagerBase:
                 features.append(
                     {
                         "index": len(features),
+                        "source": "model",
                         "body_index": m - 1,
                         "position_in_body": i,
                         "name": com_get(feature, "Name", f"Feature_{len(features) + 1}"),
                         "type": com_get(feature, "Type", "Unknown"),
                     }
                 )
+        if features:
+            return features
+        return self._enumerate_edgebar_features(doc)
+
+    def _enumerate_edgebar_features(self, doc: Any) -> list[dict[str, Any]]:
+        """Real features from the Pathfinder tree, planes and datums excluded."""
+        edgebar = com_get(doc, "DesignEdgebarFeatures")
+        count = int(com_get(edgebar, "Count", 0) or 0)
+        if not count:
+            return []
+
+        skip = _reference_plane_names(doc)
+        features: list[dict[str, Any]] = []
+        for i in range(1, count + 1):
+            entry = edgebar.Item(i)
+            name = com_get(entry, "Name")
+            if name is None or name in skip:
+                continue
+            features.append(
+                {
+                    "index": len(features),
+                    "source": "edgebar",
+                    "body_index": 0,
+                    "position_in_body": i,
+                    "name": name,
+                    "type": com_get(entry, "Type", "Unknown"),
+                }
+            )
         return features
 
     def _get_feature_by_index(self, index: int) -> tuple[Any | None, dict[str, Any] | None]:
@@ -347,9 +395,10 @@ class FeatureManagerBase:
 
         It has to walk the same collection list_features reports.
         ``doc.DesignEdgebarFeatures`` is the whole Pathfinder tree, reference
-        planes and sketches included, so indexing that shifted every lookup by
+        planes included, so indexing that directly shifted every lookup by
         however many planes came first and made delete_feature(0) remove a
-        reference plane.
+        reference plane. Each entry records its source so a part whose ordered
+        tree is out of reach still resolves.
         """
         doc = self.doc_manager.get_active_document()
         entries = self._enumerate_features(doc)
@@ -363,6 +412,8 @@ class FeatureManagerBase:
             }
 
         entry = entries[index]
+        if entry.get("source") == "edgebar":
+            return doc.DesignEdgebarFeatures.Item(entry["position_in_body"]), None
         model = doc.Models.Item(entry["body_index"] + 1)
         return model.Features.Item(entry["position_in_body"]), None
 
