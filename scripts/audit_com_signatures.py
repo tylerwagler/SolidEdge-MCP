@@ -18,11 +18,17 @@ supply, pass the later ones by keyword, using the names this script prints under
 ``--filter`` — pywin32 gives every parameter a positional slot, ``[out]`` ones
 included, so filling only the ``[in]`` slots positionally misaligns the call.
 
-Precision comes from resolving the receiver. ``model.ExtrudedCutouts`` names an
-interface directly, and the common ``cutouts = model.ExtrudedCutouts`` pattern
-is tracked per function so ``cutouts.AddFiniteMulti(...)`` resolves too. Only
-when the receiver cannot be resolved does the check fall back to accepting any
-interface that defines a method of that name.
+Precision comes from resolving the receiver, using the same type inference as
+``audit_com_receivers.py``: declared types are followed through a chain, so
+``doc.Occurrences.Item(1)`` resolves to Occurrence and the call is checked
+against that interface alone.
+
+That matters, because the fallback is weak on purpose. When the receiver cannot
+be resolved, a call is accepted if *any* interface defines a method of that name
+with a matching arity -- and that let ``occurrence.Replace(path)`` pass for as
+long as some other ``Replace`` somewhere took one argument, while
+``Occurrence.Replace`` requires two. Every receiver the inference can resolve is
+one fewer call relying on that coincidence.
 
 Needs ``reference/typelib_dump.json``; regenerate it with
 ``uv run python scripts/scrape_typelibs.py``.
@@ -37,16 +43,31 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import json
 import pathlib
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Callable
+from types import ModuleType
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DUMP = ROOT / "reference" / "typelib_dump.json"
 BACKENDS = ROOT / "src" / "solidedge_mcp" / "backends"
+RECEIVERS = ROOT / "scripts" / "audit_com_receivers.py"
 PASCAL = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+
+
+def load_receivers() -> ModuleType:
+    """The receiver audit, imported for its type inference."""
+    spec = importlib.util.spec_from_file_location("_audit_com_receivers", RECEIVERS)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
 
 Finding = tuple[str, str, str, int, set[tuple[int, int]], bool]
 
@@ -86,6 +107,8 @@ class CallVisitor(ast.NodeVisitor):
         self.known_ifaces = set(iface_methods)
         self.scopes: list[dict[str, str]] = [{}]
         self.findings: list[Finding] = []
+        #: Set to audit_com_receivers' inference when the dump is available.
+        self.infer: Callable[[ast.expr], frozenset[str]] | None = None
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
         self.scopes.append({})
@@ -120,40 +143,83 @@ class CallVisitor(ast.NodeVisitor):
                 self._check(node, func)
         self.generic_visit(node)
 
-    def _resolve_iface(self, receiver: ast.expr) -> str | None:
+    def _resolve_iface(self, receiver: ast.expr) -> list[str]:
+        """Every interface the receiver might be, best evidence first."""
+        # The full inference, when this visitor was given one.
+        if self.infer is not None:
+            inferred = [i for i in self.infer(receiver) if i in self.known_ifaces]
+            if inferred:
+                return sorted(inferred)
         if isinstance(receiver, ast.Attribute) and receiver.attr in self.known_ifaces:
-            return receiver.attr
+            return [receiver.attr]
         if isinstance(receiver, ast.Name):
-            return self._lookup(receiver.id)
-        return None
+            tracked = self._lookup(receiver.id)
+            if tracked:
+                return [tracked]
+        return []
 
     def _check(self, node: ast.Call, func: ast.Attribute) -> None:
         method = func.attr
         argc = len(node.args) + len(node.keywords)
-        iface = self._resolve_iface(func.value)
+        ifaces = [
+            i for i in self._resolve_iface(func.value) if method in self.iface_methods.get(i, {})
+        ]
         loc = f"{self.path.relative_to(ROOT).as_posix()}:{node.lineno}"
 
-        if iface and method in self.iface_methods.get(iface, {}):
-            low, high = self.iface_methods[iface][method]
-            if not (low <= argc <= high):
-                self.findings.append((loc, iface, method, argc, {(low, high)}, True))
+        if ifaces:
+            # A receiver may be one of several interfaces -- a document is any
+            # of five -- so the call is well-formed if it fits any of them.
+            windows = {self.iface_methods[i][method] for i in ifaces}
+            if not any(low <= argc <= high for low, high in windows):
+                self.findings.append((loc, ",".join(ifaces), method, argc, windows, True))
             return
 
         windows = self.any_windows.get(method)
         if not windows:
             return  # unknown member name; the member-name audit covers that
         if not any(low <= argc <= high for low, high in windows):
-            self.findings.append((loc, iface or "?", method, argc, windows, False))
+            self.findings.append((loc, "?", method, argc, windows, False))
+
+
+def build_inferring_visitor(receivers: ModuleType, typelib: object, iface_methods, any_windows):
+    """A receiver-audit visitor that also checks arity as it walks.
+
+    The inference needs live scopes -- it learns what ``occurrence`` is from
+    the assignment above the call -- so the arity check has to run inside the
+    same traversal rather than over a second pass.
+    """
+
+    class InferringCallVisitor(receivers.Visitor):  # type: ignore[misc, valid-type]
+        def __init__(self, path: pathlib.Path, tl: object) -> None:
+            super().__init__(path, tl)
+            self.checker = CallVisitor(path, iface_methods, any_windows)
+            self.checker.infer = self._infer
+
+        def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+            super().visit_Call(node)
+            func = node.func
+            if isinstance(func, ast.Attribute) and PASCAL.match(func.attr):
+                starred = any(isinstance(a, ast.Starred) for a in node.args) or any(
+                    k.arg is None for k in node.keywords
+                )
+                if not starred:
+                    self.checker._check(node, func)
+
+    return InferringCallVisitor
 
 
 def collect() -> tuple[list[Finding], list[Finding], dict]:
     iface_methods, any_windows, data = load_typelibs()
+    receivers = load_receivers()
+    typelib = receivers.TypeLib(data)
+    visitor_cls = build_inferring_visitor(receivers, typelib, iface_methods, any_windows)
+
     precise: list[Finding] = []
     loose: list[Finding] = []
     for path in sorted(BACKENDS.rglob("*.py")):
-        visitor = CallVisitor(path, iface_methods, any_windows)
+        visitor = visitor_cls(path, typelib)
         visitor.visit(ast.parse(path.read_text(encoding="utf-8")))
-        for finding in visitor.findings:
+        for finding in visitor.checker.findings:
             (precise if finding[5] else loose).append(finding)
     return precise, loose, data
 

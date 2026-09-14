@@ -106,7 +106,7 @@ Five checks enforce this, and all five skip when the dump is absent:
 | `scripts/audit_com_signatures.py` | A call with the wrong number of arguments. Run `--filter <path>` to see the full parameter list for each finding, `--by-file` for counts. |
 | `tests/unit/test_com_writes.py` (`scripts/audit_com_writes.py`) | An assignment to a member that is a method, or to a property the type library marks read-only. Solid Edge answers "Property 'Item.X' can not be set." and a surrounding try/except turns that into a reported success. |
 
-The signature audit resolves the receiver, so `cutouts = model.ExtrudedCutouts` followed by `cutouts.AddFiniteMulti(...)` is checked against `ExtrudedCutouts` specifically rather than against every interface with that method name.
+The signature audit resolves the receiver with the same inference the receiver audit uses, so `doc.Occurrences.Item(1)` is checked against `Occurrence` specifically rather than against every interface with that method name. That matters because its fallback is weak on purpose: an unresolved receiver only has to fit *some* interface with a method of that name, which is how `occurrence.Replace(path)` passed while `Occurrence.Replace` requires two arguments.
 
 The receiver audit goes further and infers what a receiver *is* by following declared types: `doc.Models.Item(1).Features` resolves PartDocument to Models to Model to Features. That is what catches the sharpest class of bug here, a real name on the wrong interface, such as `model.RevolvedSurfaces` when RevolvedSurfaces belongs to `Constructions`, or `line.StartPoint.X` when Line2d only has `GetStartPoint()`.
 

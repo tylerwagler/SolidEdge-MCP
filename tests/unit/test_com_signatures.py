@@ -89,3 +89,53 @@ def test_normal_cutout_passes_its_method_argument():
         REPO_ROOT / "src" / "solidedge_mcp" / "backends" / "features" / "_cutout.py"
     ).read_text(encoding="utf-8")
     assert "NormalCutoutMethodConstants.igSMFaceCutout" in source
+
+
+def test_the_receiver_is_resolved_by_type_inference(audit):
+    """A call on an inferred receiver is checked against that interface alone.
+
+    The fallback is deliberately weak: an unresolved receiver only has to fit
+    *some* interface with a method of that name. ``occurrence.Replace(path)``
+    passed for exactly that reason -- some other ``Replace`` takes one argument
+    -- while ``Occurrence.Replace`` requires two, so replace_component could
+    never have replaced anything.
+    """
+    import ast
+
+    iface_methods, any_windows, data = audit.load_typelibs()
+    receivers = audit.load_receivers()
+    typelib = receivers.TypeLib(data)
+    visitor_cls = audit.build_inferring_visitor(receivers, typelib, iface_methods, any_windows)
+
+    source = (
+        "def f(self):\n"
+        "    doc = self.doc_manager.get_active_document()\n"
+        "    occurrence = doc.Occurrences.Item(1)\n"
+        "    occurrence.Replace('x.par')\n"
+    )
+    visitor = visitor_cls(REPO_ROOT / "x.py", typelib)
+    visitor.visit(ast.parse(source))
+
+    findings = visitor.checker.findings
+    assert [(f[1], f[2], f[3]) for f in findings] == [("Occurrence", "Replace", 1)]
+    assert findings[0][5] is True, "should be a precise finding, not a loose one"
+
+
+def test_a_correct_call_on_an_inferred_receiver_passes(audit):
+    import ast
+
+    iface_methods, any_windows, data = audit.load_typelibs()
+    receivers = audit.load_receivers()
+    typelib = receivers.TypeLib(data)
+    visitor_cls = audit.build_inferring_visitor(receivers, typelib, iface_methods, any_windows)
+
+    source = (
+        "def f(self):\n"
+        "    doc = self.doc_manager.get_active_document()\n"
+        "    occurrence = doc.Occurrences.Item(1)\n"
+        "    occurrence.Replace('x.par', False)\n"
+    )
+    visitor = visitor_cls(REPO_ROOT / "x.py", typelib)
+    visitor.visit(ast.parse(source))
+
+    assert visitor.checker.findings == []
