@@ -4,6 +4,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import (
     FaceQueryConstants,
 )
@@ -54,7 +55,7 @@ class RoundsChamfersMixin:
             for fi in range(1, faces.Count + 1):
                 face = faces.Item(fi)
                 face_edges = face.Edges
-                if not hasattr(face_edges, "Count"):
+                if com_get(face_edges, "Count") is None:
                     continue
                 for ei in range(1, face_edges.Count + 1):
                     edge_list.append(face_edges.Item(ei))
@@ -109,7 +110,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []
@@ -199,7 +200,7 @@ class RoundsChamfersMixin:
             for fi in range(1, faces.Count + 1):
                 face = faces.Item(fi)
                 face_edges = face.Edges
-                if not hasattr(face_edges, "Count"):
+                if com_get(face_edges, "Count") is None:
                     continue
                 for ei in range(1, face_edges.Count + 1):
                     edge_list.append(face_edges.Item(ei))
@@ -250,7 +251,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []
@@ -303,7 +304,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []
@@ -358,7 +359,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             edges = face.Edges
-            if not hasattr(edges, "Count") or edges.Count == 0:
+            if com_get(edges, "Count", 0) == 0:
                 return {"error": f"No edges found on face {face_index}"}
 
             edge_list = []
@@ -412,7 +413,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []

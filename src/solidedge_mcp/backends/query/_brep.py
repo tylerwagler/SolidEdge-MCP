@@ -5,7 +5,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..comutil import OWNED_STYLE_PREFIX, face_style_named
+from ..comutil import OWNED_STYLE_PREFIX, com_get, face_style_named
 from ..logging import get_logger
 from ._base import (
     DEFAULT_PAGE_LIMIT,
@@ -171,12 +171,12 @@ class BRepMixin:
                 info["area"] = face.Area
             try:
                 edges = face.Edges
-                info["edge_count"] = edges.Count if hasattr(edges, "Count") else 0
+                info["edge_count"] = com_get(edges, "Count", 0)
             except Exception:
                 pass
             try:
                 vertices = face.Vertices
-                info["vertex_count"] = vertices.Count if hasattr(vertices, "Count") else 0
+                info["vertex_count"] = com_get(vertices, "Count", 0)
             except Exception:
                 pass
 
@@ -561,8 +561,7 @@ class BRepMixin:
                 try:
                     face = faces.Item(fi)
                     edges = face.Edges
-                    if hasattr(edges, "Count"):
-                        total_edges += edges.Count
+                    total_edges += com_get(edges, "Count", 0)
                 except Exception:
                     pass
 
@@ -966,7 +965,7 @@ class BRepMixin:
                     body_info = {
                         "index": i - 1,
                         "type": "design",
-                        "name": model.Name if hasattr(model, "Name") else f"Model_{i}",
+                        "name": com_get(model, "Name", f"Model_{i}"),
                     }
 
                     try:
@@ -998,7 +997,7 @@ class BRepMixin:
                         body_info = {
                             "index": len(bodies),
                             "type": "construction",
-                            "name": cm.Name if hasattr(cm, "Name") else f"Construction_{i}",
+                            "name": com_get(cm, "Name", f"Construction_{i}"),
                         }
                         with contextlib.suppress(Exception):
                             body_info["is_solid"] = body.IsSolid

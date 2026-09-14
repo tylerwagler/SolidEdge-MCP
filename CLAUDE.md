@@ -24,6 +24,7 @@ uv run python scripts/audit_com_signatures.py --by-file
 uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.py
 uv run python scripts/audit_com_receivers.py
 uv run python scripts/audit_com_writes.py
+uv run python scripts/audit_com_hasattr.py
 uv run python scripts/audit_dead_params.py  # parameters declared and never read
 uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid Edge)
 ```
@@ -77,7 +78,7 @@ Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{
 - **Plane indices are 1-based**: 1=Top/XY, 2=Right/YZ, 3=Front/XZ (`RefPlanes.Item(n)`). Face/edge/feature/component indices are 0-based in tools and converted at the COM boundary.
 - **Sketch then feature**: `create_sketch → draw_* → close_sketch → create_<feature>`. `close_sketch` calls `Profile.End(igProfileClosed)` and queues the profile in `sketch_manager.accumulated_profiles`; the feature consumes it.
 - **Threading**: all COM runs on `com_thread`. Tool functions are plain sync `def`. Backend code may call other backend code freely (nested calls run inline).
-- **Never `hasattr()` a COM proxy to test capability**; check `doc.Type` against `DocumentTypeConstants` or `try/except` the actual call.
+- **Never `hasattr()` a COM proxy to test capability.** Use `com_get(obj, "Member")` and test for `None`, or check `doc.Type` against `DocumentTypeConstants`. The probe is a separate `GetIDsOfNames` round trip that reads False both for a member that is absent and for one whose getter raised, so a real error becomes a silent "unsupported" -- that is how every layer call came to refuse drafts, whose layers live on `Sheet`. `tests/unit/test_com_hasattr.py` (`scripts/audit_com_hasattr.py`) pins this at zero and needs no type library.
 - **Never compare COM proxies with `==`**; compare `FullName`/`Name`.
 - **Collections are 1-based** in COM (`Item(1)`).
 - **SAFEARRAY marshalling is method-specific.** All of the following were verified against Solid Edge 2026, so change them only with new evidence:
@@ -110,7 +111,7 @@ The signature audit resolves the receiver with the same inference the receiver a
 
 The receiver audit goes further and infers what a receiver *is* by following declared types: `doc.Models.Item(1).Features` resolves PartDocument to Models to Model to Features. That is what catches the sharpest class of bug here, a real name on the wrong interface, such as `model.RevolvedSurfaces` when RevolvedSurfaces belongs to `Constructions`, or `line.StartPoint.X` when Line2d only has `GetStartPoint()`.
 
-Two more checks need no type library:
+Three more checks need no type library:
 
 `tests/unit/test_manager_mro.py` covers a different trap: the managers are built from a dozen mixins each, and two mixins defining the same method leaves one silently unreachable.
 

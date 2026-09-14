@@ -275,7 +275,7 @@ class SketchManager:
             return {
                 "status": "created",
                 "plane": plane,
-                "sketch_id": profile_set.Name if hasattr(profile_set, "Name") else "sketch",
+                "sketch_id": com_get(profile_set, "Name", "sketch"),
             }
         except Exception as e:
             _logger.error(f"Failed to create sketch on plane {plane}: {e}")
@@ -315,7 +315,7 @@ class SketchManager:
             return {
                 "status": "created",
                 "plane_index": plane_index,
-                "sketch_id": profile_set.Name if hasattr(profile_set, "Name") else "sketch",
+                "sketch_id": com_get(profile_set, "Name", "sketch"),
             }
         except Exception as e:
             return error_result(e)
@@ -1045,8 +1045,8 @@ class SketchManager:
                 self.accumulated_profiles.append(self.active_profile)
 
             sketch_id = "sketch"
-            if self.active_sketch is not None and hasattr(self.active_sketch, "Name"):
-                sketch_id = self.active_sketch.Name
+            if self.active_sketch is not None:
+                sketch_id = com_get(self.active_sketch, "Name", "sketch")
             result: dict[str, Any] = {
                 "status": "closed",
                 "validation_code": validation_code,

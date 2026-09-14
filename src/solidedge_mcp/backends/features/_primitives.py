@@ -4,6 +4,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import (
     DirectionConstants,
     ThicknessSideConstants,
@@ -345,12 +346,9 @@ class PrimitiveMixin:
             top_plane = self._get_ref_plane(doc, plane_index)
             depth = abs(z2 - z1) if abs(z2 - z1) > 0 else abs(y2 - y1)
 
-            # BoxFeatures is on the Models collection level
-            box_features = models.Item(1).BoxFeatures if hasattr(models, "BoxFeatures") else None
-            if box_features is None:
-                # Try via the model object
-                model = models.Item(1)
-                box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
+            # BoxFeatures belongs to Model, not to the Models collection, so
+            # the probe that used to come first here could never succeed.
+            box_features = com_get(models.Item(1), "BoxFeatures")
 
             if box_features is None:
                 return {"error": "BoxFeatures collection not accessible"}
@@ -423,10 +421,7 @@ class PrimitiveMixin:
 
             top_plane = self._get_ref_plane(doc, plane_index)
 
-            box_features = models.Item(1).BoxFeatures if hasattr(models, "BoxFeatures") else None
-            if box_features is None:
-                model = models.Item(1)
-                box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
+            box_features = com_get(models.Item(1), "BoxFeatures")
 
             if box_features is None:
                 return {"error": "BoxFeatures collection not accessible"}
@@ -505,10 +500,7 @@ class PrimitiveMixin:
             if depth == 0:
                 depth = 0.01
 
-            box_features = models.Item(1).BoxFeatures if hasattr(models, "BoxFeatures") else None
-            if box_features is None:
-                model = models.Item(1)
-                box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
+            box_features = com_get(models.Item(1), "BoxFeatures")
 
             if box_features is None:
                 return {"error": "BoxFeatures collection not accessible"}
@@ -581,15 +573,8 @@ class PrimitiveMixin:
 
             top_plane = self._get_ref_plane(doc, plane_index)
 
-            # CylinderFeatures collection - try on Models first, then model
-            cyl_features = (
-                models.Item(1).CylinderFeatures if hasattr(models, "CylinderFeatures") else None
-            )
-            if cyl_features is None:
-                model = models.Item(1)
-                cyl_features = (
-                    model.CylinderFeatures if hasattr(model, "CylinderFeatures") else None
-                )
+            # CylinderFeatures belongs to Model, not to the Models collection.
+            cyl_features = com_get(models.Item(1), "CylinderFeatures")
 
             if cyl_features is None:
                 return {"error": "CylinderFeatures collection not accessible"}
@@ -650,13 +635,8 @@ class PrimitiveMixin:
 
             top_plane = self._get_ref_plane(doc, plane_index)
 
-            # SphereFeatures collection
-            sph_features = (
-                models.Item(1).SphereFeatures if hasattr(models, "SphereFeatures") else None
-            )
-            if sph_features is None:
-                model = models.Item(1)
-                sph_features = model.SphereFeatures if hasattr(model, "SphereFeatures") else None
+            # SphereFeatures belongs to Model, not to the Models collection.
+            sph_features = com_get(models.Item(1), "SphereFeatures")
 
             if sph_features is None:
                 return {"error": "SphereFeatures collection not accessible"}

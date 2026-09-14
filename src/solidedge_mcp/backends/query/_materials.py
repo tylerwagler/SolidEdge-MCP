@@ -94,9 +94,7 @@ class MaterialsMixin(QueryManagerBase):
                             try:
                                 material_vars[name] = var.Value
                             except Exception:
-                                material_vars[name] = (
-                                    str(var.Formula) if hasattr(var, "Formula") else "N/A"
-                                )
+                                material_vars[name] = str(com_get(var, "Formula", "N/A"))
                     except Exception:
                         continue
             except Exception:
@@ -104,8 +102,8 @@ class MaterialsMixin(QueryManagerBase):
 
             # Also try to get material name from properties
             try:
-                if hasattr(doc, "Properties"):
-                    props = doc.Properties
+                props = com_get(doc, "Properties")
+                if props is not None:
                     for i in range(1, props.Count + 1):
                         try:
                             prop_set = props.Item(i)
@@ -501,7 +499,7 @@ class MaterialsMixin(QueryManagerBase):
                     return {"error": f"Layer '{name_or_index}' not found"}
 
             layer.Activate()
-            layer_name = layer.Name if hasattr(layer, "Name") else str(name_or_index)
+            layer_name = com_get(layer, "Name", str(name_or_index))
 
             return {"status": "activated", "name": layer_name}
         except Exception as e:
@@ -553,7 +551,7 @@ class MaterialsMixin(QueryManagerBase):
                 layer.Locatable = selectable
                 updated["selectable"] = selectable
 
-            layer_name = layer.Name if hasattr(layer, "Name") else str(name_or_index)
+            layer_name = com_get(layer, "Name", str(name_or_index))
 
             return {"status": "updated", "name": layer_name, "properties": updated}
         except Exception as e:
@@ -595,7 +593,7 @@ class MaterialsMixin(QueryManagerBase):
                 if layer is None:
                     return {"error": f"Layer '{name_or_index}' not found"}
 
-            layer_name = layer.Name if hasattr(layer, "Name") else str(name_or_index)
+            layer_name = com_get(layer, "Name", str(name_or_index))
             layer.Delete()
 
             return {"status": "deleted", "name": layer_name}

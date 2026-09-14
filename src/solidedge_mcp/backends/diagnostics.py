@@ -4,6 +4,8 @@ Diagnostic tools for Solid Edge API exploration
 
 from typing import Any
 
+from .comutil import com_get
+
 
 def get_available_methods(obj: Any, filter_prefix: str | None = None) -> dict[str, Any]:
     """
@@ -97,8 +99,8 @@ def diagnose_document(doc: Any) -> dict[str, Any]:
                 pass
 
     # Get all methods on Models collection
-    if hasattr(doc, "Models"):
-        models = doc.Models
+    models = com_get(doc, "Models")
+    if models is not None:
         all_methods = get_available_methods(models)
         info["models_methods"] = all_methods["methods"]
 

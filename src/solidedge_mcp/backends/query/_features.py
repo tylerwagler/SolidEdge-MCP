@@ -5,7 +5,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..comutil import describe_feature_type
+from ..comutil import com_get, describe_feature_type
 from ..constants import DirectionConstants, FeatureStatusConstants, OffsetSideConstants
 from ..logging import get_logger
 from ._base import all_faces, body_of, dispatch_array
@@ -62,10 +62,10 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
 
-            features = doc.DesignEdgebarFeatures
             feature_list = []
 
             for i in range(1, features.Count + 1):
@@ -102,15 +102,14 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
-
-            features = doc.DesignEdgebarFeatures
 
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == old_name:
+                    if com_get(feat, "Name") == old_name:
                         feat.Name = new_name
                         return {"status": "renamed", "old_name": old_name, "new_name": new_name}
                 except Exception:
@@ -191,14 +190,14 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            debf = com_get(doc, "DesignEdgebarFeatures")
+            if debf is None:
                 return {"error": "Document does not support feature deletion"}
 
-            debf = doc.DesignEdgebarFeatures
             for i in range(1, debf.Count + 1):
                 try:
                     feat = debf.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
+                    if com_get(feat, "Name") == feature_name:
                         feat.Delete()
                         return {"status": "deleted", "feature_name": feature_name}
                 except Exception:
@@ -223,14 +222,14 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
 
-            features = doc.DesignEdgebarFeatures
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
+                    if com_get(feat, "Name") == feature_name:
                         result: dict[str, Any] = {
                             "feature_name": feature_name,
                             "index": i - 1,
@@ -274,15 +273,15 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
 
-            features = doc.DesignEdgebarFeatures
             target = None
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
+                    if com_get(feat, "Name") == feature_name:
                         target = feat
                         break
                 except Exception:
@@ -447,8 +446,7 @@ class FeatureQueryMixin:
                 try:
                     face = faces.Item(fi)
                     vertices = face.Vertices
-                    if hasattr(vertices, "Count"):
-                        total_vertices += vertices.Count
+                    total_vertices += com_get(vertices, "Count", 0)
                 except Exception:
                     pass
 

@@ -536,7 +536,7 @@ class SheetMetalMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges."}
 
             if edge_index < 0 or edge_index >= face_edges.Count:
@@ -999,7 +999,7 @@ class SheetMetalMixin:
             The adjacent face COM object, or None if not found
         """
         cyl_edges = cyl_face.Edges
-        if not hasattr(cyl_edges, "Count") or cyl_edges.Count == 0:
+        if com_get(cyl_edges, "Count", 0) == 0:
             return None
 
         all_faces = body.Faces(FaceQueryConstants.igQueryAll)
@@ -1014,7 +1014,7 @@ class SheetMetalMixin:
 
             try:
                 cand_edges = candidate.Edges
-                if not hasattr(cand_edges, "Count") or cand_edges.Count == 0:
+                if com_get(cand_edges, "Count", 0) == 0:
                     continue
                 for ej in range(1, cand_edges.Count + 1):
                     cand_edge = cand_edges.Item(ej)
@@ -1095,10 +1095,11 @@ class SheetMetalMixin:
                 }
 
             # Create HoleData for a tapped hole (igTappedHole = 37)
-            if not hasattr(doc, "HoleDataCollection"):
+            hole_data_collection = com_get(doc, "HoleDataCollection")
+            if hole_data_collection is None:
                 return {"error": "HoleDataCollection not available on this document type."}
 
-            hole_data = doc.HoleDataCollection.Add(
+            hole_data = hole_data_collection.Add(
                 HoleType=37,
                 HoleDiameter=thread_diameter,
             )
@@ -1857,7 +1858,7 @@ class SheetMetalMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges."}
 
             # Collect the requested edges

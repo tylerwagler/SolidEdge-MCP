@@ -21,26 +21,25 @@ class DocumentQueryMixin:
             doc = self.doc_manager.get_active_document()
 
             properties = {
-                "name": doc.Name if hasattr(doc, "Name") else "Unknown",
-                "path": doc.FullName if hasattr(doc, "FullName") else "Unsaved",
+                "name": com_get(doc, "Name", "Unknown"),
+                "path": com_get(doc, "FullName", "Unsaved"),
                 "modified": com_get(doc, "Dirty", False),
-                "read_only": doc.ReadOnly if hasattr(doc, "ReadOnly") else False,
+                "read_only": com_get(doc, "ReadOnly", False),
             }
 
-            # Try to get summary info
-            try:
-                if hasattr(doc, "SummaryInfo"):
-                    summary = doc.SummaryInfo
-                    if hasattr(summary, "Title"):
-                        properties["title"] = summary.Title
-                    if hasattr(summary, "Author"):
-                        properties["author"] = summary.Author
-                    if hasattr(summary, "Subject"):
-                        properties["subject"] = summary.Subject
-                    if hasattr(summary, "Comments"):
-                        properties["comments"] = summary.Comments
-            except Exception:
-                pass
+            # Summary info. com_get rather than hasattr: the probe reads False
+            # both for a member that is absent and for one whose getter raised.
+            summary = com_get(doc, "SummaryInfo")
+            if summary is not None:
+                for key, member in (
+                    ("title", "Title"),
+                    ("author", "Author"),
+                    ("subject", "Subject"),
+                    ("comments", "Comments"),
+                ):
+                    value = com_get(summary, member)
+                    if value is not None:
+                        properties[key] = value
 
             # Add body topology info
             try:
@@ -71,10 +70,9 @@ class DocumentQueryMixin:
             doc = self.doc_manager.get_active_document()
 
             # SummaryInfo contains standard document properties
-            if not hasattr(doc, "SummaryInfo"):
+            summary = com_get(doc, "SummaryInfo")
+            if summary is None:
                 return {"error": "SummaryInfo not available on this document"}
-
-            summary = doc.SummaryInfo
 
             prop_map = {
                 "Title": "Title",
@@ -104,20 +102,17 @@ class DocumentQueryMixin:
 
             counts = {}
 
-            if hasattr(doc, "DesignEdgebarFeatures"):
-                counts["features"] = doc.DesignEdgebarFeatures.Count
-
-            if hasattr(doc, "Models"):
-                counts["models"] = doc.Models.Count
-
-            if hasattr(doc, "ProfileSets"):
-                counts["sketches"] = doc.ProfileSets.Count
-
-            if hasattr(doc, "RefPlanes"):
-                counts["ref_planes"] = doc.RefPlanes.Count
-
-            if hasattr(doc, "Variables"):
-                counts["variables"] = doc.Variables.Count
+            for key, member in (
+                ("features", "DesignEdgebarFeatures"),
+                ("models", "Models"),
+                ("sketches", "ProfileSets"),
+                ("ref_planes", "RefPlanes"),
+                ("variables", "Variables"),
+            ):
+                collection = com_get(doc, member)
+                count = com_get(collection, "Count")
+                if count is not None:
+                    counts[key] = count
 
             return counts
         except Exception as e:
@@ -138,14 +133,14 @@ class DocumentQueryMixin:
             features = []
 
             # Use DesignEdgebarFeatures for the full feature tree
-            if hasattr(doc, "DesignEdgebarFeatures"):
-                debf = doc.DesignEdgebarFeatures
+            debf = com_get(doc, "DesignEdgebarFeatures")
+            if debf is not None:
                 for i in range(1, debf.Count + 1):
                     try:
                         feat = debf.Item(i)
                         feat_info = {
                             "index": i - 1,
-                            "name": feat.Name if hasattr(feat, "Name") else f"Feature_{i}",
+                            "name": com_get(feat, "Name", f"Feature_{i}"),
                         }
                         features.append(feat_info)
                     except Exception:
@@ -158,7 +153,7 @@ class DocumentQueryMixin:
                         feat = model_features.Item(i)
                         feat_info = {
                             "index": i - 1,
-                            "name": feat.Name if hasattr(feat, "Name") else f"Feature_{i}",
+                            "name": com_get(feat, "Name", f"Feature_{i}"),
                         }
                         features.append(feat_info)
                     except Exception:
@@ -181,10 +176,10 @@ class DocumentQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "RefPlanes"):
+            ref_planes = com_get(doc, "RefPlanes")
+            if ref_planes is None:
                 return {"error": "Document does not have reference planes"}
 
-            ref_planes = doc.RefPlanes
             planes = []
 
             default_names = {1: "Top (XZ)", 2: "Front (XY)", 3: "Right (YZ)"}

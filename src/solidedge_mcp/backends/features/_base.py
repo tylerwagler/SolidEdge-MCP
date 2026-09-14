@@ -278,7 +278,7 @@ class FeatureManagerBase:
 
         face = faces.Item(face_index + 1)
         face_edges = face.Edges
-        if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+        if com_get(face_edges, "Count", 0) == 0:
             return None, None, None, {"error": f"Face {face_index} has no edges."}
 
         if edge_index < 0 or edge_index >= face_edges.Count:
@@ -302,7 +302,7 @@ class FeatureManagerBase:
         target = None
         for i in range(1, features.Count + 1):
             f = features.Item(i)
-            if hasattr(f, "Name") and f.Name == feature_name:
+            if com_get(f, "Name") == feature_name:
                 target = f
                 break
 

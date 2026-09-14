@@ -5,6 +5,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
@@ -35,7 +36,7 @@ class VariablesMixin:
                     var = variables.Item(i)
                     var_info = {
                         "index": i - 1,
-                        "name": var.DisplayName if hasattr(var, "DisplayName") else f"Var_{i}",
+                        "name": com_get(var, "DisplayName", f"Var_{i}"),
                     }
                     with contextlib.suppress(Exception):
                         var_info["value"] = var.Value
@@ -69,7 +70,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == name:
                         result = {"name": name, "index": i - 1}
                         with contextlib.suppress(Exception):
@@ -104,7 +105,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == name:
                         old_value = var.Value
                         var.Value = value
@@ -175,7 +176,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == name:
                         old_formula = ""
                         with contextlib.suppress(Exception):
@@ -228,7 +229,7 @@ class VariablesMixin:
                 for i in range(1, variables.Count + 1):
                     try:
                         var = variables.Item(i)
-                        name = var.Name if hasattr(var, "Name") else str(i)
+                        name = com_get(var, "Name", str(i))
                         if case_insensitive:
                             match = fnmatch.fnmatch(name.lower(), pattern.lower())
                         else:
@@ -290,7 +291,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == name:
                         result: dict[str, Any] = {"name": name}
                         try:
@@ -327,7 +328,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == old_name:
                         var.DisplayName = new_name
                         return {"status": "renamed", "old_name": old_name, "new_name": new_name}
@@ -358,7 +359,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == name:
                         result = {"display_name": display_name}
                         try:
@@ -482,13 +483,13 @@ class VariablesMixin:
             for ps_idx in range(1, prop_sets.Count + 1):
                 try:
                     ps = prop_sets.Item(ps_idx)
-                    ps_name = ps.Name if hasattr(ps, "Name") else f"Set_{ps_idx}"
+                    ps_name = com_get(ps, "Name", f"Set_{ps_idx}")
 
                     props = {}
                     for p_idx in range(1, ps.Count + 1):
                         try:
                             prop = ps.Item(p_idx)
-                            prop_name = prop.Name if hasattr(prop, "Name") else f"Prop_{p_idx}"
+                            prop_name = com_get(prop, "Name", f"Prop_{p_idx}")
                             try:
                                 props[prop_name] = prop.Value
                             except Exception:
@@ -526,7 +527,7 @@ class VariablesMixin:
             for ps_idx in range(1, prop_sets.Count + 1):
                 try:
                     ps = prop_sets.Item(ps_idx)
-                    if hasattr(ps, "Name") and ps.Name == "Custom":
+                    if com_get(ps, "Name") == "Custom":
                         custom_ps = ps
                         break
                 except Exception:
@@ -539,7 +540,7 @@ class VariablesMixin:
             for p_idx in range(1, custom_ps.Count + 1):
                 try:
                     prop = custom_ps.Item(p_idx)
-                    if hasattr(prop, "Name") and prop.Name == name:
+                    if com_get(prop, "Name") == name:
                         old_value = prop.Value
                         prop.Value = value
                         return {
@@ -575,11 +576,11 @@ class VariablesMixin:
             for ps_idx in range(1, prop_sets.Count + 1):
                 try:
                     ps = prop_sets.Item(ps_idx)
-                    if hasattr(ps, "Name") and ps.Name == "Custom":
+                    if com_get(ps, "Name") == "Custom":
                         for p_idx in range(1, ps.Count + 1):
                             try:
                                 prop = ps.Item(p_idx)
-                                if hasattr(prop, "Name") and prop.Name == name:
+                                if com_get(prop, "Name") == name:
                                     prop.Delete()
                                     return {"status": "deleted", "name": name}
                             except Exception:

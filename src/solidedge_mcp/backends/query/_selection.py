@@ -5,6 +5,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..logging import get_logger
 from ._base import all_faces, body_of
 
@@ -41,8 +42,9 @@ class SelectionMixin:
                         item_info["type"] = str(type(item).__name__)
 
                     try:
-                        if hasattr(item, "Name"):
-                            item_info["name"] = item.Name
+                        name = com_get(item, "Name")
+                        if name is not None:
+                            item_info["name"] = name
                     except Exception:
                         pass
 

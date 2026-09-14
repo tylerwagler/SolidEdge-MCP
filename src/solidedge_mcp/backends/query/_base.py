@@ -160,7 +160,7 @@ class QueryManagerBase:
         features = doc.DesignEdgebarFeatures
         for i in range(1, features.Count + 1):
             feat = features.Item(i)
-            if hasattr(feat, "Name") and feat.Name == feature_name:
+            if com_get(feat, "Name") == feature_name:
                 return feat, doc
         return None, doc
 

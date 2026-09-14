@@ -4,9 +4,9 @@ import contextlib
 import math
 from typing import Any
 
-from solidedge_mcp.backends.comutil import com_get
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import (
     FaceQueryConstants,
 )
@@ -373,7 +373,7 @@ class MiscFeaturesMixin:
                 "type": "mirror_copy",
                 "feature": feature_name,
                 "mirror_plane": mirror_plane_index,
-                "name": mirror.Name if hasattr(mirror, "Name") else None,
+                "name": com_get(mirror, "Name", None),
                 "note": "Mirror feature created via AddSync. "
                 "Geometry may require manual verification "
                 "in Solid Edge UI.",
@@ -573,7 +573,7 @@ class MiscFeaturesMixin:
 
             # Get edge from the face
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
             if edge_index < 0 or edge_index >= face_edges.Count:
                 return {
@@ -955,7 +955,7 @@ class MiscFeaturesMixin:
                 "x_spacing": x_spacing,
                 "y_spacing": y_spacing,
                 "plane_index": plane_index,
-                "name": pattern.Name if hasattr(pattern, "Name") else None,
+                "name": com_get(pattern, "Name", None),
             }
         except Exception as e:
             return error_result(e)

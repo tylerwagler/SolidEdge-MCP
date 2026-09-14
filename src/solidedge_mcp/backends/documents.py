@@ -318,7 +318,7 @@ class DocumentManager:
             return {
                 "status": "activated",
                 "name": doc.Name,
-                "path": doc.FullName if hasattr(doc, "FullName") else "untitled",
+                "path": com_get(doc, "FullName", "untitled"),
                 "type": self._get_document_type(doc),
             }
         except Exception as e:
@@ -419,8 +419,8 @@ class DocumentManager:
 
             return {
                 "type": doc_type,
-                "name": doc.Name if hasattr(doc, "Name") else "Unknown",
-                "path": doc.FullName if hasattr(doc, "FullName") else "untitled",
+                "name": com_get(doc, "Name", "Unknown"),
+                "path": com_get(doc, "FullName", "untitled"),
             }
         except Exception as e:
             return error_result(e)
