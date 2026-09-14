@@ -304,3 +304,103 @@ class TestSketchProject:
 
 def test_sketching_discriminators_match_their_cases():
     assert assert_literal_discriminators(sketching_tools) == 6
+
+
+class TestSketchConstraintElementSpellings:
+    """Both ways of naming the elements must reach the backend.
+
+    element1_type/element1_index used to be read only by the keypoint branch,
+    so naming elements that way for a geometric constraint sent an empty list
+    and the call failed asking for elements it had been given.
+    """
+
+    def test_elements_list_is_passed_through(self, monkeypatch):
+        from solidedge_mcp.tools import sketching
+
+        seen = {}
+        monkeypatch.setattr(
+            sketching.sketch_manager,
+            "add_constraint",
+            lambda **kw: seen.update(kw) or {"status": "constraint_added"},
+        )
+
+        sketching.sketch_constraint(
+            type="geometric", constraint_type="Parallel", elements=[["line", 1], ["line", 2]]
+        )
+
+        assert seen["elements"] == [["line", 1], ["line", 2]]
+
+    def test_numbered_parameters_are_turned_into_pairs(self, monkeypatch):
+        from solidedge_mcp.tools import sketching
+
+        seen = {}
+        monkeypatch.setattr(
+            sketching.sketch_manager,
+            "add_constraint",
+            lambda **kw: seen.update(kw) or {"status": "constraint_added"},
+        )
+
+        sketching.sketch_constraint(
+            type="geometric",
+            constraint_type="Parallel",
+            element1_type="line",
+            element1_index=1,
+            element2_type="circle",
+            element2_index=3,
+        )
+
+        assert seen["elements"] == [["line", 1], ["circle", 3]]
+
+    def test_one_numbered_element_is_enough_for_horizontal(self, monkeypatch):
+        from solidedge_mcp.tools import sketching
+
+        seen = {}
+        monkeypatch.setattr(
+            sketching.sketch_manager,
+            "add_constraint",
+            lambda **kw: seen.update(kw) or {"status": "constraint_added"},
+        )
+
+        sketching.sketch_constraint(
+            type="geometric",
+            constraint_type="Horizontal",
+            element1_type="line",
+            element1_index=2,
+        )
+
+        assert seen["elements"] == [["line", 2]]
+
+    def test_an_explicit_list_wins_over_the_numbered_parameters(self, monkeypatch):
+        from solidedge_mcp.tools import sketching
+
+        seen = {}
+        monkeypatch.setattr(
+            sketching.sketch_manager,
+            "add_constraint",
+            lambda **kw: seen.update(kw) or {"status": "constraint_added"},
+        )
+
+        sketching.sketch_constraint(
+            type="geometric",
+            constraint_type="Horizontal",
+            elements=[["arc", 9]],
+            element1_type="line",
+            element1_index=1,
+        )
+
+        assert seen["elements"] == [["arc", 9]]
+
+    def test_naming_nothing_still_reaches_the_backend_to_be_refused(self, monkeypatch):
+        from solidedge_mcp.tools import sketching
+
+        seen = {}
+        monkeypatch.setattr(
+            sketching.sketch_manager,
+            "add_constraint",
+            lambda **kw: seen.update(kw) or {"error": "needs 1 element"},
+        )
+
+        result = sketching.sketch_constraint(type="geometric", constraint_type="Horizontal")
+
+        assert seen["elements"] == []
+        assert "error" in result

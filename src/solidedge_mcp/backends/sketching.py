@@ -187,6 +187,17 @@ def _offset_side_point(profile: Any, distance: float) -> tuple[float, float] | N
     return (centre_x, centre_y + reach)
 
 
+#: How to name the elements a constraint applies to. Both spellings work; the
+#: element1_*/element2_* one used to be read only by the keypoint branch, so
+#: naming elements that way sent an empty list and the call asked for elements
+#: it had just been given.
+_HOW_TO_NAME = (
+    ' Name them with elements=[["line", 1], ["line", 2]] or with '
+    "element1_type/element1_index and element2_type/element2_index; indices "
+    "are 1-based."
+)
+
+
 class SketchManager:
     """Manages sketch creation and 2D geometry"""
 
@@ -895,32 +906,32 @@ class SketchManager:
             # Single-element constraints
             if ct == "horizontal":
                 if len(objs) < 1:
-                    return {"error": "Horizontal constraint requires 1 element"}
+                    return {"error": "Horizontal constraint needs 1 element." + _HOW_TO_NAME}
                 relations.AddHorizontal(objs[0])
             elif ct == "vertical":
                 if len(objs) < 1:
-                    return {"error": "Vertical constraint requires 1 element"}
+                    return {"error": "Vertical constraint needs 1 element." + _HOW_TO_NAME}
                 relations.AddVertical(objs[0])
             # Two-element constraints
             elif ct == "parallel":
                 if len(objs) < 2:
-                    return {"error": "Parallel constraint requires 2 elements"}
+                    return {"error": "Parallel constraint needs 2 elements." + _HOW_TO_NAME}
                 relations.AddParallel(objs[0], objs[1])
             elif ct == "perpendicular":
                 if len(objs) < 2:
-                    return {"error": "Perpendicular constraint requires 2 elements"}
+                    return {"error": "Perpendicular constraint needs 2 elements." + _HOW_TO_NAME}
                 relations.AddPerpendicular(objs[0], objs[1])
             elif ct == "equal":
                 if len(objs) < 2:
-                    return {"error": "Equal constraint requires 2 elements"}
+                    return {"error": "Equal constraint needs 2 elements." + _HOW_TO_NAME}
                 relations.AddEqual(objs[0], objs[1])
             elif ct == "concentric":
                 if len(objs) < 2:
-                    return {"error": "Concentric constraint requires 2 elements"}
+                    return {"error": "Concentric constraint needs 2 elements." + _HOW_TO_NAME}
                 relations.AddConcentric(objs[0], objs[1])
             elif ct == "tangent":
                 if len(objs) < 2:
-                    return {"error": "Tangent constraint requires 2 elements"}
+                    return {"error": "Tangent constraint needs 2 elements." + _HOW_TO_NAME}
                 relations.AddTangent(objs[0], objs[1])
             else:
                 return {

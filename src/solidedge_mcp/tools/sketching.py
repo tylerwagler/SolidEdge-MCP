@@ -305,17 +305,26 @@ def sketch_constraint(
 ) -> dict[str, Any]:
     """Add a 2D relation in the active sketch. Element indices are 1-BASED.
 
-    geometric: constraint_type + elements as [type, index] pairs, e.g.
-    [["line", 1], ["line", 2]]; type in line/circle/arc/ellipse/spline.
-    Horizontal/Vertical need 1 element, the rest need 2.
+    geometric: constraint_type plus the elements to relate, named either as
+    elements=[["line", 1], ["line", 2]] or as element1_type/element1_index and
+    element2_type/element2_index. Type is line/circle/arc/ellipse/spline.
+    Horizontal/Vertical take one element, the rest take two.
     keypoint: weld element1 keypoint1 to element2 keypoint2. Keypoints are
     0=start, 1=end, 2=midpoint (lines/arcs); 0=center (circles).
     """
     match type:
         case "geometric":
-            return sketch_manager.add_constraint(
-                constraint_type=constraint_type, elements=elements or []
-            )
+            # The element1_*/element2_* parameters used to be read only by the
+            # keypoint branch, so naming elements that way here silently sent
+            # an empty list and the call failed asking for elements it had
+            # been given. Both spellings now work.
+            pairs: list[list[str | int]] = list(elements) if elements else []
+            if not pairs:
+                if element1_index:
+                    pairs.append([element1_type, element1_index])
+                if element2_index:
+                    pairs.append([element2_type, element2_index])
+            return sketch_manager.add_constraint(constraint_type=constraint_type, elements=pairs)
         case "keypoint":
             return sketch_manager.add_keypoint_constraint(
                 element1_type=element1_type,
