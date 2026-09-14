@@ -6,6 +6,7 @@ camera dynamics, and coordinate transforms.
 Uses unittest.mock to simulate COM objects.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -131,12 +132,16 @@ class TestSetCamera:
 class TestRotateCamera:
     def test_success(self, view_mgr):
         vm, doc, view_obj = view_mgr
-        result = vm.rotate_camera(0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        result = vm.rotate_camera(math.radians(90.0), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
         assert result["status"] == "camera_rotated"
-        assert result["angle_rad"] == 0.5
+        # The backend takes radians; the answer is in the degrees the tool
+        # layer -- and the caller -- speak.
+        assert result["angle_degrees"] == pytest.approx(90.0)
         assert result["center"] == [0.0, 0.0, 0.0]
         assert result["axis"] == [0.0, 1.0, 0.0]
-        view_obj.RotateCamera.assert_called_once_with(0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        view_obj.RotateCamera.assert_called_once_with(
+            pytest.approx(math.radians(90.0)), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0
+        )
 
     def test_custom_axis(self, view_mgr):
         vm, doc, view_obj = view_mgr

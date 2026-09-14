@@ -1,5 +1,6 @@
 """ViewModel class for view manipulation (orientation, zoom, display, camera)."""
 
+import math
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -230,7 +231,8 @@ class ViewModel:
         Rotate the camera around a specified axis through a center point.
 
         Args:
-            angle: Rotation angle in radians
+            angle: Rotation angle in radians (the tool layer converts from
+                the degrees it takes)
             center_x, center_y, center_z: Center of rotation (meters)
             axis_x, axis_y, axis_z: Rotation axis vector (default: Y-up)
 
@@ -248,7 +250,10 @@ class ViewModel:
 
             return {
                 "status": "camera_rotated",
-                "angle_rad": angle,
+                # Report back in the unit the caller used, not the radians COM
+                # wanted: manage_view(action="rotate", angle=90) answering
+                # "angle_rad": 1.57 reads like it did something else.
+                "angle_degrees": math.degrees(angle),
                 "center": [center_x, center_y, center_z],
                 "axis": [axis_x, axis_y, axis_z],
             }

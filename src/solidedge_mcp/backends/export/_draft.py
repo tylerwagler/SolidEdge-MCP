@@ -1,6 +1,7 @@
 """Draft-specific operations (smart frames, symbols, PMI, printing, etc.)."""
 
 import contextlib
+import math
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -203,8 +204,10 @@ class DraftMixin:
                     info["y"] = float(keypoint[1])
                 with contextlib.suppress(Exception):
                     info["scale"] = sym.ScaleFactor
+                # Symbol2d.Angle is radians, like every other Solid Edge
+                # Angle property; degrees is the unit at this boundary.
                 with contextlib.suppress(Exception):
-                    info["angle"] = sym.Angle
+                    info["angle_degrees"] = math.degrees(sym.Angle)
                 items.append(info)
             return {"count": len(items), "symbols": items}
         except Exception as e:
