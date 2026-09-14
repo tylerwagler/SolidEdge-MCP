@@ -88,6 +88,14 @@ TUPLE_SEEDS: dict[str, frozenset[str]] = {
     "resolve_view": frozenset({"View"}),
 }
 
+#: Members whose name is an interface but whose real type is a different one.
+#: The VT_DISPATCH fallback in ``member_type`` guesses from the member name,
+#: which is right almost everywhere and wrong here: ``Document.Properties``
+#: hands back a PropertySets, whose Item() is what yields a Properties.
+DISPATCH_OVERRIDES: dict[str, str] = {
+    "Properties": "PropertySets",
+}
+
 #: Members every COM object answers, whatever its interface.
 UNIVERSAL = frozenset({"Application", "Parent", "Item", "Count", "Type", "Name", "Index"})
 
@@ -125,7 +133,19 @@ class TypeLib:
         return iface in self.members
 
     def member_type(self, iface: str, member: str) -> str | None:
-        """The interface a member yields, or None when it is not an interface."""
+        """The interface a member yields, or None when it is not an interface.
+
+        Plenty of collection properties are declared ``VT_DISPATCH`` rather
+        than with their real type -- ``Sheet.TextBoxes`` and ``Body.Faces``
+        both are -- and inference used to stop dead there, leaving everything
+        downstream unchecked. Two bugs lived in exactly that blind spot:
+        ``textbox.TextHeight`` and ``textbox.x``, neither of which TextBox has.
+
+        When the declared type is useless but the member's own name is an
+        interface in the dump, that name is used. Solid Edge is consistent
+        about this, and a wrong guess shows up immediately as a finding on a
+        member that does exist.
+        """
         seen: set[str] = set()
         current: str | None = iface
         while current and current not in seen:
@@ -133,7 +153,14 @@ class TypeLib:
             sig = self.members.get(current, {}).get(member)
             if sig is not None:
                 raw = sig.get("type") or sig.get("returns") or ""
-                return _interface_name(raw, self)
+                resolved = _interface_name(raw, self)
+                if resolved:
+                    return resolved
+                if raw.rstrip("*").strip() == "VT_DISPATCH":
+                    guess = DISPATCH_OVERRIDES.get(member, member)
+                    if guess in self.members:
+                        return guess
+                return None
             current = self.bases.get(current)
         return None
 

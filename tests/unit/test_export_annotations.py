@@ -584,32 +584,37 @@ class TestAddCenterline:
 
 
 class TestAddSurfaceFinishSymbol:
-    def test_success(self, export_mgr):
+    """SurfaceFinishSymbols has no Add, and the real method needs a pick.
+
+    AddSurfaceFinishSymbol(AnnotInitData) wants a terminator element chosen on
+    the drawing. Verified on Solid Edge 2026: with only SetPlane(sheet) it
+    returns None and the collection stays empty. What this used to do was
+    worse than failing -- the Add call raised and a fallback dropped a text box
+    containing U+2327 on the sheet, reported as a surface finish symbol.
+    """
+
+    def test_it_says_it_cannot(self, export_mgr):
         em, doc = export_mgr
         sheet = MagicMock()
-        sfs = MagicMock()
-        sheet.SurfaceFinishSymbols = sfs
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
         result = em.add_surface_finish_symbol(0.1, 0.1, "machined")
-        assert result["status"] == "added"
-        assert result["type"] == "surface_finish_symbol"
-        assert result["symbol_type"] == "machined"
 
-    def test_not_draft(self, export_mgr):
+        assert result["unsupported"] is True
+        assert "terminator element" in result["error"]
+
+    def test_it_leaves_nothing_on_the_sheet(self, export_mgr):
+        """No stray text box passed off as a symbol."""
         em, doc = export_mgr
-        doc.Type = IG_PART_DOCUMENT
-
-        result = em.add_surface_finish_symbol(0.1, 0.1)
-        assert "error" in result
-
-    def test_invalid_type(self, export_mgr):
-        em, doc = export_mgr
+        sheet = MagicMock()
+        doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
-        result = em.add_surface_finish_symbol(0.1, 0.1, "invalid_type")
-        assert "error" in result
+        em.add_surface_finish_symbol(0.1, 0.1)
+
+        sheet.TextBoxes.Add.assert_not_called()
+        sheet.SurfaceFinishSymbols.Add.assert_not_called()
 
 
 # ============================================================================
@@ -636,6 +641,26 @@ class TestAddWeldSymbol:
         # WeldSymbols.Add(x1, y1, z1); the type is the TopType property
         ws.Add.assert_called_once_with(0.1, 0.1, 0)
         assert symbol.TopType == 1  # igDimWeldTopFillet
+        assert result["top_type"] == 1
+
+    def test_a_failure_surfaces_instead_of_drawing_an_arrow(self, export_mgr):
+        """The fallback here set Leader.Text, which no interface has.
+
+        So a weld symbol that could not be placed left a bare arrow on the
+        sheet and still reported a weld symbol. WeldSymbols.Add and TopType
+        both work on Solid Edge 2026, so there is nothing to fall back to.
+        """
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sheet.WeldSymbols.Add.side_effect = Exception("no weld symbols here")
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.add_weld_symbol(0.1, 0.1, "fillet")
+
+        assert "error" in result
+        assert "no weld symbols here" in result["error"]
+        sheet.Leaders.Add.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
@@ -763,20 +788,42 @@ class TestAddTextBox:
 
 
 class TestAddLeader:
-    def test_success(self, export_mgr):
-        em, doc = export_mgr
+    """A Solid Edge Leader carries no text.
+
+    Leader.Text is on no interface -- Solid Edge 2026 answers "Property
+    'Add.Text' can not be set." -- and the write sat inside a suppress, so
+    the text vanished and the result reported it anyway.
+    """
+
+    def _sheet(self, doc):
         sheet = MagicMock()
         leaders = MagicMock()
-        leader = MagicMock()
-        leaders.Add.return_value = leader
+        leaders.Add.return_value = MagicMock()
         sheet.Leaders = leaders
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
+        return leaders
+
+    def test_a_plain_leader_is_created(self, export_mgr):
+        em, doc = export_mgr
+        leaders = self._sheet(doc)
+
+        result = em.add_leader(0.05, 0.05, 0.15, 0.15)
+
+        assert result["status"] == "added"
+        assert "text" not in result
+        leaders.Add.assert_called_once_with(0.05, 0.05, 0, 0.15, 0.15, 0)
+
+    def test_text_is_refused_rather_than_dropped(self, export_mgr):
+        em, doc = export_mgr
+        leaders = self._sheet(doc)
 
         result = em.add_leader(0.05, 0.05, 0.15, 0.15, "Note")
-        assert result["status"] == "added"
-        assert result["text"] == "Note"
-        leaders.Add.assert_called_once_with(0.05, 0.05, 0, 0.15, 0.15, 0)
+
+        assert result["unsupported"] is True
+        assert "balloon" in result["error"]
+        # Refused before touching COM, so no stray arrow is left behind.
+        leaders.Add.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr

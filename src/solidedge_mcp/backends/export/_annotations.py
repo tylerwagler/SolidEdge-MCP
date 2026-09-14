@@ -115,21 +115,35 @@ class AnnotationsMixin:
     def add_leader(
         self, x1: float, y1: float, x2: float, y2: float, text: str = ""
     ) -> dict[str, Any]:
-        """
-        Add a leader annotation to the active draft sheet.
+        """Add a leader (a plain arrow) to the active draft sheet.
 
-        A leader is an arrow pointing to geometry with optional text.
+        A Solid Edge Leader carries no text. ``Leader.Text`` is on no
+        interface -- Solid Edge 2026 answers "Property 'Add.Text' can not be
+        set." -- and the write sat inside a suppress, so the text vanished and
+        the result reported it anyway. Text with a leader is a Balloon or a
+        Note, so a caller asking for one is told that instead of being handed
+        a bare arrow and a false success.
 
         Args:
-            x1: Arrow start X (meters)
-            y1: Arrow start Y (meters)
-            x2: Text end X (meters)
-            y2: Text end Y (meters)
-            text: Optional text at the leader end
+            x1: Arrow tip X (meters)
+            y1: Arrow tip Y (meters)
+            x2: Tail end X (meters)
+            y2: Tail end Y (meters)
+            text: Must be empty; see above.
 
         Returns:
             Dict with status
         """
+        if text:
+            return {
+                "error": (
+                    "A Solid Edge leader carries no text of its own. Use "
+                    "add_annotation(type='balloon', x, y, text, leader_x, "
+                    "leader_y) for text on a leader, or type='note' for text "
+                    "alone, and call this without text for a plain arrow."
+                ),
+                "unsupported": True,
+            }
         try:
             doc = self.doc_manager.get_active_document()
 
@@ -140,18 +154,13 @@ class AnnotationsMixin:
             sheet = doc.ActiveSheet
 
             leaders = sheet.Leaders
-            leader = leaders.Add(x1, y1, 0, x2, y2, 0)
-
-            if text:
-                with contextlib.suppress(Exception):
-                    leader.Text = text
+            leaders.Add(x1, y1, 0, x2, y2, 0)
 
             return {
                 "status": "added",
                 "type": "leader",
                 "start": [x1, y1],
                 "end": [x2, y2],
-                "text": text,
             }
         except Exception as e:
             return error_result(e)
@@ -785,50 +794,38 @@ class AnnotationsMixin:
     def add_surface_finish_symbol(
         self, x: float, y: float, symbol_type: str = "machined"
     ) -> dict[str, Any]:
-        """
-        Add a surface finish symbol to the active draft sheet.
+        """Surface finish symbols cannot be placed through COM automation.
+
+        ``SurfaceFinishSymbols`` has no ``Add``; the real method is
+        ``AddSurfaceFinishSymbol(AnnotInitData)``, and the AnnotInitData needs
+        a terminator or connect element -- an edge or keypoint picked on the
+        drawing -- which this server cannot select. Verified on Solid Edge
+        2026: with only ``SetPlane(sheet)`` the call returns None and the
+        collection stays empty.
+
+        What this used to do was worse than failing. The ``Add`` call raised,
+        and the fallback dropped a text box containing U+2327 on the sheet and
+        reported ``{"status": "added", "type": "surface_finish_symbol"}`` --
+        a stray glyph passed off as a symbol.
 
         Args:
-            x: Symbol X position (meters)
-            y: Symbol Y position (meters)
-            symbol_type: Type of surface finish - 'machined', 'any', 'prohibited'
+            x: Symbol X position (meters), unused.
+            y: Symbol Y position (meters), unused.
+            symbol_type: 'machined', 'any' or 'prohibited', unused.
 
         Returns:
-            Dict with status
+            Dict with an ``unsupported`` error.
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            err = self._require_draft(doc)
-            if err:
-                return err
-
-            type_map = {"machined": 1, "any": 0, "prohibited": 2}
-            type_value = type_map.get(symbol_type.lower())
-            if type_value is None:
-                valid = ", ".join(type_map.keys())
-                return {"error": f"Invalid symbol_type: '{symbol_type}'. Valid: {valid}"}
-
-            sheet = doc.ActiveSheet
-
-            try:
-                sfs = sheet.SurfaceFinishSymbols
-                sfs.Add(x, y, 0, type_value)
-            except Exception:
-                # Fallback: use TextBoxes with standard surface finish text
-                text_boxes = sheet.TextBoxes
-                symbols = {"machined": "\u2327", "any": "\u2328", "prohibited": "\u2329"}
-                text_box = text_boxes.Add(x, y, 0)
-                text_box.Text = symbols.get(symbol_type.lower(), "\u2327")
-
-            return {
-                "status": "added",
-                "type": "surface_finish_symbol",
-                "symbol_type": symbol_type,
-                "position": [x, y],
-            }
-        except Exception as e:
-            return error_result(e)
+        del x, y, symbol_type
+        return {
+            "error": (
+                "Surface finish symbols need an AnnotInitData carrying a terminator "
+                "element picked on the drawing, which this server cannot select: "
+                "SurfaceFinishSymbols has no Add, and AddSurfaceFinishSymbol with "
+                "only a plane creates nothing. Place it in the Solid Edge UI."
+            ),
+            "unsupported": True,
+        }
 
     def add_weld_symbol(self, x: float, y: float, weld_type: str = "fillet") -> dict[str, Any]:
         """
@@ -856,25 +853,20 @@ class AnnotationsMixin:
 
             sheet = doc.ActiveSheet
 
-            try:
-                ws = sheet.WeldSymbols
-                # WeldSymbols.Add(x1, y1, z1) only places the symbol; the weld
-                # type is the WeldSymbol.TopType property, not a fourth argument.
-                symbol = ws.Add(x, y, 0)
-                with contextlib.suppress(Exception):
-                    symbol.TopType = type_value
-            except Exception:
-                # Fallback: use a leader with weld designation text
-                leaders = sheet.Leaders
-                leader = leaders.Add(x, y, 0, x + 0.02, y + 0.02, 0)
-                with contextlib.suppress(Exception):
-                    leader.Text = f"[{weld_type.upper()}]"
+            # WeldSymbols.Add(x1, y1, z1) only places the symbol; the weld
+            # type is the WeldSymbol.TopType property, not a fourth argument.
+            # Both were verified against Solid Edge 2026. The fallback that
+            # used to sit here drew a bare arrow -- it set Leader.Text, which
+            # no interface has -- and still reported a weld symbol.
+            symbol = sheet.WeldSymbols.Add(x, y, 0)
+            symbol.TopType = type_value
 
             return {
                 "status": "added",
                 "type": "weld_symbol",
                 "weld_type": weld_type,
                 "position": [x, y],
+                "top_type": com_get(symbol, "TopType"),
             }
         except Exception as e:
             return error_result(e)
