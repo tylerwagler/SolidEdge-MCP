@@ -85,6 +85,7 @@ Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{
 - **Known unsupported via COM (SE 2025/2026)**: `AssemblyFeaturesPatterns.Add`, `AssemblyFeaturesMirrors.Add` (E_ACCESSDENIED); shell/thin-wall (needs interactive face pick); multiple disjoint profiles in one cutout sketch.
 - **Front plane quirk**: COM "Normal" on the Front plane points to world −Y. Cutout tools do not auto-swap; prefer `direction="Symmetric"` there.
 - **Exports** use `SaveCopyAs`, never `SaveAs` (which repoints the live document).
+- **Never hand Solid Edge a path that already exists.** It answers with a modal "This file exists. Do you want to overwrite it?" prompt that `DisplayAlerts` does not suppress. Solid Edge has one UI thread, so the COM call never returns, every later call queues behind it, and the client eventually reports `Connection closed` as if the server had crashed. Every write goes through `backends/validation.py: guard_overwrite(file_path, overwrite)` first, which refuses by default and deletes the file when `overwrite=True`. Any new call that writes a path needs the same guard and an `overwrite` parameter.
 
 ## Type library reference
 
