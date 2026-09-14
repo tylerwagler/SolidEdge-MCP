@@ -137,6 +137,29 @@ class DrawingViewTypeConstants:
     igIsoXSectionView = 6
 
 
+class VariableNameBy:
+    """constant.tlb > VariableNameBy: which name Variables.Query matches on."""
+
+    seVariableNameByUser = 0
+    seVariableNameBySystem = 1
+    seVariableNameByBoth = 2
+
+
+class seVariableTypeConstants:  # noqa: N801
+    """framewrk.tlb > seVariableTypeConstants (named to match the enum).
+
+    Variables.Query's VarType takes one of these. It used to be passed 0,
+    which is not a member of this enum, and Solid Edge answered every query
+    with an empty collection -- so variable search never returned anything.
+    There is no "all" member; query each type and merge.
+    """
+
+    seVariableType_Dimension = 1661573600
+    seVariableType_UserDefined = 1560616706
+    seVariableType_Simulation = 215773802
+    seVariableType_Text = -170730141
+
+
 class RenderModeConstants:
     """View render mode constants (from type library: seRenderMode*)"""
 

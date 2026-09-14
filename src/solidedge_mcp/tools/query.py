@@ -70,10 +70,14 @@ def manage_variable(
 ) -> dict[str, Any]:
     """Manage document variables (Variable Table).
 
-    set: name + value (document units, typically meters). add: name + formula
-    [+ units_type]. set_formula: name + formula. rename: name + new_name.
-    query: wildcard pattern [+ case_insensitive]. translate/copy_clipboard/
-    add_from_clipboard: name [+ units_type].
+    set: name + value, always in meters. add/set_formula: name + formula, a
+    string whose bare numbers are read in the DOCUMENT's units -- on an inch
+    template "0.025" means 0.025 inch, so write "25 mm" to mean 25 mm. The
+    result reports the value Solid Edge computed. A constant formula is stored
+    as a value and reads back with an empty formula; only expressions such as
+    "Width * 2" survive as formulas.
+    rename: name + new_name. query: wildcard pattern [+ case_insensitive].
+    translate/copy_clipboard/add_from_clipboard: name [+ units_type].
     """
     match action:
         case "set":

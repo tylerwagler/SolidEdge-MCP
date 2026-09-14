@@ -229,93 +229,95 @@ class TestSetVariableFormula:
 
 
 class TestQueryVariables:
-    def test_query_with_fallback(self, query_mgr):
-        """Test fallback fnmatch when Variables.Query not available."""
-        qm, doc = query_mgr
-        variables = MagicMock()
-        variables.Count = 3
-        variables.Query.side_effect = Exception("Not available")
+    """Variables.Query's VarType takes a seVariableTypeConstants value.
 
-        v1 = MagicMock()
-        v1.Name = "Length"
-        v1.Value = 0.1
-        v1.Formula = "0.1"
+    It was passed 0, which is not a member of that enum, and Solid Edge
+    answered every query with an empty collection -- so variable search never
+    found anything. Verified on Solid Edge 2026: Query("*", 0, 0, True)
+    returns nothing, Query("*", 0, seVariableType_UserDefined, True) returns
+    the user variables. The old tests pinned the broken call exactly.
+    """
 
-        v2 = MagicMock()
-        v2.Name = "Width"
-        v2.Value = 0.05
-        v2.Formula = "0.05"
+    USER = 1560616706  # seVariableType_UserDefined
+    DIMENSION = 1661573600  # seVariableType_Dimension
 
-        v3 = MagicMock()
-        v3.Name = "LengthOffset"
-        v3.Value = 0.02
-        v3.Formula = "Length / 5"
-
-        variables.Item.side_effect = lambda i: [None, v1, v2, v3][i]
-        doc.Variables = variables
-
-        result = qm.query_variables("*Length*")
-        assert result["count"] == 2
-        assert result["method"] == "fallback_fnmatch"
-        names = [m["name"] for m in result["matches"]]
-        assert "Length" in names
-        assert "LengthOffset" in names
-
-    def test_query_with_native(self, query_mgr):
-        """Test native Variables.Query when available."""
-        qm, doc = query_mgr
+    def _variables(self, doc, per_type):
+        """per_type maps a VarType constant to the names it should return."""
         variables = MagicMock()
 
-        # Mock Query return value
-        query_results = MagicMock()
-        query_results.Count = 1
-        var = MagicMock()
-        var.Name = "Width"
-        var.Value = 0.05
-        var.Formula = "0.05"
-        query_results.Item.return_value = var
-        variables.Query.return_value = query_results
-        doc.Variables = variables
+        def query(pattern, named_by, var_type, case_insensitive):
+            names = per_type.get(var_type, [])
+            results = MagicMock()
+            results.Count = len(names)
+            made = []
+            for name in names:
+                var = MagicMock()
+                var.DisplayName = name
+                var.Value = 0.05
+                var.Formula = ""
+                made.append(var)
+            results.Item.side_effect = lambda i: made[i - 1]
+            return results
 
-        result = qm.query_variables("Width")
+        variables.Query.side_effect = query
+        doc.Variables = variables
+        return variables
+
+    def test_a_real_variable_type_is_passed(self, query_mgr):
+        qm, doc = query_mgr
+        variables = self._variables(doc, {self.USER: ["Width"]})
+
+        result = qm.query_variables("W*")
+
         assert result["count"] == 1
         assert result["matches"][0]["name"] == "Width"
-        variables.Query.assert_called_once_with("Width", 0, 0, True)
+        # NamedBy=seVariableNameByUser, VarType=seVariableType_UserDefined.
+        variables.Query.assert_any_call("W*", 0, self.USER, True)
+        # Never the 0 that made Solid Edge return nothing.
+        for call in variables.Query.call_args_list:
+            assert call.args[2] != 0
 
-    def test_case_insensitive(self, query_mgr):
-        """Test case-insensitive search with fallback."""
+    def test_every_type_is_queried_and_merged(self, query_mgr):
+        """The enum has no "all" member, so each type is asked."""
         qm, doc = query_mgr
-        variables = MagicMock()
-        variables.Count = 1
-        variables.Query.side_effect = Exception("Not available")
+        variables = self._variables(doc, {self.USER: ["Width"], self.DIMENSION: ["V1", "Width"]})
 
-        v1 = MagicMock()
-        v1.Name = "MASS"
-        v1.Value = 1.5
-        v1.Formula = "1.5"
-        variables.Item.return_value = v1
-        doc.Variables = variables
+        result = qm.query_variables("*")
 
-        result = qm.query_variables("*mass*", case_insensitive=True)
-        assert result["count"] == 1
-        assert result["matches"][0]["name"] == "MASS"
+        names = sorted(m["name"] for m in result["matches"])
+        assert names == ["V1", "Width"], "a variable in two types must appear once"
+        assert variables.Query.call_count == 4
 
-    def test_no_matches(self, query_mgr):
-        """Test query with no matching variables."""
+    def test_case_insensitive_is_passed_through(self, query_mgr):
         qm, doc = query_mgr
-        variables = MagicMock()
-        variables.Count = 1
-        variables.Query.side_effect = Exception("Not available")
+        variables = self._variables(doc, {})
 
-        v1 = MagicMock()
-        v1.Name = "Length"
-        v1.Value = 0.1
-        variables.Item.return_value = v1
-        doc.Variables = variables
+        qm.query_variables("w*", case_insensitive=False)
 
-        result = qm.query_variables("*Xyz*")
+        for call in variables.Query.call_args_list:
+            assert call.args[3] is False
+
+    def test_no_match_is_an_empty_list(self, query_mgr):
+        qm, doc = query_mgr
+        self._variables(doc, {})
+
+        result = qm.query_variables("Nothing*")
+
         assert result["count"] == 0
         assert result["matches"] == []
+        assert "error" not in result
+
+    def test_a_broken_query_is_not_an_empty_result(self, query_mgr):
+        """If every type raises, that is a failure, not "no matches"."""
+        qm, doc = query_mgr
+        variables = MagicMock()
+        variables.Query.side_effect = Exception("Query unavailable")
+        doc.Variables = variables
+
+        result = qm.query_variables("*")
+
+        assert "error" in result
+        assert "Query unavailable" in result["error"]
 
 
 # ============================================================================
@@ -361,6 +363,14 @@ class TestGetVariableFormula:
 
 
 class TestRenameVariable:
+    """variable.DisplayName is read-only; Variables.PutName is the rename.
+
+    Assigning to DisplayName raised, and because the search and the write
+    shared one `try ... except Exception: continue`, the failure skipped past
+    the variable it had just found and fell through to "not found" -- so
+    renaming never worked and said the wrong thing about why.
+    """
+
     def test_success(self, query_mgr):
         qm, doc = query_mgr
         var = MagicMock()
@@ -369,13 +379,33 @@ class TestRenameVariable:
         variables = MagicMock()
         variables.Count = 1
         variables.Item.return_value = var
+        variables.GetDisplayName.return_value = "NewVar"
         doc.Variables = variables
 
         result = qm.rename_variable("OldVar", "NewVar")
+
         assert result["status"] == "renamed"
         assert result["old_name"] == "OldVar"
         assert result["new_name"] == "NewVar"
-        assert var.DisplayName == "NewVar"
+        assert result["reads_back"] == "NewVar"
+        variables.PutName.assert_called_once_with(var, "NewVar")
+
+    def test_a_failed_rename_is_not_reported_as_not_found(self, query_mgr):
+        qm, doc = query_mgr
+        var = MagicMock()
+        var.DisplayName = "OldVar"
+
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = var
+        variables.PutName.side_effect = Exception("read-only")
+        doc.Variables = variables
+
+        result = qm.rename_variable("OldVar", "NewVar")
+
+        assert "error" in result
+        assert "not found" not in result["error"]
+        assert "read-only" in result["error"]
 
     def test_not_found(self, query_mgr):
         qm, doc = query_mgr
