@@ -883,3 +883,101 @@ class TestLoftedFlangesUnsupported:
         result = feature_mgr.create_lofted_flange_ex(0.001)
         assert result["unsupported"] is True
         models.AddLoftedFlangeEx.assert_not_called()
+
+
+# ============================================================================
+# OPEN PROFILE GUARD
+# ============================================================================
+
+
+class FakeCollection:
+    def __init__(self, items):
+        self._items = list(items)
+
+    @property
+    def Count(self):
+        return len(self._items)
+
+    def Item(self, index):
+        return self._items[index - 1]
+
+
+def _line(x1, y1, x2, y2):
+    line = MagicMock()
+    line.GetStartPoint.return_value = (x1, y1)
+    line.GetEndPoint.return_value = (x2, y2)
+    return line
+
+
+def _profile(lines=(), circles=(), ellipses=()):
+    profile = MagicMock()
+    profile.Lines2d = FakeCollection(list(lines))
+    profile.Circles2d = FakeCollection(list(circles))
+    profile.Ellipses2d = FakeCollection(list(ellipses))
+    profile.Boundaries2d = FakeCollection([])
+    return profile
+
+
+class TestRequireOpenProfile:
+    """A louver line and a bend line are open profiles.
+
+    Solid Edge fails a closed one with a bare E_FAIL that says nothing.
+    Verified on Solid Edge 2026: the same call succeeds with a line.
+    """
+
+    def _manager(self):
+        from solidedge_mcp.backends.features import FeatureManager
+
+        return FeatureManager(MagicMock(), MagicMock())
+
+    def test_a_single_line_is_open(self):
+        manager = self._manager()
+
+        assert manager._require_open_profile(_profile(lines=[_line(0, 0, 0.1, 0)]), "bend") is None
+
+    def test_a_circle_is_refused(self):
+        manager = self._manager()
+
+        result = manager._require_open_profile(_profile(circles=[MagicMock()]), "louver")
+
+        assert result is not None
+        assert "circle" in result["error"]
+        assert "louver" in result["error"]
+
+    def test_an_ellipse_is_refused(self):
+        manager = self._manager()
+
+        result = manager._require_open_profile(_profile(ellipses=[MagicMock()]), "bend")
+
+        assert result is not None
+        assert "ellipse" in result["error"]
+
+    def test_a_closed_chain_of_lines_is_refused(self):
+        manager = self._manager()
+        rectangle = [
+            _line(0, 0, 0.1, 0),
+            _line(0.1, 0, 0.1, 0.1),
+            _line(0.1, 0.1, 0, 0.1),
+            _line(0, 0.1, 0, 0),
+        ]
+
+        result = manager._require_open_profile(_profile(lines=rectangle), "bend")
+
+        assert result is not None
+        assert "closed chain" in result["error"]
+
+    def test_an_open_chain_of_lines_is_allowed(self):
+        manager = self._manager()
+        zigzag = [
+            _line(0, 0, 0.1, 0),
+            _line(0.1, 0, 0.1, 0.1),
+            _line(0.1, 0.1, 0, 0.1),
+        ]
+
+        assert manager._require_open_profile(_profile(lines=zigzag), "bend") is None
+
+    def test_a_mocked_profile_does_not_read_as_closed(self):
+        """A mock answers int() with 1, which would fake a circle into every test."""
+        manager = self._manager()
+
+        assert manager._require_open_profile(MagicMock(), "bend") is None

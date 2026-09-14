@@ -59,7 +59,13 @@ class SurfacesMixin:
             profile_array = [profile]
 
             depth1 = distance
-            depth2 = distance if direction == "Symmetric" else 0.0
+            symmetric = direction == "Symmetric"
+            depth2 = distance if symmetric else 0.0
+            # A second extent of igFinite with a depth of zero is rejected
+            # with E_INVALIDARG, so a one-sided surface must say igNone.
+            # Verified on Solid Edge 2026; the extrude and revolve calls
+            # already do this. Every non-symmetric extruded surface failed.
+            extent2 = ExtentTypeConstants.igFinite if symmetric else ExtentTypeConstants.igNone
             side1 = DirectionConstants.igRight
             side2 = (
                 DirectionConstants.igLeft
@@ -87,7 +93,7 @@ class SurfacesMixin:
                 TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
                 0.0,  # TreatmentCrownRadiusOrOffset1
                 0.0,  # TreatmentCrownTakeOffAngle1
-                ExtentTypeConstants.igFinite,  # ExtentType2
+                extent2,  # ExtentType2
                 side2,  # ExtentSide2
                 depth2,  # FiniteDepth2
                 None,  # KeyPointOrTangentFace2
@@ -447,7 +453,13 @@ class SurfacesMixin:
             curve_array = [profile]
 
             depth1 = distance
-            depth2 = distance if direction == "Symmetric" else 0.0
+            symmetric = direction == "Symmetric"
+            depth2 = distance if symmetric else 0.0
+            # A second extent of igFinite with a depth of zero is rejected
+            # with E_INVALIDARG, so a one-sided surface must say igNone.
+            # Verified on Solid Edge 2026; the extrude and revolve calls
+            # already do this. Every non-symmetric extruded surface failed.
+            extent2 = ExtentTypeConstants.igFinite if symmetric else ExtentTypeConstants.igNone
             side1 = DirectionConstants.igRight
             side2 = (
                 DirectionConstants.igLeft
@@ -477,7 +489,7 @@ class SurfacesMixin:
                 TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
                 0.0,  # TreatmentCrownRadiusOrOffset1
                 0.0,  # TreatmentCrownTakeOffAngle1
-                ExtentTypeConstants.igFinite,  # ExtentType2
+                extent2,  # ExtentType2
                 side2,  # ExtentSide2
                 depth2,  # FiniteDepth2
                 None,  # KeyPointOrTangentFace2
@@ -831,7 +843,13 @@ class SurfacesMixin:
             profile_array = [profile]
 
             depth1 = distance
-            depth2 = distance if direction == "Symmetric" else 0.0
+            symmetric = direction == "Symmetric"
+            depth2 = distance if symmetric else 0.0
+            # A second extent of igFinite with a depth of zero is rejected
+            # with E_INVALIDARG, so a one-sided surface must say igNone.
+            # Verified on Solid Edge 2026; the extrude and revolve calls
+            # already do this. Every non-symmetric extruded surface failed.
+            extent2 = ExtentTypeConstants.igFinite if symmetric else ExtentTypeConstants.igNone
             side1 = DirectionConstants.igRight
             side2 = (
                 DirectionConstants.igLeft
@@ -861,7 +879,7 @@ class SurfacesMixin:
                 TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
                 0.0,  # TreatmentCrownRadiusOrOffset1
                 0.0,  # TreatmentCrownTakeOffAngle1
-                ExtentTypeConstants.igFinite,  # ExtentType2
+                extent2,  # ExtentType2
                 side2,  # ExtentSide2
                 depth2,  # FiniteDepth2
                 None,  # KeyPointOrTangentFace2

@@ -250,9 +250,10 @@ def create_bend(
 ) -> dict[str, Any]:
     """Bend a sheet metal face along the active sketch line.
 
-    bend_angle in degrees; bend_deduction in meters. direction is the side the
-    material folds toward; moving_side selects which side of the bend line
-    moves. bend_deduction applies to 'with_calc' only.
+    The sketch must be an open line across the face: a closed shape is
+    refused. bend_angle in degrees; bend_deduction in meters. direction is the
+    side the material folds toward; moving_side selects which side of the bend
+    line moves. bend_deduction applies to 'with_calc' only.
     """
     err = validate_numerics(bend_angle=bend_angle, bend_deduction=bend_deduction)
     if err:
@@ -393,7 +394,8 @@ def create_louver(
 ) -> dict[str, Any]:
     """Create a louver from the active sketch profile (sheet metal).
 
-    depth and height in meters; Louvers.Add requires a positive height, so
+    The sketch must be an open line where the louver runs: a closed shape is
+    refused. depth and height in meters; Louvers.Add requires a positive height, so
     'basic' fails without it. direction is the side the material is formed
     toward. 'sync' (unsupported: Louvers.AddSync needs a target face plus
     origin and orientation coordinate arrays that cannot be supplied here);

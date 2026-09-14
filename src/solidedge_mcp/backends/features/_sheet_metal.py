@@ -6,6 +6,7 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import (
     DirectionConstants,
     ExtentTypeConstants,
@@ -35,8 +36,71 @@ _SE_LOUVER_DEPTH_DIRECTION_RIGHT = 2
 _SE_LOUVER_HEIGHT_NORMAL = 7
 
 
+def _count(collection: Any) -> int:
+    """A collection's Count, or zero when it is not a real number.
+
+    The isinstance check matters: a unittest.mock stand-in answers ``int()``
+    with 1, so converting blindly would make every mocked profile look as
+    though it held a circle.
+    """
+    value = com_get(collection, "Count", 0)
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return 0
+    return int(value)
+
+
+def _lines_form_a_loop(profile: Any) -> bool:
+    """True when every line endpoint is shared, which makes a closed chain."""
+    lines = com_get(profile, "Lines2d")
+    count = _count(lines)
+    if count < 3:
+        return False
+    tally: dict[tuple[float, float], int] = {}
+    for i in range(1, count + 1):
+        element = lines.Item(i)
+        for member in ("GetStartPoint", "GetEndPoint"):
+            try:
+                point = getattr(element, member)()
+            except Exception:
+                return False
+            key = (round(float(point[0]), 9), round(float(point[1]), 9))
+            tally[key] = tally.get(key, 0) + 1
+    return all(shared == 2 for shared in tally.values())
+
+
 class SheetMetalMixin:
     """Mixin providing sheet metal and miscellaneous part feature methods."""
+
+    def _require_open_profile(self, profile: Any, feature: str) -> dict[str, Any] | None:
+        """Refuse a closed profile for a feature that needs a line.
+
+        A louver line and a bend line are open profiles. Handing either a
+        closed shape fails with a bare E_FAIL from Solid Edge, which tells the
+        caller nothing. Verified on Solid Edge 2026: the same call succeeds
+        with a line and fails with a circle.
+        """
+        closed_kinds = []
+        for name, label in (
+            ("Circles2d", "circle"),
+            ("Ellipses2d", "ellipse"),
+            ("Boundaries2d", "closed boundary"),
+        ):
+            if _count(com_get(profile, name)):
+                closed_kinds.append(label)
+
+        if not closed_kinds and _lines_form_a_loop(profile):
+            closed_kinds.append("closed chain of lines")
+
+        if not closed_kinds:
+            return None
+        return {
+            "error": (
+                f"A {feature} is formed along an open line, and this sketch "
+                f"contains a {closed_kinds[0]}. Draw a single line where the "
+                f"{feature} should run, close the sketch, and try again."
+            ),
+            "profile": closed_kinds,
+        }
 
     def create_base_flange(
         self, width: float, thickness: float, bend_radius: float | None = None
@@ -830,6 +894,10 @@ class SheetMetalMixin:
             models = doc.Models
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
+
+            err = self._require_open_profile(profile, "louver")
+            if err:
+                return err
 
             model = models.Item(1)
 
@@ -1842,6 +1910,10 @@ class SheetMetalMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a sheet metal base feature first."}
 
+            err = self._require_open_profile(profile, "bend")
+            if err:
+                return err
+
             model = models.Item(1)
 
             bend_angle_rad = math.radians(bend_angle)
@@ -2470,6 +2542,10 @@ class SheetMetalMixin:
             models = doc.Models
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
+
+            err = self._require_open_profile(profile, "bend")
+            if err:
+                return err
 
             model = models.Item(1)
             angle_rad = math.radians(bend_angle)
