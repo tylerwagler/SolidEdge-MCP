@@ -14,6 +14,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
 from ..constants import (
+    FEATURE_TYPE_NAMES,
     FaceQueryConstants,
     LoftSweepConstants,
     ModelingModeConstants,
@@ -127,6 +128,20 @@ def verify_geometry_on_creators(cls: type) -> type:
         if name.startswith("create_") and callable(attr):
             setattr(cls, name, verifies_geometry(attr))
     return cls
+
+
+def _describe_type(raw: Any) -> dict[str, Any]:
+    """A feature's type as both the raw value and a readable name.
+
+    Feature.Type is a FeatureTypeConstants value. 462094706 on its own tells a
+    caller nothing; "extruded protrusion" does.
+    """
+    if not isinstance(raw, int) or isinstance(raw, bool):
+        return {"type": "Unknown"}
+    name = FEATURE_TYPE_NAMES.get(raw)
+    if name is None:
+        return {"type": raw}
+    return {"type": name, "type_code": raw}
 
 
 def _reference_plane_names(doc: Any) -> set[str]:
@@ -390,7 +405,7 @@ class FeatureManagerBase:
                         "body_index": m - 1,
                         "position_in_body": i,
                         "name": com_get(feature, "Name", f"Feature_{len(features) + 1}"),
-                        "type": com_get(feature, "Type", "Unknown"),
+                        **_describe_type(com_get(feature, "Type")),
                     }
                 )
         if features:
@@ -418,7 +433,7 @@ class FeatureManagerBase:
                     "body_index": 0,
                     "position_in_body": i,
                     "name": name,
-                    "type": com_get(entry, "Type", "Unknown"),
+                    **_describe_type(com_get(entry, "Type")),
                 }
             )
         return features
