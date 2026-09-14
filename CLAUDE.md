@@ -25,6 +25,7 @@ uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.
 uv run python scripts/audit_com_receivers.py
 uv run python scripts/audit_com_writes.py
 uv run python scripts/audit_com_hasattr.py
+uv run python scripts/audit_reported_writes.py
 uv run python scripts/audit_dead_params.py  # parameters declared and never read
 uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid Edge)
 ```
@@ -111,9 +112,11 @@ The signature audit resolves the receiver with the same inference the receiver a
 
 The receiver audit goes further and infers what a receiver *is* by following declared types: `doc.Models.Item(1).Features` resolves PartDocument to Models to Model to Features. That is what catches the sharpest class of bug here, a real name on the wrong interface, such as `model.RevolvedSurfaces` when RevolvedSurfaces belongs to `Constructions`, or `line.StartPoint.X` when Line2d only has `GetStartPoint()`.
 
-Three more checks need no type library:
+Four more checks need no type library:
 
 `tests/unit/test_manager_mro.py` covers a different trap: the managers are built from a dozen mixins each, and two mixins defining the same method leaves one silently unreachable.
+
+`tests/unit/test_reported_writes.py` (`scripts/audit_reported_writes.py`) fails when a COM write sits inside a `contextlib.suppress` or a `try` that passes, and the value written is then handed back in the result. If Solid Edge refuses the write the failure is hidden and the caller is told it applied. This shape has produced a bug every time it was checked: `TextBox.TextHeight`, `Leader.Text` and `FeatureControlFrame.Text` are on no interface, `variable.DisplayName` is read-only, `DraftPrintUtility.PaperWidth` is millimetres and was given meters, and `PMI.Show` is refused on a part with no PMI. Let the write raise, report what Solid Edge holds afterwards, or add the pair to `ALLOWED` once it has been driven live.
 
 `tests/unit/test_dead_params.py` (`scripts/audit_dead_params.py`) fails when a parameter is declared and never read, at either layer. That is this server's quietest bug: the call succeeds, the result reports what the caller asked for, and the value never reached Solid Edge, so there is nothing for it to reject. `add_adjustable_part(x, y, z)` placed the part at the origin, `create_parts_list(x, y)` let Solid Edge choose the position, and `create_revolve(axis_type)` offered a choice nothing consulted. A parameter with genuinely nowhere to go says so with `del <param>`, which the audit reads as deliberate.
 

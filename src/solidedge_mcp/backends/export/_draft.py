@@ -279,6 +279,13 @@ class DraftMixin:
         Controls the overall visibility of PMI data as well as sub-categories
         for dimensions and annotations.
 
+        PMI belongs to a part, sheet metal or assembly document, not to a
+        draft. Solid Edge does not always accept ``Show``: on a part with no
+        PMI content it stays False however it is written, so the result
+        reports what the document holds afterwards rather than what was asked
+        for. The three writes used to sit inside suppresses, which hid both
+        that and any real failure.
+
         Args:
             show: Master PMI visibility toggle
             show_dimensions: Show/hide dimension PMI annotations
@@ -294,18 +301,20 @@ class DraftMixin:
             if pmi is None:
                 return {"error": "PMI not available on this document"}
 
-            with contextlib.suppress(Exception):
-                pmi.Show = show
-            with contextlib.suppress(Exception):
-                pmi.ShowDimensions = show_dimensions
-            with contextlib.suppress(Exception):
-                pmi.ShowAnnotations = show_annotations
+            pmi.Show = show
+            pmi.ShowDimensions = show_dimensions
+            pmi.ShowAnnotations = show_annotations
 
             return {
                 "status": "updated",
-                "show": show,
-                "show_dimensions": show_dimensions,
-                "show_annotations": show_annotations,
+                "requested": {
+                    "show": show,
+                    "show_dimensions": show_dimensions,
+                    "show_annotations": show_annotations,
+                },
+                "show": com_get(pmi, "Show"),
+                "show_dimensions": com_get(pmi, "ShowDimensions"),
+                "show_annotations": com_get(pmi, "ShowAnnotations"),
             }
         except Exception as e:
             return error_result(e)

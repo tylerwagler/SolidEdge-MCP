@@ -625,6 +625,13 @@ class TestGetPmiInfo:
 
 
 class TestSetPmiVisibility:
+    """Solid Edge does not always accept Show.
+
+    Verified on a part with no PMI content: writing Show=True leaves it False.
+    The three writes sat inside suppresses and the result echoed the request,
+    so the caller was told the master toggle was on when it was not.
+    """
+
     def test_success(self, export_mgr):
         em, doc = export_mgr
         pmi = MagicMock()
@@ -632,9 +639,21 @@ class TestSetPmiVisibility:
 
         result = em.set_pmi_visibility(True, False, True)
         assert result["status"] == "updated"
-        assert result["show"] is True
-        assert result["show_dimensions"] is False
-        assert result["show_annotations"] is True
+        assert pmi.Show is True
+        assert pmi.ShowDimensions is False
+        assert pmi.ShowAnnotations is True
+
+    def test_what_solid_edge_kept_is_reported(self, export_mgr):
+        em, doc = export_mgr
+        pmi = MagicMock()
+        # A document that refuses the master toggle.
+        type(pmi).Show = PropertyMock(return_value=False)
+        doc.PMI = pmi
+
+        result = em.set_pmi_visibility(True, True, True)
+
+        assert result["requested"]["show"] is True
+        assert result["show"] is False
 
     def test_no_pmi(self, export_mgr):
         em, doc = export_mgr
@@ -650,9 +669,9 @@ class TestSetPmiVisibility:
 
         result = em.set_pmi_visibility()
         assert result["status"] == "updated"
-        assert result["show"] is True
-        assert result["show_dimensions"] is True
-        assert result["show_annotations"] is True
+        assert pmi.Show is True
+        assert pmi.ShowDimensions is True
+        assert pmi.ShowAnnotations is True
 
 
 # ============================================================================

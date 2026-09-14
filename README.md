@@ -126,12 +126,13 @@ uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.
 uv run python scripts/audit_com_receivers.py
 uv run python scripts/audit_com_writes.py
 uv run python scripts/audit_com_hasattr.py
+uv run python scripts/audit_reported_writes.py
 uv run python scripts/audit_dead_params.py
 ```
 
 `tests/unit/test_constants_typelib.py` verifies every COM enum value in `constants.py`. `tests/unit/test_com_members.py` fails on any COM member name absent from the type libraries. `tests/unit/test_com_receivers.py` goes further: it infers what each receiver is by following declared types and fails when a member is read off an interface that does not have it, which is invisible to a name check when the name is real somewhere else. `tests/unit/test_com_writes.py` covers the other direction: a write to a member that is a method, or to a property the type library marks read-only. Solid Edge answers "Property 'Item.X' can not be set." and a try/except around it turns the dead feature into a reported success. All skip when the dump is missing, so a fresh clone and CI stay green.
 
-Three checks need no type library. `tests/unit/test_com_hasattr.py` fails on `hasattr` used to test what a COM proxy can do: the probe reads False both for a member that is absent and for one whose getter raised, which is how every layer call came to refuse draft documents, whose layers live on the sheet rather than the document. `tests/unit/test_manager_mro.py` fails when two mixins define the same method on a manager, which leaves one of them unreachable.
+Four checks need no type library. `tests/unit/test_reported_writes.py` fails when a COM write is swallowed by a suppress and the value is then reported as applied -- the shape behind most of the silent no-ops found in this codebase, from text heights that never changed to a variable rename that reported "not found". `tests/unit/test_com_hasattr.py` fails on `hasattr` used to test what a COM proxy can do: the probe reads False both for a member that is absent and for one whose getter raised, which is how every layer call came to refuse draft documents, whose layers live on the sheet rather than the document. `tests/unit/test_manager_mro.py` fails when two mixins define the same method on a manager, which leaves one of them unreachable.
 
 `tests/unit/test_dead_params.py` fails when a parameter is declared and never read, in a tool or a backend method. Nothing downstream can catch that: Solid Edge is never told the value, so it has nothing to reject, and the call returns a cheerful success. Three shipped that way -- a component position that always placed at the origin, a table position Solid Edge chose for itself, and a revolve axis setting nothing consulted. A parameter that genuinely has nowhere to go says so with `del <param>`.
 
