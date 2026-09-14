@@ -1,6 +1,7 @@
 """Query operations for assembly components."""
 
 import contextlib
+import math
 import os
 from typing import Any
 
@@ -16,12 +17,30 @@ _logger = get_logger(__name__)
 class QueryMixin:
     """Mixin providing assembly query/interrogation methods."""
 
+    @staticmethod
+    def _transform_degrees(transform: Any) -> tuple[list[float], list[float]]:
+        """Split an Occurrence.GetTransform() result into position + degrees.
+
+        GetTransform reports its angles in radians, but meters and degrees are
+        the unit at this server's boundary: a caller who read ``rotation`` back
+        and passed it to set_component_orientation was rotating by 1/57th of
+        what they read.
+        """
+        position = [transform[0], transform[1], transform[2]]
+        rotation = [
+            math.degrees(transform[3]),
+            math.degrees(transform[4]),
+            math.degrees(transform[5]),
+        ]
+        return position, rotation
+
     def list_components(self) -> dict[str, Any]:
         """
         List all components in the active assembly.
 
         Uses Occurrence.GetTransform() for position/rotation and
-        OccurrenceFileName for file path.
+        OccurrenceFileName for file path. Positions are meters and
+        rotations degrees, matching what the setters take.
 
         Returns:
             Dict with list of components and their properties
@@ -52,11 +71,10 @@ class QueryMixin:
                 # Get transform (originX, originY, originZ, angleX, angleY, angleZ)
                 try:
                     transform = occurrence.GetTransform()
-                    comp["position"] = [transform[0], transform[1], transform[2]]
-                    comp["rotation"] = [transform[3], transform[4], transform[5]]
+                    comp["position"], comp["rotation_degrees"] = self._transform_degrees(transform)
                 except Exception:
-                    comp["position"] = [0, 0, 0]
-                    comp["rotation"] = [0, 0, 0]
+                    comp["position"] = [0.0, 0.0, 0.0]
+                    comp["rotation_degrees"] = [0.0, 0.0, 0.0]
 
                 # Visibility/suppression
                 try:
@@ -74,7 +92,8 @@ class QueryMixin:
         """
         Get detailed information about a specific component.
 
-        Uses GetTransform for position/rotation and GetMatrix for the full 4x4 matrix.
+        Uses GetTransform for position/rotation and GetMatrix for the full 4x4
+        matrix. Rotations are degrees, matching what the setters take.
 
         Args:
             component_index: 0-based index of the component
@@ -109,8 +128,7 @@ class QueryMixin:
             # Transform (position + rotation)
             try:
                 transform = occurrence.GetTransform()
-                info["position"] = [transform[0], transform[1], transform[2]]
-                info["rotation_rad"] = [transform[3], transform[4], transform[5]]
+                info["position"], info["rotation_degrees"] = self._transform_degrees(transform)
             except Exception:
                 pass
 
@@ -137,8 +155,8 @@ class QueryMixin:
         """
         Get the full transformation matrix of a component.
 
-        Returns the 4x4 homogeneous transformation matrix and
-        decomposed origin + rotation.
+        Returns the 4x4 homogeneous transformation matrix and decomposed
+        origin (meters) + rotation (degrees).
 
         Args:
             component_index: 0-based index of the component
@@ -172,8 +190,7 @@ class QueryMixin:
             # Try GetTransform (origin + angles)
             try:
                 transform = occurrence.GetTransform()
-                result["origin"] = [transform[0], transform[1], transform[2]]
-                result["rotation_angles"] = [transform[3], transform[4], transform[5]]
+                result["origin"], result["rotation_degrees"] = self._transform_degrees(transform)
             except Exception:
                 pass
 
@@ -669,8 +686,7 @@ class QueryMixin:
             # Transform (position + rotation)
             try:
                 transform = occurrence.GetTransform()
-                info["position"] = [transform[0], transform[1], transform[2]]
-                info["rotation_rad"] = [transform[3], transform[4], transform[5]]
+                info["position"], info["rotation_degrees"] = self._transform_degrees(transform)
             except Exception:
                 pass
 

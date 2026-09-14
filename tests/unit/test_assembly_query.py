@@ -8,6 +8,7 @@ GetOccurrenceStyle, GetFaceStyle, GetOccurrence.
 Uses unittest.mock to simulate COM objects.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -710,3 +711,87 @@ class TestGetOccurrence:
         result = am.get_occurrence(99999)
         assert "error" in result
         assert "ID not found" in result["error"]
+
+
+# ============================================================================
+# TRANSFORM UNITS
+# ============================================================================
+
+
+class TestTransformUnits:
+    """GetTransform reports radians; this server's boundary is degrees.
+
+    Every rotation setter (set_component_transform, put_transform_euler,
+    occurrence_rotate) takes degrees, so a caller who read a rotation back
+    and passed it straight to a setter was rotating by 1/57th of what they
+    read. Each read path must hand back degrees.
+    """
+
+    QUARTER_TURN = [0.1, 0.2, 0.3, 0.0, 0.0, math.pi / 2]
+
+    def _occ(self, transform):
+        occ = MagicMock()
+        occ.Name = "Part_1"
+        occ.OccurrenceFileName = "C:/parts/part1.par"
+        occ.GetTransform.return_value = transform
+        occ.Visible = True
+        return occ
+
+    def test_list_components_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        comp = am.list_components()["components"][0]
+        assert comp["position"] == [0.1, 0.2, 0.3]
+        assert comp["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+
+    def test_component_info_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        info = am.get_component_info(0)
+        assert info["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+        assert "rotation_rad" not in info
+
+    def test_component_transform_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        result = am.get_component_transform(0)
+        assert result["origin"] == [0.1, 0.2, 0.3]
+        assert result["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+        assert "rotation_angles" not in result
+
+    def test_get_occurrence_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.GetOccurrence.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        info = am.get_occurrence(42)
+        assert info["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+
+    def test_round_trip_through_a_setter(self, asm_mgr):
+        """What a read hands back is what a setter accepts."""
+        am, doc = asm_mgr
+        occ = self._occ(self.QUARTER_TURN)
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        rotation = am.get_component_transform(0)["rotation_degrees"]
+        am.set_component_transform(0, 0.0, 0.0, 0.0, *rotation)
+
+        # PutTransform takes radians: the degrees we read must arrive back as
+        # the same radians GetTransform reported.
+        assert occ.PutTransform.call_args.args[5] == pytest.approx(math.pi / 2)

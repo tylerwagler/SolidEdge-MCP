@@ -374,8 +374,10 @@ def set_component_orientation(
 ) -> dict[str, Any]:
     """Set full position + rotation of a component (0-based index).
 
-    set_transform: origin_x/y/z (meters) + angle_x/y/z (degrees).
-    put_euler: x/y/z (meters) + rx/ry/rz (degrees).
+    Position in meters and rotation in degrees, named either way: origin_x/y/z
+    with angle_x/y/z, or x/y/z with rx/ry/rz. Whichever set you fill is used,
+    so naming the rotation the other way no longer rotates by zero and reports
+    success.
     """
     err = validate_numerics(
         origin_x=origin_x,
@@ -393,20 +395,30 @@ def set_component_orientation(
     )
     if err:
         return err
+    # Each branch used to read only its own vocabulary, so naming the rotation
+    # the other way left it at zero: the component did not move and the result
+    # still said "updated". Each branch now prefers its own names and falls
+    # back to the other set.
     match method:
         case "set_transform":
             return assembly_manager.set_component_transform(
                 component_index=component_index,
-                origin_x=origin_x,
-                origin_y=origin_y,
-                origin_z=origin_z,
-                angle_x=angle_x,
-                angle_y=angle_y,
-                angle_z=angle_z,
+                origin_x=origin_x or x,
+                origin_y=origin_y or y,
+                origin_z=origin_z or z,
+                angle_x=angle_x or rx,
+                angle_y=angle_y or ry,
+                angle_z=angle_z or rz,
             )
         case "put_euler":
             return assembly_manager.put_transform_euler(
-                component_index=component_index, x=x, y=y, z=z, rx=rx, ry=ry, rz=rz
+                component_index=component_index,
+                x=x or origin_x,
+                y=y or origin_y,
+                z=z or origin_z,
+                rx=rx or angle_x,
+                ry=ry or angle_y,
+                rz=rz or angle_z,
             )
         case _:
             return {"error": f"Unknown method: {method}"}

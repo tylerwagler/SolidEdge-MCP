@@ -548,3 +548,48 @@ class TestBackendSignatureAgreement:
             {"assembly_manager": AssemblyManager},
         )
         assert violations == []
+
+
+class TestOrientationSpellings:
+    """Either vocabulary reaches the backend.
+
+    Each branch used to read only its own parameter names, so naming the
+    rotation the other way left it at zero: the component did not move and
+    the result still said "updated". Seen live on Solid Edge 2026, where
+    put_euler with angle_z reported angles [0, 0, 0].
+    """
+
+    def test_put_euler_accepts_the_angle_names(self, mock_mgr):
+        mock_mgr.put_transform_euler.return_value = {"status": "ok"}
+
+        set_component_orientation(method="put_euler", component_index=1, angle_z=0.5, origin_x=0.2)
+
+        kwargs = mock_mgr.put_transform_euler.call_args.kwargs
+        assert kwargs["rz"] == 0.5
+        assert kwargs["x"] == 0.2
+
+    def test_set_transform_accepts_the_euler_names(self, mock_mgr):
+        mock_mgr.set_component_transform.return_value = {"status": "ok"}
+
+        set_component_orientation(method="set_transform", component_index=1, rx=3.0, z=0.4)
+
+        kwargs = mock_mgr.set_component_transform.call_args.kwargs
+        assert kwargs["angle_x"] == 3.0
+        assert kwargs["origin_z"] == 0.4
+
+    def test_a_branch_still_prefers_its_own_names(self, mock_mgr):
+        mock_mgr.put_transform_euler.return_value = {"status": "ok"}
+
+        set_component_orientation(method="put_euler", rz=1.0, angle_z=9.0)
+
+        # put_euler's own vocabulary is rx/ry/rz, so rz wins.
+        assert mock_mgr.put_transform_euler.call_args.kwargs["rz"] == 1.0
+
+    def test_zeros_stay_zero(self, mock_mgr):
+        mock_mgr.put_transform_euler.return_value = {"status": "ok"}
+
+        set_component_orientation(method="put_euler", component_index=0)
+
+        kwargs = mock_mgr.put_transform_euler.call_args.kwargs
+        assert (kwargs["x"], kwargs["y"], kwargs["z"]) == (0, 0, 0)
+        assert (kwargs["rx"], kwargs["ry"], kwargs["rz"]) == (0, 0, 0)
