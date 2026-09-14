@@ -70,6 +70,22 @@ SEEDS: dict[str, frozenset[str]] = {
     "self.connection.get_application()": frozenset({"Application"}),
     "self.get_application()": frozenset({"Application"}),
     "self.application": frozenset({"Application"}),
+    "self.active_document": DOCUMENT_TYPES,
+}
+
+#: Our own helpers that hand back a COM object, keyed by function name so the
+#: arguments do not matter. Without these the inference stops at the helper
+#: and every member read off its result goes unchecked -- which is most of the
+#: query layer, since it reaches geometry through body_of and all_faces.
+CALL_SEEDS: dict[str, frozenset[str]] = {
+    "body_of": frozenset({"Body"}),
+    "all_faces": frozenset({"Faces"}),
+}
+
+#: Helpers returning ``(com_object, error_dict)``. The first name bound by a
+#: tuple assignment takes the interface; the second is ours, not Solid Edge's.
+TUPLE_SEEDS: dict[str, frozenset[str]] = {
+    "resolve_view": frozenset({"View"}),
 }
 
 #: Members every COM object answers, whatever its interface.
@@ -168,6 +184,21 @@ class Visitor(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
         self.generic_visit(node)
+
+        # view_obj, err = resolve_view(doc)
+        value = node.value
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id in TUPLE_SEEDS
+        ):
+            for target in node.targets:
+                if isinstance(target, ast.Tuple) and target.elts:
+                    first = target.elts[0]
+                    if isinstance(first, ast.Name):
+                        self.scopes[-1][first.id] = TUPLE_SEEDS[value.func.id]
+            return
+
         types = self._infer(node.value)
         if not types:
             return
@@ -189,6 +220,8 @@ class Visitor(ast.NodeVisitor):
             if isinstance(func, ast.Attribute):
                 receivers = self._infer(func.value)
                 return self._member_types(receivers, func.attr)
+            if isinstance(func, ast.Name):
+                return CALL_SEEDS.get(func.id, frozenset())
             return frozenset()
 
         if isinstance(node, ast.Attribute):
