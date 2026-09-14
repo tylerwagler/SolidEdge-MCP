@@ -273,7 +273,9 @@ def add_annotation(
 ) -> dict[str, Any]:
     """Add a text annotation to the active draft. Meters.
 
-    text_box/note: x,y + text + height (text height).
+    text_box/note: x,y + text + height, the box height in meters, which
+    Solid Edge clamps upward to fit the text (the result reports what it
+    actually holds, not what you asked for).
     leader: line (x1,y1)-(x2,y2) + text.
     balloon: x,y + text, optional leader tip at leader_x/leader_y.
     """

@@ -384,9 +384,12 @@ class TestGetSheetTextBoxes:
         sheet = MagicMock()
         tb = MagicMock()
         tb.Text = "Hello"
-        tb.x = 0.02
-        tb.y = 0.03
         tb.Height = 0.005
+        # TextBox has no x/y properties, so the position has to come from
+        # GetOrigin's out-parameters; reading tb.x left both keys missing.
+        tb.GetOrigin.return_value = (0.02, 0.03, 0.0)
+        del tb.x
+        del tb.y
 
         text_boxes = MagicMock()
         text_boxes.Count = 1
@@ -398,6 +401,8 @@ class TestGetSheetTextBoxes:
         assert result["count"] == 1
         assert result["text_boxes"][0]["text"] == "Hello"
         assert result["text_boxes"][0]["height"] == 0.005
+        assert result["text_boxes"][0]["x"] == 0.02
+        assert result["text_boxes"][0]["y"] == 0.03
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr

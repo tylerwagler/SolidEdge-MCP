@@ -821,10 +821,12 @@ class DrawingMixin:
                 info: dict[str, Any] = {"index": i - 1}
                 with contextlib.suppress(Exception):
                     info["text"] = tb.Text
+                # TextBox has no x/y properties, so both keys were always
+                # missing. Its position comes from GetOrigin's out-parameters.
                 with contextlib.suppress(Exception):
-                    info["x"] = tb.x
-                with contextlib.suppress(Exception):
-                    info["y"] = tb.y
+                    origin = tb.GetOrigin()
+                    info["x"] = float(origin[0])
+                    info["y"] = float(origin[1])
                 with contextlib.suppress(Exception):
                     info["height"] = tb.Height
                 items.append(info)

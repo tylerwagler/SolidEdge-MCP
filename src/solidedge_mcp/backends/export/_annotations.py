@@ -57,14 +57,25 @@ class AnnotationsMixin:
     # =================================================================
 
     def add_text_box(self, x: float, y: float, text: str, height: float = 0.005) -> dict[str, Any]:
-        """
-        Add a text box annotation to the active draft sheet.
+        """Add a text box annotation to the active draft sheet.
+
+        ``height`` is the box height, which Solid Edge clamps upward to fit the
+        text: asking for less than the text needs leaves it at the natural
+        height, and the returned ``height`` is what Solid Edge actually holds
+        rather than what was asked for. It is not the font size -- TextBox has
+        no text-height property, only ``TextScale``, a multiplier whose
+        relationship to a height in meters did not hold up on Solid Edge 2026,
+        so it is left alone rather than guessed at.
+
+        This used to write ``TextHeight``, which is real on DrawingView and
+        CuttingPlane but not on TextBox, inside a suppress -- so the height was
+        silently dropped and the caller was told it had been set.
 
         Args:
             x: X position on sheet (meters)
             y: Y position on sheet (meters)
             text: Text content
-            height: Text height in meters (default 0.005 = 5mm)
+            height: Box height in meters (default 0.005 = 5mm)
 
         Returns:
             Dict with status and text box info
@@ -85,11 +96,19 @@ class AnnotationsMixin:
             # Set the text content
             text_box.Text = text
 
-            # Set text height if possible
-            with contextlib.suppress(Exception):
-                text_box.TextHeight = height
+            # TextBox has Height, not TextHeight -- TextHeight is real but
+            # belongs to DrawingView and CuttingPlane. The write went to a
+            # member TextBox does not have, inside a suppress, so every text
+            # box came out at the document default and nothing said so.
+            text_box.Height = height
 
-            return {"status": "added", "type": "text_box", "text": text, "position": [x, y]}
+            return {
+                "status": "added",
+                "type": "text_box",
+                "text": text,
+                "position": [x, y],
+                "height": com_get(text_box, "Height"),
+            }
         except Exception as e:
             return error_result(e)
 
@@ -351,16 +370,17 @@ class AnnotationsMixin:
             return error_result(e)
 
     def add_note(self, x: float, y: float, text: str, height: float = 0.005) -> dict[str, Any]:
-        """
-        Add a note (free-standing text) to the active draft sheet.
+        """Add a note (free-standing text) to the active draft sheet.
 
-        Similar to text box but simpler - just plain text annotation.
+        A note is a text box with plain content; ``height`` behaves exactly as
+        it does in ``add_text_box``, clamped upward to fit the text and
+        reported back as Solid Edge holds it.
 
         Args:
             x: Note X position (meters)
             y: Note Y position (meters)
             text: Note text content
-            height: Text height in meters (default 5mm)
+            height: Box height in meters (default 5mm)
 
         Returns:
             Dict with status
@@ -378,16 +398,16 @@ class AnnotationsMixin:
             text_boxes = sheet.TextBoxes
             text_box = text_boxes.Add(x, y, 0)
             text_box.Text = text
-
-            with contextlib.suppress(Exception):
-                text_box.TextHeight = height
+            # See add_text_box: the height went to TextHeight, which TextBox
+            # does not have, so this reported a height it had never set.
+            text_box.Height = height
 
             return {
                 "status": "added",
                 "type": "note",
                 "position": [x, y],
                 "text": text,
-                "height": height,
+                "height": com_get(text_box, "Height"),
             }
         except Exception as e:
             return error_result(e)

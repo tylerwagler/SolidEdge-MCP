@@ -7,7 +7,7 @@ and 2D geometry collection access.
 Uses unittest.mock to simulate COM objects.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
@@ -717,11 +717,37 @@ class TestAddTextBox:
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
-        result = em.add_text_box(0.1, 0.1, "Hello")
+        text_box.Height = 0.0053
+
+        result = em.add_text_box(0.1, 0.1, "Hello", height=0.008)
+
         assert result["status"] == "added"
         assert result["text"] == "Hello"
         text_boxes.Add.assert_called_once_with(0.1, 0.1, 0)
         assert text_box.Text == "Hello"
+        # TextBox has Height. TextHeight is real on DrawingView and
+        # CuttingPlane but not here, and the write sat inside a suppress, so
+        # the height was dropped and the caller told it had been set.
+        assert text_box.Height == 0.008
+
+    def test_reports_the_height_solid_edge_kept(self, export_mgr):
+        """Solid Edge clamps the box up to fit the text, so echoing the
+        requested value would be a lie."""
+        em, doc = export_mgr
+        sheet = MagicMock()
+        text_boxes = MagicMock()
+        text_box = MagicMock()
+        text_boxes.Add.return_value = text_box
+        sheet.TextBoxes = text_boxes
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        # A box that refuses to shrink below its natural height.
+        type(text_box).Height = PropertyMock(return_value=0.0053)
+
+        result = em.add_text_box(0.1, 0.1, "Hello", height=0.001)
+
+        assert result["height"] == 0.0053
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
@@ -776,12 +802,16 @@ class TestAddNote:
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
-        result = em.add_note(0.1, 0.1, "Test note")
+        result = em.add_note(0.1, 0.1, "Test note", height=0.008)
+
         assert result["status"] == "added"
         assert result["type"] == "note"
         assert result["text"] == "Test note"
         text_boxes.Add.assert_called_once_with(0.1, 0.1, 0)
         assert text_box.Text == "Test note"
+        # Same trap as add_text_box: the height went to TextHeight, which
+        # TextBox does not have, and the result claimed it anyway.
+        assert text_box.Height == 0.008
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
