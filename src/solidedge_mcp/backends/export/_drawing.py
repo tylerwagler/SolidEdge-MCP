@@ -6,23 +6,25 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import DrawingViewOrientationConstants, PartDrawingViewTypeConstants
+from ..constants import PartDrawingViewTypeConstants, ViewOrientationConstants
 from ..logging import get_logger
 from ._base import NOT_A_DRAFT, com_get
 
 _logger = get_logger(__name__)
 
 #: constant.tlb > ViewOrientationConstants values accepted by the DrawingViews
-#: Add* methods, keyed by the names this server exposes.
+#: Add* methods and by DrawingView.SetViewOrientationStandard, keyed by the
+#: names this server exposes. This is the one mapping; three copies of it had
+#: drifted onto a set of values Solid Edge does not use.
 VIEW_ORIENTATIONS: dict[str, int] = {
-    "Front": 5,
-    "Back": 8,
-    "Top": 6,
-    "Bottom": 9,
-    "Right": 7,
-    "Left": 10,
-    "Isometric": 12,
-    "Iso": 12,
+    "Front": ViewOrientationConstants.igFrontView,
+    "Back": ViewOrientationConstants.igBackView,
+    "Top": ViewOrientationConstants.igTopView,
+    "Bottom": ViewOrientationConstants.igBottomView,
+    "Right": ViewOrientationConstants.igRightView,
+    "Left": ViewOrientationConstants.igLeftView,
+    "Isometric": ViewOrientationConstants.igTopFrontRightView,
+    "Iso": ViewOrientationConstants.igTopFrontRightView,
 }
 
 
@@ -66,16 +68,7 @@ class DrawingMixin:
             if views is None:
                 views = ["Front", "Top", "Right", "Isometric"]
 
-            view_orient_map = {
-                "Front": DrawingViewOrientationConstants.Front,
-                "Back": DrawingViewOrientationConstants.Back,
-                "Top": DrawingViewOrientationConstants.Top,
-                "Bottom": DrawingViewOrientationConstants.Bottom,
-                "Right": DrawingViewOrientationConstants.Right,
-                "Left": DrawingViewOrientationConstants.Left,
-                "Isometric": DrawingViewOrientationConstants.Isometric,
-                "Iso": DrawingViewOrientationConstants.Isometric,
-            }
+            view_orient_map = VIEW_ORIENTATIONS
 
             # Create a new draft document
             if template and os.path.exists(template):

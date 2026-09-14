@@ -369,3 +369,68 @@ class TestCloseAllGuard:
 
         result = dm.close_all_documents(save=False)
         assert result["closed"] == 2
+
+
+class TestCloseSaysWhetherToSave:
+    """``Close(SaveChanges)`` is optional, and omitting it is not "discard".
+
+    Both call sites used to omit it and rely on clearing ``Dirty`` first, a
+    write wrapped in a suppressed except. When that write failed, Solid Edge
+    decided for itself: an overwrite prompt appeared on the desktop and every
+    later COM call blocked behind it, which reaches an MCP client as the
+    transport closing rather than as any kind of error.
+    """
+
+    def _manager(self, dirty=False):
+        conn = MagicMock()
+        app = MagicMock()
+        conn.get_application.return_value = app
+        doc = MagicMock()
+        doc.Name = "Part1"
+        doc.Dirty = dirty
+        dm = DocumentManager(conn)
+        dm.active_document = doc
+        return dm, doc
+
+    def test_close_without_saving_says_so(self):
+        dm, doc = self._manager()
+
+        dm.close_document(save=False)
+
+        doc.Close.assert_called_once_with(False)
+
+    def test_close_with_saving_says_so(self):
+        dm, doc = self._manager()
+
+        dm.close_document(save=True)
+
+        doc.Close.assert_called_once_with(True)
+
+    def test_a_document_that_will_not_clear_dirty_is_still_discarded(self):
+        """The suppressed Dirty write is exactly how this went wrong before."""
+        dm, doc = self._manager(dirty=True)
+        type(doc).Dirty = PropertyMock(side_effect=Exception("read-only"))
+
+        dm.close_document(save=False)
+
+        doc.Close.assert_called_once_with(False)
+
+    def test_close_all_says_so_too(self):
+        conn = MagicMock()
+        app = MagicMock()
+        conn.get_application.return_value = app
+        docs = MagicMock()
+        docs.Count = 2
+        made = []
+        for name in ("Part1", "Part2"):
+            d = MagicMock()
+            d.Name = name
+            d.Dirty = False
+            made.append(d)
+        docs.Item.side_effect = lambda i: made[i - 1]
+        app.Documents = docs
+
+        DocumentManager(conn).close_all_documents(save=False)
+
+        for d in made:
+            d.Close.assert_called_once_with(False)

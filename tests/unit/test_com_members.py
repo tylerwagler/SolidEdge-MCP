@@ -47,12 +47,6 @@ UNVERIFIED: frozenset[str] = frozenset(
         "Logger",
         "StreamHandler",
         "WARNING",
-        # --- our own constants classes, referenced as Class.Member -----------
-        "Back",
-        "Bottom",
-        "Front",
-        "Isometric",
-        "Right",
         # --- plain Python attributes on our own value objects ----------------
         "X",
         "Y",

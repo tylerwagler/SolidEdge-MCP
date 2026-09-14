@@ -220,7 +220,14 @@ class DocumentManager:
                 with contextlib.suppress(Exception):
                     self.active_document.Dirty = False
 
-            self.active_document.Close()
+            # Close(SaveChanges) is optional, and an omitted one does not mean
+            # "discard": this used to close with it omitted and rely on the
+            # Dirty=False above, a write that sits inside a suppressed except.
+            # When that write failed, Solid Edge decided for itself and raised
+            # the modal "This file exists. Do you want to overwrite it?", which
+            # blocks every later COM call until somebody clicks it. Saying
+            # which is meant costs nothing and cannot be missed.
+            self.active_document.Close(bool(save))
             self.active_document = None
 
             # Clear sketch state since the document is gone
@@ -573,7 +580,8 @@ class DocumentManager:
                     else:
                         with contextlib.suppress(Exception):
                             doc.Dirty = False
-                    doc.Close()
+                    # Always say whether to save; see close_document.
+                    doc.Close(bool(save))
                     closed += 1
                 except Exception as e:
                     errors.append(str(e))

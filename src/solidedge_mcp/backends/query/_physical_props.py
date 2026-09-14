@@ -12,6 +12,9 @@ from ._base import QueryManagerBase, all_faces, body_of, r8_array
 
 _logger = get_logger(__name__)
 
+#: Styles this server creates and is therefore free to modify.
+_OWNED_STYLE_PREFIX = "MCP "
+
 
 class PhysicalPropsMixin(QueryManagerBase):
     """Mixin providing physical property queries and body appearance methods."""
@@ -441,6 +444,57 @@ class PhysicalPropsMixin(QueryManagerBase):
         except Exception as e:
             return error_result(e)
 
+    def _owned_face_style(self, doc: Any, body: Any) -> tuple[Any, dict[str, Any] | None]:
+        """Return a FaceStyle this server owns, assigned to ``body``.
+
+        Colour, opacity and reflectivity are three properties of one
+        ``FaceStyle``, so they have to share one. Giving each its own style
+        meant the last call won and the earlier ones silently vanished from
+        the model while still reporting success.
+
+        A body's existing style may be a stock Solid Edge style shared with
+        every other body using it, so it is never written to. The body gets
+        its own, named after it and seeded from whatever it had, which is why
+        setting opacity does not discard a colour set earlier.
+
+        Verified on Solid Edge 2026: ``Body`` has ``Style``, not
+        ``FaceStyle`` -- the member this used to reach for, which exists on no
+        interface, so every opacity and reflectivity call raised
+        ``AttributeError: Body.FaceStyle``.
+        """
+        styles = com_get(doc, "FaceStyles")
+        if styles is None:
+            return None, {
+                "error": (
+                    "This document has no FaceStyles collection, so appearance cannot be set."
+                )
+            }
+
+        current = com_get(body, "Style")
+        current_name = com_get(current, "StyleName", "") or ""
+        if current_name.startswith(_OWNED_STYLE_PREFIX):
+            return current, None
+
+        display_name = com_get(body, "DisplayName", "Body") or "Body"
+        name = f"{_OWNED_STYLE_PREFIX}{display_name}"
+        style = None
+        with contextlib.suppress(Exception):
+            style = styles.Item(name)
+        if style is None:
+            style = styles.Add(name, "")
+
+        # Carry over what the body already looked like, so this reads as a
+        # change to one property rather than a reset of all three.
+        if current is not None:
+            with contextlib.suppress(Exception):
+                style.SetDiffuse(*current.GetDiffuse()[:3])
+            for prop in ("Opacity", "Reflectivity"):
+                with contextlib.suppress(Exception):
+                    setattr(style, prop, getattr(current, prop))
+
+        body.Style = style
+        return style, None
+
     def set_body_color(self, red: int, green: int, blue: int) -> dict[str, Any]:
         """Set the body colour of the active part.
 
@@ -467,31 +521,18 @@ class PhysicalPropsMixin(QueryManagerBase):
             green = max(0, min(255, green))
             blue = max(0, min(255, blue))
 
-            styles = com_get(doc, "FaceStyles")
-            if styles is None:
-                return {
-                    "error": (
-                        "This document has no FaceStyles collection, so the body "
-                        "colour cannot be set."
-                    )
-                }
-
-            name = f"MCP {red:02X}{green:02X}{blue:02X}"
-            style = None
-            with contextlib.suppress(Exception):
-                style = styles.Item(name)
-            if style is None:
-                style = styles.Add(name, "")
+            style, err = self._owned_face_style(doc, body)
+            if err:
+                return err
 
             # SetDiffuse takes 0.0-1.0 per channel, not 0-255.
             style.SetDiffuse(red / 255.0, green / 255.0, blue / 255.0)
-            body.Style = style
 
             return {
                 "status": "set",
                 "color": {"red": red, "green": green, "blue": blue},
                 "hex": f"#{red:02x}{green:02x}{blue:02x}",
-                "style": name,
+                "style": com_get(style, "StyleName", ""),
             }
         except Exception as e:
             return error_result(e)
@@ -505,7 +546,8 @@ class PhysicalPropsMixin(QueryManagerBase):
         accessor and reports each channel as 0.0-1.0.
 
         Returns:
-            Dict with the colour as 0-255 channels and as hex, or an error
+            Dict with the colour as 0-255 channels and as hex, plus the
+            opacity and reflectivity carried on the same style, or an error
             when the body has no style of its own.
         """
         try:
@@ -518,7 +560,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                     "error": (
                         "This body has no style of its own, so it is drawn in the "
                         "document default colour. Set one with "
-                        "manage_appearance(action='set_body_color', ...)."
+                        "set_appearance(target='body_color', ...)."
                     )
                 }
 
@@ -531,53 +573,69 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "blue": blue,
                 "hex": f"#{red:02x}{green:02x}{blue:02x}",
                 "diffuse": [float(channel) for channel in diffuse[:3]],
+                "opacity": com_get(style, "Opacity"),
+                "reflectivity": com_get(style, "Reflectivity"),
             }
         except Exception as e:
             return error_result(e)
 
     def set_body_opacity(self, opacity: float) -> dict[str, Any]:
-        """
-        Set the body opacity (transparency).
+        """Set the body opacity.
 
-        Uses model.Body.FaceStyle.Opacity.
+        Opacity lives on the body's FaceStyle, alongside its colour and
+        reflectivity; see ``_owned_face_style``.
 
         Args:
-            opacity: Opacity value from 0.0 (fully transparent) to 1.0 (fully opaque)
+            opacity: 0.0 (fully transparent) to 1.0 (fully opaque).
 
         Returns:
-            Dict with status
+            Dict with status and the opacity Solid Edge reports afterwards.
         """
         try:
             doc, model = self._get_first_model()
             body = body_of(model)
 
             opacity = max(0.0, min(1.0, opacity))
-            body.FaceStyle.Opacity = opacity
+            style, err = self._owned_face_style(doc, body)
+            if err:
+                return err
+            style.Opacity = opacity
 
-            return {"status": "set", "opacity": opacity}
+            return {
+                "status": "set",
+                "opacity": opacity,
+                "reads_back": com_get(com_get(body, "Style"), "Opacity"),
+            }
         except Exception as e:
             return error_result(e)
 
     def set_body_reflectivity(self, reflectivity: float) -> dict[str, Any]:
-        """
-        Set the body reflectivity.
+        """Set the body reflectivity.
 
-        Uses model.Body.FaceStyle.Reflectivity.
+        Reflectivity lives on the body's FaceStyle, alongside its colour and
+        opacity; see ``_owned_face_style``.
 
         Args:
-            reflectivity: Reflectivity value from 0.0 to 1.0
+            reflectivity: 0.0 to 1.0.
 
         Returns:
-            Dict with status
+            Dict with status and the value Solid Edge reports afterwards.
         """
         try:
             doc, model = self._get_first_model()
             body = body_of(model)
 
             reflectivity = max(0.0, min(1.0, reflectivity))
-            body.FaceStyle.Reflectivity = reflectivity
+            style, err = self._owned_face_style(doc, body)
+            if err:
+                return err
+            style.Reflectivity = reflectivity
 
-            return {"status": "set", "reflectivity": reflectivity}
+            return {
+                "status": "set",
+                "reflectivity": reflectivity,
+                "reads_back": com_get(com_get(body, "Style"), "Reflectivity"),
+            }
         except Exception as e:
             return error_result(e)
 

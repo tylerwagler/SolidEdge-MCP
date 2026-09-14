@@ -5,9 +5,10 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..constants import DrawingViewOrientationConstants, FoldTypeConstants
+from ..constants import FoldTypeConstants
 from ..logging import get_logger
 from ._base import com_get
+from ._drawing import VIEW_ORIENTATIONS
 
 _logger = get_logger(__name__)
 
@@ -375,26 +376,24 @@ class ViewsMixin:
             if view_index < 0 or view_index >= dvs.Count:
                 return {"error": f"Invalid view index: {view_index}. Count: {dvs.Count}"}
 
-            orient_map = {
-                "Front": DrawingViewOrientationConstants.Front,
-                "Top": DrawingViewOrientationConstants.Top,
-                "Right": DrawingViewOrientationConstants.Right,
-                "Back": DrawingViewOrientationConstants.Back,
-                "Bottom": DrawingViewOrientationConstants.Bottom,
-                "Left": DrawingViewOrientationConstants.Left,
-                "Isometric": DrawingViewOrientationConstants.Isometric,
-                "Iso": DrawingViewOrientationConstants.Isometric,
-            }
-
-            orient_const = orient_map.get(orientation)
+            orient_const = VIEW_ORIENTATIONS.get(orientation)
             if orient_const is None:
-                valid = ", ".join(orient_map.keys())
+                valid = ", ".join(VIEW_ORIENTATIONS)
                 return {"error": f"Invalid orientation: '{orientation}'. Valid: {valid}"}
 
             view = dvs.Item(view_index + 1)
-            view.ViewOrientation = orient_const
+            # ViewOrientation is a method with seven out-parameters, not a
+            # settable property: assigning to it raised "Property
+            # 'Item.ViewOrientation' can not be set" on every call.
+            # SetViewOrientationStandard is the setter.
+            view.SetViewOrientationStandard(orient_const)
 
-            return {"status": "updated", "view_index": view_index, "orientation": orientation}
+            return {
+                "status": "updated",
+                "view_index": view_index,
+                "orientation": orientation,
+                "reads_back": view.ViewOrientation()[6],
+            }
         except Exception as e:
             return error_result(e)
 

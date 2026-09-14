@@ -318,6 +318,102 @@ class TestMeasureAngle:
 # ============================================================================
 
 
+class TestOwnedFaceStyle:
+    """Colour, opacity and reflectivity are three fields of one FaceStyle.
+
+    They used to be written to three different places: colour to a style
+    named after the colour, opacity and reflectivity to ``Body.FaceStyle``,
+    a member no Solid Edge interface has. Against a MagicMock that assignment
+    looked like it worked -- the old tests asserted
+    ``model.Body.FaceStyle.Opacity == 0.5`` and passed -- and against Solid
+    Edge 2026 it raised ``AttributeError: Body.FaceStyle`` every time.
+    """
+
+    def _part(self, doc, current_style=None):
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = current_style
+
+        style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, styles, style
+
+    def test_the_style_is_named_after_the_body(self, query_mgr):
+        qm, doc = query_mgr
+        _model, styles, _style = self._part(doc)
+
+        qm.set_body_color(255, 0, 0)
+
+        styles.Add.assert_called_once_with("MCP Design Body_1", "")
+
+    def test_all_three_share_one_style(self, query_mgr):
+        """Setting opacity must not discard a colour set before it."""
+        qm, doc = query_mgr
+        model, styles, style = self._part(doc)
+
+        qm.set_body_color(255, 0, 0)
+        # The body now carries our style, so the next call reuses it.
+        model.Body.Style = style
+        qm.set_body_opacity(0.5)
+        qm.set_body_reflectivity(0.3)
+
+        styles.Add.assert_called_once()
+        style.SetDiffuse.assert_called_once_with(1.0, 0.0, 0.0)
+        assert style.Opacity == 0.5
+        assert style.Reflectivity == 0.3
+
+    def test_a_stock_style_is_never_written_to(self, query_mgr):
+        """A style Solid Edge ships may be shared across the whole document."""
+        qm, doc = query_mgr
+        stock = MagicMock()
+        stock.StyleName = "Steel"
+        stock.GetDiffuse.return_value = (0.2, 0.2, 0.2)
+        stock.Opacity = 0.8
+        stock.Reflectivity = 0.1
+        model, _styles, style = self._part(doc, current_style=stock)
+
+        qm.set_body_opacity(0.5)
+
+        assert stock.Opacity == 0.8, "the stock style must be left alone"
+        assert style.Opacity == 0.5
+        assert model.Body.Style is style
+
+    def test_the_previous_look_is_carried_over(self, query_mgr):
+        """Changing one property must not reset the other two."""
+        qm, doc = query_mgr
+        stock = MagicMock()
+        stock.StyleName = "Steel"
+        stock.GetDiffuse.return_value = (0.2, 0.4, 0.6)
+        stock.Opacity = 0.8
+        stock.Reflectivity = 0.1
+        _model, _styles, style = self._part(doc, current_style=stock)
+
+        qm.set_body_reflectivity(0.3)
+
+        style.SetDiffuse.assert_called_once_with(0.2, 0.4, 0.6)
+        assert style.Opacity == 0.8
+        assert style.Reflectivity == 0.3
+
+    def test_a_style_we_already_own_is_reused(self, query_mgr):
+        qm, doc = query_mgr
+        mine = MagicMock()
+        mine.StyleName = "MCP Design Body_1"
+        _model, styles, _style = self._part(doc, current_style=mine)
+
+        qm.set_body_opacity(0.5)
+
+        styles.Add.assert_not_called()
+        assert mine.Opacity == 0.5
+
+
 class TestSetBodyColor:
     """A body is coloured by assigning it a FaceStyle with a diffuse colour.
 
@@ -331,7 +427,10 @@ class TestSetBodyColor:
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = None
         style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
         styles = MagicMock()
         styles.Item.side_effect = Exception("no such style")
         styles.Add.return_value = style
@@ -346,7 +445,7 @@ class TestSetBodyColor:
 
         assert result["status"] == "set"
         assert result["hex"] == "#ff0000"
-        styles.Add.assert_called_once_with("MCP FF0000", "")
+        assert result["style"] == "MCP Design Body_1"
         # SetDiffuse takes 0.0-1.0, not 0-255.
         style.SetDiffuse.assert_called_once_with(1.0, 0.0, 0.0)
         assert model.Body.Style is style
@@ -356,6 +455,7 @@ class TestSetBodyColor:
         qm, doc = query_mgr
         _model, styles, _style = self._part(doc)
         existing = MagicMock()
+        existing.StyleName = "MCP Design Body_1"
         styles.Item.side_effect = None
         styles.Item.return_value = existing
 
@@ -394,6 +494,11 @@ class TestSetBodyColor:
         assert "error" in qm.set_body_color(255, 0, 0)
 
 
+# ============================================================================
+# FACESTYLE: GET BODY COLOUR
+# ============================================================================
+
+
 class TestGetBodyColour:
     """FaceStyle.GetDiffuse reports 0.0-1.0 per channel."""
 
@@ -412,6 +517,23 @@ class TestGetBodyColour:
         assert result["green"] == 0
         assert result["blue"] == 128
         assert result["hex"] == "#ff0080"
+
+    def test_reports_the_rest_of_the_style(self, query_mgr):
+        """Opacity and reflectivity live on the same style, so read them too."""
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.Style.GetDiffuse.return_value = (1.0, 0.0, 0.5)
+        model.Body.Style.Opacity = 0.4
+        model.Body.Style.Reflectivity = 0.6
+
+        result = qm.get_body_color()
+
+        assert result["opacity"] == 0.4
+        assert result["reflectivity"] == 0.6
 
     def test_a_body_without_a_style_says_so(self, query_mgr):
         qm, doc = query_mgr
@@ -434,34 +556,51 @@ class TestGetBodyColour:
 
 
 class TestSetBodyOpacity:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+    def _part(self, doc):
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = None
+        style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, style
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model, style = self._part(doc)
 
         result = qm.set_body_opacity(0.5)
+
         assert result["status"] == "set"
         assert result["opacity"] == 0.5
-        assert model.Body.FaceStyle.Opacity == 0.5
+        # Opacity belongs to the FaceStyle, which Body.Style holds.
+        assert style.Opacity == 0.5
+        assert model.Body.Style is style
 
     def test_clamps_values(self, query_mgr):
         qm, doc = query_mgr
+        self._part(doc)
+
+        assert qm.set_body_opacity(1.5)["opacity"] == 1.0
+        assert qm.set_body_opacity(-0.5)["opacity"] == 0.0
+
+    def test_a_document_without_face_styles(self, query_mgr):
+        qm, doc = query_mgr
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        doc.FaceStyles = None
 
-        result = qm.set_body_opacity(1.5)
-        assert result["status"] == "set"
-        assert result["opacity"] == 1.0
-
-        result = qm.set_body_opacity(-0.5)
-        assert result["status"] == "set"
-        assert result["opacity"] == 0.0
+        assert "error" in qm.set_body_opacity(0.5)
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -469,8 +608,7 @@ class TestSetBodyOpacity:
         models.Count = 0
         doc.Models = models
 
-        result = qm.set_body_opacity(0.5)
-        assert "error" in result
+        assert "error" in qm.set_body_opacity(0.5)
 
 
 # ============================================================================
@@ -479,30 +617,38 @@ class TestSetBodyOpacity:
 
 
 class TestSetBodyReflectivity:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+    def _part(self, doc):
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = None
+        style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, style
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model, style = self._part(doc)
 
         result = qm.set_body_reflectivity(0.7)
+
         assert result["status"] == "set"
         assert result["reflectivity"] == 0.7
-        assert model.Body.FaceStyle.Reflectivity == 0.7
+        assert style.Reflectivity == 0.7
+        assert model.Body.Style is style
 
     def test_clamps_values(self, query_mgr):
         qm, doc = query_mgr
-        model = MagicMock()
-        models = MagicMock()
-        models.Count = 1
-        models.Item.return_value = model
-        doc.Models = models
+        self._part(doc)
 
-        result = qm.set_body_reflectivity(2.0)
-        assert result["status"] == "set"
-        assert result["reflectivity"] == 1.0
+        assert qm.set_body_reflectivity(2.0)["reflectivity"] == 1.0
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -510,8 +656,7 @@ class TestSetBodyReflectivity:
         models.Count = 0
         doc.Models = models
 
-        result = qm.set_body_reflectivity(0.5)
-        assert "error" in result
+        assert "error" in qm.set_body_reflectivity(0.5)
 
 
 # ============================================================================

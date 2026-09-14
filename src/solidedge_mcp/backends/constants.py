@@ -85,7 +85,17 @@ class FaceQueryConstants:
 
 
 class ViewOrientationConstants:
-    """Standard orthographic view orientation constants (from type library)"""
+    """constant.tlb > ViewOrientationConstants.
+
+    This is the enum ``DrawingViews.AddPartView`` and
+    ``DrawingView.SetViewOrientationStandard`` declare. The drawing code used
+    to carry its own ``DrawingViewOrientationConstants`` instead, with Front=5
+    and Top=6, excused in the constants test as "empirically verified". Solid
+    Edge 2026 disagrees: ``DrawingView.ViewOrientation()`` reads back exactly
+    the value passed in, 4 for a front view and 1 for a top view. Front=5 is
+    igBottomView, so every "Front" drawing view this server made was a bottom
+    view and every "Top" a back view.
+    """
 
     igTopView = 1
     igRightView = 2
@@ -93,10 +103,11 @@ class ViewOrientationConstants:
     igFrontView = 4
     igBottomView = 5
     igBackView = 6
-    # Pictorial views use a separate numbering scheme:
-    igTopFrontLeftView = 8  # Standard isometric
-    igTopFrontRightView = 9
+    # Pictorial views continue the same numbering. Solid Edge's own isometric
+    # view looks from the top-front-right corner.
     igTopBackLeftView = 7
+    igTopFrontLeftView = 8
+    igTopFrontRightView = 9
     igTopBackRightView = 10
 
 
@@ -124,18 +135,6 @@ class DrawingViewTypeConstants:
     igXSectionView = 4
     igDetailView = 5
     igIsoXSectionView = 6
-
-
-class DrawingViewOrientationConstants:
-    """Drawing view orientation constants for AddPartView (empirically verified)"""
-
-    Front = 5
-    Top = 6
-    Right = 7
-    Back = 8
-    Bottom = 9
-    Left = 10
-    Isometric = 12
 
 
 class RenderModeConstants:

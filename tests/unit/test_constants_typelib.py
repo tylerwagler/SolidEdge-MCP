@@ -48,7 +48,6 @@ LOCAL_GROUPINGS: dict[str, str] = {
     "MateTypeConstants": "assembly relation ordinals; no matching COM enum",
     "AssemblyFeaturePropertyConstants": "assembly feature ordinals; no matching COM enum",
     "AssemblyRelationConstants": "Relation3d object-type ids, not an enum",
-    "DrawingViewOrientationConstants": "empirically verified draft view ordinals",
     "RenderModeConstants": "render mode ordinals; no matching COM enum",
     "SaveAsConstants": "our own flag, not a COM enum",
     "DocumentTypeConstants": "aliases of DocumentTypeConstants members (verified below)",
