@@ -133,6 +133,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_variable_round(
         self,
         radii: list[float],
@@ -271,6 +272,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_chamfer_unequal(
         self, distance1: float, distance2: float, face_index: int = 0
     ) -> dict[str, Any]:
@@ -325,6 +327,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_chamfer_unequal_on_face(
         self, distance1: float, distance2: float, face_index: int
     ) -> dict[str, Any]:
@@ -732,6 +735,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_delete_hole(
         self, max_diameter: float = 1.0, hole_type: str = "All"
     ) -> dict[str, Any]:
@@ -778,6 +782,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_delete_blend(self, face_index: int) -> dict[str, Any]:
         """
         Delete/remove a blend (fillet) from the model by specifying a face.

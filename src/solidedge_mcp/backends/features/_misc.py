@@ -12,6 +12,7 @@ from ..constants import (
 )
 from ..logging import get_logger
 from ..validation import guard_overwrite
+from ._base import verifies_geometry
 
 _logger = get_logger(__name__)
 
@@ -46,7 +47,10 @@ _DRAFT_SIDES = {"inside": 4, "outside": 5}  # igInside, igOutside
 class MiscFeaturesMixin:
     """Mixin providing mirror, pattern, face ops, body ops, and simplify methods."""
 
-    def create_pattern(self, pattern_type: str, **kwargs: Any) -> dict[str, Any]:
+    @verifies_geometry
+    # self is positional-only so @verifies_geometry's ParamSpec can bind the
+    # **kwargs; every other decorated creator has a fixed signature.
+    def create_pattern(self, /, pattern_type: str, **kwargs: Any) -> dict[str, Any]:
         """
         Create a pattern of features.
 
@@ -284,6 +288,7 @@ class MiscFeaturesMixin:
             "type": "local_simplify_enclosure",
         }
 
+    @verifies_geometry
     def create_mirror(
         self, feature_name: str, mirror_plane_index: int, allow_mode_switch: bool = False
     ) -> dict[str, Any]:
@@ -817,6 +822,7 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_thicken_sync(self, thickness: float, direction: str = "Both") -> dict[str, Any]:
         """
         Create a synchronous thicken feature.
@@ -847,6 +853,7 @@ class MiscFeaturesMixin:
             "direction": direction,
         }
 
+    @verifies_geometry
     def create_mirror_sync_ex(self, feature_name: str, mirror_plane_index: int) -> dict[str, Any]:
         """
         Create a synchronous mirror copy using the extended AddSyncEx method.
@@ -877,6 +884,7 @@ class MiscFeaturesMixin:
             "mirror_plane": mirror_plane_index,
         }
 
+    @verifies_geometry
     def create_pattern_rectangular_ex(
         self,
         feature_name: str,
@@ -960,6 +968,7 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_pattern_circular_ex(
         self,
         feature_name: str,
@@ -1002,6 +1011,7 @@ class MiscFeaturesMixin:
             "axis_face_index": axis_face_index,
         }
 
+    @verifies_geometry
     def create_pattern_duplicate(self, feature_name: str) -> dict[str, Any]:
         """
         Create a duplicate pattern of a feature.
@@ -1031,6 +1041,7 @@ class MiscFeaturesMixin:
             "feature": feature_name,
         }
 
+    @verifies_geometry
     def create_pattern_by_fill(
         self,
         feature_name: str,
@@ -1070,6 +1081,7 @@ class MiscFeaturesMixin:
             "y_spacing": y_spacing,
         }
 
+    @verifies_geometry
     def create_pattern_by_table(
         self,
         feature_name: str,
@@ -1107,6 +1119,7 @@ class MiscFeaturesMixin:
             "y_offsets": list(y_offsets),
         }
 
+    @verifies_geometry
     def create_pattern_by_table_sync(
         self,
         feature_name: str,
@@ -1144,6 +1157,7 @@ class MiscFeaturesMixin:
             "y_offsets": list(y_offsets),
         }
 
+    @verifies_geometry
     def create_pattern_by_fill_ex(
         self,
         feature_name: str,
@@ -1186,6 +1200,7 @@ class MiscFeaturesMixin:
             "stagger_offset": stagger_offset,
         }
 
+    @verifies_geometry
     def create_pattern_by_curve_ex(
         self,
         feature_name: str,
@@ -1279,6 +1294,7 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_user_defined_pattern(self, feature_name: str) -> dict[str, Any]:
         """
         Create a user-defined pattern using accumulated profiles as occurrence locations.
