@@ -118,50 +118,14 @@ class DocumentQueryMixin:
         except Exception as e:
             return error_result(e)
 
-    def list_features(self) -> dict[str, Any]:
-        """
-        List all features in the active document.
-
-        Uses Model.Features collection and DesignEdgebarFeatures for the feature tree.
-
-        Returns:
-            Dict with list of features
-        """
-        try:
-            doc, model = self._get_first_model()
-
-            features = []
-
-            # Use DesignEdgebarFeatures for the full feature tree
-            debf = com_get(doc, "DesignEdgebarFeatures")
-            if debf is not None:
-                for i in range(1, debf.Count + 1):
-                    try:
-                        feat = debf.Item(i)
-                        feat_info = {
-                            "index": i - 1,
-                            "name": com_get(feat, "Name", f"Feature_{i}"),
-                        }
-                        features.append(feat_info)
-                    except Exception:
-                        features.append({"index": i - 1, "name": f"Feature_{i}"})
-            else:
-                # Fallback to Model.Features
-                model_features = model.Features
-                for i in range(1, model_features.Count + 1):
-                    try:
-                        feat = model_features.Item(i)
-                        feat_info = {
-                            "index": i - 1,
-                            "name": com_get(feat, "Name", f"Feature_{i}"),
-                        }
-                        features.append(feat_info)
-                    except Exception:
-                        features.append({"index": i - 1, "name": f"Feature_{i}"})
-
-            return {"features": features, "count": len(features)}
-        except Exception as e:
-            return error_result(e)
+    # QueryManager once carried a second list_features() of its own. It
+    # numbered DesignEdgebarFeatures from zero, so it counted the reference
+    # planes as features and every index it reported was three too high --
+    # the same bug fixed in get_feature_status. Nothing called it: the
+    # solidedge://model/features resource has always used
+    # feature_manager.list_features(), which enumerates Models.Item(n).Features
+    # and is the index every index-taking tool speaks. It is deleted rather
+    # than fixed, because two enumerations under one name is how they drift.
 
     def get_ref_planes(self) -> dict[str, Any]:
         """

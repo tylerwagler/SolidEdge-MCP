@@ -69,6 +69,60 @@ def test_no_method_is_shadowed(manager):
     )
 
 
+#: One name on two managers, and why that one is tolerated. Each entry has to
+#: say what the two do differently and which one the tools call.
+SHARED_ACROSS_MANAGERS: dict[str, str] = {
+    # FeatureManager.delete_feature(index) is the one manage_feature calls.
+    # QueryManager.delete_feature(feature_name) deletes by name and nothing
+    # reaches it; the signatures differ, so neither can be passed the other's
+    # argument by accident.
+    "delete_feature": "FeatureManager takes an index, QueryManager takes a name",
+}
+
+
+def test_no_method_name_is_claimed_by_two_managers():
+    """Two managers answering to one name is how index spaces drift apart.
+
+    QueryManager used to carry a list_features() of its own alongside
+    FeatureManager's. They enumerated different collections: the query copy
+    numbered DesignEdgebarFeatures from zero, counting the three reference
+    planes as features, so every index it reported was three too high. Nothing
+    called it, which is the only reason it never bit -- wiring one resource to
+    the wrong manager would have been enough.
+    """
+    owners: dict[str, list[str]] = collections.defaultdict(list)
+    for manager in MANAGERS:
+        for name in dir(manager):
+            if name.startswith("_"):
+                continue
+            if callable(getattr(manager, name, None)):
+                owners[name].append(manager.__name__)
+
+    found = {
+        name: who
+        for name, who in owners.items()
+        if len(who) > 1 and name not in SHARED_ACROSS_MANAGERS
+    }
+    assert not found, (
+        "these method names are defined on more than one manager:\n  "
+        + "\n  ".join(f"{name}: {', '.join(sorted(who))}" for name, who in sorted(found.items()))
+        + "\n\nTwo managers answering to one name drift apart: they end up "
+        "enumerating different collections and reporting indices that mean "
+        "different things. Delete the copy nothing calls, or add the name to "
+        "SHARED_ACROSS_MANAGERS with a note on how the two differ."
+    )
+
+
+def test_the_shared_name_allowlist_is_not_stale():
+    """An entry that no longer collides has to be deleted, not left behind."""
+    for name in SHARED_ACROSS_MANAGERS:
+        owners = [m.__name__ for m in MANAGERS if callable(getattr(m, name, None))]
+        assert len(owners) > 1, (
+            f"{name!r} is in SHARED_ACROSS_MANAGERS but is now defined on "
+            f"{owners}. Remove the entry."
+        )
+
+
 def test_the_check_can_actually_see_a_duplicate():
     """Guard against a silent pass from an empty scan."""
 
