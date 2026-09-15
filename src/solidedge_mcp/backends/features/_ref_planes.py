@@ -158,8 +158,9 @@ class RefPlaneMixin:
 
             ignore_natural = curve_end == "End"
             normal_side = DirectionConstants.igRight
-            # igPivotEnd = 2
-            pivot_end_const = 2
+            # igPivotEnd is 4. This was 2, which is igNormalSide -- a side of
+            # a plane, not an end of the pivot.
+            pivot_end_const = ReferenceElementConstants.igPivotEnd
 
             ref_planes.AddNormalToCurveAtArcLengthRatio(
                 profile, ratio, ignore_natural, normal_side, pivot_plane, pivot_end_const
@@ -204,7 +205,9 @@ class RefPlaneMixin:
 
             ignore_natural = curve_end == "End"
             normal_side = DirectionConstants.igRight
-            pivot_end_const = 2
+            # igPivotEnd is 4. This was 2, which is igNormalSide -- a side of
+            # a plane, not an end of the pivot.
+            pivot_end_const = ReferenceElementConstants.igPivotEnd
 
             ref_planes.AddNormalToCurveAtDistanceAlongCurve(
                 profile, distance_along, ignore_natural, normal_side, pivot_plane, pivot_end_const
@@ -307,10 +310,18 @@ class RefPlaneMixin:
             ref_planes = doc.RefPlanes
             pivot_plane = ref_planes.Item(pivot_plane_index)
 
-            # igCurveEnd = 2, igCurveStart = 1
-            curve_end_const = 2 if curve_end == "End" else 1
+            # igCurveStart is 14 and igCurveEnd is 15. These were 1 and 2,
+            # which are igReverseNormalSide and igNormalSide -- sides of a
+            # plane, not ends of a curve, so the call answered E_FAIL.
+            curve_end_const = (
+                ReferenceElementConstants.igCurveEnd
+                if curve_end == "End"
+                else ReferenceElementConstants.igCurveStart
+            )
             # igPivotEnd = 2
-            pivot_end_const = 2
+            # igPivotEnd is 4. This was 2, which is igNormalSide -- a side of
+            # a plane, not an end of the pivot.
+            pivot_end_const = ReferenceElementConstants.igPivotEnd
 
             ref_planes.AddNormalToCurve(
                 profile, curve_end_const, pivot_plane, pivot_end_const, True
