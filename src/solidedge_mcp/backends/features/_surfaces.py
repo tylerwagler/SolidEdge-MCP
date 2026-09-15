@@ -7,6 +7,7 @@ from win32com.client import VARIANT
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import profile_origin
 from ..constants import (
     DirectionConstants,
     DraftSideConstants,
@@ -212,7 +213,8 @@ class SurfacesMixin:
             # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
             # the outer wrapper is not. Dropping them broke the lofted cutout.
             v_origins = [
-                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
+                for p in all_profiles
             ]
 
             if models.Count > 0:
@@ -677,7 +679,8 @@ class SurfacesMixin:
             # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
             # the outer wrapper is not. Dropping them broke the lofted cutout.
             v_origins = [
-                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
+                for p in all_profiles
             ]
 
             # Surfaces live on doc.Constructions; Model has no
@@ -757,7 +760,8 @@ class SurfacesMixin:
             # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
             # the outer wrapper is not. Dropping them broke the lofted cutout.
             v_origins = [
-                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
+                for p in cross_sections
             ]
 
             # Surfaces live on doc.Constructions; Model has no

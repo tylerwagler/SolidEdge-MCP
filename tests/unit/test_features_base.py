@@ -7,6 +7,7 @@ feature-tree node but leaves the bodies' faces unchanged.
 
 from unittest.mock import MagicMock
 
+from solidedge_mcp.backends.comutil import profile_origin
 from solidedge_mcp.backends.features._base import FeatureManagerBase, verifies_geometry
 
 
@@ -280,28 +281,28 @@ class TestProfileOrigin:
 
     def test_a_line_gives_its_start_point(self):
         profile = self._profile(Lines2d=(4, "GetStartPoint", (0.01, 0.02, 0.0)))
-        assert FeatureManagerBase._profile_origin(profile) == (0.01, 0.02)
+        assert profile_origin(profile) == (0.01, 0.02)
 
     def test_a_circle_gives_its_centre(self):
         profile = self._profile(Circles2d=(1, "GetCenterPoint", (0.025, 0.02, 0.0)))
-        assert FeatureManagerBase._profile_origin(profile) == (0.025, 0.02)
+        assert profile_origin(profile) == (0.025, 0.02)
 
     def test_an_arc_gives_its_start_point(self):
         profile = self._profile(Arcs2d=(1, "GetStartPoint", (0.03, 0.04, 0.0)))
-        assert FeatureManagerBase._profile_origin(profile) == (0.03, 0.04)
+        assert profile_origin(profile) == (0.03, 0.04)
 
     def test_lines_win_over_circles(self):
         profile = self._profile(
             Lines2d=(4, "GetStartPoint", (0.01, 0.02, 0.0)),
             Circles2d=(1, "GetCenterPoint", (0.9, 0.9, 0.0)),
         )
-        assert FeatureManagerBase._profile_origin(profile) == (0.01, 0.02)
+        assert profile_origin(profile) == (0.01, 0.02)
 
     def test_an_empty_profile_falls_back_to_the_origin(self):
-        assert FeatureManagerBase._profile_origin(self._profile()) == (0.0, 0.0)
+        assert profile_origin(self._profile()) == (0.0, 0.0)
 
     def test_geometry_that_raises_is_skipped(self):
         profile = self._profile(Circles2d=(1, "GetCenterPoint", (0.02, 0.03, 0.0)))
         profile.Lines2d.Count = 2
         profile.Lines2d.Item.side_effect = Exception("no such element")
-        assert FeatureManagerBase._profile_origin(profile) == (0.02, 0.03)
+        assert profile_origin(profile) == (0.02, 0.03)

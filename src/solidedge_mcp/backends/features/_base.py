@@ -12,7 +12,7 @@ from win32com.client import VARIANT
 
 from solidedge_mcp.backends.errors import error_result
 
-from ..comutil import com_get, describe_feature_type
+from ..comutil import com_get, describe_feature_type, profile_origin
 from ..constants import (
     FaceQueryConstants,
     LoftSweepConstants,
@@ -226,35 +226,6 @@ class FeatureManagerBase:
         """Get a reference plane from the document (1=Top/XY, 2=Right/YZ, 3=Front/XZ)"""
         return doc.RefPlanes.Item(plane_index)
 
-    @staticmethod
-    def _profile_origin(profile: Any) -> tuple[float, float]:
-        """A point on ``profile`` that Solid Edge accepts as its loft origin.
-
-        The Origins array is how a loft pairs its cross-sections up, and each
-        entry has to be a point that actually lies on its section. Verified on
-        Solid Edge 2026: two rectangles lofted with the real corner points
-        build a 6-faced solid, and the same call with (0, 0) builds nothing --
-        no error, no geometry, just a silent no-op.
-
-        A start point serves for lines and arcs, a centre for circles. Both
-        were driven live; a circle centred away from the origin lofts
-        correctly, which it could not do with a hardcoded (0, 0).
-        """
-        for collection, getter in (
-            ("Lines2d", "GetStartPoint"),
-            ("Arcs2d", "GetStartPoint"),
-            ("Circles2d", "GetCenterPoint"),
-            ("Ellipses2d", "GetCenterPoint"),
-        ):
-            try:
-                items = getattr(profile, collection)
-                if items.Count:
-                    point = getattr(items.Item(1), getter)()
-                    return float(point[0]), float(point[1])
-            except Exception:  # noqa: BLE001 - try the next kind of geometry
-                continue
-        return 0.0, 0.0
-
     def _make_loft_variant_arrays(self, profiles: list[Any]) -> tuple[Any, Any, Any]:
         """Create properly typed VARIANT arrays for loft/sweep COM calls.
 
@@ -272,12 +243,12 @@ class FeatureManagerBase:
         # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
         # the outer wrapper is not. Dropping them broke the lofted cutout.
         #
-        # Each origin must be a point on its own profile; see _profile_origin.
+        # Each origin must be a point on its own profile; see profile_origin.
         # These were hardcoded to (0, 0), which only lines up when every
         # profile happens to pass through the sketch origin -- otherwise the
         # loft silently built nothing.
         v_origins = [
-            VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(self._profile_origin(profile)))
+            VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(profile)))
             for profile in profiles
         ]
         return v_profiles, v_types, v_origins

@@ -8,6 +8,7 @@ from win32com.client import VARIANT
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import profile_origin
 from ..constants import (
     AssemblyFeaturePropertyConstants,
     ExtentTypeConstants,
@@ -525,7 +526,8 @@ class AssemblyFeaturesMixin:
             # the outer wrapper is not. Dropping them broke the lofted cutout.
 
             v_origins = [
-                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
+                for p in cross_sections
             ]
 
             swept = af.AssemblyFeaturesSweptProtrusions

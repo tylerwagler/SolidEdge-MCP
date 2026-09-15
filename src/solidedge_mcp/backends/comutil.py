@@ -111,3 +111,32 @@ def owned_style_for(doc: Any, holder: Any, label: str) -> tuple[Any, dict[str, A
 
     holder.Style = style
     return style, None
+
+
+def profile_origin(profile: Any) -> tuple[float, float]:
+    """A point on ``profile`` that Solid Edge accepts as its loft/sweep origin.
+
+    The Origins array is how a loft or sweep pairs its cross-sections up, and
+    each entry has to be a point that actually lies on its own section.
+    Verified on Solid Edge 2026: two rectangles lofted with their real corner
+    points build a 6-faced solid, and the same call with (0, 0) builds nothing
+    -- no error, no geometry, just a silent no-op.
+
+    A start point serves for lines and arcs, a centre for circles. Circles
+    centred on the sketch origin work either way, which is how a hardcoded
+    (0, 0) survived every earlier sweep: their profiles were centred circles.
+    """
+    for collection, getter in (
+        ("Lines2d", "GetStartPoint"),
+        ("Arcs2d", "GetStartPoint"),
+        ("Circles2d", "GetCenterPoint"),
+        ("Ellipses2d", "GetCenterPoint"),
+    ):
+        try:
+            items = getattr(profile, collection)
+            if items.Count:
+                point = getattr(items.Item(1), getter)()
+                return float(point[0]), float(point[1])
+        except Exception:  # noqa: BLE001 - try the next kind of geometry
+            continue
+    return 0.0, 0.0
