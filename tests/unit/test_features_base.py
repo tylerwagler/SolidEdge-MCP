@@ -249,3 +249,59 @@ class TestNoGeometryReason:
 
         for name in ("create_chamfer", "create_draft_angle", "create_thin_wall"):
             assert "edges or faces" in _why_nothing(name), name
+
+
+class TestProfileOrigin:
+    """A loft pairs its cross-sections by the Origins array.
+
+    Each entry has to be a point that lies on its own section. These were
+    hardcoded to (0, 0), which only lines up when every profile happens to
+    pass through the sketch origin. Verified on Solid Edge 2026: two
+    rectangles lofted with their real corner points build a 6-faced solid,
+    and the same call with (0, 0) builds nothing at all -- no error, no
+    geometry, just a silent no-op that create_loft and create_lofted_cutout
+    both reported as "created no geometry".
+    """
+
+    def _profile(self, **collections):
+        profile = MagicMock()
+        for name in ("Lines2d", "Arcs2d", "Circles2d", "Ellipses2d"):
+            empty = MagicMock()
+            empty.Count = 0
+            setattr(profile, name, empty)
+        for name, (count, getter, point) in collections.items():
+            col = MagicMock()
+            col.Count = count
+            item = MagicMock()
+            getattr(item, getter).return_value = point
+            col.Item.return_value = item
+            setattr(profile, name, col)
+        return profile
+
+    def test_a_line_gives_its_start_point(self):
+        profile = self._profile(Lines2d=(4, "GetStartPoint", (0.01, 0.02, 0.0)))
+        assert FeatureManagerBase._profile_origin(profile) == (0.01, 0.02)
+
+    def test_a_circle_gives_its_centre(self):
+        profile = self._profile(Circles2d=(1, "GetCenterPoint", (0.025, 0.02, 0.0)))
+        assert FeatureManagerBase._profile_origin(profile) == (0.025, 0.02)
+
+    def test_an_arc_gives_its_start_point(self):
+        profile = self._profile(Arcs2d=(1, "GetStartPoint", (0.03, 0.04, 0.0)))
+        assert FeatureManagerBase._profile_origin(profile) == (0.03, 0.04)
+
+    def test_lines_win_over_circles(self):
+        profile = self._profile(
+            Lines2d=(4, "GetStartPoint", (0.01, 0.02, 0.0)),
+            Circles2d=(1, "GetCenterPoint", (0.9, 0.9, 0.0)),
+        )
+        assert FeatureManagerBase._profile_origin(profile) == (0.01, 0.02)
+
+    def test_an_empty_profile_falls_back_to_the_origin(self):
+        assert FeatureManagerBase._profile_origin(self._profile()) == (0.0, 0.0)
+
+    def test_geometry_that_raises_is_skipped(self):
+        profile = self._profile(Circles2d=(1, "GetCenterPoint", (0.02, 0.03, 0.0)))
+        profile.Lines2d.Count = 2
+        profile.Lines2d.Item.side_effect = Exception("no such element")
+        assert FeatureManagerBase._profile_origin(profile) == (0.02, 0.03)
