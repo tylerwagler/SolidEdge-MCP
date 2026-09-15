@@ -281,116 +281,44 @@ class TestAddTube:
 # ============================================================================
 
 
-class TestAddStructuralFrame:
-    def test_success(self, asm_mgr):
+class TestStructuralFrames:
+    """A structural frame runs along 3D sketch segments, not along components.
+
+    StructuralFrames.Add takes those curves as its Path. Both methods were
+    handed Occurrences instead, which Solid Edge 2026 rejects with E_POINTER,
+    "Property name is invalid". There is no way to build a valid path from
+    here: an AssemblyDocument exposes no Sketches collection through this
+    binding, and the Segments commands that would draw one raise a modal
+    dialog, which blocks the whole server until somebody clicks it.
+    """
+
+    def test_add_says_it_cannot(self, asm_mgr):
         am, doc = asm_mgr
-        path1, path2 = MagicMock(), MagicMock()
-        frame = MagicMock()
-        frame.Name = "Frame_1"
+
+        result = am.add_structural_frame("C:\frames\beam.par", [0, 1])
+
+        assert result["unsupported"] is True
+        assert "3D sketch segments" in result["error"]
+
+    def test_by_orientation_says_it_cannot(self, asm_mgr):
+        am, doc = asm_mgr
+
+        result = am.add_structural_frame_by_orientation("C:\frames\beam.par", "CoordSys1", [0])
+
+        assert result["unsupported"] is True
+        assert "3D sketch segments" in result["error"]
+
+    def test_neither_touches_com(self, asm_mgr):
+        """The house rule: refuse without calling, so nothing half-happens."""
+        am, doc = asm_mgr
         frames = MagicMock()
-        frames.Add.return_value = frame
         doc.StructuralFrames = frames
 
-        occurrences = MagicMock()
-        occurrences.Count = 3
-        occurrences.Item.side_effect = lambda i: {1: path1, 2: path2, 3: MagicMock()}[i]
-        doc.Occurrences = occurrences
+        am.add_structural_frame("C:\frames\beam.par", [0])
+        am.add_structural_frame_by_orientation("C:\frames\beam.par", "CS", [0])
 
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame("C:\\frames\\beam.par", [0, 1])
-        assert result["status"] == "created"
-        assert result["type"] == "structural_frame"
-        assert result["num_paths"] == 2
-        frames.Add.assert_called_once()
-
-    def test_file_not_found(self, asm_mgr):
-        am, doc = asm_mgr
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=False):
-            result = am.add_structural_frame("C:\\missing.par", [0])
-        assert "error" in result
-        assert "File not found" in result["error"]
-
-    def test_invalid_path_index(self, asm_mgr):
-        am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame("C:\\frames\\beam.par", [0, 5])
-        assert "error" in result
-        assert "Invalid path index" in result["error"]
-
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        doc.Type = IG_PART_DOCUMENT
-
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame("C:\\frames\\beam.par", [0])
-        assert "error" in result
-
-
-class TestAddStructuralFrameByOrientation:
-    def test_success(self, asm_mgr):
-        am, doc = asm_mgr
-        path1 = MagicMock()
-        frame = MagicMock()
-        frame.Name = "OrientedFrame_1"
-        frames = MagicMock()
-        frames.AddByOrientation.return_value = frame
-        doc.StructuralFrames = frames
-
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        occurrences.Item.return_value = path1
-        doc.Occurrences = occurrences
-
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame_by_orientation(
-                "C:\\frames\\beam.par", "CoordSys1", [0]
-            )
-        assert result["status"] == "created"
-        assert result["type"] == "structural_frame_oriented"
-        assert result["coord_system"] == "CoordSys1"
-        # AddByOrientation(PartFileName, CoOrdinateSystemName, NumPaths, Path)
-        call_args = frames.AddByOrientation.call_args.args
-        assert len(call_args) == 4
-        assert call_args[0] == "C:\\frames\\beam.par"
-        assert call_args[1] == "CoordSys1"
-        assert call_args[2] == 1
-
-    def test_file_not_found(self, asm_mgr):
-        am, doc = asm_mgr
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=False):
-            result = am.add_structural_frame_by_orientation("C:\\missing.par", "CS1", [0])
-        assert "error" in result
-
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        doc.Type = IG_PART_DOCUMENT
-
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame_by_orientation("C:\\frames\\beam.par", "CS1", [0])
-        assert "error" in result
-
-
-# ============================================================================
-# SPLICES
-# ============================================================================
+        frames.Add.assert_not_called()
+        frames.AddByOrientation.assert_not_called()
 
 
 class TestAddSplice:

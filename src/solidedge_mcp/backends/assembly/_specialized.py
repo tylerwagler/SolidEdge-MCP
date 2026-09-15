@@ -12,6 +12,24 @@ from ..logging import get_logger
 _logger = get_logger(__name__)
 
 
+#: StructuralFrames.Add and AddByOrientation both take a Path array of the
+#: curves the frame runs along -- 3D sketch segments drawn in the assembly.
+#: Both methods were being handed Occurrences instead, which Solid Edge 2026
+#: rejects with E_POINTER, "Property name is invalid". There is no way to
+#: build such a path from here: an AssemblyDocument exposes no Sketches
+#: collection through this binding, and the Segments commands that would
+#: create one raise a modal dialog, which blocks the whole server.
+_NO_FRAME_PATH: dict[str, Any] = {
+    "error": (
+        "A structural frame runs along 3D sketch segments drawn in the assembly, "
+        "and StructuralFrames.Add takes those curves as its Path. This server "
+        "cannot draw or select them -- passing occurrences instead is rejected "
+        "with E_POINTER. Create the frame in the Solid Edge UI."
+    ),
+    "unsupported": True,
+}
+
+
 class SpecializedMixin:
     """Mixin providing specialized assembly subsystem methods."""
 
@@ -321,59 +339,20 @@ class SpecializedMixin:
         path_indices: list[int],
     ) -> dict[str, Any]:
         """
-        Add a structural frame to the assembly.
+        Structural frames cannot be created through COM automation here.
 
-        Uses StructuralFrames.Add with VARIANT-wrapped path array.
+        See ``_NO_FRAME_PATH``: the Path array wants the 3D sketch segments the
+        frame runs along, and this server can neither draw nor select them.
 
         Args:
-            part_filename: Path to the frame cross-section part file
-            path_indices: 0-based indices of occurrences defining the path
+            part_filename: Path to the frame cross-section part file, unused.
+            path_indices: Unused; occurrences are not a valid path.
 
         Returns:
-            Dict with status and frame info
+            Dict with an ``unsupported`` error.
         """
-        try:
-            _logger.info(
-                "Adding structural frame: part=%s, paths=%d",
-                part_filename,
-                len(path_indices),
-            )
-            if not os.path.exists(part_filename):
-                return {"error": f"File not found: {part_filename}"}
-
-            doc = self.doc_manager.get_active_document()
-
-            err = self._require_assembly(doc)
-            if err:
-                return err
-
-            occurrences = doc.Occurrences
-
-            paths = []
-            for idx in path_indices:
-                if idx < 0 or idx >= occurrences.Count:
-                    return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
-                paths.append(occurrences.Item(idx + 1))
-
-            v_paths = paths
-
-            frames = doc.StructuralFrames
-            frame = frames.Add(part_filename, len(paths), v_paths)
-
-            result: dict[str, Any] = {
-                "status": "created",
-                "type": "structural_frame",
-                "part_filename": part_filename,
-                "num_paths": len(paths),
-            }
-
-            with contextlib.suppress(Exception):
-                result["name"] = frame.Name
-
-            return result
-        except Exception as e:
-            _logger.error(f"Failed to add structural frame: {e}")
-            return error_result(e)
+        del part_filename, path_indices
+        return _NO_FRAME_PATH
 
     def add_structural_frame_by_orientation(
         self,
@@ -382,67 +361,20 @@ class SpecializedMixin:
         path_indices: list[int],
     ) -> dict[str, Any]:
         """
-        Add a structural frame with a specific coordinate system orientation.
+        Structural frames cannot be created through COM automation here.
 
-        Uses StructuralFrames.AddByOrientation.
+        Same reason as ``add_structural_frame``: see ``_NO_FRAME_PATH``.
 
         Args:
-            part_filename: Path to the frame cross-section part file
-            coord_system_name: Name of the coordinate system to orient by
-            path_indices: 0-based indices of occurrences defining the path
+            part_filename: Unused.
+            coord_system_name: Unused.
+            path_indices: Unused.
 
         Returns:
-            Dict with status and frame info
+            Dict with an ``unsupported`` error.
         """
-        try:
-            _logger.info(
-                "Adding structural frame by orientation: part=%s, coord=%s",
-                part_filename,
-                coord_system_name,
-            )
-            if not os.path.exists(part_filename):
-                return {"error": f"File not found: {part_filename}"}
-
-            doc = self.doc_manager.get_active_document()
-
-            err = self._require_assembly(doc)
-            if err:
-                return err
-
-            occurrences = doc.Occurrences
-
-            paths = []
-            for idx in path_indices:
-                if idx < 0 or idx >= occurrences.Count:
-                    return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
-                paths.append(occurrences.Item(idx + 1))
-
-            v_paths = paths
-
-            frames = doc.StructuralFrames
-            # AddByOrientation(PartFileName, CoOrdinateSystemName, NumPaths, Path,
-            #     [PreferredOrientationPlane], [GlobalEndConditions],
-            #     [GlobalEndConditionValue], [AutoPosition]).
-            # PartFileName was previously omitted, shifting every argument.
-            frame = frames.AddByOrientation(part_filename, coord_system_name, len(paths), v_paths)
-
-            result: dict[str, Any] = {
-                "status": "created",
-                "type": "structural_frame_oriented",
-                "part_filename": part_filename,
-                "coord_system": coord_system_name,
-                "num_paths": len(paths),
-            }
-
-            with contextlib.suppress(Exception):
-                result["name"] = frame.Name
-
-            return result
-        except Exception as e:
-            _logger.error(f"Failed to add structural frame by orientation: {e}")
-            return error_result(e)
-
-    # -- Splices -------------------------------------------------------------
+        del part_filename, coord_system_name, path_indices
+        return _NO_FRAME_PATH
 
     def add_splice(
         self,
