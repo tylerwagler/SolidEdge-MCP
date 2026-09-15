@@ -572,16 +572,29 @@ class SaveAsConstants:
 
 
 class AssemblyFeaturePropertyConstants:
-    """Assembly feature property constants (from type library)"""
+    """Assembly feature side constants.
 
-    # Feature extent side
-    igAssemblyFeatureBothSides = 0
-    igAssemblyFeatureOneSide = 1
+    These are NOT a type library enum of their own -- there is no
+    AssemblyFeaturePropertyConstants in any Solid Edge library. Every side
+    argument on AssemblyFeatures*.Add is typed FeaturePropertyConstants, the
+    same enum the part-level features use, so the values below are its
+    members and match DirectionConstants.
 
-    # Feature profile side
-    igAssemblyFeatureProfileLeft = 0
-    igAssemblyFeatureProfileRight = 1
-    igAssemblyFeatureProfileSymmetric = 2
+    They were previously an invented 0/1/2 numbering: "Left" was 0, which is
+    igNullConstant and not a side at all, and "Right" and "Symmetric" were
+    each one short of the member they named. Verified on Solid Edge 2026,
+    where Add accepts any of 1, 2, 3 and 6 without complaint -- so this was
+    never going to surface as an error, only as the wrong side.
+    """
+
+    # Feature extent side (FeaturePropertyConstants)
+    igAssemblyFeatureOneSide = 2  # igRight
+    igAssemblyFeatureBothSides = 3  # igSymmetric
+
+    # Feature profile side (FeaturePropertyConstants)
+    igAssemblyFeatureProfileLeft = 1  # igLeft
+    igAssemblyFeatureProfileRight = 2  # igRight
+    igAssemblyFeatureProfileSymmetric = 3  # igSymmetric
 
     # Assembly feature types
     igAssemblyFeatureExtrudedCutout = 1

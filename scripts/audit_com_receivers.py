@@ -84,8 +84,16 @@ CALL_SEEDS: dict[str, frozenset[str]] = {
 
 #: Helpers returning ``(com_object, error_dict)``. The first name bound by a
 #: tuple assignment takes the interface; the second is ours, not Solid Edge's.
-TUPLE_SEEDS: dict[str, frozenset[str]] = {
-    "resolve_view": frozenset({"View"}),
+#: Helpers that hand back a tuple of COM objects, by position. ``None`` for a
+#: slot that is not a COM object (an error dict, a count). The key matches
+#: either a bare call, ``resolve_view(doc)``, or a method on self,
+#: ``self._get_assembly_features()``.
+TUPLE_SEEDS: dict[str, tuple[frozenset[str] | None, ...]] = {
+    "resolve_view": (frozenset({"View"}),),
+    "_get_assembly_features": (
+        frozenset({"AssemblyDocument"}),
+        frozenset({"AssemblyFeatures"}),
+    ),
 }
 
 #: Members whose name is an interface but whose real type is a different one.
@@ -213,17 +221,25 @@ class Visitor(ast.NodeVisitor):
         self.generic_visit(node)
 
         # view_obj, err = resolve_view(doc)
+        # doc, af = self._get_assembly_features()
         value = node.value
-        if (
-            isinstance(value, ast.Call)
-            and isinstance(value.func, ast.Name)
-            and value.func.id in TUPLE_SEEDS
-        ):
+        seed_key = None
+        if isinstance(value, ast.Call):
+            if isinstance(value.func, ast.Name):
+                seed_key = value.func.id
+            elif isinstance(value.func, ast.Attribute):
+                seed_key = value.func.attr
+        if seed_key in TUPLE_SEEDS:
+            seeds = TUPLE_SEEDS[seed_key]
             for target in node.targets:
-                if isinstance(target, ast.Tuple) and target.elts:
-                    first = target.elts[0]
-                    if isinstance(first, ast.Name):
-                        self.scopes[-1][first.id] = TUPLE_SEEDS[value.func.id]
+                if not isinstance(target, ast.Tuple):
+                    continue
+                for position, element in enumerate(target.elts):
+                    if position >= len(seeds):
+                        break
+                    ifaces = seeds[position]
+                    if ifaces is not None and isinstance(element, ast.Name):
+                        self.scopes[-1][element.id] = ifaces
             return
 
         types = self._infer(node.value)

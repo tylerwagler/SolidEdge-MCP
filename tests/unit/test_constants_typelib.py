@@ -46,7 +46,11 @@ LOCAL_GROUPINGS: dict[str, str] = {
     # Solid Edge exposes no enum for these; values were determined empirically.
     "FeatureOperationConstants": "not in any type library; unused by COM calls",
     "MateTypeConstants": "assembly relation ordinals; no matching COM enum",
-    "AssemblyFeaturePropertyConstants": "assembly feature ordinals; no matching COM enum",
+    "AssemblyFeaturePropertyConstants": (
+        "no COM enum of this name exists; the side members are "
+        "FeaturePropertyConstants values, pinned by "
+        "test_assembly_feature_sides.py"
+    ),
     "AssemblyRelationConstants": "Relation3d object-type ids, not an enum",
     "RenderModeConstants": "render mode ordinals; no matching COM enum",
     "SaveAsConstants": "our own flag, not a COM enum",

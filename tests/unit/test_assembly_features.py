@@ -135,12 +135,15 @@ class TestAssemblyExtrudedProtrusion:
         profiles = [profile]
         sm.get_accumulated_profiles.return_value = profiles
         protrusions = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesExtrudedProtrusions = protrusions
+        # The property is ExtrudedProtrusions; AssemblyFeaturesExtrudedProtrusions
+        # is the interface it returns. Reading the interface name off
+        # AssemblyFeatures raises, and every protrusion call did.
+        doc.AssemblyFeatures.ExtrudedProtrusions = protrusions
 
         result = am.create_assembly_extruded_protrusion(distance=0.05)
         assert result["status"] == "created"
         assert result["type"] == "assembly_extruded_protrusion"
-        # AssemblyFeaturesExtrudedProtrusions.Add(nNumProfiles, pProfiles,
+        # ExtrudedProtrusions.Add(nNumProfiles, pProfiles,
         #   ExtentType, pExtentSide, profileSide, pdDistance, pKeyPoint,
         #   pKeyPointFlags, pFromSurfOrPlane, pToSurfOrPlane)
         protrusions.Add.assert_called_once_with(
@@ -173,12 +176,12 @@ class TestAssemblyRevolvedProtrusion:
         profiles = [profile]
         sm.get_accumulated_profiles.return_value = profiles
         protrusions = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedProtrusions = protrusions
+        doc.AssemblyFeatures.RevolvedProtrusions = protrusions
 
         result = am.create_assembly_revolved_protrusion(angle=90.0)
         assert result["status"] == "created"
         assert result["angle"] == 90.0
-        # AssemblyFeaturesRevolvedProtrusions.Add(nNumProfiles, pProfiles,
+        # RevolvedProtrusions.Add(nNumProfiles, pProfiles,
         #   pRefAxis, ExtentType, ExtentSide, profileSide, pdAngle,
         #   KeyPointOrTangentFace, KeyPointFlags, pFromSurface, pToSurface)
         protrusions.Add.assert_called_once_with(

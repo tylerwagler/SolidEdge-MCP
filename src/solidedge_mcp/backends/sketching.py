@@ -17,6 +17,34 @@ from .logging import get_logger
 _logger = get_logger(__name__)
 
 
+def ref_planes_of(doc: Any) -> Any:
+    """The document's base reference planes, whatever it calls them.
+
+    A part, sheet metal or weldment document holds them in ``RefPlanes``. An
+    assembly has no such member at all: its three are ``AsmRefPlanes``, in the
+    same 1=Top/XY, 2=Right/YZ, 3=Front/XZ order. Reaching only for RefPlanes
+    made every sketch in an assembly fail with a bare ``<unknown>.RefPlanes``,
+    and since each assembly-level creator consumes an accumulated profile,
+    all six of them could only ever answer "No profiles available" -- there
+    was no way to give them one. Verified on Solid Edge 2026, where
+    AsmRefPlanes with ProfileSets builds an assembly profile normally.
+
+    Returns None when the document has neither, which is what a draft is.
+    """
+    planes = com_get(doc, "RefPlanes")
+    if planes is not None:
+        return planes
+    return com_get(doc, "AsmRefPlanes")
+
+
+#: A document that holds neither RefPlanes nor AsmRefPlanes cannot be
+#: sketched on. A draft is the case: its geometry lives on Sheets.
+_NO_REF_PLANES = (
+    "This document has no reference planes to sketch on. Parts, sheet metal "
+    "and assemblies do; a draft does not -- draw on its sheet instead."
+)
+
+
 def _corner_points(
     line1: Any, line2: Any
 ) -> tuple[tuple[float, float], tuple[float, float]] | None:
@@ -234,7 +262,9 @@ class SketchManager:
             doc = self.doc_manager.get_active_document()
 
             # Get reference planes
-            ref_planes = doc.RefPlanes
+            ref_planes = ref_planes_of(doc)
+            if ref_planes is None:
+                return {"error": _NO_REF_PLANES}
 
             # Map plane names to indices
             plane_map = {
@@ -295,7 +325,9 @@ class SketchManager:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            ref_planes = doc.RefPlanes
+            ref_planes = ref_planes_of(doc)
+            if ref_planes is None:
+                return {"error": _NO_REF_PLANES}
 
             if plane_index < 1 or plane_index > ref_planes.Count:
                 return {"error": f"Invalid plane index: {plane_index}. Count: {ref_planes.Count}"}
@@ -1636,7 +1668,9 @@ class SketchManager:
 
             profile = self.active_profile
             doc = self.doc_manager.get_active_document()
-            ref_planes = doc.RefPlanes
+            ref_planes = ref_planes_of(doc)
+            if ref_planes is None:
+                return {"error": _NO_REF_PLANES}
 
             if plane_index < 1 or plane_index > ref_planes.Count:
                 return {"error": f"Invalid plane_index: {plane_index}. Count: {ref_planes.Count}"}
@@ -2227,7 +2261,7 @@ class SketchManager:
         # RefPlanes collection by name.
         try:
             plane_name = self.active_profile.Plane.Name
-            ref_planes = self.doc_manager.get_active_document().RefPlanes
+            ref_planes = ref_planes_of(self.doc_manager.get_active_document())
             for i in range(1, ref_planes.Count + 1):
                 if ref_planes.Item(i).Name == plane_name:
                     return i

@@ -14,7 +14,7 @@ from ..constants import (
     ExtentTypeConstants,
 )
 from ..logging import get_logger
-from ._base import com_get
+from ._base import com_get, verifies_assembly_geometry
 
 _logger = get_logger(__name__)
 
@@ -145,6 +145,7 @@ class AssemblyFeaturesMixin:
         occurrences = doc.Occurrences
         return [occurrences.Item(idx + 1) for idx in scope_parts]
 
+    @verifies_assembly_geometry
     def create_assembly_extruded_cutout(
         self,
         scope_parts: list[int],
@@ -202,6 +203,7 @@ class AssemblyFeaturesMixin:
             _logger.error(f"Failed to create assembly extruded cutout: {e}")
             return error_result(e)
 
+    @verifies_assembly_geometry
     def create_assembly_revolved_cutout(
         self,
         scope_parts: list[int],
@@ -256,6 +258,7 @@ class AssemblyFeaturesMixin:
             _logger.error(f"Failed to create assembly revolved cutout: {e}")
             return error_result(e)
 
+    @verifies_assembly_geometry
     def create_assembly_hole(
         self,
         scope_parts: list[int],
@@ -307,6 +310,7 @@ class AssemblyFeaturesMixin:
             _logger.error(f"Failed to create assembly hole: {e}")
             return error_result(e)
 
+    @verifies_assembly_geometry
     def create_assembly_extruded_protrusion(
         self,
         extent_type: str = "Finite",
@@ -341,7 +345,11 @@ class AssemblyFeaturesMixin:
             # 35 arguments. Add here is (nNumProfiles, pProfiles, ExtentType,
             # pExtentSide, profileSide, pdDistance, pKeyPoint, pKeyPointFlags,
             # pFromSurfOrPlane, pToSurfOrPlane).
-            protrusions = af.AssemblyFeaturesExtrudedProtrusions
+            # The PROPERTY is ExtrudedProtrusions; its TYPE is the
+            # interface AssemblyFeaturesExtrudedProtrusions. Reading the
+            # interface name off AssemblyFeatures raises, and the member
+            # check cannot see it because that name is real elsewhere.
+            protrusions = af.ExtrudedProtrusions
             protrusions.Add(
                 len(profiles),
                 profiles,
@@ -364,6 +372,7 @@ class AssemblyFeaturesMixin:
             _logger.error(f"Failed to create assembly extruded protrusion: {e}")
             return error_result(e)
 
+    @verifies_assembly_geometry
     def create_assembly_revolved_protrusion(
         self,
         extent_type: str = "Finite",
@@ -396,7 +405,9 @@ class AssemblyFeaturesMixin:
             # AssemblyFeaturesRevolvedProtrusions.Add(nNumProfiles, pProfiles,
             #     pRefAxis, ExtentType, ExtentSide, profileSide, pdAngle,
             #     KeyPointOrTangentFace, KeyPointFlags, pFromSurface, pToSurface)
-            protrusions = af.AssemblyFeaturesRevolvedProtrusions
+            # As above: the property is RevolvedProtrusions, the interface
+            # it returns is AssemblyFeaturesRevolvedProtrusions.
+            protrusions = af.RevolvedProtrusions
             protrusions.Add(
                 len(profiles),
                 profiles,
@@ -499,6 +510,7 @@ class AssemblyFeaturesMixin:
             "pattern_type": pattern_type,
         }
 
+    @verifies_assembly_geometry
     def create_assembly_swept_protrusion(
         self,
         num_trace_curves: int = 1,
