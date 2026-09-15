@@ -16,6 +16,7 @@ from ..constants import (
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
+from ._base import verifies_geometry
 
 _logger = get_logger(__name__)
 
@@ -1446,6 +1447,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_ex(
         self,
         thickness: float,
@@ -1513,6 +1515,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_sync(
         self,
         face_index: int,
@@ -1582,6 +1585,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_sync_with_bend(
         self,
         face_index: int,
@@ -2387,6 +2391,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_v3(
         self,
         thickness: float,
@@ -2449,6 +2454,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_sync_ex(
         self,
         face_index: int,
