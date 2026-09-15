@@ -107,7 +107,7 @@ class SelectionMixin:
                     return {"error": "No model features exist"}
                 model = models.Item(1)
                 body = body_of(model)
-                faces = all_faces(body)
+                faces = all_faces(body, model)
                 if index < 0 or index >= faces.Count:
                     return {"error": f"Invalid face index: {index}. Count: {faces.Count}"}
                 obj = faces.Item(index + 1)

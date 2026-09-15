@@ -76,7 +76,7 @@ def page_result(
     return result
 
 
-#: Why a body stops answering, in the one state where it does.
+#: Why a body stops answering when the modelling mode puts it out of reach.
 _UNREACHABLE = (
     "The part's body could not be read. A part built in ordered mode and then "
     "switched to synchronous keeps its geometry on screen but puts it out of "
@@ -84,41 +84,80 @@ _UNREACHABLE = (
     "manage_feature_tree(action='set_mode', mode='ordered')."
 )
 
+#: Why a body stops answering when nothing is left to build it.
+_ALL_SUPPRESSED = (
+    "The part's body could not be read because all {count} of its features are "
+    "suppressed, so the part has no solid to measure. Unsuppress one with "
+    "manage_feature(action='unsuppress', index=...)."
+)
+
+
+def _why_no_body(model: Any) -> str:
+    """Which state is hiding this body, as a message the caller can act on.
+
+    Suppressing every feature empties the body exactly as a switch to
+    synchronous does, and the two want opposite advice: one says unsuppress a
+    feature, the other says change the modelling mode. Sending a caller after
+    the mode when the real cause was suppression costs them the whole trip, so
+    the feature tree decides between them. Anything unreadable here falls back
+    to the mode message, which is the only diagnosis this helper used to give.
+
+    Only entries that can be suppressed are counted. DesignEdgebarFeatures
+    also holds the three base reference planes, and RefPlane has no Suppress
+    member at all, so asking every entry never once answered yes -- a part
+    with one suppressed extrusion reads as four entries, three of which
+    cannot be suppressed. Verified on Solid Edge 2026.
+
+    Each answer has to be exactly ``True``, not merely truthy: the claim is
+    only worth making when the tree really said so.
+    """
+    try:
+        features = model.Document.DesignEdgebarFeatures
+        answers = [com_get(features.Item(i), "Suppress") for i in range(1, int(features.Count) + 1)]
+        suppressible = [a for a in answers if isinstance(a, bool)]
+        if suppressible and all(a is True for a in suppressible):
+            return _ALL_SUPPRESSED.format(count=len(suppressible))
+    except Exception:  # noqa: BLE001 - a tree we cannot read tells us nothing
+        pass
+    return _UNREACHABLE
+
 
 def body_of(model: Any) -> Any:
     """A model's solid body, with a readable error when it cannot be reached.
 
     Reading Body raises a bare E_FAIL on a part that was built in ordered mode
-    and then switched to synchronous. Verified on Solid Edge 2026.
+    and then switched to synchronous, and reads as None when every feature is
+    suppressed. Both verified on Solid Edge 2026; ``_why_no_body`` says which.
     """
     try:
         body = model.Body
     except Exception as exc:
-        raise BodyNotReachableError(_UNREACHABLE) from exc
+        raise BodyNotReachableError(_why_no_body(model)) from exc
     if body is None:
-        raise BodyNotReachableError(_UNREACHABLE)
+        raise BodyNotReachableError(_why_no_body(model))
     return body
 
 
-def all_faces(body: Any) -> Any:
+def all_faces(body: Any, model: Any = None) -> Any:
     """Every face of a body, with a readable error when it cannot be reached.
 
     A part built in ordered mode and then switched to synchronous keeps its
     geometry on screen but makes Body.Faces raise a bare E_FAIL, which told a
     caller nothing about why a measurement suddenly stopped working. Verified
     on Solid Edge 2026, where Models.Item(n).Features goes empty in the same
-    state.
+    state. Pass ``model`` to have suppression told apart from that.
     """
     try:
         faces = body.Faces(FaceQueryConstants.igQueryAll)
         int(faces.Count)  # the call above is lazy; this is what really asks
     except Exception as exc:
-        raise BodyNotReachableError(_UNREACHABLE) from exc
+        message = _why_no_body(model) if model is not None else _UNREACHABLE
+        raise BodyNotReachableError(message) from exc
     return faces
 
 
 class BodyNotReachableError(Exception):
-    """The body exists but the current modelling mode hides it."""
+    """There is no body to measure, and the message says which state caused it."""
 
 
 class QueryManagerBase:
@@ -147,10 +186,11 @@ class QueryManagerBase:
         if not count:
             raise BodyNotReachableError(
                 "This document reports no model. Create a base feature first. "
-                "If the part does have geometry, it was probably built in "
-                "ordered mode and then switched to synchronous, which puts the "
-                "model out of reach; switch it back with "
-                "manage_feature_tree(action='set_mode', mode='ordered')."
+                "If the part does have features, they may all be suppressed, or "
+                "it was built in ordered mode and then switched to synchronous, "
+                "which puts the model out of reach; unsuppress with "
+                "manage_feature(action='unsuppress', index=...) or switch back "
+                "with manage_feature_tree(action='set_mode', mode='ordered')."
             )
         return doc, models.Item(1)
 
@@ -172,7 +212,7 @@ class QueryManagerBase:
     def _get_face(self, face_index: int) -> tuple[Any, Any, Any, Any]:
         """Get a specific face by 0-based index. Returns (doc, model, body, face)."""
         doc, model, body = self._get_body()
-        faces = all_faces(body)
+        faces = all_faces(body, model)
         if face_index < 0 or face_index >= faces.Count:
             raise IndexError(f"Invalid face index: {face_index}. Body has {faces.Count} faces.")
         face = faces.Item(face_index + 1)

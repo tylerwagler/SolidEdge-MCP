@@ -63,7 +63,7 @@ class BRepMixin:
             doc, model = self._get_first_model()
             body = body_of(model)
 
-            faces = all_faces(body)
+            faces = all_faces(body, model)
             total = faces.Count
             start, stop, limit = page_bounds(total, offset, limit)
 
@@ -157,7 +157,7 @@ class BRepMixin:
             doc, model = self._get_first_model()
             body = body_of(model)
 
-            faces = all_faces(body)
+            faces = all_faces(body, model)
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
 
@@ -194,7 +194,7 @@ class BRepMixin:
         try:
             doc, model = self._get_first_model()
             body = body_of(model)
-            faces = all_faces(body)
+            faces = all_faces(body, model)
             return {"face_count": faces.Count}
         except Exception as e:
             return error_result(e)
@@ -462,7 +462,7 @@ class BRepMixin:
         try:
             doc, model = self._get_first_model()
             body = body_of(model)
-            faces = all_faces(body)
+            faces = all_faces(body, model)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
@@ -514,7 +514,7 @@ class BRepMixin:
             doc, model = self._get_first_model()
             body = body_of(model)
 
-            faces = all_faces(body)
+            faces = all_faces(body, model)
             total = faces.Count
             start, stop, limit = page_bounds(total, offset, limit)
 
@@ -554,7 +554,7 @@ class BRepMixin:
             doc, model = self._get_first_model()
             body = body_of(model)
 
-            faces = all_faces(body)
+            faces = all_faces(body, model)
             total_edges = 0
 
             for fi in range(1, faces.Count + 1):
@@ -587,7 +587,7 @@ class BRepMixin:
         try:
             doc, model = self._get_first_model()
             body = body_of(model)
-            faces = all_faces(body)
+            faces = all_faces(body, model)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}

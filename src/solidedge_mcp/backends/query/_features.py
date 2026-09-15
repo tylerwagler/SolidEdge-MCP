@@ -439,7 +439,7 @@ class FeatureQueryMixin:
             doc, model = self._get_first_model()
             body = body_of(model)
 
-            faces = all_faces(body)
+            faces = all_faces(body, model)
             total_vertices = 0
 
             for fi in range(1, faces.Count + 1):

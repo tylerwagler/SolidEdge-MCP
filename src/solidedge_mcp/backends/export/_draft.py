@@ -455,8 +455,9 @@ class DraftMixin:
             if models.Count == 0:
                 return {"error": "No models in document"}
 
-            body = body_of(models.Item(1))
-            faces = all_faces(body)
+            model = models.Item(1)
+            body = body_of(model)
+            faces = all_faces(body, model)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face_index: {face_index}. Count: {faces.Count}"}

@@ -164,7 +164,7 @@ class PhysicalPropsMixin(QueryManagerBase):
             # raised and the sum below was the only path that ever ran.
             # Face.Area is real, and summing it gives the true area.
 
-            faces = all_faces(body)
+            faces = all_faces(body, model)
             total_area = 0.0
             for i in range(1, faces.Count + 1):
                 try:
@@ -220,7 +220,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         try:
             doc, model = self._get_first_model()
             body = body_of(model)
-            faces = all_faces(body)
+            faces = all_faces(body, model)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
