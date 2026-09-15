@@ -7,6 +7,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get, describe_feature_type
 from ..constants import DirectionConstants, FeatureStatusConstants, OffsetSideConstants
+from ..features._base import feature_index_of
 from ..logging import get_logger
 from ._base import all_faces, body_of, dispatch_array
 
@@ -56,6 +57,12 @@ class FeatureQueryMixin:
         Unlike list_features() which only shows Models, this shows the
         complete design tree including sketches, reference planes, etc.
 
+        ``tree_position`` is the spot in that tree; ``index`` is the one every
+        index-taking tool speaks, and is null for an entry that is not a
+        feature. The two differ by however many reference planes come first,
+        so reporting the tree position as "index" pointed callers at the wrong
+        feature.
+
         Returns:
             Dict with list of all feature tree entries
         """
@@ -71,18 +78,21 @@ class FeatureQueryMixin:
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    entry: dict[str, Any] = {"index": i - 1}
+                    entry: dict[str, Any] = {"tree_position": i - 1}
                     try:
                         entry["name"] = feat.Name
                     except Exception:
                         entry["name"] = f"Feature_{i}"
+                    entry["index"] = feature_index_of(doc, entry["name"])
                     with contextlib.suppress(Exception):
                         entry.update(describe_feature_type(feat.Type))
                     with contextlib.suppress(Exception):
                         entry["suppressed"] = feat.Suppress
                     feature_list.append(entry)
                 except Exception:
-                    feature_list.append({"index": i - 1, "name": f"Feature_{i}"})
+                    feature_list.append(
+                        {"tree_position": i - 1, "index": None, "name": f"Feature_{i}"}
+                    )
 
             return {"features": feature_list, "count": len(feature_list)}
         except Exception as e:
@@ -230,9 +240,15 @@ class FeatureQueryMixin:
                 try:
                     feat = features.Item(i)
                     if com_get(feat, "Name") == feature_name:
+                        # i - 1 is the position in the Pathfinder tree, which
+                        # holds the reference planes too. Reporting that as
+                        # "index" pointed callers at a different feature: the
+                        # base extrusion read as index 3, and renaming index 3
+                        # hit the third cutout instead.
                         result: dict[str, Any] = {
                             "feature_name": feature_name,
-                            "index": i - 1,
+                            "index": feature_index_of(doc, feature_name),
+                            "tree_position": i - 1,
                         }
                         with contextlib.suppress(Exception):
                             code = _status_code(feat.Status)

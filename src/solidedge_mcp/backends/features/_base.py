@@ -145,6 +145,92 @@ def _reference_plane_names(doc: Any) -> set[str]:
     return names
 
 
+def enumerate_features(doc: Any) -> list[dict[str, Any]]:
+    """The part's features, in tree order, however the document holds them.
+
+    This is the one enumeration feature indices refer to, and anything that
+    hands a caller an index has to speak it. ``Models.Item(n).Features`` is the
+    normal source and holds real features only, which is why indexing
+    ``DesignEdgebarFeatures`` instead shifted every lookup past the reference
+    planes.
+
+    A part built in ordered mode and then switched to synchronous is the
+    exception: its features stay in the Pathfinder but leave
+    ``Models.Item(n).Features`` empty. Verified on Solid Edge 2026, where
+    ``Body.Faces`` raises E_FAIL in the same state. Falling back to the
+    edgebar keeps the feature list honest there, and each entry says which
+    collection it came from so the index lookup follows.
+    """
+    features: list[dict[str, Any]] = []
+    models = com_get(doc, "Models")
+    count_models = int(com_get(models, "Count", 0) or 0)
+    for m in range(1, count_models + 1):
+        model = models.Item(m)
+        collection = com_get(model, "Features")
+        if collection is None:
+            continue
+        count = int(com_get(collection, "Count", 0) or 0)
+        for i in range(1, count + 1):
+            feature = collection.Item(i)
+            features.append(
+                {
+                    "index": len(features),
+                    "source": "model",
+                    "body_index": m - 1,
+                    "position_in_body": i,
+                    "name": com_get(feature, "Name", f"Feature_{len(features) + 1}"),
+                    **describe_feature_type(com_get(feature, "Type")),
+                }
+            )
+    if features:
+        return features
+    return enumerate_edgebar_features(doc)
+
+
+def enumerate_edgebar_features(doc: Any) -> list[dict[str, Any]]:
+    """Real features from the Pathfinder tree, planes and datums excluded."""
+    edgebar = com_get(doc, "DesignEdgebarFeatures")
+    count = int(com_get(edgebar, "Count", 0) or 0)
+    if not count:
+        return []
+
+    skip = _reference_plane_names(doc)
+    features: list[dict[str, Any]] = []
+    for i in range(1, count + 1):
+        entry = edgebar.Item(i)
+        name = com_get(entry, "Name")
+        if name is None or name in skip:
+            continue
+        features.append(
+            {
+                "index": len(features),
+                "source": "edgebar",
+                "body_index": 0,
+                "position_in_body": i,
+                "name": name,
+                **describe_feature_type(com_get(entry, "Type")),
+            }
+        )
+    return features
+
+
+def feature_index_of(doc: Any, feature_name: str) -> int | None:
+    """Where ``feature_name`` sits in the index every index-taking tool speaks.
+
+    A position in ``DesignEdgebarFeatures`` is not that index: the tree holds
+    the reference planes too, so the same feature is three higher there, and
+    handing a caller the tree position under the name "index" pointed them at
+    a different feature entirely. Verified on Solid Edge 2026, where the status
+    of ExtrudedProtrusion_1 reported index 3 and renaming index 3 hit
+    ExtrudedCutout_3.
+    """
+    for entry in enumerate_features(doc):
+        if entry.get("name") == feature_name:
+            index = entry.get("index")
+            return int(index) if isinstance(index, int) else None
+    return None
+
+
 class FeatureManagerBase:
     """Base providing __init__ and helpers shared across feature mixins."""
 
@@ -366,70 +452,12 @@ class FeatureManagerBase:
         return None
 
     def _enumerate_features(self, doc: Any) -> list[dict[str, Any]]:
-        """The part's features, in tree order, however the document holds them.
-
-        This is the one enumeration feature indices refer to.
-        ``Models.Item(n).Features`` is the normal source and holds real
-        features only, which is why indexing ``DesignEdgebarFeatures`` instead
-        shifted every lookup past the reference planes.
-
-        A part built in ordered mode and then switched to synchronous is the
-        exception: its features stay in the Pathfinder but leave
-        ``Models.Item(n).Features`` empty. Verified on Solid Edge 2026, where
-        ``Body.Faces`` raises E_FAIL in the same state. Falling back to the
-        edgebar keeps the feature list honest there, and each entry says which
-        collection it came from so the index lookup follows.
-        """
-        features: list[dict[str, Any]] = []
-        models = com_get(doc, "Models")
-        count_models = int(com_get(models, "Count", 0) or 0)
-        for m in range(1, count_models + 1):
-            model = models.Item(m)
-            collection = com_get(model, "Features")
-            if collection is None:
-                continue
-            count = int(com_get(collection, "Count", 0) or 0)
-            for i in range(1, count + 1):
-                feature = collection.Item(i)
-                features.append(
-                    {
-                        "index": len(features),
-                        "source": "model",
-                        "body_index": m - 1,
-                        "position_in_body": i,
-                        "name": com_get(feature, "Name", f"Feature_{len(features) + 1}"),
-                        **describe_feature_type(com_get(feature, "Type")),
-                    }
-                )
-        if features:
-            return features
-        return self._enumerate_edgebar_features(doc)
+        """The part's features, in tree order, however the document holds them."""
+        return enumerate_features(doc)
 
     def _enumerate_edgebar_features(self, doc: Any) -> list[dict[str, Any]]:
         """Real features from the Pathfinder tree, planes and datums excluded."""
-        edgebar = com_get(doc, "DesignEdgebarFeatures")
-        count = int(com_get(edgebar, "Count", 0) or 0)
-        if not count:
-            return []
-
-        skip = _reference_plane_names(doc)
-        features: list[dict[str, Any]] = []
-        for i in range(1, count + 1):
-            entry = edgebar.Item(i)
-            name = com_get(entry, "Name")
-            if name is None or name in skip:
-                continue
-            features.append(
-                {
-                    "index": len(features),
-                    "source": "edgebar",
-                    "body_index": 0,
-                    "position_in_body": i,
-                    "name": name,
-                    **describe_feature_type(com_get(entry, "Type")),
-                }
-            )
-        return features
+        return enumerate_edgebar_features(doc)
 
     def _get_feature_by_index(self, index: int) -> tuple[Any | None, dict[str, Any] | None]:
         """Resolve a 0-based index from list_features to the COM feature.

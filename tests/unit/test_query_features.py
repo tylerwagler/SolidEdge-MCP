@@ -116,6 +116,38 @@ class TestGetDesignEdgebarFeatures:
         result = qm.get_design_edgebar_features()
         assert "error" in result
 
+    def test_the_tree_position_is_not_offered_as_a_tool_index(self, query_mgr):
+        """Only a real feature gets an index a tool will accept.
+
+        This listing is the whole Pathfinder, sketches and planes included.
+        Numbering those 0, 1, 2 under the name "index" invited a caller to
+        pass one to manage_feature, which speaks a different index entirely.
+        """
+        qm, doc = query_mgr
+        plane = MagicMock(Name="Front")
+        extrude = MagicMock(Name="ExtrudedProtrusion 1", Type=3)
+
+        edgebar = MagicMock()
+        edgebar.Count = 2
+        edgebar.Item.side_effect = lambda i: [None, plane, extrude][i]
+        doc.DesignEdgebarFeatures = edgebar
+
+        model_features = MagicMock()
+        model_features.Count = 1
+        model_features.Item.return_value = extrude
+        model = MagicMock()
+        model.Features = model_features
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+
+        rows = qm.get_design_edgebar_features()["features"]
+
+        assert [r["tree_position"] for r in rows] == [0, 1]
+        assert rows[0]["index"] is None, "a reference plane is not a tool index"
+        assert rows[1]["index"] == 0, "the only real feature is index 0"
+
 
 # ============================================================================
 # RENAME FEATURE
@@ -196,16 +228,34 @@ class TestGetFeatureStatus:
     igFeatureOK is 1216476310, which tells a caller nothing on its own.
     """
 
-    def _feature(self, doc, status):
+    def _feature(self, doc, status, planes_before=0):
+        """A document holding one feature, optionally behind some ref planes.
+
+        A real part keeps its features in Models.Item(n).Features and repeats
+        them in DesignEdgebarFeatures behind the reference planes, so the two
+        collections number the same feature differently.
+        """
         feat = MagicMock()
         feat.Name = "Extrude1"
         feat.Status = status
         feat.Suppress = False
         feat.Type = 25
-        features = MagicMock()
-        features.Count = 1
-        features.Item.return_value = feat
-        doc.DesignEdgebarFeatures = features
+
+        tree = [MagicMock(Name=f"Plane{i}") for i in range(planes_before)] + [feat]
+        edgebar = MagicMock()
+        edgebar.Count = len(tree)
+        edgebar.Item.side_effect = lambda i: tree[i - 1]
+        doc.DesignEdgebarFeatures = edgebar
+
+        model_features = MagicMock()
+        model_features.Count = 1
+        model_features.Item.return_value = feat
+        model = MagicMock()
+        model.Features = model_features
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
         return feat
 
     def test_success(self, query_mgr):
@@ -216,10 +266,26 @@ class TestGetFeatureStatus:
 
         assert result["feature_name"] == "Extrude1"
         assert result["index"] == 0
+        assert result["tree_position"] == 0
         assert result["status"] == "ok"
         assert result["status_code"] == FeatureStatusConstants.igFeatureOK
         assert result["is_suppressed"] is False
         assert result["type"] == 25
+
+    def test_the_index_is_the_one_tools_take_not_the_tree_position(self, query_mgr):
+        """The tree carries the reference planes; the tool index does not.
+
+        Reporting the tree position as "index" sent a caller to a different
+        feature: live, the base extrusion read as index 3 and renaming index 3
+        hit the third cutout and reported success.
+        """
+        qm, doc = query_mgr
+        self._feature(doc, FeatureStatusConstants.igFeatureOK, planes_before=3)
+
+        result = qm.get_feature_status("Extrude1")
+
+        assert result["index"] == 0, "the index a tool would accept"
+        assert result["tree_position"] == 3, "where it sits in the Pathfinder"
 
     def test_every_named_status_is_decoded(self, query_mgr):
         qm, doc = query_mgr
