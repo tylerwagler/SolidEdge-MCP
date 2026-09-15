@@ -103,6 +103,7 @@ class SheetMetalMixin:
             "profile": closed_kinds,
         }
 
+    @verifies_geometry
     def create_base_flange(
         self, width: float, thickness: float, bend_radius: float | None = None
     ) -> dict[str, Any]:
@@ -160,6 +161,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_base_tab(self, thickness: float, width: float | None = None) -> dict[str, Any]:
         """
         Create a base tab (sheet metal).
@@ -195,6 +197,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_lofted_flange(self, thickness: float) -> dict[str, Any]:
         """
         Create a lofted flange (sheet metal).
@@ -217,6 +220,7 @@ class SheetMetalMixin:
             "thickness": thickness,
         }
 
+    @verifies_geometry
     def create_web_network(
         self,
         thickness: float = 0.0,
@@ -281,6 +285,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_base_contour_flange_advanced(
         self,
         thickness: float,
@@ -344,6 +349,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_base_tab_multi_profile(self, thickness: float) -> dict[str, Any]:
         """
         Create a base tab from the accumulated sketch profiles.
@@ -388,6 +394,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_lofted_flange_advanced(self, thickness: float, bend_radius: float) -> dict[str, Any]:
         """
         Create a lofted flange with bend deduction or bend allowance.
@@ -411,6 +418,7 @@ class SheetMetalMixin:
             "bend_radius": bend_radius,
         }
 
+    @verifies_geometry
     def create_lofted_flange_ex(self, thickness: float) -> dict[str, Any]:
         """
         Create an extended lofted flange.
@@ -432,6 +440,7 @@ class SheetMetalMixin:
             "thickness": thickness,
         }
 
+    @verifies_geometry
     def create_emboss(
         self,
         face_indices: list[int],
@@ -495,6 +504,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_flange(
         self,
         face_index: int,
@@ -621,6 +631,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_dimple(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a dimple feature (sheet metal).
@@ -689,6 +700,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_rib(self, thickness: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a rib feature from the active sketch profile.
@@ -745,6 +757,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_lip(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a lip feature from the active sketch profile.
@@ -774,6 +787,7 @@ class SheetMetalMixin:
             "direction": direction,
         }
 
+    @verifies_geometry
     def create_drawn_cutout(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a drawn cutout feature (sheet metal).
@@ -830,6 +844,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_bead(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a bead feature (sheet metal stiffener).
@@ -863,6 +878,7 @@ class SheetMetalMixin:
             "direction": direction,
         }
 
+    @verifies_geometry
     def create_louver(
         self, depth: float, direction: str = "Normal", height: float = 0.0
     ) -> dict[str, Any]:
@@ -927,6 +943,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_gusset(self, thickness: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a gusset feature (sheet metal reinforcement).
@@ -1143,6 +1160,7 @@ class SheetMetalMixin:
                 ),
             )
 
+    @verifies_geometry
     def create_slot(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a slot feature from the active sketch profile.
@@ -1172,6 +1190,7 @@ class SheetMetalMixin:
             "direction": direction,
         }
 
+    @verifies_geometry
     def create_split(self, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a split feature to divide a body.
@@ -1200,6 +1219,7 @@ class SheetMetalMixin:
             "direction": direction,
         }
 
+    @verifies_geometry
     def create_flange_by_match_face(
         self,
         face_index: int,
@@ -1250,6 +1270,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_flange_sync(
         self,
         face_index: int,
@@ -1289,6 +1310,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_flange_by_face(
         self,
         face_index: int,
@@ -1352,6 +1374,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_flange_with_bend_calc(
         self,
         face_index: int,
@@ -1405,6 +1428,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_flange_sync_with_bend_calc(
         self,
         face_index: int,
@@ -1658,6 +1682,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_hem(
         self,
         face_index: int,
@@ -1715,6 +1740,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_jog(
         self,
         jog_offset: float = 0.005,
@@ -1777,6 +1803,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_close_corner(
         self,
         face_index: int,
@@ -1824,6 +1851,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_multi_edge_flange(
         self,
         face_index: int,
@@ -1898,6 +1926,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_bend_with_calc(
         self,
         bend_angle: float = 90.0,
@@ -2013,6 +2042,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_dimple_ex(
         self,
         depth: float,
@@ -2097,6 +2127,7 @@ class SheetMetalMixin:
             physical=True,
         )
 
+    @verifies_geometry
     def create_slot_ex(
         self, width: float, depth: float, direction: str = "Normal"
     ) -> dict[str, Any]:
@@ -2131,6 +2162,7 @@ class SheetMetalMixin:
             "direction": direction,
         }
 
+    @verifies_geometry
     def create_slot_sync(self, width: float, depth: float) -> dict[str, Any]:
         """
         Create a synchronous slot feature.
@@ -2161,6 +2193,7 @@ class SheetMetalMixin:
             "depth": depth,
         }
 
+    @verifies_geometry
     def create_drawn_cutout_ex(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create an extended drawn cutout feature (sheet metal).
@@ -2222,6 +2255,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_louver_sync(self, depth: float) -> dict[str, Any]:
         """
         Create a synchronous louver feature (sheet metal).
@@ -2251,6 +2285,7 @@ class SheetMetalMixin:
             "depth": depth,
         }
 
+    @verifies_geometry
     def create_flange_match_face_with_bend(
         self,
         face_index: int,
@@ -2316,6 +2351,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_flange_by_face_with_bend(
         self,
         face_index: int,
@@ -2533,6 +2569,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_bend(
         self,
         bend_angle: float = 90.0,
@@ -2594,6 +2631,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_slot_multi_body(
         self, width: float, depth: float, direction: str = "Normal"
     ) -> dict[str, Any]:
@@ -2665,6 +2703,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_geometry
     def create_slot_sync_multi_body(
         self, width: float, depth: float, direction: str = "Normal"
     ) -> dict[str, Any]:
