@@ -93,19 +93,29 @@ class AssemblyFeaturesMixin:
         return doc, af
 
     def recompute_assembly_features(self, options: int = 0) -> dict[str, Any]:
-        """
-        Recompute all assembly features.
+        """Update the assembly.
+
+        ``AssemblyFeatures.Recompute(options)`` matches the type library but
+        answers E_FAIL on Solid Edge 2026 whatever it is given -- verified on
+        an empty assembly and on one holding a component, with options 0. The
+        object is not a normal collection either: it has no Count.
+
+        ``AssemblyDocument.UpdateAll()`` is the update that works, and it is
+        what this does.
 
         Args:
-            options: Recompute options (0 = default)
+            options: Accepted for compatibility; UpdateAll takes no options.
         """
         try:
-            _logger.info(f"Recomputing assembly features with options={options}")
-            _doc, af = self._get_assembly_features()
-            af.Recompute(options)
-            return {"status": "recomputed", "options": options}
+            _logger.info("Updating assembly (options=%s ignored by UpdateAll)", options)
+            doc = self.doc_manager.get_active_document()
+            err = self._require_assembly(doc)
+            if err:
+                return err
+            doc.UpdateAll()
+            return {"status": "recomputed", "method": "AssemblyDocument.UpdateAll"}
         except Exception as e:
-            _logger.error(f"Failed to recompute assembly features: {e}")
+            _logger.error(f"Failed to update assembly: {e}")
             return error_result(e)
 
     def _map_extent_type(self, extent_type: str) -> int:

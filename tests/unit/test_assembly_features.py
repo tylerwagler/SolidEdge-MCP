@@ -306,18 +306,36 @@ class TestAssemblySweptProtrusion:
 
 
 class TestRecomputeAssemblyFeatures:
-    def test_success(self, asm_mgr_with_sketch):
+    """AssemblyFeatures.Recompute answers E_FAIL whatever it is given.
+
+    Verified on Solid Edge 2026, on an empty assembly and on one holding a
+    component, with options 0. The object is not a normal collection either --
+    it has no Count. AssemblyDocument.UpdateAll is the update that works.
+    """
+
+    def test_it_updates_the_document(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        af = MagicMock()
-        doc.AssemblyFeatures = af
 
         result = am.recompute_assembly_features()
+
         assert result["status"] == "recomputed"
-        af.Recompute.assert_called_once_with(0)
+        doc.UpdateAll.assert_called_once_with()
+        doc.AssemblyFeatures.Recompute.assert_not_called()
 
     def test_com_error(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        doc.AssemblyFeatures.Recompute.side_effect = Exception("fail")
+        doc.UpdateAll.side_effect = Exception("fail")
 
         result = am.recompute_assembly_features()
         assert "error" in result
+
+    def test_not_an_assembly(self, asm_mgr_with_sketch):
+        from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+        am, doc, sm = asm_mgr_with_sketch
+        doc.Type = DocumentTypeConstants.igPartDocument
+
+        result = am.recompute_assembly_features()
+
+        assert "error" in result
+        doc.UpdateAll.assert_not_called()
