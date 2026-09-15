@@ -138,3 +138,63 @@ def test_an_invented_member_is_caught(audit):
     visitor.visit(ast.parse(source))
 
     assert [f[2] for f in visitor.findings] == ["NotARealMember"]
+
+
+def test_a_lowercase_member_is_checked_too(audit):
+    """PascalCase is usual but not universal, and the gap hid two bugs.
+
+    ``textbox.x`` and ``balloon.x`` are members of nothing, so the position was
+    quietly missing from every text box and balloon this server reported. The
+    name check skips lowercase, and the receiver check used to as well.
+    """
+    import ast
+    import json
+
+    typelib = audit.TypeLib(json.loads(DUMP.read_text(encoding="utf-8")))
+    source = (
+        "def f(self):\n"
+        "    doc = self.doc_manager.get_active_document()\n"
+        "    balloon = doc.ActiveSheet.Balloons.Item(1)\n"
+        "    return balloon.x\n"
+    )
+    visitor = audit.Visitor(pathlib.Path(REPO_ROOT / "x.py"), typelib)
+    visitor.visit(ast.parse(source))
+
+    assert [(f[1], f[2]) for f in visitor.findings] == [("Balloon", "x")]
+
+
+def test_a_real_lowercase_member_passes(audit):
+    """857 lowercase member names exist; they must not all be findings."""
+    import ast
+    import json
+
+    typelib = audit.TypeLib(json.loads(DUMP.read_text(encoding="utf-8")))
+    # Line2d.GetStartPoint is real; so is the keypoint route off a Balloon.
+    source = (
+        "def f(self):\n"
+        "    doc = self.doc_manager.get_active_document()\n"
+        "    balloon = doc.ActiveSheet.Balloons.Item(1)\n"
+        "    return balloon.GetKeyPoint(0)\n"
+    )
+    visitor = audit.Visitor(pathlib.Path(REPO_ROOT / "x.py"), typelib)
+    visitor.visit(ast.parse(source))
+
+    assert not visitor.findings
+
+
+def test_our_own_attributes_are_not_mistaken_for_com(audit):
+    """A receiver that resolves to nothing is skipped, whatever the spelling."""
+    import ast
+    import json
+
+    typelib = audit.TypeLib(json.loads(DUMP.read_text(encoding="utf-8")))
+    source = (
+        "def f(self):\n"
+        "    profile = self.active_profile\n"
+        "    state = self.sketch_manager.accumulated_profiles\n"
+        "    return profile, state\n"
+    )
+    visitor = audit.Visitor(pathlib.Path(REPO_ROOT / "x.py"), typelib)
+    visitor.visit(ast.parse(source))
+
+    assert not visitor.findings

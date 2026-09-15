@@ -110,6 +110,8 @@ Five checks enforce this, and all five skip when the dump is absent:
 
 The signature audit resolves the receiver with the same inference the receiver audit uses, so `doc.Occurrences.Item(1)` is checked against `Occurrence` specifically rather than against every interface with that method name. That matters because its fallback is weak on purpose: an unresolved receiver only has to fit *some* interface with a method of that name, which is how `occurrence.Replace(path)` passed while `Occurrence.Replace` requires two arguments.
 
+The receiver audit checks lowercase members too, once the receiver resolves. PascalCase is the usual spelling but 857 lowercase member names exist across the libraries, and requiring PascalCase hid two bugs of one shape: `textbox.x` and `balloon.x` are members of nothing, so the position was quietly missing from every text box and balloon reported. Our own attributes stay out of it because `self.active_profile` resolves to no interface.
+
 The receiver audit goes further and infers what a receiver *is* by following declared types: `doc.Models.Item(1).Features` resolves PartDocument to Models to Model to Features. That is what catches the sharpest class of bug here, a real name on the wrong interface, such as `model.RevolvedSurfaces` when RevolvedSurfaces belongs to `Constructions`, or `line.StartPoint.X` when Line2d only has `GetStartPoint()`.
 
 Four more checks need no type library:

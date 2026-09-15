@@ -346,8 +346,11 @@ class TestGetSheetBalloons:
         sheet = MagicMock()
         b1 = MagicMock()
         b1.BalloonText = "1"
-        b1.x = 0.05
-        b1.y = 0.1
+        # Balloon has no x/y and no GetOrigin; its position is its keypoint.
+        # Reading .x left both keys missing from every balloon this returned.
+        b1.GetKeyPoint.return_value = (0.05, 0.1, 0.0, 16384, 2)
+        del b1.x
+        del b1.y
 
         balloons = MagicMock()
         balloons.Count = 1
@@ -358,6 +361,8 @@ class TestGetSheetBalloons:
         result = em.get_sheet_balloons()
         assert result["count"] == 1
         assert result["balloons"][0]["text"] == "1"
+        assert result["balloons"][0]["x"] == 0.05
+        assert result["balloons"][0]["y"] == 0.1
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr

@@ -789,10 +789,13 @@ class DrawingMixin:
                 info: dict[str, Any] = {"index": i - 1}
                 with contextlib.suppress(Exception):
                     info["text"] = balloon.BalloonText
+                # Balloon has no x/y, so both keys were always missing. It has
+                # no GetOrigin either; its position comes from its one
+                # keypoint, the same way Symbol2d's does.
                 with contextlib.suppress(Exception):
-                    info["x"] = balloon.x
-                with contextlib.suppress(Exception):
-                    info["y"] = balloon.y
+                    keypoint = balloon.GetKeyPoint(0)
+                    info["x"] = float(keypoint[0])
+                    info["y"] = float(keypoint[1])
                 items.append(info)
             return {"count": len(items), "balloons": items}
         except Exception as e:

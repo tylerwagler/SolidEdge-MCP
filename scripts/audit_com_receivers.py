@@ -288,7 +288,18 @@ class Visitor(ast.NodeVisitor):
             self._check(node.args[0], node.args[1].value, node.lineno)
 
     def _check(self, receiver: ast.expr, member: str, lineno: int) -> None:
-        if not PASCAL.match(member) or member in UNIVERSAL:
+        # PascalCase is how a COM member is usually spelled, but not always:
+        # 857 lowercase member names exist across the Solid Edge libraries, and
+        # requiring PascalCase hid two bugs of exactly the same shape --
+        # ``textbox.x`` and ``balloon.x``, neither of which is a member of
+        # anything, so the position was quietly missing from every result.
+        #
+        # A lowercase name is only checked once the receiver has resolved to a
+        # known interface, which is what keeps our own Python attributes out of
+        # it: ``self.active_profile`` and friends resolve to nothing.
+        if member in UNIVERSAL or member.startswith("_"):
+            return
+        if not PASCAL.match(member) and not member.isidentifier():
             return
         receivers = self._infer(receiver)
         if not receivers:
