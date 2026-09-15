@@ -26,6 +26,7 @@ uv run python scripts/audit_com_receivers.py
 uv run python scripts/audit_com_writes.py
 uv run python scripts/audit_com_hasattr.py
 uv run python scripts/audit_reported_writes.py
+uv run python scripts/audit_com_enum_args.py
 uv run python scripts/audit_dead_params.py  # parameters declared and never read
 uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid Edge)
 ```
@@ -99,7 +100,7 @@ Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{
 
 Rules: never guess a constant or signature. Look it up, copy the exact value into `constants.py` with a comment naming the enum, and prefer collection-level `Add*` methods.
 
-Five checks enforce this, and all five skip when the dump is absent:
+Six checks enforce this, and all six skip when the dump is absent:
 
 | Check | What it catches |
 |---|---|
@@ -107,6 +108,7 @@ Five checks enforce this, and all five skip when the dump is absent:
 | `tests/unit/test_com_members.py` | A COM member name that exists in no type library. A ratchet: new names fail, and fixing one fails until you delete it from `UNVERIFIED`. |
 | `tests/unit/test_com_receivers.py` (`scripts/audit_com_receivers.py`) | A member read off an interface that does not have it, which the name check cannot see because the name is real elsewhere. |
 | `scripts/audit_com_signatures.py` | A call with the wrong number of arguments. Run `--filter <path>` to see the full parameter list for each finding, `--by-file` for counts. |
+| `tests/unit/test_com_enum_args.py` (`scripts/audit_com_enum_args.py`) | A constant whose value is in no member of the enum its parameter declares -- a stray literal, or a value from the wrong constants class that falls outside the target enum. It **cannot** see the wrong *member* of the right enum, which is what most constant bugs here have been; only live geometry verification catches those. Bitmask enums accept 0 and any combination. |
 | `tests/unit/test_com_writes.py` (`scripts/audit_com_writes.py`) | An assignment to a member that is a method, or to a property the type library marks read-only. Solid Edge answers "Property 'Item.X' can not be set." and a surrounding try/except turns that into a reported success. |
 
 The signature audit resolves the receiver with the same inference the receiver audit uses, so `doc.Occurrences.Item(1)` is checked against `Occurrence` specifically rather than against every interface with that method name. That matters because its fallback is weak on purpose: an unresolved receiver only has to fit *some* interface with a method of that name, which is how `occurrence.Replace(path)` passed while `Occurrence.Replace` requires two arguments.

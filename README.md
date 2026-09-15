@@ -118,7 +118,7 @@ CI runs lint, format, type check, and unit tests on `windows-latest` for every p
 
 ### COM conformance
 
-Unit tests mock COM with objects that answer to any attribute, so a misspelled member or a wrong argument count passes them and only fails against real Solid Edge. Five checks close that gap using the scraped type libraries:
+Unit tests mock COM with objects that answer to any attribute, so a misspelled member or a wrong argument count passes them and only fails against real Solid Edge. Six checks close that gap using the scraped type libraries:
 
 ```bash
 uv run python scripts/audit_com_signatures.py --by-file
@@ -127,6 +127,7 @@ uv run python scripts/audit_com_receivers.py
 uv run python scripts/audit_com_writes.py
 uv run python scripts/audit_com_hasattr.py
 uv run python scripts/audit_reported_writes.py
+uv run python scripts/audit_com_enum_args.py
 uv run python scripts/audit_dead_params.py
 ```
 
