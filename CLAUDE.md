@@ -72,6 +72,8 @@ reference/             typelib_summary.md (committed), typelib_dump.json (gitign
 4. **Tests** in `tests/unit/test_tools_<area>.py` (dispatch, every case label) and `tests/unit/test_<backend>.py` (COM call arguments with `assert_called_once_with`, not just "returns status").
 5. Update `reference/TYPELIB_IMPLEMENTATION_MAP.md` if you add COM coverage.
 
+`reference/VERIFICATION_STATUS.md` tracks the other question — not "is this API wired up" but "does it actually do what it says". Read it before deciding what to work on, and re-measure it after landing anything that changes creator coverage or the audits. It carries the commands that regenerate every number in it.
+
 Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{s+=$2} END {print s}'`.
 
 ## Solid Edge / COM rules
