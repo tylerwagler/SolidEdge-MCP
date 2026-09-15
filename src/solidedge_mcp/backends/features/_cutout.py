@@ -509,7 +509,11 @@ class CutoutMixin:
             if revolutions is None:
                 revolutions = height / pitch
 
-            axis_start = DirectionConstants.igRight
+            # AxisStart says which end of the axis the helix grows from.
+            # This passed igRight, which is a profile *side*: the helix
+            # protrusion next door uses AxisEndConstants.igStart (29) and
+            # works, while this one built nothing at all.
+            axis_start = AxisEndConstants.igStart
             dir_const = (
                 DirectionConstants.igRight if direction == "Right" else DirectionConstants.igLeft
             )
