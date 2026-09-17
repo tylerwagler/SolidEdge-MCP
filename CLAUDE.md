@@ -5,7 +5,7 @@ Guidance for Claude Code when working in this repository.
 ## What this is
 
 A Solid Edge MCP server: FastMCP 2.x over pywin32 COM automation. Windows only. MIT.
-Surface: 117 tools, 52 data resources + 2 guide resources, 4 prompts.
+Surface: 118 tools, 53 data resources + 2 guide resources, 4 prompts.
 
 ## Commands
 
@@ -43,7 +43,7 @@ src/solidedge_mcp/
 ├── tools/             MCP surface. One module per area; each has register(mcp)
 │   ├── _registry.py   register_tool()/register_resource(): COM-thread wrap + annotations + tags
 │   ├── features/      feature tools split by family (_extrude.py, _cutout.py, ...)
-│   ├── resources.py   52 solidedge:// resources (read-only JSON)
+│   ├── resources.py   53 solidedge:// resources (read-only JSON)
 │   └── guide.py       solidedge://guide/workflows, solidedge://guide/conventions
 └── backends/          COM automation
     ├── connection.py  SolidEdgeConnection: attach/start, liveness probe, reconnect

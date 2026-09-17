@@ -1,6 +1,6 @@
 # Verification Status
 
-**Last measured: 2026-09-15**, against Solid Edge 2026 (226.00.01.04), branch `modernize`.
+**Last measured: 2026-09-16**, against Solid Edge 2026 (226.00.01.04), branch `modernize`.
 
 Regenerate every number here with the commands in [How to re-measure](#how-to-re-measure).
 Nothing in this document is an estimate.
@@ -24,10 +24,10 @@ So this document tracks the other question: **does it actually do what it says?*
 
 | | count | what it means |
 |---|---|---|
-| Tools | 119 | the MCP action surface |
+| Tools | 118 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
 | Unit tests | 2,897 | mocked COM; catch shape, not truth |
-| Integration tests | 13 | drive real Solid Edge |
+| Integration tests | 13 | drive real Solid Edge; between them they touch **16 of 118** tools |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
@@ -39,11 +39,11 @@ check that catches a call which succeeds and builds nothing.
 | | count | |
 |---|---|---|
 | Verified live | **127** | the body must change or the result becomes an error |
-| Refuse honestly | 36 | return `unsupported: True` without touching COM |
-| Neither | **50** | see below |
+| Refuse honestly | 37 | return `unsupported: True` -- 34 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
+| Neither | **49** | see below |
 | **Total `create_*`** | **213** | |
 
-The 50 unverified break down as:
+The 49 unverified break down as:
 
 | count | file | why |
 |---|---|---|
@@ -55,13 +55,15 @@ The 50 unverified break down as:
 | 3 | `features/_sheet_metal.py` | cosmetic threads and etches change no material |
 | 2 | `export/_drawing.py` | drawings and parts lists are not geometry |
 | 2 | `sketching.py` | profiles, not solids |
-| 1 | `assembly/_relations.py` | `create_mate` constrains, it does not build |
 | 1 | `export/_draft.py` | a bend table is a table |
 
-**Roughly 40 of the 50 genuinely cannot be face-counted.** They are not a backlog.
-The honest gap is the remaining ~10, which need a different kind of check
-(does the plane exist afterwards, did the surface get added to `Constructions`)
-rather than the one we have.
+None of the 49 can be *face*-counted -- a plane is not a solid. But **every one of
+them lands in a COM collection whose `.Count` is readable**: `RefPlanes`,
+`ProfileSets`, the five `Constructions.*Surfaces`, `Rounds`/`Blends`, `Etches`,
+`Threads`, `Drafts`, `FaceRotates`, `DrawingViews`, `PartsLists`, and
+`Application.Documents`. A collection-growth check of the same shape as
+`@verifies_geometry` closes all 49. An earlier version of this document put the
+closable gap at "~10"; that was wrong in the pessimistic direction.
 
 ### Structural audits
 
@@ -83,7 +85,9 @@ Ordered by how much risk each removes, not by effort.
 
 ### 1. Live verification is barely reproducible
 
-**13 integration tests against 119 tools.** Almost every bug found so far was
+**13 integration tests, touching 16 of 118 tools.** All 14 assembly tools, all 18
+draft/export tools, all 11 sheet-metal tools and all 6 surface tools have none.
+Almost every bug found so far was
 caught by a throwaway script that was then thrown away. Three have been
 converted (`tests/integration/test_reported_values.py`) and each was
 mutation-tested by restoring the original defect. The rest are gone.
@@ -128,7 +132,7 @@ counsel. A defensible bar:
 
 - [ ] every tool driven live at least once, with the result recorded
 - [ ] every bug fixed this far pinned by a test that fails without the fix
-- [ ] the ~10 genuinely-unverified creators given a check that suits them
+- [ ] the 49 unverified creators given a collection-growth check
 - [ ] one numeric-correctness check per measurement tool
 - [ ] the branch merged
 

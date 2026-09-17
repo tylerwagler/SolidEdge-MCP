@@ -56,6 +56,7 @@ class RelationsMixin:
                 "selection which is not available via "
                 "COM automation. Use Solid Edge UI to "
                 "create mates.",
+                "unsupported": True,
                 "mate_type": mate_type,
                 "component1": component1_index,
                 "component2": component2_index,
@@ -68,6 +69,7 @@ class RelationsMixin:
         """Add an align constraint between two components (requires UI for face selection)"""
         return {
             "error": "Constraint creation requires face/edge selection. Use Solid Edge UI.",
+            "unsupported": True,
             "constraint_type": "align",
             "component1": component1_index,
             "component2": component2_index,
@@ -79,6 +81,7 @@ class RelationsMixin:
         """Add an angle constraint between two components (requires UI for face selection)"""
         return {
             "error": "Constraint creation requires face/edge selection. Use Solid Edge UI.",
+            "unsupported": True,
             "constraint_type": "angle",
             "component1": component1_index,
             "component2": component2_index,
@@ -91,6 +94,7 @@ class RelationsMixin:
         """Add a planar align constraint (requires UI for face selection)"""
         return {
             "error": "Constraint creation requires face/edge selection. Use Solid Edge UI.",
+            "unsupported": True,
             "constraint_type": "planar_align",
             "component1": component1_index,
             "component2": component2_index,
@@ -102,6 +106,7 @@ class RelationsMixin:
         """Add an axial align constraint (requires UI for face selection)"""
         return {
             "error": "Constraint creation requires face/edge selection. Use Solid Edge UI.",
+            "unsupported": True,
             "constraint_type": "axial_align",
             "component1": component1_index,
             "component2": component2_index,

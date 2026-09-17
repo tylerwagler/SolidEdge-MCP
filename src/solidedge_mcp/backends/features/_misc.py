@@ -9,6 +9,8 @@ from solidedge_mcp.backends.errors import error_result
 from ..comutil import com_get
 from ..constants import (
     FaceQueryConstants,
+    PatternOffsetTypeConstants,
+    PatternTypeConstants,
 )
 from ..logging import get_logger
 from ..validation import guard_overwrite
@@ -25,18 +27,6 @@ _ADD_BODY_TYPES = {
     "SheetMetal": 2,  # igSheetMetalType
     "Construction": 5,  # igConstructionPartType
 }
-
-# constant.tlb > PatternTypeConstants: seSmartPattern = 0, seFastPattern = 1.
-# NOTE: backends/constants.py has a class of the same name holding different,
-# unverified values (igRectangularPattern = 1, ...), so the real value is
-# defined locally rather than imported.
-_SE_SMART_PATTERN = 0
-
-# assembly.tlb > PatternOffsetTypeConstants: sePatternFitOffset = 0,
-# sePatternFillOffset = 1, sePatternFixedOffset = 2, sePatternChordLengthOffset = 3.
-# backends/constants.py's PatternOffsetTypeConstants holds different values.
-_SE_PATTERN_FIXED_OFFSET = 2
-
 
 #: Drafts.Add takes a DraftSide from FeaturePropertyConstants. It is inside or
 #: outside; igLeft and igRight are not sides a draft has, and passing one
@@ -949,9 +939,9 @@ class MiscFeaturesMixin:
                 x_spacing,
                 y_spacing,
                 math.radians(rectangle_angle),
-                _SE_PATTERN_FIXED_OFFSET,
+                PatternOffsetTypeConstants.sePatternFixedOffset,
                 0,
-                _SE_SMART_PATTERN,
+                PatternTypeConstants.seSmartPattern,
             )
 
             return {
