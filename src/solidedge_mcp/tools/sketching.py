@@ -391,6 +391,30 @@ def sketch_project(
 # === Registration ===
 
 
+# === draw_3d_line ===
+
+
+def draw_3d_line(
+    x1: float = 0.0,
+    y1: float = 0.0,
+    z1: float = 0.0,
+    x2: float = 0.0,
+    y2: float = 0.0,
+    z2: float = 0.0,
+    new_sketch: bool = False,
+) -> dict[str, Any]:
+    """Draw a 3D sketch line (meters) in the active part or assembly.
+
+    Lines accumulate in the document's active 3D sketch (new_sketch=true
+    starts another) and are the paths structural_frame runs along, named by
+    the 0-based index this returns.
+    """
+    err = validate_numerics(x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2)
+    if err:
+        return err
+    return sketch_manager.draw_line_3d(x1, y1, z1, x2, y2, z2, new_sketch=new_sketch)
+
+
 def register(mcp: Any) -> None:
     """Register sketching tools with the MCP server."""
     tags = {"sketch"}
@@ -400,3 +424,4 @@ def register(mcp: Any) -> None:
     register_tool(mcp, sketch_advanced_modify, tags=tags, destructive=True)
     register_tool(mcp, sketch_constraint, tags=tags)
     register_tool(mcp, sketch_project, tags=tags)
+    register_tool(mcp, draw_3d_line, tags=tags)

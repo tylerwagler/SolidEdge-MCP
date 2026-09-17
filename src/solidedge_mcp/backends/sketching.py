@@ -238,6 +238,10 @@ class SketchManager:
         self.active_refaxis: Any | None = None  # Reference axis for revolve operations
         self.accumulated_profiles: list[Any] = []  # For loft/sweep multi-profile operations
         self._last_document_handle: Any | None = None  # Track which document we're working with
+        #: The active 3D sketch and every Line3D drawn into it, in order. A
+        #: structural frame takes them by index.
+        self.active_sketch3d: Any = None
+        self.lines_3d: list[Any] = []
 
     def clear_state(self) -> None:
         """Clear all sketch state. Call this when switching documents."""
@@ -247,6 +251,8 @@ class SketchManager:
         self.active_plane_index = None
         self.active_refaxis = None
         self.accumulated_profiles.clear()
+        self.active_sketch3d = None
+        self.lines_3d.clear()
         self._last_document_handle = None
 
     @verifies_collection_growth("ProfileSets")
@@ -1160,6 +1166,58 @@ class SketchManager:
             info["total_elements"] = total
 
             return info
+        except Exception as e:
+            return error_result(e)
+
+    def draw_line_3d(
+        self,
+        x1: float,
+        y1: float,
+        z1: float,
+        x2: float,
+        y2: float,
+        z2: float,
+        new_sketch: bool = False,
+    ) -> dict[str, Any]:
+        """Draw a 3D sketch line, in meters, in the active part or assembly.
+
+        ``Sketches3D.Add()`` opens a 3D sketch and ``Lines3D.Add(x1, y1, z1,
+        x2, y2, z2)`` draws into it -- verified on Solid Edge 2026 in a part
+        and an assembly, where a structural frame then ran along the line.
+        Lines accumulate in one sketch until ``new_sketch`` starts another.
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            sketches = com_get(doc, "Sketches3D")
+            if sketches is None:
+                return {
+                    "error": (
+                        "This document has no Sketches3D collection; 3D sketch lines "
+                        "live in parts and assemblies."
+                    )
+                }
+            if new_sketch or self.active_sketch3d is None:
+                self.active_sketch3d = sketches.Add()
+            lines = self.active_sketch3d.Lines3D
+            before = com_get(lines, "Count")
+            line = lines.Add(x1, y1, z1, x2, y2, z2)
+            after = com_get(lines, "Count")
+            if type(before) is int and type(after) is int and after != before + 1:
+                return {
+                    "error": "Lines3D.Add returned without adding a line to the 3D sketch.",
+                    "lines_before": before,
+                    "lines_after": after,
+                }
+            self.lines_3d.append(line)
+            return {
+                "status": "created",
+                "type": "line_3d",
+                "index": len(self.lines_3d) - 1,
+                "start": [x1, y1, z1],
+                "end": [x2, y2, z2],
+                "length": com_get(line, "Length"),
+                "sketch_lines": after,
+            }
         except Exception as e:
             return error_result(e)
 

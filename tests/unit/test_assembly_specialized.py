@@ -282,43 +282,63 @@ class TestAddTube:
 
 
 class TestStructuralFrames:
-    """A structural frame runs along 3D sketch segments, not along components.
+    """A frame runs along Line3D objects from draw_3d_line (verified on SE 2026)."""
 
-    StructuralFrames.Add takes those curves as its Path. Both methods were
-    handed Occurrences instead, which Solid Edge 2026 rejects with E_POINTER,
-    "Property name is invalid". There is no way to build a valid path from
-    here: an AssemblyDocument exposes no Sketches collection through this
-    binding, and the Segments commands that would draw one raise a modal
-    dialog, which blocks the whole server until somebody clicks it.
-    """
+    @staticmethod
+    def _ready(am, doc, tmp_path, monkeypatch, n_lines=2):
+        part = tmp_path / "beam.par"
+        part.write_bytes(b"x")
+        lines = [MagicMock(name=f"line{i}") for i in range(n_lines)]
+        am.sketch_manager = MagicMock(lines_3d=lines)
+        doc.StructuralFrames.Count = 1
+        seen = {"prefix": None}
 
-    def test_add_says_it_cannot(self, asm_mgr):
+        class _Dismisser:
+            dismissed = 0
+
+            def __init__(self, prefix, **_):
+                seen["prefix"] = prefix
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return None
+
+        monkeypatch.setattr(
+            "solidedge_mcp.backends.assembly._specialized.dismiss_informational_dialog", _Dismisser
+        )
+        return part, lines, seen
+
+    def test_adds_along_the_named_lines_with_the_dialog_watched(
+        self, asm_mgr, tmp_path, monkeypatch
+    ):
+        import pythoncom
+
         am, doc = asm_mgr
+        part, lines, seen = self._ready(am, doc, tmp_path, monkeypatch)
 
-        result = am.add_structural_frame("C:\frames\beam.par", [0, 1])
+        result = am.add_structural_frame(str(part), [0, 1])
 
+        assert result["status"] == "created"
+        assert result["frames"] == 1
+        args = doc.StructuralFrames.Add.call_args.args
+        assert args[:3] == (str(part), 2, lines)
+        assert all(a.varianttype == pythoncom.VT_EMPTY for a in args[3:])
+        assert seen["prefix"] == "The Segments group of commands"
+
+    def test_a_bad_index_or_no_lines_is_refused(self, asm_mgr, tmp_path, monkeypatch):
+        am, doc = asm_mgr
+        part, _, _ = self._ready(am, doc, tmp_path, monkeypatch)
+        assert "Invalid path index" in am.add_structural_frame(str(part), [5])["error"]
+        assert "none were given" in am.add_structural_frame(str(part), [])["error"]
+        doc.StructuralFrames.Add.assert_not_called()
+
+    def test_by_orientation_still_says_it_cannot(self, asm_mgr):
+        am, doc = asm_mgr
+        result = am.add_structural_frame_by_orientation("C:\\frames\\beam.par", "CoordSys1", [0])
         assert result["unsupported"] is True
-        assert "3D sketch segments" in result["error"]
-
-    def test_by_orientation_says_it_cannot(self, asm_mgr):
-        am, doc = asm_mgr
-
-        result = am.add_structural_frame_by_orientation("C:\frames\beam.par", "CoordSys1", [0])
-
-        assert result["unsupported"] is True
-        assert "3D sketch segments" in result["error"]
-
-    def test_neither_touches_com(self, asm_mgr):
-        """The house rule: refuse without calling, so nothing half-happens."""
-        am, doc = asm_mgr
-        frames = MagicMock()
-        doc.StructuralFrames = frames
-
-        am.add_structural_frame("C:\frames\beam.par", [0])
-        am.add_structural_frame_by_orientation("C:\frames\beam.par", "CS", [0])
-
-        frames.Add.assert_not_called()
-        frames.AddByOrientation.assert_not_called()
+        doc.StructuralFrames.Add.assert_not_called()
 
 
 class TestAddSplice:
@@ -390,7 +410,7 @@ class TestAddWire:
         result = am.add_wire([0, 1], [True, False], "Test wire")
 
         assert result["unsupported"] is True
-        assert "3D sketch curve" in result["error"]
+        assert "draw_3d_line" in result["error"]
         assert result["path_indices"] == [0, 1]
         assert result["description"] == "Test wire"
         wires.Add.assert_not_called()

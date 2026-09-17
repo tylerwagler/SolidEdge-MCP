@@ -51,7 +51,12 @@ RECEIVERS = ROOT / "scripts" / "audit_com_receivers.py"
 
 #: (Interface.Method, parameter) pairs that pass a value the enum does not
 #: list, on purpose. Keep this short and say why.
-ALLOWED: frozenset[tuple[str, str]] = frozenset()
+# (interface.method, parameter) pairs whose value is outside the declared enum on
+# purpose, each driven live. Slots.Add: KeyPointExtentConstants has no null member,
+# and 0 is what a finite-extent slot takes (Solid Edge 2026: 6 -> 10 faces).
+ALLOWED: frozenset[tuple[str, str]] = frozenset(
+    {("Slots.Add", "KeyPointFlags"), ("Slots.Add", "KeyPointFlags2")}
+)
 
 
 @dataclass(frozen=True)

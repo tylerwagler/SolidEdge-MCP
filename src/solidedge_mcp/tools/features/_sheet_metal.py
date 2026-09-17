@@ -283,17 +283,17 @@ def create_slot(
 ) -> dict[str, Any]:
     """Create a slot from the active sketch profile.
 
-    width and depth in meters. 'basic' (unsupported), 'ex' (unsupported) and
-    'sync' (unsupported) need a KeyPointOrTangentFace plus From/To extent
-    faces that cannot be selected here; use 'multi_body' or
-    'sync_multi_body' (width + depth + direction), or an extruded cutout.
+    width and depth in meters (depth <= 0 cuts through all). 'basic' cuts a slot
+    along an OPEN line path with direction='Normal' (Slots.Add; 'Reverse' records
+    a slot that removes nothing on Solid Edge 2026). 'ex' is unsupported;
+    'sync', 'multi_body' and 'sync_multi_body' take width + depth + direction.
     """
     err = validate_numerics(width=width, depth=depth)
     if err:
         return err
     match method:
         case "basic":
-            return feature_manager.create_slot(depth=depth, direction=direction)
+            return feature_manager.create_slot(width=width, depth=depth, direction=direction)
         case "ex":
             return feature_manager.create_slot_ex(width=width, depth=depth, direction=direction)
         case "sync":

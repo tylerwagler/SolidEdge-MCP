@@ -125,3 +125,17 @@ class TestMirrorSeenByVolume:
         # re-read: the Body proxy held across the mirror is stale afterwards
         volume_after = stack.doc.get_active_document().Models.Item(1).Body.Volume
         assert volume_after == pytest.approx(2 * volume_before, rel=1e-6)
+
+
+class TestSlot:
+    def test_a_line_path_cuts_a_slot(self, stack, new_sheet_metal):
+        _tab(stack)
+        stack.sketch.create_sketch("Top")
+        stack.sketch.draw_line(0.02, 0.024, 0.06, 0.024)
+        stack.sketch.close_sketch(closed=False)
+        before = stack.query.get_face_count()["face_count"]
+
+        r = stack.feature.create_slot(0.004, 0.01)
+
+        assert r["status"] == "created", r
+        assert stack.query.get_face_count()["face_count"] == before + 4

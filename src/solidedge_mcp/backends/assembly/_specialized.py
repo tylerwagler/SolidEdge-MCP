@@ -4,9 +4,14 @@ import contextlib
 import os
 from typing import Any
 
+import pythoncom
+from win32com.client import VARIANT
+
 from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
+from ..dialogs import dismiss_informational_dialog
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
@@ -21,10 +26,9 @@ _logger = get_logger(__name__)
 #: create one raise a modal dialog, which blocks the whole server.
 _NO_FRAME_PATH: dict[str, Any] = {
     "error": (
-        "A structural frame runs along 3D sketch segments drawn in the assembly, "
-        "and StructuralFrames.Add takes those curves as its Path. This server "
-        "cannot draw or select them -- passing occurrences instead is rejected "
-        "with E_POINTER. Create the frame in the Solid Edge UI."
+        "structural_frame(method='by_orientation') has not been driven live; "
+        "method='basic' builds a frame along 3D sketch lines drawn with "
+        "draw_3d_line (path_indices are their 0-based indices)."
     ),
     "unsupported": True,
 }
@@ -333,26 +337,67 @@ class SpecializedMixin:
 
     # -- Structural Frames ---------------------------------------------------
 
+    @verifies_collection_growth("StructuralFrames")
     def add_structural_frame(
         self,
         part_filename: str,
         path_indices: list[int],
     ) -> dict[str, Any]:
         """
-        Structural frames cannot be created through COM automation here.
+        Run a structural frame along 3D sketch lines.
 
-        See ``_NO_FRAME_PATH``: the Path array wants the 3D sketch segments the
-        frame runs along, and this server can neither draw nor select them.
+        ``StructuralFrames.Add(PartFileName, NumPaths, Path, GlobalEndConditions,
+        GlobalEndConditionValue, AutoPosition)`` takes the Line3D objects drawn
+        by ``draw_line_3d`` as its Path; verified on Solid Edge 2026 along one
+        and two lines (StructuralFrames.Count grows, an occurrence appears).
+        The first frame in a session raises an informational "Segments group
+        ... 3D Draw" dialog that blocks the call until OK is clicked, so that
+        one dialog is dismissed while the call runs; see backends/dialogs.py.
 
         Args:
-            part_filename: Path to the frame cross-section part file, unused.
-            path_indices: Unused; occurrences are not a valid path.
+            part_filename: The frame cross-section part file (must exist).
+            path_indices: 0-based indices of the 3D lines from draw_3d_line.
 
         Returns:
-            Dict with an ``unsupported`` error.
+            Dict with status, frame count, and whether the dialog was dismissed.
         """
-        del part_filename, path_indices
-        return _NO_FRAME_PATH
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_assembly(doc)
+            if err:
+                return err
+            if not os.path.exists(part_filename):
+                return {"error": f"Frame part does not exist: {part_filename}"}
+            lines = list(getattr(self.sketch_manager, "lines_3d", None) or [])
+            if not path_indices:
+                return {
+                    "error": (
+                        "path_indices names the 3D lines the frame runs along "
+                        "(draw_3d_line, 0-based); none were given."
+                    )
+                }
+            bad = [i for i in path_indices if i < 0 or i >= len(lines)]
+            if bad:
+                return {
+                    "error": (
+                        f"Invalid path index {bad[0]}: {len(lines)} 3D line(s) drawn in "
+                        "this document with draw_3d_line."
+                    )
+                }
+            path = [lines[i] for i in path_indices]
+            empty = VARIANT(pythoncom.VT_EMPTY, None)
+            with dismiss_informational_dialog("The Segments group of commands") as dialog:
+                doc.StructuralFrames.Add(part_filename, len(path), path, empty, empty, empty)
+            return {
+                "status": "created",
+                "type": "structural_frame",
+                "part_filename": part_filename,
+                "path_indices": path_indices,
+                "frames": com_get(doc.StructuralFrames, "Count"),
+                "dialog_dismissed": dialog.dismissed,
+            }
+        except Exception as e:
+            return error_result(e)
 
     def add_structural_frame_by_orientation(
         self,
@@ -478,9 +523,9 @@ class SpecializedMixin:
         # and Solid Edge 2026 answered E_FAIL. Say so, without the call.
         return {
             "error": (
-                "A wire path is a 3D sketch curve, which this server cannot draw; "
-                "Wires.Add given occurrences answers E_FAIL. Route wires in the "
-                "Solid Edge UI (Wire Harness Design)."
+                "Wires.Add answers E_FAIL on Solid Edge 2026 given occurrences and "
+                "given a 3D sketch line drawn with draw_3d_line alike. Route wires in "
+                "the Solid Edge UI (Wire Harness Design)."
             ),
             "unsupported": True,
             "path_indices": path_indices,

@@ -445,26 +445,47 @@ class TestCreateGusset:
 
 
 class TestCreateSlot:
-    """Slots.Add needs 22 arguments including KeyPointOrTangentFace objects."""
+    """Slots.Add with a line path, igRight and a finite extent cuts (SE 2026: 6 -> 10)."""
 
-    def test_unsupported(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        slots = MagicMock()
-        model.Slots = slots
-        result = feature_mgr.create_slot(0.01)
-        assert result["unsupported"] is True
-        assert result["depth"] == 0.01
-        assert "KeyPointOrTangentFace" in result["error"]
-        slots.Add.assert_not_called()
+    @staticmethod
+    def _open_profile(profile):
+        for name in ("Circles2d", "Ellipses2d", "Boundaries2d"):
+            getattr(profile, name).Count = 0
 
-    def test_unsupported_reverse(self, feature_mgr, managers):
+    def test_cuts_a_finite_slot(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        self._open_profile(profile)
+
+        result = feature_mgr.create_slot(0.004, 0.01)
+
+        assert result["status"] == "created"
+        assert result["extent"] == "finite"
+        args = model.Slots.Add.call_args.args
+        assert args[0] is profile
+        assert args[1:9] == (235, 0, 0.004, 0.0, 0.0, 13, 2, 0.01)
+        assert args[10] is None and args[15] is None and args[16] is None and args[19] is None
+        assert len(args) == 22
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_depth_zero_cuts_through_all(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        self._open_profile(profile)
+        result = feature_mgr.create_slot(0.004, 0.0)
+        assert result["extent"] == "through_all"
+        assert model.Slots.Add.call_args.args[6] == 16
+
+    def test_reverse_is_refused_as_a_verified_no_op(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        slots = MagicMock()
-        model.Slots = slots
-        result = feature_mgr.create_slot(0.01, "Reverse")
+        result = feature_mgr.create_slot(0.004, 0.01, direction="Reverse")
         assert result["unsupported"] is True
-        assert result["direction"] == "Reverse"
-        slots.Add.assert_not_called()
+        model.Slots.Add.assert_not_called()
+
+    def test_a_closed_profile_is_refused(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        profile.Circles2d.Count = 1
+        result = feature_mgr.create_slot(0.004, 0.01)
+        assert "error" in result
+        model.Slots.Add.assert_not_called()
 
 
 # ============================================================================

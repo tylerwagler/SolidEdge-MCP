@@ -879,3 +879,14 @@ class SETargetConstructionBodyOption:
 
     igCreateMultipleConstructionBodiesOnNonManifoldOption = 0
     igCreateSingleConstructionGeneralBodyOnNonManifoldOption = 1
+
+
+class FeaturePropertyConstants:
+    """constant.tlb > FeaturePropertyConstants, the members Slots.Add takes.
+
+    The enum has no slot end-condition member; 0 (igNullConstant) is what
+    cuts on Solid Edge 2026.
+    """
+
+    igNullConstant = 0
+    igRegularSlot = 235

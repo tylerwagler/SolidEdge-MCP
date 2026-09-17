@@ -14,6 +14,7 @@ from ..constants import (
     DirectionConstants,
     ExtentTypeConstants,
     FaceQueryConstants,
+    FeaturePropertyConstants,
     KeyPointExtentConstants,
     ModelingModeConstants,
     OffsetSideConstants,
@@ -1027,7 +1028,8 @@ class SheetMetalMixin:
         }
 
     @verifies_geometry
-    def create_slot(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
+    @verifies_geometry
+    def create_slot(self, width: float, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a slot feature from the active sketch profile.
 
@@ -1043,18 +1045,77 @@ class SheetMetalMixin:
         Returns:
             Dict with an unsupported error
         """
-        return {
-            "error": (
-                "Slot features are not available through this server: Slots.Add "
-                "requires 22 arguments including KeyPointOrTangentFace objects "
-                "and From/To extent faces that cannot be selected here. Use an "
-                "extruded cutout, or create the slot in the Solid Edge UI."
-            ),
-            "unsupported": True,
-            "type": "slot",
-            "depth": depth,
-            "direction": direction,
-        }
+        if direction != "Normal":
+            # Verified on Solid Edge 2026: with igLeft the slot is recorded and
+            # cuts nothing (faces 6 -> 6), with igRight it cuts (6 -> 10).
+            return {
+                "error": (
+                    "A slot cuts only with direction='Normal' on Solid Edge 2026; "
+                    "'Reverse' records a slot that removes nothing. Draw the path on "
+                    "the other face instead."
+                ),
+                "unsupported": True,
+                "width": width,
+                "depth": depth,
+                "direction": direction,
+            }
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+            err = self._require_open_profile(profile, "slot")
+            if err:
+                return err
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a sheet metal base feature first."}
+            model = models.Item(1)
+            # Slots.Add(Profile, SlotType, SlotEndCondition, SlotWidth, SlotOffsetWidth,
+            #   SlotOffsetDepth, ExtentType, ExtentSide, FiniteDistance, KeyPointFlags,
+            #   KeyPointOrTangentFace, ExtentType2, ExtentSide2, FiniteDistance2,
+            #   KeyPointFlags2, KeyPointOrTangentFace2, FromFaceOrPlane, FromOffsetSide,
+            #   FromOffsetDistance, ToFaceOrPlane, ToOffsetSide, ToOffsetDistance).
+            # The keypoint and face slots take None for a finite extent; verified on
+            # Solid Edge 2026 with a line path: 6 -> 10 faces.
+            extent = (
+                ExtentTypeConstants.igThroughAll if depth <= 0 else ExtentTypeConstants.igFinite
+            )
+            model.Slots.Add(
+                profile,
+                FeaturePropertyConstants.igRegularSlot,
+                FeaturePropertyConstants.igNullConstant,
+                width,
+                0.0,
+                0.0,
+                extent,
+                DirectionConstants.igRight,
+                depth,
+                0,
+                None,
+                ExtentTypeConstants.igNone,
+                DirectionConstants.igRight,
+                0.0,
+                0,
+                None,
+                None,
+                OffsetSideConstants.seOffsetNone,
+                0.0,
+                None,
+                OffsetSideConstants.seOffsetNone,
+                0.0,
+            )
+            self.sketch_manager.clear_accumulated_profiles()
+            return {
+                "status": "created",
+                "type": "slot",
+                "width": width,
+                "depth": depth,
+                "direction": direction,
+                "extent": "through_all" if depth <= 0 else "finite",
+            }
+        except Exception as e:
+            return error_result(e)
 
     @verifies_collection_growth("Models.*.Splits")
     def create_split(self, plane_index: int = 1) -> dict[str, Any]:

@@ -404,3 +404,22 @@ class TestSketchConstraintElementSpellings:
 
         assert seen["elements"] == []
         assert "error" in result
+
+
+# === draw_3d_line ===
+
+
+class TestDraw3dLine:
+    def test_dispatch(self, mock_mgr):
+        from solidedge_mcp.tools.sketching import draw_3d_line
+
+        mock_mgr.draw_line_3d.return_value = {"status": "created"}
+        result = draw_3d_line(x1=0, y1=0, z1=0, x2=0.3, y2=0, z2=0, new_sketch=True)
+        mock_mgr.draw_line_3d.assert_called_once_with(0, 0, 0, 0.3, 0, 0, new_sketch=True)
+        assert result == {"status": "created"}
+
+    def test_nan_is_refused(self, mock_mgr):
+        from solidedge_mcp.tools.sketching import draw_3d_line
+
+        assert "error" in draw_3d_line(x1=float("nan"))
+        mock_mgr.draw_line_3d.assert_not_called()

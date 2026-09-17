@@ -42,6 +42,16 @@ UNVERIFIED: frozenset[str] = frozenset(
         "DEBUG",
         "Dispatch",
         "EnsureDispatch",
+        # --- ctypes / user32 / threading in backends/dialogs.py, not COM ---
+        "EnumChildWindows",
+        "EnumWindows",
+        "Event",
+        "GetClassNameW",
+        "GetDlgItem",
+        "GetWindowTextW",
+        "IsWindowVisible",
+        "SendMessageW",
+        "WINFUNCTYPE",
         "GetIDsOfNames",  # IDispatch itself, via doc._oleobj_ (export/_draft.py)
         "InvokeTypes",  # same: declared-type invoke for [in, out] parameters
         "Formatter",
