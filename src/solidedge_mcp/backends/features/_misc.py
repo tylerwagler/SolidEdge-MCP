@@ -241,12 +241,12 @@ class MiscFeaturesMixin:
         return {
             "error": (
                 "Auto-simplify is not available through this server: "
-                "Models.AddAutoSimplify(numInputs, Occurrences, "
-                "vbRemoveInternals, BodyName) requires an array of assembly "
-                "occurrences that this server cannot select. Use the Solid Edge UI."
+                "Models.AddAutoSimplify(numInputs, Occurrences, vbRemoveInternals, "
+                "BodyName) wants an array of occurrences, and given the model's own "
+                "Body it took the Solid Edge 2026 process down (RPC_S_CALL_FAILED, "
+                "then the server gone). Simplify the model in the Solid Edge UI."
             ),
             "unsupported": True,
-            "type": "auto_simplify",
         }
 
     def simplify_enclosure(self) -> dict[str, Any]:

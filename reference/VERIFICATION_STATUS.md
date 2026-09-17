@@ -141,6 +141,7 @@ question on this install:
 | tool / method | evidence |
 |---|---|
 | `create_stamped(bead)` | `Beads.Add(1, [line], BeadType, height, width, taper, form/punch/die radii, round option, side, end condition, end punch width)` answers `E_FAIL` for circular, U and V beads with formed, punched and lanced ends (Solid Edge 2026). Refuses before COM. |
+| `simplify(method="auto")` | `Models.AddAutoSimplify(1, [model.Body], True, "")` took the Solid Edge 2026 process down (RPC_S_CALL_FAILED, then the server gone); the parameter wants occurrences. Refuses before COM. |
 | `create_blend` | `Blends.Add(1, SelectSetArray, RadiusArray, ...)` answers `E_FAIL` with nested edge arrays plain or VARIANT-wrapped, one edge or a face's four (Solid Edge 2026). `create_round` takes the same edges through `Rounds.Add`. Refuses before COM. |
 | `create_thread` (basic, physical) | `Threads.Add(HoleData, 1, [cylinder], [end face])` answers `E_INVALIDARG` for an extruded boss and for a cut hole alike, with every `HoleData` this server can build (`igTappedHole` bare, with `ThreadMinorDiameter`/`ThreadDepth`, `igRegularThread` with `ThreadExternalDiameter`); a `ThreadDescription` is refused by `HoleDataCollection.Add` itself. Refuses before COM and points at `create_hole(method='threaded')`, which carries its thread. |
 | `create_contour_flange` (sync) | `ContourFlanges.AddSync` answers `E_INVALIDARG` in a synchronous document with the open line from the tab edge on the perpendicular base plane, both sides. Refuses before COM; `sync_with_bend`/`sync_ex` are not driven. |
