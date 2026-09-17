@@ -7,7 +7,8 @@ Walks ``backends/`` for every ``create_*`` method and buckets it:
                     ``@verifies_collection_growth(...)``, directly or through
                     the class-level ``@verify_geometry_on_creators`` /
                     ``@verify_collection_growth_on_creators(...)``
-    unsupported  -- returns ``"unsupported": True`` somewhere in its body
+    unsupported  -- returns ``"unsupported": True`` somewhere in its body, or
+                    calls a same-class helper that does
     neither      -- nothing checks that it built what it claims
 
 A grep for one decorator name undercounts badly: the class-level forms cover
@@ -56,12 +57,24 @@ def audit() -> dict[str, list[str]]:
         rel = path.relative_to(ROOT).as_posix()
         for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
             whole = bool(_names(cls) & CLASS_DECORATORS)
+            # A refusal shared by several creators lives in a helper (the eight
+            # flange creators return self._flanges_unsupported(...)); a creator
+            # that calls one is a refusal too, whatever it is decorated with.
+            refusers = {
+                fn.name
+                for fn in cls.body
+                if isinstance(fn, ast.FunctionDef)
+                and '"unsupported": True' in (ast.get_source_segment(src, fn) or "")
+            }
             for fn in cls.body:
                 if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("create_"):
                     continue
                 body = ast.get_source_segment(src, fn) or ""
                 label = f"{rel}::{fn.name}"
-                if '"unsupported": True' in body:
+                refuses = '"unsupported": True' in body or any(
+                    f"self.{name}(" in body for name in refusers - {fn.name}
+                )
+                if refuses:
                     buckets["unsupported"].append(label)
                 elif whole or (_names(fn) & METHOD_DECORATORS):
                     buckets["verified"].append(label)

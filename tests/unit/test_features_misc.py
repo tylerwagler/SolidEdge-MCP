@@ -389,39 +389,21 @@ class TestCreateBead:
 
 
 class TestCreateLouver:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
-        louvers = MagicMock()
-        model.Louvers = louvers
-        result = feature_mgr.create_louver(0.005, height=0.008)
-        assert result["status"] == "created"
-        assert result["type"] == "louver"
-        assert result["height"] == 0.008
-        # Louvers.Add(Profile, Depth, DepthDirection, Height, HeightDirection)
-        louvers.Add.assert_called_once_with(profile, 0.005, 2, 0.008, 7)
+    """Louvers.Add records a louver Solid Edge 2026 never solves; no call is made."""
 
-    def test_reverse(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
-        louvers = MagicMock()
-        model.Louvers = louvers
-        result = feature_mgr.create_louver(0.005, "Reverse", height=0.008)
-        assert result["status"] == "created"
-        louvers.Add.assert_called_once_with(profile, 0.005, 1, 0.008, 7)
-
-    def test_height_required(self, feature_mgr, managers):
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
         louvers = MagicMock()
         model.Louvers = louvers
-        result = feature_mgr.create_louver(0.005)
-        assert "error" in result
-        assert "height" in result["error"]
-        louvers.Add.assert_not_called()
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_louver(0.005, height=0.008)
-        assert "error" in result
+        result = feature_mgr.create_louver(0.005, "Reverse", height=0.008)
+
+        assert result["unsupported"] is True
+        assert "never solves" in result["error"]
+        assert result["depth"] == 0.005
+        assert result["direction"] == "Reverse"
+        assert result["height"] == 0.008
+        louvers.Add.assert_not_called()
 
 
 # ============================================================================

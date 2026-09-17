@@ -929,50 +929,23 @@ class SurfacesMixin:
         Returns:
             Dict with status and surface info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            all_profiles = self.sketch_manager.get_accumulated_profiles()
-            if len(all_profiles) < 2:
-                return {
-                    "error": f"Bounded surface requires at least 2 profiles, "
-                    f"got {len(all_profiles)}."
-                }
-
-            v_sections = all_profiles
-            v_origins = [None] * len(all_profiles)
-
-            # Surfaces live on doc.Constructions; Model has no
-            # BlueSurfs property, so this always raised.
-            blue_surfs = doc.Constructions.BlueSurfs
-            blue_surfs.Add(
-                len(all_profiles),  # NumSections
-                v_sections,  # CrossSections
-                v_origins,  # Origins
-                0,  # SectionStartTangentType (igNone)
-                0.0,  # SectionStartTangentMagnitude
-                0,  # SectionEndTangentType (igNone)
-                0.0,  # SectionEndTangentMagnitude
-                0,  # NumGuideCurves
-                None,  # GuideCurves
-                0,  # GuideStartTangentType
-                0.0,  # GuideStartTangentMagnitude
-                0,  # GuideEndTangentType
-                0.0,  # GuideEndTangentMagnitude
-                want_end_caps,  # WantEndCaps
-                periodic,  # Periodic
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "bounded_surface",
-                "num_profiles": len(all_profiles),
-                "want_end_caps": want_end_caps,
-                "periodic": periodic,
-            }
-        except Exception as e:
-            return error_result(e)
+        # Constructions.BlueSurfs.Add answers E_INVALIDARG whatever it is
+        # given for Origins -- the SAFEARRAY(VT_DISPATCH) it declares, filled
+        # with the sections' circles, with the profiles themselves, or with
+        # None -- from two profiles that Models.AddLoftedProtrusion lofts
+        # (Solid Edge 2026). Say so rather than raise it.
+        all_profiles = self.sketch_manager.get_accumulated_profiles()
+        return {
+            "error": (
+                "BlueSurfs.Add rejects every argument form tried on Solid Edge 2026 "
+                "(E_INVALIDARG). Use create_loft for a solid, or the Solid Edge UI "
+                "for a bounded surface."
+            ),
+            "unsupported": True,
+            "num_profiles": len(all_profiles),
+            "want_end_caps": want_end_caps,
+            "periodic": periodic,
+        }
 
     def create_revolved_surface_full_sync(
         self, angle: float = 360.0, want_end_caps: bool = False

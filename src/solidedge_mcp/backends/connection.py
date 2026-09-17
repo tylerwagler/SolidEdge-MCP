@@ -5,8 +5,6 @@ Handles connecting to and managing Solid Edge application instances.
 """
 
 import contextlib
-import os
-import time
 from collections.abc import Callable
 from typing import Any
 
@@ -31,26 +29,6 @@ def _looks_dead(exc: BaseException) -> bool:
     """Heuristic for dead-proxy errors that are not typed com_error."""
     text = str(exc)
     return any(m in text for m in _DEAD_MARKERS)
-
-
-def _wait_for_file(path: str, timeout: float = 20.0) -> int | None:
-    """The file's size once it exists and has stopped growing, or None.
-
-    A conversion may still be writing when the COM call returns; two equal
-    non-zero size readings a short interval apart is taken as finished.
-    """
-    deadline = time.monotonic() + timeout
-    last: int | None = None
-    while time.monotonic() < deadline:
-        if os.path.exists(path):
-            size = os.path.getsize(path)
-            if size and size == last:
-                return size
-            last = size
-        time.sleep(0.25)
-    if os.path.exists(path) and os.path.getsize(path):
-        return os.path.getsize(path)
-    return None
 
 
 class SolidEdgeConnection:
@@ -572,46 +550,30 @@ class SolidEdgeConnection:
 
     def convert_by_file_path(self, input_path: str, output_path: str) -> dict[str, Any]:
         """
-        Batch-convert CAD files between formats.
+        Batch-convert CAD files between formats -- refused, with the evidence.
 
-        Uses Application.ConvertByFilePath to convert individual files or
-        entire folders. The format is determined by file extensions.
+        Application.ConvertByFilePath returns in about a second reporting
+        nothing wrong and writes nothing. Verified on Solid Edge 2026 with a
+        saved part and nine output extensions (stp, step, x_t, igs, jt, pdf,
+        dxf, stl, par): no file appeared for any of them, while SaveCopyAs on
+        the opened document wrote the STEP at once. export_file is that route.
 
         Args:
             input_path: Input file or folder path
             output_path: Output file or folder path
 
         Returns:
-            Dict with status
+            Dict with the refusal
         """
-        if not os.path.exists(input_path):
-            return {"error": f"Input path does not exist: {input_path}. Nothing was converted."}
-        try:
-            app = self._get_app()
-            app.ConvertByFilePath(input_path, output_path)
-        except Exception as e:
-            return error_result(e)
-
-        # ConvertByFilePath returns without saying whether it did anything,
-        # and can return before the writer has finished. Verified live: it
-        # returned in 1.1 s reporting nothing wrong, and no file appeared.
-        # The output is what says a conversion happened.
-        size = _wait_for_file(output_path)
-        if size is None:
-            return {
-                "error": (
-                    f"ConvertByFilePath returned without writing {output_path}; "
-                    "nothing was converted. Check that the output extension is a "
-                    "format Solid Edge can write and that the input opens."
-                ),
-                "input": input_path,
-                "output": output_path,
-            }
         return {
-            "status": "converted",
+            "error": (
+                "Application.ConvertByFilePath writes nothing on Solid Edge 2026 "
+                "(nine output formats tried; SaveCopyAs writes them). Open the file "
+                "and use export_file instead."
+            ),
+            "unsupported": True,
             "input": input_path,
             "output": output_path,
-            "size_bytes": size,
         }
 
     def get_default_template_path(self, doc_type: int) -> dict[str, Any]:

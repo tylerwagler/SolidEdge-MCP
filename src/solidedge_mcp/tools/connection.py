@@ -130,7 +130,9 @@ def app_config(
 def convert_by_file_path(
     input_path: str, output_path: str, overwrite: bool = False
 ) -> dict[str, Any]:
-    """Convert a CAD file to another format by extension (e.g. .par -> .step).
+    """Convert a CAD file by extension (e.g. .par -> .step) -- refused on Solid Edge
+    2026, where Application.ConvertByFilePath writes nothing; open the file and use
+    export_file.
 
     input_path must exist and output_path must not, unless overwrite=true:
     Solid Edge answers a missing input or an existing output with a modal

@@ -471,51 +471,22 @@ class SpecializedMixin:
         Returns:
             Dict with status and wire info
         """
-        try:
-            _logger.info(f"Adding wire with {len(path_indices)} path segments")
-            doc = self.doc_manager.get_active_document()
-
-            err = self._require_assembly(doc)
-            if err:
-                return err
-
-            if len(path_indices) != len(path_directions):
-                return {"error": "path_indices and path_directions must have the same length"}
-
-            occurrences = doc.Occurrences
-
-            paths = []
-            for idx in path_indices:
-                if idx < 0 or idx >= occurrences.Count:
-                    return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
-                paths.append(occurrences.Item(idx + 1))
-
-            v_paths = paths
-            v_dirs = path_directions
-
-            # Wires belongs to a Harness, not to the document; reading it
-            # off the document always raised. A harness is created on
-            # demand so the first wire in an assembly has somewhere to go.
-            harness, err = self._active_harness(doc)
-            if err:
-                return err
-            wires = harness.Wires
-            wire = wires.Add(len(paths), v_paths, v_dirs, description)
-
-            result: dict[str, Any] = {
-                "status": "created",
-                "type": "wire",
-                "num_paths": len(paths),
-                "description": description,
-            }
-
-            with contextlib.suppress(Exception):
-                result["name"] = wire.Name
-
-            return result
-        except Exception as e:
-            _logger.error(f"Failed to add wire: {e}")
-            return error_result(e)
+        # Wires.Add(NumberOfPaths, PathArray, PathDirectionArray,
+        # ConductorDescription) wants wire-path curves in PathArray: 3D
+        # sketch segments this server cannot draw, the same gap that keeps
+        # structural frames out. This method handed it occurrences instead
+        # and Solid Edge 2026 answered E_FAIL. Say so, without the call.
+        return {
+            "error": (
+                "A wire path is a 3D sketch curve, which this server cannot draw; "
+                "Wires.Add given occurrences answers E_FAIL. Route wires in the "
+                "Solid Edge UI (Wire Harness Design)."
+            ),
+            "unsupported": True,
+            "path_indices": path_indices,
+            "path_directions": path_directions,
+            "description": description,
+        }
 
     # -- Cables --------------------------------------------------------------
 

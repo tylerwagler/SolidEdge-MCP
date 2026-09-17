@@ -129,54 +129,23 @@ class TestCreateLoftWithGuides:
 
 
 class TestCreateBoundedSurface:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, doc, _, model, _ = managers
-        p1, p2 = MagicMock(), MagicMock()
-        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+    """BlueSurfs.Add answered E_INVALIDARG to every origin form on SE 2026."""
+
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
         blue_surfs = MagicMock()
         doc.Constructions.BlueSurfs = blue_surfs
 
-        result = feature_mgr.create_bounded_surface()
-        assert result["status"] == "created"
-        assert result["type"] == "bounded_surface"
+        result = feature_mgr.create_bounded_surface(want_end_caps=True, periodic=True)
+
+        assert result["unsupported"] is True
+        assert "E_INVALIDARG" in result["error"]
         assert result["num_profiles"] == 2
         assert result["want_end_caps"] is True
-        assert result["periodic"] is False
-        blue_surfs.Add.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called_once()
-
-    def test_periodic(self, feature_mgr, managers):
-        _, sketch_mgr, doc, _, model, _ = managers
-        p1, p2, p3 = MagicMock(), MagicMock(), MagicMock()
-        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2, p3]
-        blue_surfs = MagicMock()
-        doc.Constructions.BlueSurfs = blue_surfs
-
-        result = feature_mgr.create_bounded_surface(want_end_caps=False, periodic=True)
-        assert result["status"] == "created"
-        assert result["want_end_caps"] is False
         assert result["periodic"] is True
-        assert result["num_profiles"] == 3
-
-    def test_too_few_profiles(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
-
-        result = feature_mgr.create_bounded_surface()
-        assert "error" in result
-        assert "at least 2 profiles" in result["error"]
-
-    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
-        """A construction surface needs no solid; the old guard was a
-        precondition Solid Edge does not have."""
-        _, sketch_mgr, _, models, _, _ = managers
-        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
-        models.Count = 0
-
-        result = feature_mgr.create_bounded_surface()
-
-        assert "base feature" not in str(result.get("error", "")).lower()
-        assert result.get("status") == "created", result
+        blue_surfs.Add.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
 
 
 # ============================================================================

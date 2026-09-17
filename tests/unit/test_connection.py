@@ -5,7 +5,6 @@ Tests application management, performance flags, and new property accessors.
 Uses unittest.mock to simulate COM objects.
 """
 
-import pathlib
 from unittest.mock import MagicMock
 
 import pytest
@@ -215,62 +214,19 @@ class TestSetGlobalParameter:
 
 
 class TestConvertByFilePath:
-    """The result must match the disk.
+    """Application.ConvertByFilePath writes nothing on Solid Edge 2026 (nine
+    formats tried); the tool refuses and points at export_file."""
 
-    Application.ConvertByFilePath returns without saying whether it did
-    anything. Verified live on Solid Edge 2026: it returned in 1.1 s with no
-    error, the tool reported "converted", and no output file existed. The
-    output is what says a conversion happened, so the fakes here either write
-    one or do not.
-    """
-
-    def test_success_means_the_output_is_on_disk(self, conn, tmp_path):
+    def test_refuses_without_the_call(self, conn, tmp_path):
         src = tmp_path / "part.par"
-        src.write_bytes(b"part")
-        out = tmp_path / "part.step"
-        conn.application.ConvertByFilePath.side_effect = lambda i, o: pathlib.Path(o).write_bytes(
-            b"step data"
-        )
-
-        result = conn.convert_by_file_path(str(src), str(out))
-
-        assert result["status"] == "converted"
-        assert result["size_bytes"] == 9
-        conn.application.ConvertByFilePath.assert_called_once_with(str(src), str(out))
-
-    def test_nothing_written_is_an_error_not_a_conversion(self, conn, tmp_path, monkeypatch):
-        from solidedge_mcp.backends import connection as module
-
-        monkeypatch.setattr(module, "_wait_for_file", lambda path, timeout=20.0: None)
-        src = tmp_path / "part.par"
-        src.write_bytes(b"part")
+        src.write_bytes(b"x")
 
         result = conn.convert_by_file_path(str(src), str(tmp_path / "part.step"))
 
-        assert "error" in result
-        assert "nothing was converted" in result["error"]
-        assert "status" not in result
-
-    def test_a_missing_input_is_refused_before_com(self, conn, tmp_path):
-        result = conn.convert_by_file_path(str(tmp_path / "nope.par"), str(tmp_path / "x.step"))
-
-        assert "error" in result
-        assert "does not exist" in result["error"]
+        assert result["unsupported"] is True
+        assert "export_file" in result["error"]
+        assert result["input"] == str(src)
         conn.application.ConvertByFilePath.assert_not_called()
-
-    def test_not_connected(self, tmp_path):
-        src = tmp_path / "in.par"
-        src.write_bytes(b"part")
-        c = SolidEdgeConnection()
-        result = c.convert_by_file_path(str(src), str(tmp_path / "out.step"))
-        assert "error" in result
-
-    def test_com_error(self, conn, tmp_path):
-        src = tmp_path / "in.par"
-        src.write_bytes(b"part")
-        conn.application.ConvertByFilePath.side_effect = Exception("Conversion failed")
-        result = conn.convert_by_file_path(str(src), str(tmp_path / "out.step"))
-        assert "error" in result
 
 
 # ============================================================================

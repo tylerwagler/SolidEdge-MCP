@@ -375,15 +375,11 @@ class TestAddSplice:
 
 
 class TestAddWire:
-    def test_success(self, asm_mgr):
+    """Wires.Add wants wire-path curves this server cannot draw; no call is made."""
+
+    def test_refuses_with_the_evidence(self, asm_mgr):
         am, doc = asm_mgr
-        p1, p2 = MagicMock(), MagicMock()
-        wire = MagicMock()
-        wire.Name = "Wire_1"
         wires = MagicMock()
-        wires.Add.return_value = wire
-        # Wires belongs to a Harness, reached through doc.Harnesses.
-        del doc.Wires
         harness = MagicMock()
         harness.Wires = wires
         harnesses = MagicMock()
@@ -391,42 +387,14 @@ class TestAddWire:
         harnesses.Item.return_value = harness
         doc.Harnesses = harnesses
 
-        occurrences = MagicMock()
-        occurrences.Count = 3
-        occurrences.Item.side_effect = lambda i: {1: p1, 2: p2, 3: MagicMock()}[i]
-        doc.Occurrences = occurrences
-
         result = am.add_wire([0, 1], [True, False], "Test wire")
-        assert result["status"] == "created"
-        assert result["type"] == "wire"
-        assert result["num_paths"] == 2
+
+        assert result["unsupported"] is True
+        assert "3D sketch curve" in result["error"]
+        assert result["path_indices"] == [0, 1]
         assert result["description"] == "Test wire"
-        wires.Add.assert_called_once()
-
-    def test_mismatched_lengths(self, asm_mgr):
-        am, doc = asm_mgr
-        doc.Occurrences = MagicMock()
-
-        result = am.add_wire([0, 1], [True], "")
-        assert "error" in result
-        assert "same length" in result["error"]
-
-    def test_invalid_path_index(self, asm_mgr):
-        am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-
-        result = am.add_wire([0, 5], [True, True], "")
-        assert "error" in result
-        assert "Invalid path index" in result["error"]
-
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        doc.Type = IG_PART_DOCUMENT
-
-        result = am.add_wire([0], [True], "")
-        assert "error" in result
+        wires.Add.assert_not_called()
+        doc.Occurrences.Item.assert_not_called()
 
 
 # ============================================================================

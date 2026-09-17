@@ -838,49 +838,24 @@ class SheetMetalMixin:
         Returns:
             Dict with status and louver info
         """
-        if height <= 0:
-            return {"error": "Louvers.Add needs a positive louver height; pass height (in meters)."}
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            err = self._require_open_profile(profile, "louver")
-            if err:
-                return err
-
-            model = models.Item(1)
-
-            depth_direction = (
-                _SE_LOUVER_DEPTH_DIRECTION_RIGHT
-                if direction == "Normal"
-                else _SE_LOUVER_DEPTH_DIRECTION_LEFT
-            )
-
-            louvers = model.Louvers
-            louvers.Add(
-                profile,
-                depth,
-                depth_direction,
-                height,
-                _SE_LOUVER_HEIGHT_NORMAL,  # HeightDirection
-            )
-
-            return {
-                "status": "created",
-                "type": "louver",
-                "depth": depth,
-                "height": height,
-                "direction": direction,
-            }
-        except Exception as e:
-            return error_result(e)
+        # Louvers.Add records a Louver (Louver_1, in the Louvers collection)
+        # that never solves: the body's range, volume and face count are
+        # unchanged, with the line on the base plane or on a plane through
+        # the top face, both depth directions, depths of 1 and 3 mm, and with
+        # every Type / RoundType / DieRadius / DimensionType combination the
+        # optional parameters take (Solid Edge 2026, nine placements). Say so
+        # rather than leave a dead feature behind.
+        return {
+            "error": (
+                "Louvers.Add records a louver that Solid Edge 2026 never solves "
+                "(no geometry, whatever the placement or type). Use the Solid "
+                "Edge UI for louvers; create_dimple and create_drawn_cutout work."
+            ),
+            "unsupported": True,
+            "depth": depth,
+            "direction": direction,
+            "height": height,
+        }
 
     @verifies_geometry
     def create_gusset(self, thickness: float, direction: str = "Normal") -> dict[str, Any]:
