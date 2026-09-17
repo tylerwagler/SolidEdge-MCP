@@ -8,6 +8,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
 from ..constants import (
+    DirectionConstants,
     FaceQueryConstants,
     FaceRotateConstants,
     PatternOffsetTypeConstants,
@@ -171,7 +172,10 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
-    def thicken_surface(self, thickness: float, direction: str = "Both") -> dict[str, Any]:
+    @verifies_geometry
+    def thicken_surface(
+        self, thickness: float, direction: str = "Both", surface_index: int = 0
+    ) -> dict[str, Any]:
         """
         Thicken a surface to create a solid.
 
@@ -187,19 +191,44 @@ class MiscFeaturesMixin:
         Returns:
             Dict with an unsupported error
         """
-        return {
-            "error": (
-                "Thicken is not available through this server: "
-                "Models.AddThickenFeature(Side, offsetDistance, NumberOfFaces, "
-                "Faces) requires the surface faces to thicken, which cannot be "
-                "selected through this API. Thicken the surface in the Solid "
-                "Edge UI."
-            ),
-            "unsupported": True,
-            "type": "thicken",
-            "thickness": thickness,
-            "direction": direction,
+        sides = {
+            "Both": DirectionConstants.igSymmetric,
+            "Normal": DirectionConstants.igRight,
+            "Reverse": DirectionConstants.igLeft,
         }
+        side = sides.get(direction)
+        if side is None:
+            return {"error": f"Invalid direction: {direction}. Use 'Both', 'Normal' or 'Reverse'."}
+        try:
+            doc = self.doc_manager.get_active_document()
+            constructions = doc.Constructions
+            count = com_get(constructions, "Count", 0)
+            if surface_index < 0 or surface_index >= count:
+                return {
+                    "error": (
+                        f"Invalid surface index: {surface_index}. Document has {count} "
+                        "construction surfaces (0-based); make one with "
+                        "create_extruded_surface or create_revolved_surface first."
+                    )
+                }
+            # The faces are the construction body's. Verified on Solid Edge 2026:
+            # Models.AddThickenFeature(Side, offsetDistance, NumberOfFaces, Faces)
+            # over Constructions.Item(n).Body.Faces turns an extruded surface into
+            # a 12-face solid for every side; the surface's own Faces property
+            # raises.
+            faces = constructions.Item(surface_index + 1).Body.Faces(FaceQueryConstants.igQueryAll)
+            face_list = [faces.Item(i) for i in range(1, faces.Count + 1)]
+            doc.Models.AddThickenFeature(side, thickness, len(face_list), face_list)
+            return {
+                "status": "created",
+                "type": "thicken",
+                "thickness": thickness,
+                "direction": direction,
+                "surface_index": surface_index,
+                "faces_thickened": len(face_list),
+            }
+        except Exception as e:
+            return error_result(e)
 
     def auto_simplify(self) -> dict[str, Any]:
         """

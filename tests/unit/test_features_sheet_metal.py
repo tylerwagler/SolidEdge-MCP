@@ -4,6 +4,7 @@ Unit tests for FeatureManager backend methods.
 Uses unittest.mock to simulate COM objects so tests run without Solid Edge.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -793,10 +794,8 @@ class TestThreadNeedsACylinder:
 FLANGE_CREATORS = [
     "create_flange",
     "create_flange_by_match_face",
-    "create_flange_sync",
     "create_flange_by_face",
     "create_flange_with_bend_calc",
-    "create_flange_sync_with_bend_calc",
     "create_flange_match_face_with_bend",
     "create_flange_by_face_with_bend",
 ]
@@ -844,3 +843,92 @@ class TestFlangeCreatorsRefuse:
         assert result["face_index"] == 3
         assert result["edge_index"] == 2
         assert result["flange_length"] == 0.02
+
+
+# ============================================================================
+# SYNCHRONOUS FLANGES: Flanges.AddSync builds in a synchronous document
+# ============================================================================
+
+
+def _sync_tab(managers, mode=1):
+    """A sheet-metal document in the given ModelingMode with a 6-face tab."""
+    _, _, doc, _, model, _ = managers
+    doc.ModelingMode = mode
+    faces = model.Body.Faces.return_value
+    faces.Count = 6
+    face = MagicMock(name="face")
+    faces.Item.side_effect = None
+    faces.Item.return_value = face
+    face.Edges.Count = 4
+    edge = MagicMock(name="edge")
+    face.Edges.Item.side_effect = None
+    face.Edges.Item.return_value = edge
+    return doc, model, face, edge
+
+
+class TestCreateFlangeSync:
+    def test_builds_through_add_sync_with_the_optional_slots_empty(self, feature_mgr, managers):
+        import pythoncom
+
+        doc, model, face, edge = _sync_tab(managers)
+
+        result = feature_mgr.create_flange_sync(1, 0, 0.02, inside_radius=0.003)
+
+        assert result["status"] == "created"
+        args = model.Flanges.AddSync.call_args.args
+        assert args[0] is edge
+        assert args[1] == 0.02
+        assert args[3] == 0.003
+        assert len(args) == 12
+        # ThicknessSide, DimSide, ... and BendAngle left to Solid Edge's defaults
+        for slot in (2, 4, 5, 6, 7, 8, 9, 10, 11):
+            assert args[slot].varianttype == pythoncom.VT_EMPTY
+        model.Body.Faces.return_value.Item.assert_called_once_with(2)
+        face.Edges.Item.assert_called_once_with(1)
+
+    def test_bend_angle_is_passed_in_radians(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers)
+
+        feature_mgr.create_flange_sync(0, 0, 0.02, bend_angle=45.0)
+
+        assert model.Flanges.AddSync.call_args.args[11] == pytest.approx(math.radians(45.0))
+
+    def test_an_ordered_document_is_refused_before_the_call(self, feature_mgr, managers):
+        """Switching after an ordered tab answers E_FAIL, so it is not switched."""
+        doc, model, _, _ = _sync_tab(managers, mode=2)
+
+        result = feature_mgr.create_flange_sync(0, 0, 0.02)
+
+        assert result["unsupported"] is True
+        assert "synchronous" in result["error"]
+        model.Flanges.AddSync.assert_not_called()
+        assert doc.ModelingMode == 2
+
+    def test_bad_indices_are_refused(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers)
+        assert "Invalid face index" in feature_mgr.create_flange_sync(6, 0, 0.02)["error"]
+        assert "Invalid edge index" in feature_mgr.create_flange_sync(0, 4, 0.02)["error"]
+        model.Flanges.AddSync.assert_not_called()
+
+
+class TestCreateFlangeSyncWithBendCalc:
+    def test_default_calculation_builds(self, feature_mgr, managers):
+        _, model, _, edge = _sync_tab(managers)
+
+        result = feature_mgr.create_flange_sync_with_bend_calc(1, 0, 0.02)
+
+        assert result["status"] == "created"
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once_with(edge, 0.02)
+
+    def test_a_bend_deduction_is_refused_as_unverified(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers)
+
+        result = feature_mgr.create_flange_sync_with_bend_calc(1, 0, 0.02, bend_deduction=0.001)
+
+        assert result["unsupported"] is True
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_not_called()
+
+    def test_an_ordered_document_is_refused(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers, mode=2)
+        assert feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.02)["unsupported"] is True
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_not_called()

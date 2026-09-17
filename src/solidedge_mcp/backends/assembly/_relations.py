@@ -299,9 +299,12 @@ class RelationsMixin:
         del occurrence1_index, occurrence2_index, offset, orientation
         return {
             "error": (
-                "Planar relations need two planar faces (Relations3d.AddPlanar takes "
-                "Plane1, Plane2, NormalsAligned, ConstrainingPoint1, ConstrainingPoint2), "
-                "which this server cannot select. Use the Solid Edge UI."
+                "Planar relations need two planar faces in the assembly's own topology "
+                "(Relations3d.AddPlanar takes Plane1, Plane2, NormalsAligned, "
+                "ConstrainingPoint1, ConstrainingPoint2). Occurrence.Body.Faces raises "
+                "E_FAIL and faces read from the occurrence's part document answer "
+                "0x80040225 (Solid Edge 2026), so this server cannot form the call. "
+                "Add the relation in the Solid Edge UI."
             ),
             "unsupported": True,
         }

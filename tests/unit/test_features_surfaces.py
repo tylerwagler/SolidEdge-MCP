@@ -439,37 +439,23 @@ class TestCreateRevolvedSurfaceByKeypoint:
 
 
 class TestCreateLoftedSurfaceV2:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, doc, models, model, _ = managers
-        p1, p2 = MagicMock(), MagicMock()
-        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
-        loft_surfaces = MagicMock()
-        doc.Constructions.LoftedSurfaces = loft_surfaces
+    """LoftedSurfaces.Add2 answered E_INVALIDARG like Add; no call is made."""
 
-        result = feature_mgr.create_lofted_surface_v2()
-        assert result["status"] == "created"
-        assert result["type"] == "lofted_surface_v2"
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
+
+        result = feature_mgr.create_lofted_surface_v2(want_end_caps=True)
+
+        assert result["unsupported"] is True
+        assert "Add2" in result["error"]
         assert result["num_profiles"] == 2
-        loft_surfaces.Add2.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+        doc.Constructions.LoftedSurfaces.Add2.assert_not_called()
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
         sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
-
-        result = feature_mgr.create_lofted_surface_v2()
-        assert "error" in result
-        assert "at least 2 profiles" in result["error"]
-
-    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
-        _, sketch_mgr, _, models, _, _ = managers
-        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
-        models.Count = 0
-
-        result = feature_mgr.create_lofted_surface_v2()
-
-        assert "base feature" not in str(result.get("error", "")).lower()
-        assert result.get("status") == "created", result
+        assert "at least 2" in feature_mgr.create_lofted_surface_v2()["error"]
 
 
 # ============================================================================

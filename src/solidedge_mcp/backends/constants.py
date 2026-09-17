@@ -864,3 +864,18 @@ class UnitTypeConstants:
     igUnitDensity = 16
     igUnitVolume = 56
     igUnitScalar = 58
+
+
+class SETargetDesignBodyOption:
+    """part.tlb > SETargetDesignBodyOption: Splits.Add, what a non-manifold result becomes."""
+
+    igCreateMultipleDesignBodiesOnNonManifoldOption = 0
+    igFailOnNonManifoldOption = 1
+    igCreateSingleDesignBodyOnNonManifoldOption = 2
+
+
+class SETargetConstructionBodyOption:
+    """part.tlb > SETargetConstructionBodyOption: Splits.Add, for construction bodies."""
+
+    igCreateMultipleConstructionBodiesOnNonManifoldOption = 0
+    igCreateSingleConstructionGeneralBodyOnNonManifoldOption = 1

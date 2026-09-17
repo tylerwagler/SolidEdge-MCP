@@ -67,6 +67,7 @@ def create_flange(
                 edge_index=edge_index,
                 flange_length=flange_length,
                 inside_radius=inside_radius or 0.001,
+                bend_angle=bend_angle,
             )
         case "by_face":
             return feature_manager.create_flange_by_face(
@@ -583,11 +584,11 @@ def create_web_network(
     return feature_manager.create_web_network(thickness=thickness, depth=depth, direction=direction)
 
 
-def create_split() -> dict[str, Any]:
-    """Split the solid body with the active sketch profile.
+def create_split(plane_index: int = 1) -> dict[str, Any]:
+    """Split the solid body with a reference plane into two design bodies.
 
-    Unsupported: Splits.Add needs target bodies plus tool surfaces or planes
-    to cut with, which cannot be selected here. Split the body in the Solid
-    Edge UI.
+    plane_index is 1-based (1=Top, 2=Right, 3=Front, 4+ = planes made with
+    create_ref_plane); the plane has to pass through the body, so it is
+    usually an offset plane. Reports the Splits and Models counts afterwards.
     """
-    return feature_manager.create_split()
+    return feature_manager.create_split(plane_index=plane_index)

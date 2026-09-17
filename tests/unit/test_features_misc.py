@@ -540,17 +540,35 @@ class TestCreateSlot:
 
 
 class TestCreateSplit:
-    """Splits.Add needs target bodies and tool surfaces, not a profile."""
+    """Splits.Add(1, [Body], 1, [RefPlane], multiple-bodies options) splits the box."""
 
-    def test_unsupported(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        splits = MagicMock()
-        model.Splits = splits
-        result = feature_mgr.create_split()
-        assert result["unsupported"] is True
-        assert result["type"] == "split"
-        assert "tool surfaces" in result["error"]
-        splits.Add.assert_not_called()
+    def test_splits_the_body_with_a_reference_plane(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        doc.RefPlanes.Count = 4
+        plane = doc.RefPlanes.Item.return_value
+        model.Splits.Count = 1
+
+        result = feature_mgr.create_split(plane_index=4)
+
+        assert result["status"] == "created"
+        assert result["plane_index"] == 4
+        model.Splits.Add.assert_called_once_with(1, [model.Body], 1, [plane], 0, 0)
+        doc.RefPlanes.Item.assert_called_once_with(4)
+
+    def test_a_plane_index_out_of_range_is_refused(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        doc.RefPlanes.Count = 3
+
+        result = feature_mgr.create_split(plane_index=4)
+
+        assert "Invalid plane index" in result["error"]
+        model.Splits.Add.assert_not_called()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        models.Count = 0
+        assert "error" in feature_mgr.create_split()
+        model.Splits.Add.assert_not_called()
 
 
 # ============================================================================
@@ -1817,12 +1835,43 @@ class TestAddByConstruction:
 
 
 class TestThickenSurface:
-    def test_unsupported(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
+    """AddThickenFeature over a construction body's faces; verified live for every side."""
+
+    @staticmethod
+    def _surface(doc, n_faces=6):
+        doc.Constructions.Count = 1
+        faces = doc.Constructions.Item.return_value.Body.Faces.return_value
+        faces.Count = n_faces
+        face_objects = [MagicMock(name=f"face{i}") for i in range(n_faces)]
+        faces.Item.side_effect = lambda i: face_objects[i - 1]
+        return face_objects
+
+    @pytest.mark.parametrize("direction, side", [("Both", 3), ("Normal", 2), ("Reverse", 1)])
+    def test_thickens_every_face_of_the_first_construction_body(
+        self, feature_mgr, managers, direction, side
+    ):
+        _, _, doc, models, _, _ = managers
+        face_objects = self._surface(doc)
+
+        result = feature_mgr.thicken_surface(0.002, direction=direction)
+
+        assert result["status"] == "created"
+        assert result["faces_thickened"] == 6
+        models.AddThickenFeature.assert_called_once_with(side, 0.002, 6, face_objects)
+        doc.Constructions.Item.assert_called_once_with(1)
+
+    def test_a_missing_surface_is_refused(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        doc.Constructions.Count = 0
+
         result = feature_mgr.thicken_surface(0.002)
-        assert result["unsupported"] is True
-        assert result["thickness"] == 0.002
-        assert "Faces" in result["error"]
+
+        assert "Invalid surface index" in result["error"]
+        models.AddThickenFeature.assert_not_called()
+
+    def test_a_bad_direction_is_refused(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        assert "Invalid direction" in feature_mgr.thicken_surface(0.002, direction="Up")["error"]
         models.AddThickenFeature.assert_not_called()
 
 

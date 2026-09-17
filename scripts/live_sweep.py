@@ -195,10 +195,21 @@ CONTEXTS: dict[str, list[Step]] = {
     "box_loft": _box() + _loft_profiles(),
     "box_sweep": _box() + _sweep_profiles(),
     "box_round": _box() + [("create_round", {"method": "all_edges", "radius": 0.002})],
+    "box_plane": _box()
+    + [("create_ref_plane", {"method": "offset", "parent_plane_index": 1, "distance": 0.015})],
+    "part_surface": _part()
+    + _rect_closed()
+    + [("create_extruded_surface", {"method": "finite", "distance": 0.03})],
     "cylinder": _part()
     + _circle_closed()
     + [("create_extrude", {"method": "finite", "distance": 0.03})],
     "sheet": _sheet(),
+    "sheet_sync": [
+        ("create_document", {"type": "sheet_metal"}),
+        ("manage_feature_tree", {"action": "set_mode", "mode": "synchronous"}),
+    ]
+    + _rect_closed()
+    + [("create_sheet_metal_base", {"type": "tab", "thickness": 0.002})],
     "sheet_rect_closed": [("create_document", {"type": "sheet_metal"})] + _rect_closed(),
     "sheet_circle_closed": _sheet() + _circle_closed(),
     "sheet_line_closed": _sheet()
@@ -360,8 +371,8 @@ CASES: list[Case] = [
         "cylinder",
     ),
     Case("create_blend", {"method": "basic", "radius": 0.002, "face_index": 0}, "box"),
-    Case("create_split", {}, "box"),
-    Case("thicken", {"method": "basic", "thickness": 0.002}, "box"),
+    Case("create_split", {"plane_index": 4}, "box_plane"),
+    Case("thicken", {"method": "basic", "thickness": 0.002}, "part_surface"),
     Case("create_web_network", {"thickness": 0.002, "depth": 0.01}, "box_circle_closed"),
     Case("create_reinforcement", {"type": "rib", "thickness": 0.002}, "box_circle_closed"),
     Case("add_body", {"method": "basic", "body_type": "Solid", "body_name": "B2"}, "box"),
@@ -384,6 +395,11 @@ CASES: list[Case] = [
         "create_flange",
         {"method": "basic", "face_index": 0, "edge_index": 0, "flange_length": 0.02},
         "sheet",
+    ),
+    Case(
+        "create_flange",
+        {"method": "sync", "face_index": 1, "edge_index": 0, "flange_length": 0.02},
+        "sheet_sync",
     ),
     Case("create_bend", {"method": "basic", "bend_angle": 90.0}, "sheet_line_closed"),
     Case(

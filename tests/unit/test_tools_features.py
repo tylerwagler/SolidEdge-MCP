@@ -1468,8 +1468,8 @@ class TestStandaloneFeatures:
 
     def test_create_split(self, mock_mgr):
         mock_mgr.create_split.return_value = {"status": "ok"}
-        result = create_split()
-        mock_mgr.create_split.assert_called_once()
+        result = create_split(plane_index=4)
+        mock_mgr.create_split.assert_called_once_with(plane_index=4)
         assert result == {"status": "ok"}
 
     def test_create_draft_angle(self, mock_mgr):

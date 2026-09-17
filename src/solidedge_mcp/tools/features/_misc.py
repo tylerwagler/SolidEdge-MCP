@@ -10,21 +10,24 @@ def thicken(
     method: Literal["basic", "sync"] = "basic",
     thickness: float = 0.0,
     direction: str = "Both",
+    surface_index: int = 0,
 ) -> dict[str, Any]:
-    """Thicken an existing surface body into a solid.
+    """Thicken a construction surface into a solid.
 
-    thickness in meters; direction is 'Both' | 'Normal' | 'Reverse'.
-    Both methods are unsupported: Models.AddThickenFeature and
-    Thickens.AddSync need the surface faces (and, for sync, the bounding
-    loop) to thicken, which cannot be selected through this API. Thicken the
-    surface in the Solid Edge UI.
+    basic: Models.AddThickenFeature over the faces of construction surface
+    surface_index (0-based, in document order; make one with
+    create_extruded_surface first). thickness in meters; direction is
+    'Both' | 'Normal' | 'Reverse'. sync is unsupported (Thickens.AddSync
+    needs the bounding loop, which cannot be selected here).
     """
     err = validate_numerics(thickness=thickness)
     if err:
         return err
     match method:
         case "basic":
-            return feature_manager.thicken_surface(thickness=thickness, direction=direction)
+            return feature_manager.thicken_surface(
+                thickness=thickness, direction=direction, surface_index=surface_index
+            )
         case "sync":
             return feature_manager.create_thicken_sync(thickness=thickness, direction=direction)
         case _:

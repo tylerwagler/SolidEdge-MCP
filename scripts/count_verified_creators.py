@@ -71,8 +71,10 @@ def audit() -> dict[str, list[str]]:
                     continue
                 body = ast.get_source_segment(src, fn) or ""
                 label = f"{rel}::{fn.name}"
+                # ... but only as its answer: a precondition helper that can
+                # refuse (self._require_synchronous_sheet) is not a refusal.
                 refuses = '"unsupported": True' in body or any(
-                    f"self.{name}(" in body for name in refusers - {fn.name}
+                    f"return self.{name}(" in body for name in refusers - {fn.name}
                 )
                 if refuses:
                     buckets["unsupported"].append(label)

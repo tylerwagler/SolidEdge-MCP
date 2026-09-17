@@ -597,57 +597,23 @@ class SurfacesMixin:
         Returns:
             Dict with status and surface info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            all_profiles = self.sketch_manager.get_accumulated_profiles()
-
-            if len(all_profiles) < 2:
-                return {
-                    "error": f"Lofted surface requires at least 2 profiles, "
-                    f"got {len(all_profiles)}."
-                }
-
-            _CS = LoftSweepConstants.igProfileBasedCrossSection
-
-            v_sections = all_profiles
-            v_types = [_CS] * len(all_profiles)
-            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
-            # the outer wrapper is not. Dropping them broke the lofted cutout.
-            v_origins = [
-                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
-                for p in all_profiles
-            ]
-
-            # Surfaces live on doc.Constructions; Model has no
-            # LoftedSurfaces property, so this always raised.
-            loft_surfaces = doc.Constructions.LoftedSurfaces
-            loft_surfaces.Add2(
-                len(all_profiles),  # NumSections
-                v_sections,  # CrossSections
-                v_types,  # CrossSectionTypes
-                v_origins,  # Origins
-                ExtentTypeConstants.igNone,  # StartExtentType
-                ExtentTypeConstants.igNone,  # EndExtentType
-                0,  # StartTangentType
-                0.0,  # StartTangentMagnitude
-                0,  # EndTangentType
-                0.0,  # EndTangentMagnitude
-                0,  # NumGuideCurves
-                None,  # GuideCurves
-                want_end_caps,  # WantEndCaps
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
+        all_profiles = self.sketch_manager.get_accumulated_profiles()
+        if len(all_profiles) < 2:
             return {
-                "status": "created",
-                "type": "lofted_surface_v2",
-                "num_profiles": len(all_profiles),
-                "want_end_caps": want_end_caps,
+                "error": f"Lofted surface requires at least 2 profiles, got {len(all_profiles)}."
             }
-        except Exception as e:
-            return error_result(e)
+        # LoftedSurfaces.Add2 answers E_INVALIDARG to the same profiles that
+        # Models.AddLoftedProtrusion lofts (Solid Edge 2026), as Add does.
+        return {
+            "error": (
+                "LoftedSurfaces.Add2 rejects the argument form Solid Edge 2026 accepts "
+                "for a solid loft (E_INVALIDARG), as Add does. Use create_loft for a "
+                "solid, or the Solid Edge UI for a lofted surface."
+            ),
+            "unsupported": True,
+            "num_profiles": len(all_profiles),
+            "want_end_caps": want_end_caps,
+        }
 
     def create_swept_surface_ex(
         self, path_profile_index: int | None = None, want_end_caps: bool = False

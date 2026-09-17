@@ -4,6 +4,9 @@ import contextlib
 import math
 from typing import Any
 
+import pythoncom
+from win32com.client import VARIANT
+
 from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
@@ -12,7 +15,10 @@ from ..constants import (
     ExtentTypeConstants,
     FaceQueryConstants,
     KeyPointExtentConstants,
+    ModelingModeConstants,
     OffsetSideConstants,
+    SETargetConstructionBodyOption,
+    SETargetDesignBodyOption,
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
@@ -522,10 +528,11 @@ class SheetMetalMixin:
         """
         return {
             "error": (
-                f"{method}: Flanges.Add* records a flange that Solid Edge 2026 never "
-                "solves (no geometry after Recompute), or raises. Use the Solid "
-                "Edge UI for flanges; create_base_tab, create_bend and "
-                "create_lofted_flange work."
+                f"{method}: the ordered Flanges.Add* calls record a flange that Solid "
+                "Edge 2026 never solves (no geometry after Recompute), or raise. "
+                "Flanges do build in a synchronous document: run "
+                "manage_feature_tree(action='set_mode', mode='synchronous') before "
+                "the base tab, then create_flange(method='sync')."
             ),
             "unsupported": True,
             "method": method,
@@ -848,8 +855,9 @@ class SheetMetalMixin:
         return {
             "error": (
                 "Louvers.Add records a louver that Solid Edge 2026 never solves "
-                "(no geometry, whatever the placement or type). Use the Solid "
-                "Edge UI for louvers; create_dimple and create_drawn_cutout work."
+                "(no geometry, whatever the placement or type), and Louvers.AddSync "
+                "on a synchronous tab face answers 0x807B0086. Use the Solid Edge "
+                "UI for louvers; create_dimple and create_drawn_cutout work."
             ),
             "unsupported": True,
             "depth": depth,
@@ -1105,8 +1113,8 @@ class SheetMetalMixin:
             "direction": direction,
         }
 
-    @verifies_geometry
-    def create_split(self, direction: str = "Normal") -> dict[str, Any]:
+    @verifies_collection_growth("Models.*.Splits")
+    def create_split(self, plane_index: int = 1) -> dict[str, Any]:
         """
         Create a split feature to divide a body.
 
@@ -1122,17 +1130,44 @@ class SheetMetalMixin:
         Returns:
             Dict with an unsupported error
         """
-        return {
-            "error": (
-                "Split features are not available through this server: "
-                "Splits.Add needs target bodies plus tool surfaces or planes to "
-                "cut with, which cannot be selected here. Split the body in the "
-                "Solid Edge UI."
-            ),
-            "unsupported": True,
-            "type": "split",
-            "direction": direction,
-        }
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a base feature first."}
+            model = models.Item(1)
+            planes = doc.RefPlanes
+            if plane_index < 1 or plane_index > planes.Count:
+                return {
+                    "error": (
+                        f"Invalid plane index: {plane_index}. Document has {planes.Count} "
+                        "reference planes (1-based)."
+                    )
+                }
+            plane = planes.Item(plane_index)
+            # Splits.Add(nNumTargets, TargetArray, nNumTools, ToolsArray,
+            #   TargetDesignBodyOption, TargetConstructionBodyOption). Verified on
+            # Solid Edge 2026: the model's own Body as the target and a reference
+            # plane as the tool splits a box into two design bodies (Models 1 -> 2,
+            # Splits 0 -> 1); the first model keeps its face count, so the
+            # verification watches Splits.
+            model.Splits.Add(
+                1,
+                [model.Body],
+                1,
+                [plane],
+                SETargetDesignBodyOption.igCreateMultipleDesignBodiesOnNonManifoldOption,
+                SETargetConstructionBodyOption.igCreateMultipleConstructionBodiesOnNonManifoldOption,
+            )
+            return {
+                "status": "created",
+                "type": "split",
+                "plane_index": plane_index,
+                "splits": com_get(model.Splits, "Count"),
+                "models": com_get(doc.Models, "Count"),
+            }
+        except Exception as e:
+            return error_result(e)
 
     @verifies_geometry
     def create_flange_by_match_face(
@@ -1168,6 +1203,48 @@ class SheetMetalMixin:
             inside_radius=inside_radius,
         )
 
+    @staticmethod
+    def _require_synchronous_sheet(doc: Any) -> dict[str, Any] | None:
+        """Flanges.AddSync builds only in a synchronous sheet-metal document.
+
+        Verified on Solid Edge 2026: in a document set to synchronous before
+        its base tab, AddSync on any horizontal tab edge builds (6 -> 14
+        faces, the range grows by the flange length, InsideRadius and
+        BendAngle are honoured). In an ordered document it raises 0x80004021,
+        and switching the mode after an ordered tab answers E_FAIL -- the
+        tab itself has to be synchronous, so this does not switch for you.
+        """
+        mode = com_get(doc, "ModelingMode")
+        if mode is None or mode == ModelingModeConstants.seModelingModeSynchronous:
+            return None
+        return {
+            "error": (
+                "A synchronous flange needs a synchronous sheet-metal document whose "
+                "base tab was made in that mode; switching an ordered tab afterwards "
+                "answers E_FAIL on Solid Edge 2026. Create the document, run "
+                "manage_feature_tree(action='set_mode', mode='synchronous') before "
+                "create_sheet_metal_base, then create_flange(method='sync')."
+            ),
+            "modeling_mode": "ordered",
+            "unsupported": True,
+        }
+
+    def _flange_edge(
+        self, doc: Any, face_index: int, edge_index: int
+    ) -> tuple[Any, Any] | dict[str, Any]:
+        """The (model, edge) a flange is located on, or the error dict."""
+        models = doc.Models
+        if models.Count == 0:
+            return {"error": "No base feature exists. Create a sheet metal base tab first."}
+        model = models.Item(1)
+        faces = model.Body.Faces(FaceQueryConstants.igQueryAll)
+        if face_index < 0 or face_index >= faces.Count:
+            return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+        edges = faces.Item(face_index + 1).Edges
+        if edge_index < 0 or edge_index >= edges.Count:
+            return {"error": f"Invalid edge index: {edge_index}. Face has {edges.Count} edges."}
+        return model, edges.Item(edge_index + 1)
+
     @verifies_geometry
     def create_flange_sync(
         self,
@@ -1175,6 +1252,7 @@ class SheetMetalMixin:
         edge_index: int,
         flange_length: float,
         inside_radius: float = 0.001,
+        bend_angle: float | None = None,
     ) -> dict[str, Any]:
         """
         Create a synchronous flange feature.
@@ -1190,13 +1268,47 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        return self._flanges_unsupported(
-            "create_flange_sync",
-            face_index=face_index,
-            edge_index=edge_index,
-            flange_length=flange_length,
-            inside_radius=inside_radius,
-        )
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous_sheet(doc)
+            if err:
+                return err
+            located = self._flange_edge(doc, face_index, edge_index)
+            if isinstance(located, dict):
+                return located
+            model, edge = located
+            # Flanges.AddSync(pLocatedEdge, FlangeLength, ThicknessSide, InsideRadius,
+            #   DimSide, BRType, BRWidth, BRLength, CRType, NeutralFactor, BnParamType,
+            #   BendAngle, FlangeType, PartialFlangeStartPoint). The VARIANT slots
+            #   left empty take Solid Edge's defaults; verified with InsideRadius
+            #   0.003 and BendAngle 45 degrees read back from the feature.
+            empty = VARIANT(pythoncom.VT_EMPTY, None)
+            angle = math.radians(bend_angle) if bend_angle is not None else empty
+            model.Flanges.AddSync(
+                edge,
+                flange_length,
+                empty,
+                inside_radius,
+                empty,
+                empty,
+                empty,
+                empty,
+                empty,
+                empty,
+                empty,
+                angle,
+            )
+            return {
+                "status": "created",
+                "type": "flange_sync",
+                "face_index": face_index,
+                "edge_index": edge_index,
+                "flange_length": flange_length,
+                "inside_radius": inside_radius,
+                "bend_angle": bend_angle,
+            }
+        except Exception as e:
+            return error_result(e)
 
     @verifies_geometry
     def create_flange_by_face(
@@ -1292,13 +1404,39 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        return self._flanges_unsupported(
-            "create_flange_sync_with_bend_calc",
-            face_index=face_index,
-            edge_index=edge_index,
-            flange_length=flange_length,
-            bend_deduction=bend_deduction,
-        )
+        if bend_deduction:
+            return {
+                "error": (
+                    "A bend deduction through AddSyncByBendDeductionOrBendAllowance "
+                    "(BendCalculationMethod, BendCalculationMethodValue) has not been "
+                    "driven live; only the default calculation is. Pass bend_deduction=0 "
+                    "or use create_flange(method='sync')."
+                ),
+                "unsupported": True,
+                "bend_deduction": bend_deduction,
+            }
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous_sheet(doc)
+            if err:
+                return err
+            located = self._flange_edge(doc, face_index, edge_index)
+            if isinstance(located, dict):
+                return located
+            model, edge = located
+            # Verified on Solid Edge 2026: the two-argument form builds the same
+            # flange AddSync does (6 -> 14 faces).
+            model.Flanges.AddSyncByBendDeductionOrBendAllowance(edge, flange_length)
+            return {
+                "status": "created",
+                "type": "flange_sync_with_bend_calc",
+                "face_index": face_index,
+                "edge_index": edge_index,
+                "flange_length": flange_length,
+                "bend_deduction": bend_deduction,
+            }
+        except Exception as e:
+            return error_result(e)
 
     @verifies_geometry
     def create_contour_flange_ex(
