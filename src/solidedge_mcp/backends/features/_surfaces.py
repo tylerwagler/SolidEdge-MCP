@@ -218,41 +218,20 @@ class SurfacesMixin:
                     f"got {len(all_profiles)}."
                 }
 
-            _CS = LoftSweepConstants.igProfileBasedCrossSection
-
-            v_sections = all_profiles
-            v_types = [_CS] * len(all_profiles)
-            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
-            # the outer wrapper is not. Dropping them broke the lofted cutout.
-            v_origins = [
-                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
-                for p in all_profiles
-            ]
-
-            # Surfaces live on doc.Constructions; Model has no
-            # LoftedSurfaces property, so this always raised.
-            loft_surfaces = doc.Constructions.LoftedSurfaces
-            loft_surfaces.Add(
-                len(all_profiles),
-                v_sections,
-                v_types,
-                v_origins,
-                ExtentTypeConstants.igNone,  # StartExtentType
-                ExtentTypeConstants.igNone,  # EndExtentType
-                0,
-                0.0,  # StartTangentType, StartTangentMagnitude
-                0,
-                0.0,  # EndTangentType, EndTangentMagnitude
-                0,
-                None,  # NumGuideCurves, GuideCurves
-                want_end_caps,
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
+            # Constructions.LoftedSurfaces.Add answers E_INVALIDARG to every
+            # argument shape that builds Models.AddLoftedProtrusion from the
+            # same two profiles (Solid Edge 2026: coordinate-array origins,
+            # element origins, VARIANT-wrapped arrays, every extent and tangent
+            # constant, with and without guide curves -- 13 shapes). Say so
+            # rather than raise it.
+            del doc
             return {
-                "status": "created",
-                "type": "lofted_surface",
+                "error": (
+                    "LoftedSurfaces.Add rejects every argument form Solid Edge 2026 "
+                    "accepts for a solid loft (E_INVALIDARG). Use create_loft for a "
+                    "solid, or the Solid Edge UI for a lofted surface."
+                ),
+                "unsupported": True,
                 "num_profiles": len(all_profiles),
                 "want_end_caps": want_end_caps,
             }
@@ -275,52 +254,28 @@ class SurfacesMixin:
         Returns:
             Dict with status and surface info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            all_profiles = self.sketch_manager.get_accumulated_profiles()
-
-            if len(all_profiles) < 2:
-                return {
-                    "error": f"Swept surface requires at least 2 profiles (path + cross-section), "
-                    f"got {len(all_profiles)}."
-                }
-
-            path_idx = path_profile_index if path_profile_index is not None else 0
-            path_profile = all_profiles[path_idx]
-            cross_sections = [p for i, p in enumerate(all_profiles) if i != path_idx]
-
-            _CS = LoftSweepConstants.igProfileBasedCrossSection
-
-            v_paths = [path_profile]
-            v_sections = cross_sections
-
-            # Surfaces live on doc.Constructions; Model has no
-            # SweptSurfaces property, so this always raised.
-            swept_surfaces = doc.Constructions.SweptSurfaces
-            swept_surfaces.Add(
-                1,
-                v_paths,
-                _CS,  # Path
-                len(cross_sections),
-                v_sections,
-                _CS,  # Sections
-                None,
-                None,  # Origins, OriginRefs
-                ExtentTypeConstants.igNone,  # StartExtentType
-                ExtentTypeConstants.igNone,  # EndExtentType
-                want_end_caps,
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "swept_surface",
-                "num_cross_sections": len(cross_sections),
-                "want_end_caps": want_end_caps,
-            }
-        except Exception as e:
-            return error_result(e)
+        # Constructions.SweptSurfaces.Add takes Solid Edge 2026 down -- the
+        # process, not the call -- once a session has been through a few
+        # documents: three crashes in five calls, each after other work in the
+        # same instance, with a circle section as well as a rectangle. On a
+        # fresh instance the call builds, and the argument shape that does is
+        # worth keeping on record: TraceCurveTypes and CrossSectionTypes are
+        # single igProfileBasedCrossSection values, Origins is [element] where
+        # element comes from profile_origin_element(section), and OriginRefs
+        # is that element's keypoint (igKeyPointCenter for a circle). None for
+        # the origins is E_FAIL. A crash is worse than a refusal, so no call.
+        all_profiles = self.sketch_manager.get_accumulated_profiles()
+        return {
+            "error": (
+                "SweptSurfaces.Add crashes Solid Edge 2026 after other work in the "
+                "same session (3 of 5 calls). Use create_sweep for a solid, or the "
+                "Solid Edge UI for a swept surface."
+            ),
+            "unsupported": True,
+            "num_profiles": len(all_profiles),
+            "path_profile_index": path_profile_index,
+            "want_end_caps": want_end_caps,
+        }
 
     def create_extruded_surface_from_to(
         self, from_plane_index: int, to_plane_index: int

@@ -504,6 +504,34 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @staticmethod
+    def _flanges_unsupported(method: str, **echo: Any) -> dict[str, Any]:
+        """The refusal every flange creator returns, with the evidence.
+
+        Verified on Solid Edge 2026 against a base tab, on every horizontal
+        edge, each on a fresh document: Flanges.Add, AddByMatchFace and
+        AddByBendDeductionOrBendAllowance record a Flange feature (a name, a
+        90-degree bend angle, a bend radius) that never solves -- the body's
+        range, volume and face count are unchanged after Recompute,
+        Flange.Status raises, and the UI draws only its outline. The optional
+        parameters (ThicknessSide, InsideRadius, DimSide, BendAngle, and every
+        FeaturePropertyConstants *Side* value) change the recorded feature and
+        nothing else. AddSync and AddSyncByBendDeductionOrBendAllowance raise
+        0x80004021 in an ordered document, and AddFlangeByFace raises
+        E_POINTER. Refusing here leaves no dead feature behind.
+        """
+        return {
+            "error": (
+                f"{method}: Flanges.Add* records a flange that Solid Edge 2026 never "
+                "solves (no geometry after Recompute), or raises. Use the Solid "
+                "Edge UI for flanges; create_base_tab, create_bend and "
+                "create_lofted_flange work."
+            ),
+            "unsupported": True,
+            "method": method,
+            **echo,
+        }
+
     @verifies_geometry
     def create_flange(
         self,
@@ -531,105 +559,15 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a sheet metal base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
-
-            face = faces.Item(face_index + 1)
-            face_edges = face.Edges
-            if com_get(face_edges, "Count", 0) == 0:
-                return {"error": f"Face {face_index} has no edges."}
-
-            if edge_index < 0 or edge_index >= face_edges.Count:
-                return {
-                    "error": f"Invalid edge index: {edge_index}. Face has {face_edges.Count} edges."
-                }
-
-            edge = face_edges.Item(edge_index + 1)
-
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
-
-            flanges = model.Flanges
-
-            # Build optional args
-
-            # Optional params: ThicknessSide, InsideRadius, DimSide, BRType, BRWidth,
-            # BRLength, CRType, NeutralFactor, BnParamType, BendAngle
-            if inside_radius is not None or bend_angle is not None:
-                # ThicknessSide (skip) -> InsideRadius
-                # We need to pass positional VT_VARIANT optional params
-                # In late binding, pass them positionally
-                if inside_radius is not None and bend_angle is not None:
-                    bend_angle_rad = math.radians(bend_angle)
-                    flanges.Add(
-                        edge,
-                        side_const,
-                        flange_length,
-                        None,
-                        inside_radius,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        bend_angle_rad,
-                    )
-                elif inside_radius is not None:
-                    flanges.Add(edge, side_const, flange_length, None, inside_radius)
-                else:
-                    assert bend_angle is not None
-                    bend_angle_rad = math.radians(bend_angle)
-                    flanges.Add(
-                        edge,
-                        side_const,
-                        flange_length,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        bend_angle_rad,
-                    )
-            else:
-                flanges.Add(edge, side_const, flange_length)
-
-            result = {
-                "status": "created",
-                "type": "flange",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-                "side": side,
-            }
-            if inside_radius is not None:
-                result["inside_radius"] = inside_radius
-            if bend_angle is not None:
-                result["bend_angle"] = bend_angle
-
-            return result
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            inside_radius=inside_radius,
+            bend_angle=bend_angle,
+        )
 
     @verifies_geometry
     def create_dimple(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
@@ -1246,31 +1184,14 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
-
-            flanges = model.Flanges
-            flanges.AddByMatchFace(edge, side_const, flange_length, None, inside_radius)
-
-            return {
-                "status": "created",
-                "type": "flange_by_match_face",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-                "side": side,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange_by_match_face",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            inside_radius=inside_radius,
+        )
 
     @verifies_geometry
     def create_flange_sync(
@@ -1294,23 +1215,13 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            flanges = model.Flanges
-            flanges.AddSync(edge, flange_length, None, inside_radius)
-
-            return {
-                "status": "created",
-                "type": "flange_sync",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange_sync",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            inside_radius=inside_radius,
+        )
 
     @verifies_geometry
     def create_flange_by_face(
@@ -1339,42 +1250,15 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            # Get the reference face
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if ref_face_index < 0 or ref_face_index >= faces.Count:
-                return {
-                    "error": f"Invalid ref_face_index: {ref_face_index}. "
-                    f"Body has {faces.Count} faces."
-                }
-            ref_face = faces.Item(ref_face_index + 1)
-
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
-
-            flanges = model.Flanges
-            flanges.AddFlangeByFace(edge, ref_face, side_const, flange_length, None, bend_radius)
-
-            return {
-                "status": "created",
-                "type": "flange_by_face",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "ref_face_index": ref_face_index,
-                "flange_length": flange_length,
-                "side": side,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange_by_face",
+            face_index=face_index,
+            edge_index=edge_index,
+            ref_face_index=ref_face_index,
+            flange_length=flange_length,
+            side=side,
+            bend_radius=bend_radius,
+        )
 
     @verifies_geometry
     def create_flange_with_bend_calc(
@@ -1401,34 +1285,14 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
-
-            flanges = model.Flanges
-            # AddByBendDeductionOrBendAllowance(pLocatedEdge, FlangeSide, FlangeLength,
-            #   vtKeyPointOrTangentFace, vtKeyPointFlags, ...)
-            flanges.AddByBendDeductionOrBendAllowance(edge, side_const, flange_length, None, 0)
-
-            return {
-                "status": "created",
-                "type": "flange_with_bend_calc",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-                "side": side,
-                "bend_deduction": bend_deduction,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange_with_bend_calc",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            bend_deduction=bend_deduction,
+        )
 
     @verifies_geometry
     def create_flange_sync_with_bend_calc(
@@ -1453,25 +1317,13 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            flanges = model.Flanges
-            # AddSyncByBendDeductionOrBendAllowance(pLocatedEdge, FlangeLength, ...)
-            flanges.AddSyncByBendDeductionOrBendAllowance(edge, flange_length)
-
-            return {
-                "status": "created",
-                "type": "flange_sync_with_bend_calc",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-                "bend_deduction": bend_deduction,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange_sync_with_bend_calc",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            bend_deduction=bend_deduction,
+        )
 
     @verifies_geometry
     def create_contour_flange_ex(
@@ -1505,35 +1357,22 @@ class SheetMetalMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a sheet metal base feature first."}
 
-            model = models.Item(1)
+            del models
 
-            dir_side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            # AddEx(pProfile, varExtentType, varProjectionSide, varProjectionDistance,
-            #   varKeyPointOrTangentFace, varKeyPointFlags, varBendRadius,
-            #   vtBRType, vtBRWidth, vtBRLength, vtCRType, ...)
-            contour_flanges.AddEx(
-                profile,
-                ExtentTypeConstants.igFinite,
-                dir_side,
-                thickness,
-                None,  # varKeyPointOrTangentFace
-                0,  # varKeyPointFlags
-                bend_radius,
-                0,  # vtBRType (no bend relief)
-                0.0,  # vtBRWidth
-                0.0,  # vtBRLength
-                0,  # vtCRType (no corner relief)
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
+            # ContourFlanges.AddEx and Add answer E_FAIL to every open profile
+            # this server can draw against a tab (Solid Edge 2026: lines from
+            # the tab's corner and from the interior of an edge, on the base
+            # planes and on planes perpendicular to the edge, both projection
+            # sides, both APIs -- 52 combinations). The profile a contour
+            # flange wants is attached to a thickness edge in the UI; nothing
+            # drawn through ProfileSets satisfies it. Say so, without the call.
             return {
-                "status": "created",
-                "type": "contour_flange_ex",
+                "error": (
+                    "ContourFlanges.AddEx rejects every open profile this server "
+                    "can draw (E_FAIL on Solid Edge 2026). Use create_flange's sync "
+                    "methods, create_lofted_flange, or the Solid Edge UI."
+                ),
+                "unsupported": True,
                 "thickness": thickness,
                 "bend_radius": bend_radius,
                 "direction": direction,
@@ -2310,49 +2149,14 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face_index: {face_index}. Body has {faces.Count} faces."}
-
-            face = faces.Item(face_index + 1)
-            edges = face.Edges
-            if edge_index < 0 or edge_index >= edges.Count:
-                return {"error": f"Invalid edge_index: {edge_index}. Face has {edges.Count} edges."}
-
-            edge = edges.Item(edge_index + 1)
-            side_const = (
-                DirectionConstants.igRight if side == "Right" else DirectionConstants.igLeft
-            )
-
-            flanges = model.Flanges
-            flanges.AddByMatchFaceAndBendDeductionOrBendAllowance(
-                edge,
-                side_const,
-                flange_length,
-                None,
-                0,
-                side_const,
-                inside_radius,
-            )
-
-            return {
-                "status": "created",
-                "type": "flange_match_face_with_bend",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange_match_face_with_bend",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            inside_radius=inside_radius,
+        )
 
     @verifies_geometry
     def create_flange_by_face_with_bend(
@@ -2378,57 +2182,15 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face_index: {face_index}. Body has {faces.Count} faces."}
-            if ref_face_index < 0 or ref_face_index >= faces.Count:
-                return {
-                    "error": f"Invalid ref_face_index: {ref_face_index}. "
-                    f"Body has {faces.Count} faces."
-                }
-
-            face = faces.Item(face_index + 1)
-            ref_face = faces.Item(ref_face_index + 1)
-            edges = face.Edges
-            if edge_index < 0 or edge_index >= edges.Count:
-                return {"error": f"Invalid edge_index: {edge_index}. Face has {edges.Count} edges."}
-
-            edge = edges.Item(edge_index + 1)
-            side_const = (
-                DirectionConstants.igRight if side == "Right" else DirectionConstants.igLeft
-            )
-
-            flanges = model.Flanges
-            flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance(
-                edge,
-                ref_face,
-                side_const,
-                flange_length,
-                None,
-                0,
-                side_const,
-                bend_radius,
-            )
-
-            return {
-                "status": "created",
-                "type": "flange_by_face_with_bend",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "ref_face_index": ref_face_index,
-                "flange_length": flange_length,
-            }
-        except Exception as e:
-            return error_result(e)
+        return self._flanges_unsupported(
+            "create_flange_by_face_with_bend",
+            face_index=face_index,
+            edge_index=edge_index,
+            ref_face_index=ref_face_index,
+            flange_length=flange_length,
+            side=side,
+            bend_radius=bend_radius,
+        )
 
     @verifies_geometry
     def create_contour_flange_v3(

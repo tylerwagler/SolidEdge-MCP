@@ -64,86 +64,9 @@ def feature_mgr(managers):
 # ============================================================================
 
 
-class TestCreateFlange:
-    def test_basic_flange(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-        flanges = MagicMock()
-        model.Flanges = flanges
-
-        result = feature_mgr.create_flange(face_index=0, edge_index=0, flange_length=0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "flange"
-        assert result["flange_length"] == 0.01
-        assert result["side"] == "Right"
-        flanges.Add.assert_called_once()
-
-    def test_flange_with_options(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-        flanges = MagicMock()
-        model.Flanges = flanges
-
-        result = feature_mgr.create_flange(
-            face_index=0,
-            edge_index=0,
-            flange_length=0.02,
-            side="Left",
-            inside_radius=0.003,
-            bend_angle=90.0,
-        )
-        assert result["status"] == "created"
-        assert result["side"] == "Left"
-        assert result["inside_radius"] == 0.003
-        assert result["bend_angle"] == 90.0
-
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-        models.Count = 0
-
-        result = feature_mgr.create_flange(face_index=0, edge_index=0, flange_length=0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face_index(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-
-        result = feature_mgr.create_flange(face_index=99, edge_index=0, flange_length=0.01)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
-
-    def test_invalid_edge_index(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-
-        result = feature_mgr.create_flange(face_index=0, edge_index=99, flange_length=0.01)
-        assert "error" in result
-        assert "Invalid edge index" in result["error"]
-
-
 # ============================================================================
 # FLANGE BY MATCH FACE
 # ============================================================================
-
-
-class TestCreateFlangeByMatchFace:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_by_match_face(0, 0, 0.02)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_by_match_face"
-        assert result["flange_length"] == 0.02
-        model.Flanges.AddByMatchFace.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_by_match_face(0, 0, 0.02)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face_index(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_flange_by_match_face(99, 0, 0.02)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
 
 
 # ============================================================================
@@ -151,53 +74,9 @@ class TestCreateFlangeByMatchFace:
 # ============================================================================
 
 
-class TestCreateFlangeSync:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_sync(0, 0, 0.03)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_sync"
-        assert result["flange_length"] == 0.03
-        model.Flanges.AddSync.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_sync(0, 0, 0.03)
-        assert "error" in result
-
-    def test_invalid_edge_index(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_flange_sync(0, 99, 0.03)
-        assert "error" in result
-        assert "Invalid edge index" in result["error"]
-
-
 # ============================================================================
 # FLANGE BY FACE
 # ============================================================================
-
-
-class TestCreateFlangeByFace:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_by_face(0, 0, 0, 0.025)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_by_face"
-        assert result["flange_length"] == 0.025
-        model.Flanges.AddFlangeByFace.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_by_face(0, 0, 0, 0.025)
-        assert "error" in result
-
-    def test_invalid_ref_face(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_flange_by_face(0, 0, 99, 0.025)
-        assert "error" in result
-        assert "Invalid ref_face_index" in result["error"]
 
 
 # ============================================================================
@@ -205,51 +84,9 @@ class TestCreateFlangeByFace:
 # ============================================================================
 
 
-class TestCreateFlangeWithBendCalc:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_with_bend_calc"
-        model.Flanges.AddByBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03)
-        assert "error" in result
-
-    def test_custom_side(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03, side="Left")
-        assert result["status"] == "created"
-        assert result["side"] == "Left"
-
-
 # ============================================================================
 # FLANGE SYNC WITH BEND CALC
 # ============================================================================
-
-
-class TestCreateFlangeSyncWithBendCalc:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_sync_with_bend_calc"
-        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04)
-        assert "error" in result
-
-    def test_bend_deduction_returned(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04, bend_deduction=0.002)
-        assert result["status"] == "created"
-        assert result["bend_deduction"] == 0.002
 
 
 # ============================================================================
@@ -258,14 +95,16 @@ class TestCreateFlangeSyncWithBendCalc:
 
 
 class TestCreateContourFlangeEx:
-    def test_success(self, feature_mgr, managers):
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        """ContourFlanges.AddEx/Add answered E_FAIL to 52 open-profile placements
+        on Solid Edge 2026; the call is not made."""
         _, sketch_mgr, _, _, model, _ = managers
         result = feature_mgr.create_contour_flange_ex(0.005)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_ex"
+        assert result["unsupported"] is True
+        assert "E_FAIL" in result["error"]
         assert result["thickness"] == 0.005
-        model.ContourFlanges.AddEx.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
+        model.ContourFlanges.AddEx.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -522,95 +361,9 @@ class TestConvertPartToSheetMetal:
 # ============================================================================
 
 
-class TestCreateFlangeMatchFaceWithBend:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 3
-        face = MagicMock()
-        edge = MagicMock()
-        edges = MagicMock()
-        edges.Count = 4
-        edges.Item.return_value = edge
-        face.Edges = edges
-        faces.Item.return_value = face
-        body.Faces.return_value = faces
-
-        flange = MagicMock()
-        flange.Name = "FlangeMFB1"
-        model.Flanges.AddByMatchFaceAndBendDeductionOrBendAllowance.return_value = flange
-
-        result = feature_mgr.create_flange_match_face_with_bend(0, 0, 0.02)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_match_face_with_bend"
-        model.Flanges.AddByMatchFaceAndBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_match_face_with_bend(0, 0, 0.02)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 1
-        body.Faces.return_value = faces
-
-        result = feature_mgr.create_flange_match_face_with_bend(5, 0, 0.02)
-        assert "error" in result
-        assert "Invalid face_index" in result["error"]
-
-
 # ============================================================================
 # FLANGE BY FACE WITH BEND
 # ============================================================================
-
-
-class TestCreateFlangeByFaceWithBend:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 3
-        face = MagicMock()
-        edge = MagicMock()
-        edges = MagicMock()
-        edges.Count = 4
-        edges.Item.return_value = edge
-        face.Edges = edges
-        faces.Item.return_value = face
-        body.Faces.return_value = faces
-
-        flange = MagicMock()
-        flange.Name = "FlangeFBB1"
-        model.Flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance.return_value = flange
-
-        result = feature_mgr.create_flange_by_face_with_bend(0, 0, 1, 0.02)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_by_face_with_bend"
-        model.Flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_by_face_with_bend(0, 0, 1, 0.02)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 1
-        body.Faces.return_value = faces
-
-        result = feature_mgr.create_flange_by_face_with_bend(5, 0, 1, 0.02)
-        assert "error" in result
-        assert "Invalid face_index" in result["error"]
 
 
 # ============================================================================
@@ -1029,3 +782,65 @@ class TestThreadNeedsACylinder:
 
         assert "not cylindrical" not in result.get("error", "")
         model.Threads.Add.assert_not_called()  # the mock has no end cap to find
+
+
+# ============================================================================
+# FLANGES: every creator refuses with the evidence (Solid Edge 2026 never
+# solves a Flanges.Add* flange; see FeatureManager._flanges_unsupported)
+# ============================================================================
+
+
+FLANGE_CREATORS = [
+    "create_flange",
+    "create_flange_by_match_face",
+    "create_flange_sync",
+    "create_flange_by_face",
+    "create_flange_with_bend_calc",
+    "create_flange_sync_with_bend_calc",
+    "create_flange_match_face_with_bend",
+    "create_flange_by_face_with_bend",
+]
+
+
+def _dummy_arguments(fn):
+    """A value for every parameter, by annotation, so each creator can be called."""
+    import inspect
+
+    values = {}
+    for name, param in inspect.signature(fn).parameters.items():
+        if param.default is not inspect.Parameter.empty:
+            continue
+        ann = str(param.annotation)
+        if "float" in ann:
+            values[name] = 0.01
+        elif "int" in ann:
+            values[name] = 0
+        elif "str" in ann:
+            values[name] = "Right"
+        else:
+            values[name] = None
+    return values
+
+
+class TestFlangeCreatorsRefuse:
+    @pytest.mark.parametrize("method", FLANGE_CREATORS)
+    def test_refuses_without_touching_com(self, feature_mgr, managers, method):
+        _, sketch_mgr, doc, _, model, _ = managers
+        fn = getattr(feature_mgr, method)
+
+        result = fn(**_dummy_arguments(fn))
+
+        assert result["unsupported"] is True
+        assert result["method"] == method
+        assert "never" in result["error"]
+        model.Flanges.Add.assert_not_called()
+        model.Flanges.AddByMatchFace.assert_not_called()
+        model.Flanges.AddSync.assert_not_called()
+        model.Flanges.AddFlangeByFace.assert_not_called()
+        doc.Models.Item.assert_not_called()
+
+    def test_every_parameter_is_echoed(self, feature_mgr):
+        result = feature_mgr.create_flange(face_index=3, edge_index=2, flange_length=0.02)
+        assert result["face_index"] == 3
+        assert result["edge_index"] == 2
+        assert result["flange_length"] == 0.02

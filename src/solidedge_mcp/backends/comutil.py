@@ -113,6 +113,36 @@ def owned_style_for(doc: Any, holder: Any, label: str) -> tuple[Any, dict[str, A
     return style, None
 
 
+def profile_origin_element(profile: Any) -> tuple[Any, int] | None:
+    """The 2D element and keypoint that place ``profile`` for SweptSurfaces.Add.
+
+    Unlike Models.AddSweptProtrusion, which pairs each cross-section with a
+    coordinate array, SweptSurfaces.Add declares Origins as
+    SAFEARRAY(VT_DISPATCH) and OriginRefs as a KeyPointType: a sketch element
+    and which of its keypoints is the origin. Verified on Solid Edge 2026: a
+    circle with igKeyPointCenter builds the surface, while None, the profile
+    object, and the circle with igKeyPointStart all fail with E_FAIL. Lines
+    and arcs are placed by their start point, as profile_origin does.
+
+    Returns None when the profile holds none of the four element kinds.
+    """
+    from .constants import KeyPointTypeConstants
+
+    for collection, keypoint in (
+        ("Lines2d", KeyPointTypeConstants.igKeyPointStart),
+        ("Arcs2d", KeyPointTypeConstants.igKeyPointStart),
+        ("Circles2d", KeyPointTypeConstants.igKeyPointCenter),
+        ("Ellipses2d", KeyPointTypeConstants.igKeyPointCenter),
+    ):
+        try:
+            items = getattr(profile, collection)
+            if items.Count:
+                return items.Item(1), keypoint
+        except Exception:  # noqa: BLE001 - try the next kind of geometry
+            continue
+    return None
+
+
 def profile_origin(profile: Any) -> tuple[float, float]:
     """A point on ``profile`` that Solid Edge accepts as its loft/sweep origin.
 
