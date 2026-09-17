@@ -666,7 +666,11 @@ async def main() -> int:
         version = str(conn.get("version", "?"))
 
         async def close_all() -> None:
-            await raw("close_document", scope="all", save=False)
+            # discard_unsaved is required: every scratch document is dirty, and
+            # close_all_documents rightly refuses to throw away unsaved work
+            # without it. Omitting it made each close after the first dirty
+            # document a no-op, so documents piled up across the run.
+            await raw("close_document", scope="all", save=False, discard_unsaved=True)
 
         # the saved part every assembly and draft case needs
         await close_all()
