@@ -9,7 +9,7 @@ from ..constants import (
     FaceQueryConstants,
 )
 from ..logging import get_logger
-from ._base import verifies_geometry
+from ._base import verifies_collection_growth, verifies_geometry
 
 _logger = get_logger(__name__)
 
@@ -504,6 +504,7 @@ class RoundsChamfersMixin:
             "face_index": face_index,
         }
 
+    @verifies_collection_growth("Models.*.Rounds", "Models.*.Blends")
     def create_blend_surface(
         self,
         face_index1: int,
@@ -602,6 +603,7 @@ class RoundsChamfersMixin:
                 ),
             )
 
+    @verifies_collection_growth("Models.*.Rounds", "Models.*.Blends")
     def create_round_blend(
         self, face_index1: int, face_index2: int, radius: float
     ) -> dict[str, Any]:
@@ -658,6 +660,7 @@ class RoundsChamfersMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("Models.*.Rounds", "Models.*.Blends")
     def create_round_surface_blend(
         self,
         face_index1: int,

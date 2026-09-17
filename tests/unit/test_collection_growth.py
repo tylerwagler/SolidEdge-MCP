@@ -136,6 +136,75 @@ class TestAGroupIsSummed:
         assert _Mgr(doc).create_surface(into=None)["status"] == "created"
 
 
+class _Items:
+    """A COM collection of items, 1-based like the real thing."""
+
+    def __init__(self, *items: object) -> None:
+        self._items = items
+        self.Count = len(items)
+
+    def Item(self, index: int) -> object:  # noqa: N802 - COM spelling
+        return self._items[index - 1]
+
+
+class _Model:
+    def __init__(self, rounds: int = 0, blends: int = 0) -> None:
+        self.Rounds = _Counter(rounds)
+        self.Blends = _Counter(blends)
+
+
+class TestAWildcardSumsEveryItem:
+    """Feature collections hang off Models.Item(n), so ``*`` fans out over them."""
+
+    def _mgr(self, *models: _Model) -> _Mgr:
+        doc = _Doc()
+        doc.Models = _Items(*models)  # type: ignore[attr-defined]
+        return _Mgr(doc)
+
+    def test_sums_across_models(self):
+        mgr = self._mgr(_Model(rounds=2), _Model(rounds=3, blends=1))
+
+        assert collection_count("Models.*.Rounds")(mgr) == 5
+        assert collection_count("Models.*.Rounds", "Models.*.Blends")(mgr) == 6
+
+    def test_no_models_reads_zero_not_none(self):
+        """An empty part has nothing to count, which is a real 0."""
+        assert collection_count("Models.*.Rounds")(self._mgr()) == 0
+
+    def test_an_unreadable_item_withholds_judgement(self):
+        mgr = self._mgr(_Model())
+        del mgr.doc.Models._items[0].Rounds  # type: ignore[attr-defined]
+
+        assert collection_count("Models.*.Rounds")(mgr) is None
+
+    def test_a_non_int_count_on_the_collection_withholds_judgement(self):
+        mgr = self._mgr(_Model())
+        mgr.doc.Models.Count = MagicMock()  # type: ignore[attr-defined]
+
+        assert collection_count("Models.*.Rounds")(mgr) is None
+
+    def test_a_grown_model_collection_passes_through(self):
+        mgr = self._mgr(_Model(rounds=1))
+
+        @verifies_collection_growth("Models.*.Rounds")
+        def create_round(self) -> dict:
+            self.doc.Models.Item(1).Rounds.Count += 1
+            return {"status": "created", "type": "round"}
+
+        assert create_round(mgr) == {"status": "created", "type": "round"}
+
+    def test_an_unchanged_model_collection_is_an_error(self):
+        mgr = self._mgr(_Model(rounds=1))
+
+        @verifies_collection_growth("Models.*.Rounds")
+        def create_round(self) -> dict:
+            return {"status": "created", "type": "round"}
+
+        result = create_round(mgr)
+        assert "error" in result
+        assert result["count_before"] == 1
+
+
 class TestTheApplicationRoot:
     def test_documents_are_counted_on_the_application(self):
         class _App:

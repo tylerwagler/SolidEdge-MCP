@@ -144,7 +144,8 @@ def collection_count(*paths: str, root: str = "document") -> Callable[[Any], int
     say. Each of them does land in a collection whose ``Count`` is readable.
 
     ``paths`` are dotted from the root: ``"RefPlanes"``,
-    ``"Constructions.ExtrudedSurfaces"``. ``root`` is ``"document"`` (the
+    ``"Constructions.ExtrudedSurfaces"``, and ``"Models.*.Rounds"`` where
+    ``*`` sums over every Item of a collection. ``root`` is ``"document"`` (the
     active document) or ``"application"``, for creators that run before there
     is a document at all, which is what the ones that make one do.
 
@@ -171,18 +172,47 @@ def collection_count(*paths: str, root: str = "document") -> Callable[[Any], int
             return None
         total = 0
         for path in paths:
-            obj: Any = base
-            for step in path.split("."):
-                obj = com_get(obj, step)
-                if obj is None:
-                    return None
-            count = com_get(obj, "Count")
-            if type(count) is not int:
+            summed = _count_along(base, path.split("."))
+            if summed is None:
                 return None
-            total += count
+            total += summed
         return total
 
     return snapshot
+
+
+def _count_along(obj: Any, steps: list[str]) -> int | None:
+    """Sum ``Count`` at the end of ``steps``; a ``*`` step fans out over every Item.
+
+    Most feature collections hang off a Model, not the document --
+    ``Models.Item(n).Rounds`` -- and a part can hold more than one model, so
+    ``"Models.*.Rounds"`` sums the rounds of every model, the way the face
+    count check already sums the faces of every body. Any step that cannot be
+    read, and any Count that is not a plain int, makes the whole path ``None``.
+    """
+    if not steps:
+        count = com_get(obj, "Count")
+        return count if type(count) is int else None
+    step, rest = steps[0], steps[1:]
+    if step == "*":
+        n = com_get(obj, "Count")
+        if type(n) is not int:
+            return None
+        total = 0
+        for i in range(1, n + 1):
+            try:
+                item = obj.Item(i)
+            except Exception:
+                return None
+            part = _count_along(item, rest)
+            if part is None:
+                return None
+            total += part
+        return total
+    nxt = com_get(obj, step)
+    if nxt is None:
+        return None
+    return _count_along(nxt, rest)
 
 
 def verifies_change(snapshot: Callable[[Any], int | None], what: str) -> _Decorator:

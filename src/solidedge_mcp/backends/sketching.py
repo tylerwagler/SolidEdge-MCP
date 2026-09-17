@@ -12,6 +12,7 @@ from solidedge_mcp.backends.errors import describe_exception, error_result
 
 from .comutil import com_get
 from .constants import FaceQueryConstants, ProfileValidationConstants
+from .features._base import verifies_collection_growth
 from .logging import get_logger
 
 _logger = get_logger(__name__)
@@ -248,6 +249,7 @@ class SketchManager:
         self.accumulated_profiles.clear()
         self._last_document_handle = None
 
+    @verifies_collection_growth("ProfileSets")
     def create_sketch(self, plane: str = "Top") -> dict[str, Any]:
         """
         Create a new sketch on a reference plane.
@@ -311,6 +313,7 @@ class SketchManager:
             _logger.error(f"Failed to create sketch on plane {plane}: {e}")
             return error_result(e)
 
+    @verifies_collection_growth("ProfileSets")
     def create_sketch_on_plane_index(self, plane_index: int) -> dict[str, Any]:
         """
         Create a new sketch on a reference plane by its 1-based index.
