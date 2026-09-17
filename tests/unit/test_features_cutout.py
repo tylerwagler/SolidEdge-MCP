@@ -206,6 +206,7 @@ class TestNormalCutout:
 
         assert "error" in result
         assert "sheet metal feature" in result["error"]
+        assert result["unsupported"] is True
         model.NormalCutouts.AddFiniteMulti.assert_not_called()
 
     def test_reverse_direction(self, feature_mgr, managers):

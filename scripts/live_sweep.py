@@ -190,6 +190,7 @@ CONTEXTS: dict[str, list[Step]] = {
     "box_sweep": _box() + _sweep_profiles(),
     "box_round": _box() + [("create_round", {"method": "all_edges", "radius": 0.002})],
     "sheet": _sheet(),
+    "sheet_rect_closed": [("create_document", {"type": "sheet_metal"})] + _rect_closed(),
     "sheet_circle_closed": _sheet() + _circle_closed(),
     "sheet_line_closed": _sheet()
     + [

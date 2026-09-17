@@ -282,6 +282,7 @@ class CutoutMixin:
                         "create_normal_cutout(method='through_all'), which does work "
                         "on a part."
                     ),
+                    "unsupported": True,
                     "document_type": doc_type,
                 }
 
