@@ -5,7 +5,7 @@ Base class for FeatureManager providing constructor and shared helpers.
 import contextlib
 import functools
 from collections.abc import Callable
-from typing import Any, Concatenate, ParamSpec
+from typing import Any, Concatenate, ParamSpec, Protocol
 
 import pythoncom
 from win32com.client import VARIANT
@@ -127,6 +127,137 @@ def verify_geometry_on_creators(cls: type) -> type:
         if name.startswith("create_") and callable(attr):
             setattr(cls, name, verifies_geometry(attr))
     return cls
+
+
+class _Decorator(Protocol):
+    """A method decorator that keeps the decorated signature."""
+
+    def __call__(self, fn: _Creator[_P], /) -> _Creator[_P]: ...
+
+
+def collection_count(*paths: str, root: str = "document") -> Callable[[Any], int | None]:
+    """A snapshot: the summed ``Count`` of the named COM collections.
+
+    This is the signal for creators that build no solid material -- a
+    reference plane, a construction surface, a sketch, a document -- so a
+    face count never moves for them and ``verifies_geometry`` has nothing to
+    say. Each of them does land in a collection whose ``Count`` is readable.
+
+    ``paths`` are dotted from the root: ``"RefPlanes"``,
+    ``"Constructions.ExtrudedSurfaces"``. ``root`` is ``"document"`` (the
+    active document) or ``"application"``, for creators that run before there
+    is a document at all, which is what the ones that make one do.
+
+    Several paths are summed on purpose. A surface creator lands in whichever
+    of five ``Constructions`` sub-collections suits it, and naming one per
+    method would read a surface that landed in a sibling as a no-op. Summing
+    the group is immune to that.
+
+    It answers ``None`` -- "cannot read, do not judge" -- when the root is a
+    mock, when a step of any path is missing, or when a leaf ``Count`` is not
+    a plain ``int``. A MagicMock ``Count`` is truthy and not an int, and has
+    already talked one check into claiming something Solid Edge never said.
+    """
+
+    def snapshot(self: Any) -> int | None:
+        try:
+            if root == "application":
+                base = self.doc_manager.connection.get_application()
+            else:
+                base = self.doc_manager.get_active_document()
+        except Exception:
+            return None
+        if base is None or type(base).__module__.startswith("unittest.mock"):
+            return None
+        total = 0
+        for path in paths:
+            obj: Any = base
+            for step in path.split("."):
+                obj = com_get(obj, step)
+                if obj is None:
+                    return None
+            count = com_get(obj, "Count")
+            if type(count) is not int:
+                return None
+            total += count
+        return total
+
+    return snapshot
+
+
+def verifies_change(snapshot: Callable[[Any], int | None], what: str) -> _Decorator:
+    """Refuse to report success when ``snapshot`` reads the same before and after.
+
+    The same shape as ``verifies_geometry`` with the measurement made
+    pluggable: snapshot, call, and if the result claims success while the
+    snapshot did not move, hand back an explicit error instead. Solid Edge
+    accepts a great many calls, records the feature, and builds nothing; the
+    result dict looks right and only the document disagrees.
+
+    It never invents a failure it cannot prove. A ``None`` from the snapshot
+    on either side passes the result through untouched, as does a result that
+    already carries an error.
+    """
+
+    def decorate(fn: _Creator[_P]) -> _Creator[_P]:
+        @functools.wraps(fn)
+        def wrapper(self: Any, /, *args: _P.args, **kwargs: _P.kwargs) -> dict[str, Any]:
+            before = snapshot(self)
+            result = fn(self, *args, **kwargs)
+            if not (isinstance(result, dict) and "error" not in result):
+                return result
+            if before is None:
+                return result
+            after = snapshot(self)
+            if after is None or after != before:
+                return result
+            _logger.warning(
+                "%s reported success but %s did not change (%d); reporting as a no-op error.",
+                fn.__name__,
+                what,
+                before,
+            )
+            return {
+                "error": (
+                    f"{fn.__name__} reported success but added nothing: {what} "
+                    f"still holds {before} item(s), exactly as before the call. "
+                    f"Solid Edge accepted the call and built nothing."
+                ),
+                "attempted": result.get("type"),
+                "count_before": before,
+                "count_after": after,
+            }
+
+        return wrapper
+
+    return decorate
+
+
+def verifies_collection_growth(*paths: str, root: str = "document") -> _Decorator:
+    """Method decorator: the named collection(s) must grow, or success is refused."""
+    return verifies_change(collection_count(*paths, root=root), " + ".join(paths))
+
+
+def verify_collection_growth_on_creators(
+    *paths: str, root: str = "document"
+) -> Callable[[type], type]:
+    """Class decorator: every ``create_*`` on the mixin must grow the collection(s).
+
+    The counterpart of ``verify_geometry_on_creators`` for a mixin whose
+    creators all land in one collection -- every method on RefPlaneMixin ends
+    in a ``RefPlanes.Add*``. Apply it only where that is true of every
+    creator; one that legitimately replaces rather than adds would be
+    misreported as a no-op.
+    """
+    decorator = verifies_collection_growth(*paths, root=root)
+
+    def decorate(cls: type) -> type:
+        for name, attr in list(vars(cls).items()):
+            if name.startswith("create_") and callable(attr):
+                setattr(cls, name, decorator(attr))
+        return cls
+
+    return decorate
 
 
 def _reference_plane_names(doc: Any) -> set[str]:

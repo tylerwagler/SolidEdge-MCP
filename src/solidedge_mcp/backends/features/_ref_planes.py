@@ -11,10 +11,15 @@ from ..constants import (
     ReferenceElementConstants,
 )
 from ..logging import get_logger
+from ._base import verify_collection_growth_on_creators
 
 _logger = get_logger(__name__)
 
 
+# Every creator here ends in a RefPlanes.Add*, and a plane is not a solid,
+# so the face count that verifies_geometry watches never moves for them.
+# The plane collection is what has to grow.
+@verify_collection_growth_on_creators("RefPlanes")
 class RefPlaneMixin:
     """Mixin providing reference plane creation methods."""
 
