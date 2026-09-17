@@ -651,13 +651,26 @@ class Row:
     modals: list[str] = field(default_factory=list)
 
 
+_TOOL_TOTAL: list[int] = []
+
+
 def _tool_total() -> int:
-    """How many tools the server registers, read from the server rather than typed."""
-    import asyncio
+    """How many tools the server registers, read from the server rather than typed.
 
-    from solidedge_mcp.server import create_server
+    The sweep's own event loop is running when the report is written, so the
+    count is taken on a worker thread with a loop of its own, once.
+    """
+    if not _TOOL_TOTAL:
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
 
-    return len(asyncio.run(create_server().get_tools()))
+        from solidedge_mcp.server import create_server
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            _TOOL_TOTAL.append(
+                pool.submit(lambda: len(asyncio.run(create_server().get_tools()))).result()
+            )
+    return _TOOL_TOTAL[0]
 
 
 def write_report(rows: list[Row], started: dt.datetime, version: str, done: bool) -> None:
