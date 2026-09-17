@@ -549,6 +549,11 @@ CASES: list[Case] = [
         {"method": "basic", "part_filename": str(BOX), "path_indices": [0]},
         "asm_lines",
     ),
+    Case(
+        "structural_frame",
+        {"method": "by_orientation", "part_filename": str(BOX), "path_indices": [0]},
+        "asm_lines",
+    ),
     Case("wiring", {"type": "wire", "path_indices": [0], "path_directions": [True]}, "asm"),
     # draft
     Case("manage_sheet", {"action": "add"}, "draft"),

@@ -28,3 +28,12 @@ class TestStructuralFrame:
         assert r["status"] == "created", r
         assert doc.StructuralFrames.Count == 1
         assert doc.Occurrences.Count > occurrences_before
+
+    def test_by_orientation_runs_along_a_line(self, stack, new_assembly, saved_part):
+        doc = stack.doc.get_active_document()
+        assert stack.sketch.draw_line_3d(0.0, 0.0, 0.0, 0.3, 0.0, 0.0)["status"] == "created"
+
+        r = stack.assembly.add_structural_frame_by_orientation(str(saved_part), "", [0])
+
+        assert r["status"] == "created", r
+        assert doc.StructuralFrames.Count == 1

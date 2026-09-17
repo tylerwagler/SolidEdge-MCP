@@ -303,7 +303,8 @@ class RelationsMixin:
                 "(Relations3d.AddPlanar takes Plane1, Plane2, NormalsAligned, "
                 "ConstrainingPoint1, ConstrainingPoint2). Occurrence.Body.Faces raises "
                 "E_FAIL and faces read from the occurrence's part document answer "
-                "0x80040225 (Solid Edge 2026), so this server cannot form the call. "
+                "0x80040225 (Solid Edge 2026), as do its RefPlanes and the assembly's "
+                "own AsmRefPlanes, so this server cannot form the call. "
                 "Add the relation in the Solid Edge UI."
             ),
             "unsupported": True,

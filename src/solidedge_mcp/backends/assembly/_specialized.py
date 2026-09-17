@@ -17,23 +17,6 @@ from ..logging import get_logger
 _logger = get_logger(__name__)
 
 
-#: StructuralFrames.Add and AddByOrientation both take a Path array of the
-#: curves the frame runs along -- 3D sketch segments drawn in the assembly.
-#: Both methods were being handed Occurrences instead, which Solid Edge 2026
-#: rejects with E_POINTER, "Property name is invalid". There is no way to
-#: build such a path from here: an AssemblyDocument exposes no Sketches
-#: collection through this binding, and the Segments commands that would
-#: create one raise a modal dialog, which blocks the whole server.
-_NO_FRAME_PATH: dict[str, Any] = {
-    "error": (
-        "structural_frame(method='by_orientation') has not been driven live; "
-        "method='basic' builds a frame along 3D sketch lines drawn with "
-        "draw_3d_line (path_indices are their 0-based indices)."
-    ),
-    "unsupported": True,
-}
-
-
 class SpecializedMixin:
     """Mixin providing specialized assembly subsystem methods."""
 
@@ -399,6 +382,7 @@ class SpecializedMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("StructuralFrames")
     def add_structural_frame_by_orientation(
         self,
         part_filename: str,
@@ -408,7 +392,7 @@ class SpecializedMixin:
         """
         Structural frames cannot be created through COM automation here.
 
-        Same reason as ``add_structural_frame``: see ``_NO_FRAME_PATH``.
+        Like ``add_structural_frame``, along 3D sketch lines from ``draw_line_3d``.
 
         Args:
             part_filename: Unused.
@@ -418,8 +402,51 @@ class SpecializedMixin:
         Returns:
             Dict with an ``unsupported`` error.
         """
-        del part_filename, coord_system_name, path_indices
-        return _NO_FRAME_PATH
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_assembly(doc)
+            if err:
+                return err
+            if not os.path.exists(part_filename):
+                return {"error": f"Frame part does not exist: {part_filename}"}
+            lines = list(getattr(self.sketch_manager, "lines_3d", None) or [])
+            if not path_indices:
+                return {
+                    "error": (
+                        "path_indices names the 3D lines the frame runs along "
+                        "(draw_3d_line, 0-based); none were given."
+                    )
+                }
+            bad = [i for i in path_indices if i < 0 or i >= len(lines)]
+            if bad:
+                return {
+                    "error": (
+                        f"Invalid path index {bad[0]}: {len(lines)} 3D line(s) drawn in "
+                        "this document with draw_3d_line."
+                    )
+                }
+            path = [lines[i] for i in path_indices]
+            # StructuralFrames.AddByOrientation(PartFileName, CoOrdinateSystemName,
+            #   NumPaths, Path, PreferredOrientationPlane, GlobalEndConditions,
+            #   GlobalEndConditionValue, AutoPosition). Verified on Solid Edge 2026
+            # with an empty coordinate-system name; the same informational dialog
+            # as Add is dismissed while it runs.
+            empty = VARIANT(pythoncom.VT_EMPTY, None)
+            with dismiss_informational_dialog("The Segments group of commands") as dialog:
+                doc.StructuralFrames.AddByOrientation(
+                    part_filename, coord_system_name, len(path), path, empty, empty, empty, empty
+                )
+            return {
+                "status": "created",
+                "type": "structural_frame_by_orientation",
+                "part_filename": part_filename,
+                "coord_system_name": coord_system_name,
+                "path_indices": path_indices,
+                "frames": com_get(doc.StructuralFrames, "Count"),
+                "dialog_dismissed": dialog.dismissed,
+            }
+        except Exception as e:
+            return error_result(e)
 
     def add_splice(
         self,

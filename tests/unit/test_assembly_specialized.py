@@ -334,11 +334,17 @@ class TestStructuralFrames:
         assert "none were given" in am.add_structural_frame(str(part), [])["error"]
         doc.StructuralFrames.Add.assert_not_called()
 
-    def test_by_orientation_still_says_it_cannot(self, asm_mgr):
+    def test_by_orientation_builds_the_same_way(self, asm_mgr, tmp_path, monkeypatch):
         am, doc = asm_mgr
-        result = am.add_structural_frame_by_orientation("C:\\frames\\beam.par", "CoordSys1", [0])
-        assert result["unsupported"] is True
-        doc.StructuralFrames.Add.assert_not_called()
+        part, lines, seen = self._ready(am, doc, tmp_path, monkeypatch, n_lines=1)
+
+        result = am.add_structural_frame_by_orientation(str(part), "Base", [0])
+
+        assert result["status"] == "created"
+        args = doc.StructuralFrames.AddByOrientation.call_args.args
+        assert args[:4] == (str(part), "Base", 1, lines)
+        assert len(args) == 8
+        assert seen["prefix"] == "The Segments group of commands"
 
 
 class TestAddSplice:
