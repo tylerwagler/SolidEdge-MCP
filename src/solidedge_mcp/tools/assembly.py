@@ -678,6 +678,7 @@ def assembly_feature(
     distance: float = 0.01,
     angle: float = 360.0,
     depth: float = 0.01,
+    diameter: float = 0.006,
     feature_indices: list[int] | None = None,
     plane_index: int = 1,
     mirror_type: int = 1,
@@ -690,7 +691,7 @@ def assembly_feature(
 
     Cutouts/hole: scope_parts = 0-based occurrence indices to cut.
     extruded_*: extent_type/extent_side/profile_side + distance (meters).
-    revolved_*: angle (degrees). hole: depth (meters).
+    revolved_*: angle (degrees). hole: depth and diameter (meters).
     swept_protrusion: num_trace_curves/num_cross_sections.
     recompute: options (raw COM flags, 0=default).
     'mirror'/'pattern' unsupported: AssemblyFeaturesMirrors.Add and
@@ -723,6 +724,7 @@ def assembly_feature(
                 extent_type=extent_type,
                 extent_side=extent_side,
                 depth=depth,
+                diameter=diameter,
             )
         case "extruded_protrusion":
             return assembly_manager.create_assembly_extruded_protrusion(

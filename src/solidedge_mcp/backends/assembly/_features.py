@@ -12,7 +12,9 @@ from ..comutil import profile_origin
 from ..constants import (
     AssemblyFeaturePropertyConstants,
     ExtentTypeConstants,
+    HoleTypeConstants,
 )
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
 from ._base import com_get, verifies_assembly_geometry
 
@@ -265,6 +267,7 @@ class AssemblyFeaturesMixin:
         extent_type: str = "Finite",
         extent_side: str = "OneSide",
         depth: float = 0.01,
+        diameter: float = 0.006,
     ) -> dict[str, Any]:
         """
         Create an assembly-level hole feature across multiple components.
@@ -276,6 +279,7 @@ class AssemblyFeaturesMixin:
             extent_type: 'Finite' or 'ThroughAll'
             extent_side: 'OneSide' or 'BothSides'
             depth: Hole depth in meters (for Finite)
+            diameter: Hole diameter in meters
         """
         try:
             _logger.info(f"Creating assembly hole: depth={depth}, extent={extent_type}")
@@ -285,6 +289,19 @@ class AssemblyFeaturesMixin:
                 return {"error": "No profiles available. Create and close a sketch first."}
 
             scope = self._get_scope_parts_array(doc, scope_parts)
+            # pHoledata is what makes this a hole. Passed None, Solid Edge
+            # 2026 records nothing and raises nothing: AssemblyFeaturesHoles
+            # .Count stayed 0. With a HoleData from the assembly's own
+            # collection the same call records the feature and cuts the
+            # placed part, faces 6 -> 7. Verified live.
+            hole_data_collection = com_get(doc, "HoleDataCollection")
+            if hole_data_collection is None:
+                return {
+                    "error": "This document has no HoleDataCollection; no hole data can be built."
+                }
+            hole_data = hole_data_collection.Add(
+                HoleType=HoleTypeConstants.igRegularHole, HoleDiameter=diameter
+            )
             holes = af.AssemblyFeaturesHoles
             holes.Add(
                 len(scope),
@@ -292,7 +309,7 @@ class AssemblyFeaturesMixin:
                 len(profiles),
                 profiles,
                 self._map_extent_side(extent_side),
-                None,  # pHoledata
+                hole_data,
                 self._map_extent_type(extent_type),
                 depth,
                 None,
@@ -305,12 +322,17 @@ class AssemblyFeaturesMixin:
                 "type": "assembly_hole",
                 "extent_type": extent_type,
                 "depth": depth,
+                "diameter": diameter,
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly hole: {e}")
             return error_result(e)
 
-    @verifies_assembly_geometry
+    # A protrusion takes no scope parts, so there is no occurrence body for
+    # it to change and the occurrence-face check can only ever say "nothing
+    # happened". Verified live: ExtrudedProtrusions.Count goes 0 -> 1 while
+    # every occurrence keeps its faces. The feature collection is the signal.
+    @verifies_collection_growth("AssemblyFeatures.ExtrudedProtrusions")
     def create_assembly_extruded_protrusion(
         self,
         extent_type: str = "Finite",
@@ -372,7 +394,8 @@ class AssemblyFeaturesMixin:
             _logger.error(f"Failed to create assembly extruded protrusion: {e}")
             return error_result(e)
 
-    @verifies_assembly_geometry
+    # As above: no scope parts, so the feature collection is the signal.
+    @verifies_collection_growth("AssemblyFeatures.RevolvedProtrusions")
     def create_assembly_revolved_protrusion(
         self,
         extent_type: str = "Finite",

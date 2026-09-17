@@ -113,26 +113,36 @@ established: a bare-number formula is read in the *document's* units (on an
 inch template `"0.785398"` became 0.0199 m), and the variable query never sees
 dimension variables. Whether angular values arrive in radians is not.
 
-### 3. Four assembly creators still build nothing
+### 3. Known-broken, with the evidence
 
-`create_assembly_hole`, `create_assembly_extruded_protrusion`,
-`create_assembly_revolved_protrusion` refuse honestly now rather than reporting
-success; `create_assembly_swept_protrusion` answers `E_INVALIDARG`. The cutouts
-were fixed and build. Whether the rest can work through COM on 2026 is open.
+`scripts/live_sweep.py` drove all 118 tools once through the real server and
+recorded every outcome in `reference/LIVE_SWEEP.md`. What it left as
+known-broken, each with the evidence that closes the question on this install:
 
-### 4. `create_contour_flange` does not build
+| tool / method | evidence |
+|---|---|
+| `create_flange` (basic) | 24 face/edge combinations through the tool and 18 `FlangeSide`/`ThicknessSide` combinations through raw COM on a fresh tab: every one builds nothing or answers `E_POINTER`. `Flanges.Add` never builds from a `Face.Edges` edge here. Reports honestly via the decorator. |
+| `create_lofted_surface`, `_v2`, `create_swept_surface` | `E_INVALIDARG` / `E_FAIL` with a base feature and without, while `create_extruded_surface` builds beside them. A "requires a base feature" guard masked this for years; it is gone and the COM error shows. |
+| `create_assembly_hole`, `_extruded_protrusion`, `_revolved_protrusion` | record a feature and change no occurrence body; refuse honestly via `verifies_assembly_geometry`. Under investigation: a protrusion takes no scope parts and may build an assembly-level body the check does not read. |
+| `create_assembly_swept_protrusion` | `E_INVALIDARG`. |
+| `create_contour_flange` | `E_FAIL`; it needs an open profile against a specific edge the sketch tools cannot guarantee. |
+| `select_set(action="all")` | `SelectSet.AddAll` answers `E_FAIL` whatever the selection holds; now refuses honestly. |
+| `draft_config(action="get_origin")` | raw `DISP_E_BADINDEX`; not yet investigated. |
+| `face_operation(rotate_by_edge)` | raw `E_INVALIDARG` on a box face; not yet investigated. |
+| `create_weldment` without a template | raised a modal that hung the server; now refuses before COM. |
 
-It needs an open profile positioned against a specific edge, which the sketch
-tools cannot guarantee. It fails honestly, which is the floor, not a fix.
+Fixed because the sweep found them: `convert_by_file_path` reported
+"converted" with no output on disk; vertices came back as one-element points;
+extent slots were shifted so the side constant was reported as the distance.
 
-### 5. The swallow surface is only partly audited
+### 4. The swallow surface is only partly audited
 
 771 `except Exception` and 210 `contextlib.suppress` in the backends. The
 write-then-reported slice is pinned by `audit_reported_writes`. The read side was
 measured and is clean: only 10 swallowed reads have a literal fallback and 9 of
 those fall back to `None`, which a caller can tell apart from a real value.
 
-### 6. Nothing is pushed
+### 5. Nothing is pushed
 
 70 commits on `modernize`. `master` has not moved since the merge of #3. No PR.
 

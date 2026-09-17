@@ -108,17 +108,49 @@ class TestAssemblyRevolvedCutout:
 
 
 class TestAssemblyHole:
-    def test_success(self, asm_mgr_with_sketch):
+    """pHoledata is what makes this a hole.
+
+    Passed None, Solid Edge 2026 recorded nothing and raised nothing --
+    AssemblyFeaturesHoles.Count stayed 0. With a HoleData from the assembly's
+    own HoleDataCollection the same call records the feature and cuts the
+    placed part, faces 6 -> 7. Verified live.
+    """
+
+    def test_builds_hole_data_and_passes_it(self, asm_mgr_with_sketch):
+        from solidedge_mcp.backends.constants import HoleTypeConstants
+
         am, doc, sm = asm_mgr_with_sketch
         sm.get_accumulated_profiles.return_value = [MagicMock()]
         doc.Occurrences.Item.return_value = MagicMock()
         holes = MagicMock()
         doc.AssemblyFeatures.AssemblyFeaturesHoles = holes
+        hole_data = MagicMock()
+        doc.HoleDataCollection.Add.return_value = hole_data
 
-        result = am.create_assembly_hole([0], depth=0.005)
+        result = am.create_assembly_hole([0], depth=0.005, diameter=0.008)
+
         assert result["status"] == "created"
         assert result["depth"] == 0.005
-        holes.Add.assert_called_once()
+        assert result["diameter"] == 0.008
+        doc.HoleDataCollection.Add.assert_called_once_with(
+            HoleType=HoleTypeConstants.igRegularHole, HoleDiameter=0.008
+        )
+        args = holes.Add.call_args.args
+        assert args[5] is hole_data, "pHoledata is the sixth positional argument"
+
+    def test_a_document_without_hole_data_is_refused_before_com(self, asm_mgr_with_sketch):
+        am, doc, sm = asm_mgr_with_sketch
+        sm.get_accumulated_profiles.return_value = [MagicMock()]
+        doc.Occurrences.Item.return_value = MagicMock()
+        holes = MagicMock()
+        doc.AssemblyFeatures.AssemblyFeaturesHoles = holes
+        del doc.HoleDataCollection
+
+        result = am.create_assembly_hole([0])
+
+        assert "error" in result
+        assert "HoleDataCollection" in result["error"]
+        holes.Add.assert_not_called()
 
     def test_no_profiles(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
