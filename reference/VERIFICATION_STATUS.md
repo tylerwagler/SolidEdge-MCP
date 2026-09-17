@@ -26,8 +26,8 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 118 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,949 | mocked COM; catch shape, not truth |
-| Integration tests | 32 | drive real Solid Edge; 19 of them pin exact values against a known box |
+| Unit tests | 2,953 | mocked COM; catch shape, not truth |
+| Integration tests | 55 | drive real Solid Edge; 19 pin exact values against a known box, and there are now assembly, draft and sheet-metal fixtures |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
@@ -123,8 +123,7 @@ known-broken, each with the evidence that closes the question on this install:
 |---|---|
 | `create_flange` (basic) | 24 face/edge combinations through the tool and 18 `FlangeSide`/`ThicknessSide` combinations through raw COM on a fresh tab: every one builds nothing or answers `E_POINTER`. `Flanges.Add` never builds from a `Face.Edges` edge here. Reports honestly via the decorator. |
 | `create_lofted_surface`, `_v2`, `create_swept_surface` | `E_INVALIDARG` / `E_FAIL` with a base feature and without, while `create_extruded_surface` builds beside them. A "requires a base feature" guard masked this for years; it is gone and the COM error shows. |
-| `create_assembly_hole`, `_extruded_protrusion`, `_revolved_protrusion` | record a feature and change no occurrence body; refuse honestly via `verifies_assembly_geometry`. Under investigation: a protrusion takes no scope parts and may build an assembly-level body the check does not read. |
-| `create_assembly_swept_protrusion` | `E_INVALIDARG`. |
+| `create_assembly_swept_protrusion` | `E_INVALIDARG` with `Origins` as inner VARIANTs (the shape the part-level sweep needs) and `E_FAIL` as plain tuples or lists; the argument shape is not the cause. |
 | `create_contour_flange` | `E_FAIL`; it needs an open profile against a specific edge the sketch tools cannot guarantee. |
 | `select_set(action="all")` | `SelectSet.AddAll` answers `E_FAIL` whatever the selection holds; now refuses honestly. |
 | `draft_config(action="get_origin")` | raw `DISP_E_BADINDEX`; not yet investigated. |
@@ -133,7 +132,13 @@ known-broken, each with the evidence that closes the question on this install:
 
 Fixed because the sweep found them: `convert_by_file_path` reported
 "converted" with no output on disk; vertices came back as one-element points;
-extent slots were shifted so the side constant was reported as the distance.
+extent slots were shifted so the side constant was reported as the distance;
+`create_assembly_hole` passed no hole data and Solid Edge recorded nothing
+(with a `HoleData` it cuts, faces 6 -> 7); the two assembly protrusions take
+no scope parts and were being measured against occurrence bodies they cannot
+touch (they are recorded, `ExtrudedProtrusions.Count` 0 -> 1, and are now
+verified by that); eight surface creators refused without a solid on a
+precondition Solid Edge does not have.
 
 ### 4. The swallow surface is only partly audited
 
@@ -142,17 +147,27 @@ write-then-reported slice is pinned by `audit_reported_writes`. The read side wa
 measured and is clean: only 10 swallowed reads have a literal fallback and 9 of
 those fall back to `None`, which a caller can tell apart from a real value.
 
-### 5. Nothing is pushed
+### 5. What CI actually protects
 
-70 commits on `modernize`. `master` has not moved since the merge of #3. No PR.
+`.github/workflows/ci.yml` runs ruff, format, mypy and `pytest -q` only.
+Integration tests are deselected by `addopts`, there is no Solid Edge on the
+runner, and the seven audits live inside unit tests that **skip when
+`reference/typelib_dump.json` is absent** -- and it is gitignored. On CI every
+audit is inert and no COM call is ever made. Green CI is a far weaker signal
+than green locally: the live suite, the audits and `scripts/live_sweep.py` are
+the gates that matter, and they run only where Solid Edge does.
+
+### 6. Nothing is pushed
+
+`master` has not moved since the merge of #3. No PR.
 
 ## What "done" would mean
 
 There is no state where this is finished, because Solid Edge keeps its own
 counsel. A defensible bar:
 
-- [ ] every tool driven live at least once, with the result recorded
-- [ ] every bug fixed this far pinned by a test that fails without the fix
+- [x] every tool driven live at least once, with the result recorded (`scripts/live_sweep.py` -> `reference/LIVE_SWEEP.md`)
+- [x] every bug fixed this far pinned by a test that fails without the fix (55 integration tests, each mutation-tested when written)
 - [x] the 49 unverified creators given a collection-growth check
 - [x] one numeric-correctness check per measurement tool (angular variables excepted, see above)
 - [ ] the branch merged
