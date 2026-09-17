@@ -28,6 +28,7 @@ uv run python scripts/audit_com_hasattr.py
 uv run python scripts/audit_reported_writes.py
 uv run python scripts/audit_com_enum_args.py
 uv run python scripts/audit_dead_params.py  # parameters declared and never read
+uv run python scripts/count_verified_creators.py  # which create_* are checked, and how
 uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid Edge)
 ```
 

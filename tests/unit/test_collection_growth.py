@@ -220,6 +220,34 @@ class TestTheApplicationRoot:
 
         assert collection_count("Documents", root="application")(mgr) is None
 
+    def test_a_manager_that_is_the_document_manager_reaches_its_own_connection(self):
+        """DocumentManager holds the connection itself; there is no self.doc_manager."""
+
+        class _App:
+            Documents = _Counter(4)
+
+        class _DocumentManager:
+            def __init__(self) -> None:
+                self.connection = MagicMock()
+                self.connection.get_application.return_value = _App()
+
+        assert collection_count("Documents", root="application")(_DocumentManager()) == 4
+
+    def test_the_document_creators_are_wrapped(self):
+        from solidedge_mcp.backends.documents import DocumentManager
+        from solidedge_mcp.backends.export._drawing import DrawingMixin
+
+        creators = (
+            "create_part",
+            "create_assembly",
+            "create_sheet_metal",
+            "create_draft",
+            "create_weldment",
+        )
+        for name in creators:
+            assert hasattr(getattr(DocumentManager, name), "__wrapped__"), name
+        assert hasattr(DrawingMixin.create_drawing, "__wrapped__")
+
 
 class TestTheClassDecorator:
     def test_wraps_only_creators(self):

@@ -12,6 +12,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from .comutil import com_get
 from .constants import DocumentTypeConstants
+from .features._base import verifies_collection_growth
 from .logging import get_logger
 from .validation import guard_overwrite
 
@@ -35,6 +36,7 @@ class DocumentManager:
         if self.sketch_manager:
             self.sketch_manager.clear_state()
 
+    @verifies_collection_growth("Documents", root="application")
     def create_part(self, template: str | None = None) -> dict[str, Any]:
         """Create a new part document"""
         try:
@@ -59,6 +61,7 @@ class DocumentManager:
             _logger.error(f"Failed to create Part document: {e}")
             return error_result(e)
 
+    @verifies_collection_growth("Documents", root="application")
     def create_assembly(self, template: str | None = None) -> dict[str, Any]:
         """Create a new assembly document"""
         try:
@@ -83,6 +86,7 @@ class DocumentManager:
             _logger.error(f"Failed to create Assembly document: {e}")
             return error_result(e)
 
+    @verifies_collection_growth("Documents", root="application")
     def create_sheet_metal(self, template: str | None = None) -> dict[str, Any]:
         """Create a new sheet metal document"""
         try:
@@ -107,6 +111,7 @@ class DocumentManager:
             _logger.error(f"Failed to create SheetMetal document: {e}")
             return error_result(e)
 
+    @verifies_collection_growth("Documents", root="application")
     def create_draft(self, template: str | None = None) -> dict[str, Any]:
         """Create a new draft document"""
         try:
@@ -425,6 +430,7 @@ class DocumentManager:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("Documents", root="application")
     def create_weldment(self, template: str | None = None) -> dict[str, Any]:
         """Create a new weldment document"""
         try:

@@ -32,6 +32,7 @@ VIEW_ORIENTATIONS: dict[str, int] = {
 class DrawingMixin:
     """Mixin providing drawing creation and sheet management methods."""
 
+    @verifies_collection_growth("Documents", root="application")
     def create_drawing(
         self, template: str | None = None, views: list[str] | None = None
     ) -> dict[str, Any]:

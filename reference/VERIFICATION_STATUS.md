@@ -32,38 +32,30 @@ So this document tracks the other question: **does it actually do what it says?*
 
 ### Creator verification
 
-`@verifies_geometry` (and `@verifies_assembly_geometry`) snapshot the body before
-and after, and downgrade a false success to an explicit error. This is the only
-check that catches a call which succeeds and builds nothing.
+Two decorator families snapshot the document before and after a creator runs
+and downgrade a false success to an explicit error. `@verifies_geometry` (and
+`@verifies_assembly_geometry`) watch the body's face count; for creators that
+build no solid -- a plane, a surface, a sketch, a document -- that count never
+moves, so `@verifies_collection_growth(...)` watches the COM collection their
+`Add` lands in instead. This is the only kind of check that catches a call
+which succeeds and builds nothing.
 
 | | count | |
 |---|---|---|
-| Verified live | **127** | the body must change or the result becomes an error |
+| Verified live | **176** | the body or the target collection must change, or the result becomes an error |
 | Refuse honestly | 37 | return `unsupported: True` -- 34 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
-| Neither | **49** | see below |
+| Neither | **0** | |
 | **Total `create_*`** | **213** | |
 
-The 49 unverified break down as:
-
-| count | file | why |
-|---|---|---|
-| 15 | `features/_ref_planes.py` | a plane is not a solid; no face count to change |
-| 15 | `features/_surfaces.py` | builds constructions, not body material |
-| 5 | `documents.py` | creates documents |
-| 3 | `features/_misc.py` | face rotations and draft angles reshape faces without changing the count |
-| 3 | `features/_rounds_chamfers.py` | surface blends build constructions |
-| 3 | `features/_sheet_metal.py` | cosmetic threads and etches change no material |
-| 2 | `export/_drawing.py` | drawings and parts lists are not geometry |
-| 2 | `sketching.py` | profiles, not solids |
-| 1 | `export/_draft.py` | a bend table is a table |
-
-None of the 49 can be *face*-counted -- a plane is not a solid. But **every one of
-them lands in a COM collection whose `.Count` is readable**: `RefPlanes`,
-`ProfileSets`, the five `Constructions.*Surfaces`, `Rounds`/`Blends`, `Etches`,
-`Threads`, `Drafts`, `FaceRotates`, `DrawingViews`, `PartsLists`, and
-`Application.Documents`. A collection-growth check of the same shape as
-`@verifies_geometry` closes all 49. An earlier version of this document put the
-closable gap at "~10"; that was wrong in the pessimistic direction.
+Of the 176, 127 are face-count checks and 49 are collection-growth checks:
+15 reference planes (`RefPlanes`), 15 surfaces (the five `Constructions.*Surfaces`
+summed), 9 that reshape or annotate (`Models.*.Etches`, `.Threads`, `.Drafts`,
+`.FaceRotates`; `PartsLists`, `DraftBendTables`), 3 surface blends
+(`Models.*.Rounds` + `.Blends`), 2 sketches (`ProfileSets`), and 6 document
+creators (`Application.Documents`). Each group was driven live: the snapshot
+reads a real integer on the right document type, a known-good creator moves
+it and passes through, and a creator that claims success without adding is
+downgraded to an error on the live path -- not only against fakes.
 
 ### Structural audits
 
@@ -132,7 +124,7 @@ counsel. A defensible bar:
 
 - [ ] every tool driven live at least once, with the result recorded
 - [ ] every bug fixed this far pinned by a test that fails without the fix
-- [ ] the 49 unverified creators given a collection-growth check
+- [x] the 49 unverified creators given a collection-growth check
 - [ ] one numeric-correctness check per measurement tool
 - [ ] the branch merged
 
@@ -148,7 +140,10 @@ done
 uv run python scripts/audit_reported_writes.py
 ```
 
-Creator counts come from walking `backends/` for `create_*` and checking for
-`@verifies_geometry`, `@verifies_assembly_geometry`, the class-level
-`@verify_geometry_on_creators`, or an `"unsupported": True` return. A grep for
-the decorator alone undercounts badly — the class decorator covers whole mixins.
+```bash
+uv run python scripts/count_verified_creators.py   # the creator table above
+```
+
+Do not count creators with a grep for a decorator name. There are two
+decorator families and two class-level forms that cover whole mixins, and a
+grep for one name has undercounted this table twice.

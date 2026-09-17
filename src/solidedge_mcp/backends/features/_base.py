@@ -163,7 +163,10 @@ def collection_count(*paths: str, root: str = "document") -> Callable[[Any], int
     def snapshot(self: Any) -> int | None:
         try:
             if root == "application":
-                base = self.doc_manager.connection.get_application()
+                # DocumentManager holds the connection itself; everything
+                # else reaches it through its doc_manager.
+                holder = getattr(self, "doc_manager", self)
+                base = holder.connection.get_application()
             else:
                 base = self.doc_manager.get_active_document()
         except Exception:
