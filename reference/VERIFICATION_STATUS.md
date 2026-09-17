@@ -26,8 +26,8 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 118 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,897 | mocked COM; catch shape, not truth |
-| Integration tests | 13 | drive real Solid Edge; between them they touch **16 of 118** tools |
+| Unit tests | 2,949 | mocked COM; catch shape, not truth |
+| Integration tests | 32 | drive real Solid Edge; 19 of them pin exact values against a known box |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
@@ -86,13 +86,32 @@ mutation-tested by restoring the original defect. The rest are gone.
 
 This is the largest gap, because it is the one that lets fixed bugs come back.
 
-### 2. No check verifies a value is numerically right
+### 2. Numeric correctness -- now checked, one item open
 
-Every check answers *did the write take* or *did the face count change*. Nothing
-answers *is this number correct*. A mass, a centre of gravity or a bounding box
-could be wrong by a unit factor and every gate stays green. `DraftPrintUtility.
-PaperWidth` being handed metres when it wanted millimetres was exactly this, and
-it was found by hand.
+`tests/integration/test_known_answer_box.py` builds a 0.08 x 0.048 x 0.03 m box
+and asserts, at float-noise tolerance, every number that can be computed by
+hand: volume, surface area, each face area, counts, bounding box, centre of
+gravity, mass at two densities, the body diagonal, a right angle, and the six
+global moments of inertia with their frame (about the model origin) and sign
+(products positive) -- plus five cross-path invariants that need no reference
+value. Nineteen of nineteen pass live.
+
+Writing it found and fixed: vertices reported as one-element points (`result[0]`
+of a flat `(x, y, z)`); a short physical-property tuple padded with zeros and
+reported as computed; a partial surface-area sum reported as the total; moments
+of inertia that silently assumed steel; `GetDirection{1,2}Extent` read with its
+slots shifted so the side constant was reported as the distance and the real
+value stringified into a non-existent `face_ref`; a cone `half_angle` and the
+camera's perspective field of view reported in radians.
+
+**Open:** `Variable.Value` for an *angular* variable is unconfirmed. Neither
+`Variables.Add(name, "45 deg")` nor an explicit `units_type` would create one
+on this install, and `query_variables("*")` returns only user-defined variables
+-- `doc.Variables.Count` reads 4 while the query reports 0 -- so a revolve's own
+angle dimension cannot be observed through this server either. Two things are
+established: a bare-number formula is read in the *document's* units (on an
+inch template `"0.785398"` became 0.0199 m), and the variable query never sees
+dimension variables. Whether angular values arrive in radians is not.
 
 ### 3. Four assembly creators still build nothing
 
@@ -125,7 +144,7 @@ counsel. A defensible bar:
 - [ ] every tool driven live at least once, with the result recorded
 - [ ] every bug fixed this far pinned by a test that fails without the fix
 - [x] the 49 unverified creators given a collection-growth check
-- [ ] one numeric-correctness check per measurement tool
+- [x] one numeric-correctness check per measurement tool (angular variables excepted, see above)
 - [ ] the branch merged
 
 ## How to re-measure
