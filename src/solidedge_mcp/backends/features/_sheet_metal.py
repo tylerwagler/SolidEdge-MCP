@@ -16,7 +16,7 @@ from ..constants import (
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
-from ._base import verifies_geometry
+from ._base import verifies_collection_growth, verifies_geometry
 
 _logger = get_logger(__name__)
 
@@ -670,6 +670,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("Models.*.Etches")
     def create_etch(self) -> dict[str, Any]:
         """
         Create an etch feature (sheet metal).
@@ -1048,6 +1049,7 @@ class SheetMetalMixin:
 
         return None
 
+    @verifies_collection_growth("Models.*.Threads")
     def create_thread(
         self,
         face_index: int,
@@ -2100,6 +2102,7 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("Models.*.Threads")
     def create_thread_ex(
         self,
         face_index: int,

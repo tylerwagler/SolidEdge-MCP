@@ -7,6 +7,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import describe_exception, error_result
 
 from ..constants import PartDrawingViewTypeConstants, ViewOrientationConstants
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
 from ._base import NOT_A_DRAFT, com_get
 
@@ -290,6 +291,7 @@ class DrawingMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("PartsLists")
     def create_parts_list(
         self, auto_balloon: bool = True, x: float = 0.15, y: float = 0.25
     ) -> dict[str, Any]:

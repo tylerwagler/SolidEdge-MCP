@@ -14,7 +14,7 @@ from ..constants import (
 )
 from ..logging import get_logger
 from ..validation import guard_overwrite
-from ._base import verifies_geometry
+from ._base import verifies_collection_growth, verifies_geometry
 
 _logger = get_logger(__name__)
 
@@ -533,6 +533,7 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("Models.*.FaceRotates")
     def create_face_rotate_by_edge(
         self, face_index: int, edge_index: int, angle: float
     ) -> dict[str, Any]:
@@ -594,6 +595,7 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("Models.*.FaceRotates")
     def create_face_rotate_by_points(
         self, face_index: int, vertex1_index: int, vertex2_index: int, angle: float
     ) -> dict[str, Any]:
@@ -661,6 +663,7 @@ class MiscFeaturesMixin:
         except Exception as e:
             return error_result(e)
 
+    @verifies_collection_growth("Models.*.Drafts")
     def create_draft_angle(
         self, face_index: int, angle: float, plane_index: int = 1, side: str = "inside"
     ) -> dict[str, Any]:

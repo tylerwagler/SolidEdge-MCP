@@ -240,3 +240,66 @@ class TestTheClassDecorator:
         assert creators, "RefPlaneMixin has no creators?"
         for name in creators:
             assert hasattr(getattr(RefPlaneMixin, name), "__wrapped__"), name
+
+
+class TestTheCollectionBackedCreatorsAreWrapped:
+    """The creators that build no solid, pinned one by one.
+
+    A face count never moves for any of these, so verifies_geometry cannot
+    see them; each is decorated with the collection its Add lands in. A new
+    creator of this kind that is not listed here is a creator nothing checks.
+    """
+
+    def _wrapped(self, module: str, cls: str, *names: str) -> None:
+        import importlib
+
+        owner = getattr(importlib.import_module(module), cls)
+        for name in names:
+            assert hasattr(getattr(owner, name), "__wrapped__"), f"{cls}.{name} is unverified"
+
+    def test_sketches(self):
+        self._wrapped(
+            "solidedge_mcp.backends.sketching",
+            "SketchManager",
+            "create_sketch",
+            "create_sketch_on_plane_index",
+        )
+
+    def test_surface_blends(self):
+        self._wrapped(
+            "solidedge_mcp.backends.features._rounds_chamfers",
+            "RoundsChamfersMixin",
+            "create_blend_surface",
+            "create_round_blend",
+            "create_round_surface_blend",
+        )
+
+    def test_sheet_metal_cosmetics(self):
+        self._wrapped(
+            "solidedge_mcp.backends.features._sheet_metal",
+            "SheetMetalMixin",
+            "create_etch",
+            "create_thread",
+            "create_thread_ex",
+        )
+
+    def test_face_reshapers(self):
+        self._wrapped(
+            "solidedge_mcp.backends.features._misc",
+            "MiscFeaturesMixin",
+            "create_draft_angle",
+            "create_face_rotate_by_edge",
+            "create_face_rotate_by_points",
+        )
+
+    def test_draft_tables(self):
+        self._wrapped(
+            "solidedge_mcp.backends.export._drawing",
+            "DrawingMixin",
+            "create_parts_list",
+        )
+        self._wrapped(
+            "solidedge_mcp.backends.export._draft",
+            "DraftMixin",
+            "create_bend_table",
+        )

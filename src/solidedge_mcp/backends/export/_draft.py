@@ -8,6 +8,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import owned_style_for
 from ..constants import DraftPrintOrientationConstants
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
 from ..query._base import BodyNotReachableError, all_faces, body_of
 from ._base import NOT_A_DRAFT, com_get
@@ -483,6 +484,7 @@ class DraftMixin:
     # BEND TABLE
     # =================================================================
 
+    @verifies_collection_growth("DraftBendTables")
     def create_bend_table(
         self,
         view_index: int = 0,
