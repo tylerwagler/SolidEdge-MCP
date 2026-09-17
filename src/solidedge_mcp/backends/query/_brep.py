@@ -1,6 +1,7 @@
 """B-Rep topology queries: faces, edges, vertices, shells, and geometry inspection."""
 
 import contextlib
+import math
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -316,7 +317,11 @@ class BRepMixin:
                     result["base_point"] = self._to_list(cone_data[0])
                     result["axis"] = self._to_list(cone_data[1])
                     result["radius"] = cone_data[2]
-                    result["half_angle"] = cone_data[3]
+                    # HalfAngle is radians, like every other Solid Edge angle;
+                    # degrees is the unit at this boundary. Verified live: a
+                    # triangle revolved to a cone read atan(0.02/0.04) in radians.
+                    result["half_angle_degrees"] = math.degrees(cone_data[3])
+                    result["half_angle_radians"] = cone_data[3]
                     if len(cone_data) > 4:
                         result["expanding"] = bool(cone_data[4])
                     return result

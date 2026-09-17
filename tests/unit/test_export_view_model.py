@@ -93,6 +93,20 @@ class TestGetCamera:
         result = vm.get_camera()
         assert result["perspective"] is True
         assert result["scale_or_angle"] == 0.785
+        # ScaleOrAngle is a field-of-view angle in radians when perspective is
+        # on; the boundary reports degrees. Verified live: set 0.5, read 0.5.
+        assert result["field_of_view_radians"] == 0.785
+        assert result["field_of_view_degrees"] == pytest.approx(math.degrees(0.785))
+        assert "scale" not in result
+
+    def test_orthographic_names_it_a_scale(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        view_obj.GetCamera.return_value = (1, 2, 3, 0, 0, 0, 0, 1, 0, False, 1.5)
+
+        result = vm.get_camera()
+
+        assert result["scale"] == 1.5
+        assert "field_of_view_degrees" not in result
 
 
 class TestSetCamera:
@@ -107,14 +121,23 @@ class TestSetCamera:
             1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, False, 1.0
         )
 
-    def test_with_perspective(self, view_mgr):
+    def test_with_perspective_takes_degrees_and_sends_radians(self, view_mgr):
+        """This test used to pin 0.785 passing straight through -- radians in,
+        radians out -- against the project's degrees-at-the-boundary rule."""
         vm, doc, view_obj = view_mgr
-        result = vm.set_camera(0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, 0.785)
+        result = vm.set_camera(0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, 45.0)
         assert result["status"] == "camera_set"
         assert result["perspective"] is True
         assert result["up"] == [0.0, 0.0, 1.0]
         view_obj.SetCamera.assert_called_once_with(
-            0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, 0.785
+            0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, pytest.approx(math.radians(45.0))
+        )
+
+    def test_orthographic_scale_is_not_converted(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        vm.set_camera(1.0, 2.0, 3.0, 0.0, 0.0, 0.0, perspective=False, scale_or_angle=2.5)
+        view_obj.SetCamera.assert_called_once_with(
+            1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, False, 2.5
         )
 
     def test_no_window(self):

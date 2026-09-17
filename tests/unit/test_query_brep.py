@@ -1680,10 +1680,19 @@ class TestSurfaceGeometrySignatures:
         geom = MagicMock()
         geom.GetPlaneData.side_effect = Exception("no")
         geom.GetCylinderData.side_effect = Exception("no")
+        # HalfAngle is radians, like every Solid Edge angle. Verified live: a
+        # triangle revolved to a cone read atan(0.02/0.04) there. Degrees is
+        # the unit at this boundary.
         geom.GetConeData.return_value = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.05, 0.3, True)
         _face_with_geometry(doc, geom)
+        import math
 
-        assert qm.get_face_geometry(0)["geometry_type"] == "Cone"
+        cone = qm.get_face_geometry(0)
+
+        assert cone["geometry_type"] == "Cone"
+        assert cone["half_angle_degrees"] == pytest.approx(math.degrees(0.3))
+        assert cone["half_angle_radians"] == 0.3
+        assert "half_angle" not in cone
         assert call_shape(geom.GetConeData) == ((R8_3, R8_3), {})
 
     def test_sphere_data_takes_one_r8_array(self, query_mgr):

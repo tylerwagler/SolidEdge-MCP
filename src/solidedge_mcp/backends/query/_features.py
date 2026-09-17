@@ -1,6 +1,7 @@
 """Feature tree queries, editing, and extent/treatment operations."""
 
 import contextlib
+import math
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -43,6 +44,46 @@ _FEATURE_STATUS: dict[int | None, str] = {
     FeatureStatusConstants.igFeatureSuppressed: "suppressed",
     FeatureStatusConstants.igFeatureRolledBack: "rolled_back",
 }
+
+
+def _is_revolved(feature: Any) -> bool:
+    """A revolved feature's extent is an angle; every other feature's is a length."""
+    kind = describe_feature_type(com_get(feature, "Type")).get("type", "")
+    return "revolv" in str(kind).lower()
+
+
+def _report_extent(result: dict[str, Any], extent_data: Any, feature: Any) -> None:
+    """Name the three values GetDirection{1,2}Extent hands back.
+
+    Part.tlb declares three out-params -- ExtentType, ExtentSide, then
+    FiniteDepth (or Angle on a revolved feature, FiniteDistance on a slot)
+    -- and no face reference. The code used to read slot 1 as the distance
+    and slot 2 as a face, so the side constant was reported as the distance
+    and the real value was stringified into face_ref. Verified on Solid Edge
+    2026: an extrude read distance=2 (igRight) and face_ref='0.03'.
+
+    A revolved feature's value is an angle in radians; it is reported in
+    degrees, the unit at this boundary, with the radians alongside.
+    """
+    if not (isinstance(extent_data, tuple) and len(extent_data) >= 3):
+        result["error_detail"] = (
+            f"GetDirectionExtent returned {extent_data!r}; expected (type, side, value)"
+        )
+        return
+    result["extent_type"] = extent_data[0]
+    result["extent_side"] = extent_data[1]
+    value = extent_data[2]
+    if _is_revolved(feature):
+        result["angle_radians"] = value
+        if isinstance(value, (int, float)):
+            result["angle_degrees"] = math.degrees(value)
+    else:
+        result["distance"] = value
+
+
+def _extent_value(feature: Any, distance: float) -> float:
+    """What to hand ApplyDirection{1,2}Extent: radians for a revolve, meters otherwise."""
+    return math.radians(distance) if _is_revolved(feature) else distance
 
 
 class FeatureQueryMixin:
@@ -499,13 +540,7 @@ class FeatureQueryMixin:
             result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 extent_data = feature.GetDirection1Extent()
-                if isinstance(extent_data, tuple):
-                    result["extent_type"] = extent_data[0] if len(extent_data) > 0 else None
-                    result["distance"] = extent_data[1] if len(extent_data) > 1 else None
-                    has_face = len(extent_data) > 2 and extent_data[2] is not None
-                    result["face_ref"] = str(extent_data[2]) if has_face else None
-                else:
-                    result["extent_type"] = extent_data
+                _report_extent(result, extent_data, feature)
             except Exception as e:
                 result["error_detail"] = f"GetDirection1Extent failed: {e}"
 
@@ -537,7 +572,9 @@ class FeatureQueryMixin:
         Args:
             feature_name: Name of the feature in the design tree
             extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
-            distance: Extent distance in meters (used when extent_type is Finite)
+            distance: Extent distance in meters when extent_type is Finite. For a
+                revolved feature this is the angle in DEGREES; it is converted to
+                radians before COM.
             extent_side: Side constant (1=Left/Reverse, 2=Right/Normal, 3=Symmetric)
 
         Returns:
@@ -549,7 +586,7 @@ class FeatureQueryMixin:
                 return {"error": f"Feature '{feature_name}' not found"}
 
             feature.ApplyDirection1Extent(
-                extent_type, extent_side, distance, None, _NO_KEYPOINT_FLAGS
+                extent_type, extent_side, _extent_value(feature, distance), None, _NO_KEYPOINT_FLAGS
             )
 
             return {
@@ -583,13 +620,7 @@ class FeatureQueryMixin:
             result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 extent_data = feature.GetDirection2Extent()
-                if isinstance(extent_data, tuple):
-                    result["extent_type"] = extent_data[0] if len(extent_data) > 0 else None
-                    result["distance"] = extent_data[1] if len(extent_data) > 1 else None
-                    has_face = len(extent_data) > 2 and extent_data[2] is not None
-                    result["face_ref"] = str(extent_data[2]) if has_face else None
-                else:
-                    result["extent_type"] = extent_data
+                _report_extent(result, extent_data, feature)
             except Exception as e:
                 result["error_detail"] = f"GetDirection2Extent failed: {e}"
 
@@ -620,7 +651,9 @@ class FeatureQueryMixin:
         Args:
             feature_name: Name of the feature in the design tree
             extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
-            distance: Extent distance in meters (used when extent_type is Finite)
+            distance: Extent distance in meters when extent_type is Finite. For a
+                revolved feature this is the angle in DEGREES; it is converted to
+                radians before COM.
             extent_side: Side constant (1=Left/Reverse, 2=Right/Normal, 3=Symmetric)
 
         Returns:
@@ -632,7 +665,7 @@ class FeatureQueryMixin:
                 return {"error": f"Feature '{feature_name}' not found"}
 
             feature.ApplyDirection2Extent(
-                extent_type, extent_side, distance, None, _NO_KEYPOINT_FLAGS
+                extent_type, extent_side, _extent_value(feature, distance), None, _NO_KEYPOINT_FLAGS
             )
 
             return {

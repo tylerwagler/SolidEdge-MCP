@@ -534,11 +534,20 @@ class TestGetFeatureDimensions:
 
 
 class TestGetDirection1Extent:
+    """Part.tlb: GetDirection1Extent returns (ExtentType, ExtentSide, value).
+
+    Three out-params and no face. The code used to read slot 1 as the
+    distance and slot 2 as a face, so the side constant was reported as the
+    distance and the real value was stringified into face_ref -- live, an
+    extrude read distance=2 and face_ref='0.03'. This test used to feed that
+    wrong shape.
+    """
+
     def test_success(self, query_mgr):
         qm, doc = query_mgr
         feat = MagicMock()
         feat.Name = "Extrude 1"
-        feat.GetDirection1Extent.return_value = (13, 0.05, None)
+        feat.GetDirection1Extent.return_value = (13, 2, 0.05)
 
         features = MagicMock()
         features.Count = 1
@@ -548,7 +557,92 @@ class TestGetDirection1Extent:
         result = qm.get_direction1_extent("Extrude 1")
         assert result["feature_name"] == "Extrude 1"
         assert result["extent_type"] == 13
+        assert result["extent_side"] == 2
         assert result["distance"] == 0.05
+        assert "face_ref" not in result
+
+    def test_a_short_tuple_is_reported_not_guessed(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+        feat.GetDirection1Extent.return_value = (13, 2)
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        result = qm.get_direction1_extent("Extrude 1")
+        assert "distance" not in result
+        assert "expected (type, side, value)" in result["error_detail"]
+
+
+def _revolved_type_code():
+    """The FeatureTypeConstants value describe_feature_type names as revolved."""
+    from solidedge_mcp.backends.comutil import FEATURE_TYPE_NAMES
+
+    for code, name in FEATURE_TYPE_NAMES.items():
+        if "revolv" in str(name).lower():
+            return code
+    raise AssertionError("no revolved feature type in FEATURE_TYPE_NAMES")
+
+
+class TestARevolvedExtentIsAnAngle:
+    """On a revolved feature slot 2 of GetDirection1Extent is an angle in radians.
+
+    Verified live: a 90-degree revolve read 1.5707963 there. Degrees is the
+    unit at this boundary, so it is reported as angle_degrees, and the setter
+    takes degrees and converts before COM.
+    """
+
+    def _revolve(self, doc):
+        import math
+
+        feat = MagicMock()
+        feat.Name = "Revolve 1"
+        feat.Type = _revolved_type_code()
+        feat.GetDirection1Extent.return_value = (13, 2, math.pi / 2)
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+        return feat
+
+    def test_the_getter_reports_degrees(self, query_mgr):
+        import math
+
+        qm, doc = query_mgr
+        self._revolve(doc)
+
+        result = qm.get_direction1_extent("Revolve 1")
+
+        assert result["angle_degrees"] == pytest.approx(90.0)
+        assert result["angle_radians"] == pytest.approx(math.pi / 2)
+        assert "distance" not in result
+
+    def test_the_setter_takes_degrees_and_sends_radians(self, query_mgr):
+        import math
+
+        qm, doc = query_mgr
+        feat = self._revolve(doc)
+
+        qm.set_direction1_extent("Revolve 1", 13, 45.0)
+
+        feat.ApplyDirection1Extent.assert_called_once_with(
+            13, 2, pytest.approx(math.radians(45.0)), None, 0
+        )
+
+    def test_an_extrude_still_sends_meters_untouched(self, query_mgr):
+        qm, doc = query_mgr
+        feat = MagicMock()
+        feat.Name = "Extrude 1"
+        features = MagicMock()
+        features.Count = 1
+        features.Item.return_value = feat
+        doc.DesignEdgebarFeatures = features
+
+        qm.set_direction1_extent("Extrude 1", 13, 0.05)
+
+        feat.ApplyDirection1Extent.assert_called_once_with(13, 2, 0.05, None, 0)
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr
@@ -642,7 +736,7 @@ class TestGetDirection2Extent:
         qm, doc = query_mgr
         feat = MagicMock()
         feat.Name = "Extrude 1"
-        feat.GetDirection2Extent.return_value = (16, 0.0, None)
+        feat.GetDirection2Extent.return_value = (16, 2, 0.0)
 
         features = MagicMock()
         features.Count = 1
@@ -652,6 +746,8 @@ class TestGetDirection2Extent:
         result = qm.get_direction2_extent("Extrude 1")
         assert result["feature_name"] == "Extrude 1"
         assert result["extent_type"] == 16
+        assert result["extent_side"] == 2
+        assert result["distance"] == 0.0
 
     def test_feature_not_found(self, query_mgr):
         qm, doc = query_mgr

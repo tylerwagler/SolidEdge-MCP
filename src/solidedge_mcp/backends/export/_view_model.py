@@ -207,13 +207,24 @@ class ViewModel:
 
             # result is a tuple: (EyeX, EyeY, EyeZ, TargetX, TargetY, TargetZ,
             #                     UpX, UpY, UpZ, Perspective, ScaleOrAngle)
-            return {
+            perspective = bool(result[9])
+            camera: dict[str, Any] = {
                 "eye": [result[0], result[1], result[2]],
                 "target": [result[3], result[4], result[5]],
                 "up": [result[6], result[7], result[8]],
-                "perspective": bool(result[9]),
+                "perspective": perspective,
                 "scale_or_angle": result[10],
             }
+            # ScaleOrAngle means two different things: a view scale in
+            # orthographic, and a field-of-view angle in RADIANS in
+            # perspective. Verified live: set 0.5 in perspective, read 0.5.
+            # It is named for what it is, in the unit of this boundary.
+            if perspective:
+                camera["field_of_view_degrees"] = math.degrees(result[10])
+                camera["field_of_view_radians"] = result[10]
+            else:
+                camera["scale"] = result[10]
+            return camera
         except Exception as e:
             return error_result(e)
 
@@ -444,7 +455,8 @@ class ViewModel:
             target_x, target_y, target_z: Camera target (look-at) coordinates
             up_x, up_y, up_z: Camera up vector (default: Y-up)
             perspective: True for perspective, False for orthographic
-            scale_or_angle: View scale (ortho) or FOV angle in radians (perspective)
+            scale_or_angle: View scale (ortho) or field-of-view angle in DEGREES
+                (perspective); converted to radians before COM
 
         Returns:
             Dict with status and camera settings
@@ -467,7 +479,8 @@ class ViewModel:
                 up_y,
                 up_z,
                 perspective,
-                scale_or_angle,
+                # In perspective the caller gives degrees; COM wants radians.
+                math.radians(scale_or_angle) if perspective else scale_or_angle,
             )
 
             return {
