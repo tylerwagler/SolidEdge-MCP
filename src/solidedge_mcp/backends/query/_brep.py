@@ -39,6 +39,28 @@ _GEOMETRY_FORM_NAMES: dict[int, str] = {
 }
 
 
+def _point3(result: Any, buffer: list[float]) -> list[float] | None:
+    """The (x, y, z) a ``GetPointData(buffer)`` call handed back, or None.
+
+    ``Vertex.GetPointData`` takes one ``[in, out] SAFEARRAY(VT_R8)*``. pywin32
+    returns the filled values as the call's result -- a flat ``(x, y, z)``
+    tuple, verified on Solid Edge 2026 -- and does not update the list that
+    was passed in. Reading ``result[0]`` therefore took the x coordinate on
+    its own, and every vertex this server reported was a one-element point:
+    the eight corners of a box read as {(0.0,), (0.08,)}.
+
+    A three-number sequence is the answer. Anything else is None rather than
+    a partial point, because a coordinate list that is short is worse than
+    one that is missing.
+    """
+    seq = result if isinstance(result, (tuple, list)) else buffer
+    if len(seq) >= 3 and all(isinstance(c, (int, float)) for c in seq[:3]):
+        return [float(c) for c in seq[:3]]
+    if seq and isinstance(seq[0], (tuple, list)) and len(seq[0]) >= 3:
+        return [float(c) for c in seq[0][:3]]
+    return None
+
+
 class BRepMixin:
     """Mixin providing B-Rep topology query methods."""
 
@@ -1245,11 +1267,9 @@ class BRepMixin:
                     point_arr = [0.0, 0.0, 0.0]
                     result = vertex.GetPointData(point_arr)
 
-                    point = (
-                        self._to_list(result[0]) if isinstance(result, tuple) else list(point_arr)
-                    )
+                    point = _point3(result, point_arr)
 
-                    vertex_list.append({"index": i - 1, "point": point[:3]})
+                    vertex_list.append({"index": i - 1, "point": point})
                 except Exception:
                     vertex_list.append({"index": i - 1, "point": None})
 
@@ -1285,14 +1305,14 @@ class BRepMixin:
             point_arr = [0.0, 0.0, 0.0]
             result = vertex.GetPointData(point_arr)
 
-            point = self._to_list(result[0]) if isinstance(result, tuple) else list(point_arr)
+            point = _point3(result, point_arr)
 
             vertex_id = -1
             with contextlib.suppress(Exception):
                 vertex_id = vertex.ID
 
             return {
-                "point": point[:3],
+                "point": point,
                 "vertex_id": vertex_id,
                 "which": which,
                 "face_index": face_index,
