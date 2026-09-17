@@ -196,25 +196,38 @@ class TestGetMomentsOfInertia:
         models.Item.return_value = model
         doc.Models = models
 
-        moi = (1.0, 2.0, 3.0)
+        # GlobalMomentsOfInteria is six values: Ixx Iyy Izz Ixy Ixz Iyz. This
+        # test used to feed three and assert a bare list, which pinned both
+        # the wrong length and the shape that hid which value was which.
+        moi = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
         principal = (1.5, 2.5, 3.5)
         model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
             0.001,
             0.06,
             7.85,
             (0, 0, 0),
-            (0,),
+            (0, 0, 0),
             moi,
             principal,
-            (0,),
-            (0,),
-            0,
+            (0,) * 9,
+            (0.1, 0.2, 0.3),
+            0.0,
             0,
         )
 
         result = qm.get_moments_of_inertia()
-        assert result["moments_of_inertia"] == [1.0, 2.0, 3.0]
+        assert result["moments_of_inertia"] == {
+            "Ixx": 1.0,
+            "Iyy": 2.0,
+            "Izz": 3.0,
+            "Ixy": 4.0,
+            "Ixz": 5.0,
+            "Iyz": 6.0,
+        }
         assert result["principal_moments"] == [1.5, 2.5, 3.5]
+        assert result["radii_of_gyration"] == [0.1, 0.2, 0.3]
+        assert result["density"] == 7850.0, "the assumed density is now visible"
+        assert result["units"]["moments_of_inertia"] == "kg·m²"
 
 
 # ============================================================================

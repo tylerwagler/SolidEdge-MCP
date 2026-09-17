@@ -12,6 +12,57 @@ from ._base import QueryManagerBase, all_faces, body_of, r8_array
 _logger = get_logger(__name__)
 
 
+#: Units for everything ComputePhysicalPropertiesWithSpecifiedDensity returns.
+_PHYSICAL_UNITS: dict[str, str] = {
+    "volume": "m³",
+    "surface_area": "m²",
+    "mass": "kg",
+    "density": "kg/m³",
+    "moments_of_inertia": "kg·m²",
+    "radii_of_gyration": "meters",
+    "coordinates": "meters",
+}
+
+#: GlobalMomentsOfInteria, in the order Solid Edge fills the buffer.
+_MOI_NAMES = ("Ixx", "Iyy", "Izz", "Ixy", "Ixz", "Iyz")
+
+#: The eleven values the call hands back, in order. Anything shorter is not a
+#: computation that happened; it used to be padded with zeros and reported as
+#: "computed", so a caller was told the part had no volume and no mass.
+_PHYSICAL_TUPLE_LENGTH = 11
+
+
+def _unpack_physical_properties(result: Any) -> dict[str, Any]:
+    """Name every field of the COM result, or say why it cannot be trusted.
+
+    Two of the eleven -- RelativeAccuracyAchieved and Status -- are what say
+    whether the computation converged, and they were discarded. They are
+    reported now, under names that do not collide with the "status" string.
+    """
+    if not isinstance(result, tuple) or len(result) != _PHYSICAL_TUPLE_LENGTH:
+        got = len(result) if isinstance(result, tuple) else type(result).__name__
+        return {
+            "error": (
+                f"Solid Edge returned {got} value(s) from the physical-property "
+                f"computation instead of {_PHYSICAL_TUPLE_LENGTH}; nothing was computed."
+            )
+        }
+    volume, area, mass, cog, cov, moi, principal, axes, gyration, accuracy, status = result
+    return {
+        "volume": volume,
+        "surface_area": area,
+        "mass": mass,
+        "center_of_gravity": [float(c) for c in cog][:3],
+        "center_of_volume": [float(c) for c in cov][:3],
+        "moments_of_inertia": dict(zip(_MOI_NAMES, moi, strict=True)),
+        "principal_moments": [float(v) for v in principal][:3],
+        "principal_axes": [float(v) for v in axes][:9],
+        "radii_of_gyration": [float(v) for v in gyration][:3],
+        "relative_accuracy_achieved": accuracy,
+        "compute_status": status,
+    }
+
+
 class PhysicalPropsMixin(QueryManagerBase):
     """Mixin providing physical property queries and body appearance methods."""
 
@@ -72,40 +123,15 @@ class PhysicalPropsMixin(QueryManagerBase):
             doc, model = self._get_first_model()
 
             result = self._compute_physical_properties(model, density, 0.99)
-
-            volume = result[0] if len(result) > 0 else 0
-            surface_area = result[1] if len(result) > 1 else 0
-            mass_val = result[2] if len(result) > 2 else 0
-            cog = result[3] if len(result) > 3 else (0, 0, 0)
-            cov = result[4] if len(result) > 4 else (0, 0, 0)
-            moi = result[5] if len(result) > 5 else (0, 0, 0, 0, 0, 0)
-            principal_moi = result[6] if len(result) > 6 else (0, 0, 0)
+            props = _unpack_physical_properties(result)
+            if "error" in props:
+                return props
 
             return {
                 "status": "computed",
                 "density": density,
-                "volume": volume,
-                "surface_area": surface_area,
-                "mass": mass_val,
-                "center_of_gravity": list(cog) if cog else [0, 0, 0],
-                "center_of_volume": list(cov) if cov else [0, 0, 0],
-                "moments_of_inertia": {
-                    "Ixx": moi[0] if len(moi) > 0 else 0,
-                    "Iyy": moi[1] if len(moi) > 1 else 0,
-                    "Izz": moi[2] if len(moi) > 2 else 0,
-                    "Ixy": moi[3] if len(moi) > 3 else 0,
-                    "Ixz": moi[4] if len(moi) > 4 else 0,
-                    "Iyz": moi[5] if len(moi) > 5 else 0,
-                },
-                "principal_moments": list(principal_moi) if principal_moi else [0, 0, 0],
-                "units": {
-                    "volume": "m³",
-                    "surface_area": "m²",
-                    "mass": "kg",
-                    "density": "kg/m³",
-                    "moments_of_inertia": "kg·m²",
-                    "coordinates": "meters",
-                },
+                **props,
+                "units": _PHYSICAL_UNITS,
             }
         except Exception as e:
             _logger.error(f"Mass properties computation failed: {e}")
@@ -166,16 +192,28 @@ class PhysicalPropsMixin(QueryManagerBase):
 
             faces = all_faces(body, model)
             total_area = 0.0
+            unreadable = 0
             for i in range(1, faces.Count + 1):
                 try:
                     face = faces.Item(i)
                     total_area += face.Area
                 except Exception:
-                    pass
+                    unreadable += 1
 
             if not faces.Count:
                 return {
                     "error": ("This body reports no faces, so its surface area cannot be measured.")
+                }
+            if unreadable:
+                # A sum with faces missing is not the surface area; it is a
+                # smaller number that looks like one.
+                return {
+                    "error": (
+                        f"{unreadable} of {faces.Count} faces could not be read, so the "
+                        f"surface area cannot be totalled."
+                    ),
+                    "faces_unreadable": unreadable,
+                    "face_count": faces.Count,
                 }
 
             return {
@@ -281,26 +319,45 @@ class PhysicalPropsMixin(QueryManagerBase):
         except Exception as e:
             return error_result(e)
 
-    def get_moments_of_inertia(self) -> dict[str, Any]:
-        """
-        Get the moments of inertia of the part.
+    def get_moments_of_inertia(self, density: float = 7850.0) -> dict[str, Any]:
+        """Moments of inertia, at a stated density.
 
-        Returns:
-            Dict with moments of inertia values
+        These are mass moments, so they scale with the density used. The
+        default is steel, and it used to be silent: the numbers assumed
+        7850 kg/m³ whatever material the part carried, with no unit and no
+        way for a caller to tell. The density is now a parameter and is
+        reported back with the result, in the same labelled shape as
+        get_mass_properties rather than a bare list.
+
+        Frame and sign are pinned live against a box whose moments can be
+        computed by hand: ``moments_of_inertia`` are about the MODEL ORIGIN,
+        not the centroid, and the products Ixy/Ixz/Iyz are reported positive
+        (the integral of xy dm, not its negative). ``principal_moments`` are
+        the centroidal principal values, and ``radii_of_gyration`` are their
+        square roots over the mass.
         """
         try:
             doc, model = self._get_first_model()
-            result = self._compute_physical_properties(model, 7850.0, 0.001)
-            # result: (volume, area, mass, cog, cov, global_moi, principal_moi,
-            # principal_axes, radii_of_gyration, relative_accuracy, status)
-            moi = result[5]
-            principal_moi = result[6]
-
+            result = self._compute_physical_properties(model, density, 0.001)
+            props = _unpack_physical_properties(result)
+            if "error" in props:
+                return props
             return {
-                "moments_of_inertia": list(moi) if hasattr(moi, "__iter__") else moi,
-                "principal_moments": (
-                    list(principal_moi) if hasattr(principal_moi, "__iter__") else principal_moi
-                ),
+                "density": density,
+                "mass": props["mass"],
+                "moments_of_inertia": props["moments_of_inertia"],
+                "frame": "global (about the model origin); products reported positive",
+                "principal_moments": props["principal_moments"],
+                "principal_axes": props["principal_axes"],
+                "radii_of_gyration": props["radii_of_gyration"],
+                "relative_accuracy_achieved": props["relative_accuracy_achieved"],
+                "compute_status": props["compute_status"],
+                "units": {
+                    "moments_of_inertia": "kg·m²",
+                    "radii_of_gyration": "meters",
+                    "mass": "kg",
+                    "density": "kg/m³",
+                },
             }
         except Exception as e:
             return error_result(e)

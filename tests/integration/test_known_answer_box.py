@@ -142,6 +142,66 @@ class TestExactValues:
         assert a["angle_radians"] == pytest.approx(math.pi / 2, **EXACT)
 
 
+class TestMomentsOfInertia:
+    """Mass moments at a stated density, pinned for units, frame and sign.
+
+    Read live before this was written: Solid Edge's GlobalMomentsOfInteria
+    are about the MODEL ORIGIN, the products Ixy/Ixz/Iyz come back POSITIVE
+    (the integral of xy dm, not its negative), the "principal" moments are the
+    centroidal principal values, and the radii of gyration are sqrt(I / m).
+    Every number below is the hand formula for a box extruded +Z from the
+    origin, at 1000 kg/m^3.
+    """
+
+    DENSITY = 1000.0
+
+    def test_global_moments_about_the_origin(self, box):
+        m = self.DENSITY * VOLUME
+        a, b, c = X / 2, Y / 2, Z / 2
+        ixx = m * (Y * Y + Z * Z) / 12 + m * (b * b + c * c)
+        iyy = m * (X * X + Z * Z) / 12 + m * (a * a + c * c)
+        izz = m * (X * X + Y * Y) / 12 + m * (a * a + b * b)
+
+        r = box.get_moments_of_inertia(density=self.DENSITY)
+        assert "error" not in r, r
+        moi = r["moments_of_inertia"]
+        assert moi["Ixx"] == pytest.approx(ixx, **EXACT)
+        assert moi["Iyy"] == pytest.approx(iyy, **EXACT)
+        assert moi["Izz"] == pytest.approx(izz, **EXACT)
+        assert moi["Ixy"] == pytest.approx(m * a * b, **EXACT), "products are reported positive"
+        assert moi["Ixz"] == pytest.approx(m * a * c, **EXACT)
+        assert moi["Iyz"] == pytest.approx(m * b * c, **EXACT)
+        assert r["density"] == self.DENSITY
+        assert r["units"]["moments_of_inertia"] == "kg·m²"
+
+    def test_principal_moments_are_the_centroidal_values(self, box):
+        m = self.DENSITY * VOLUME
+        centroidal = sorted(
+            [m * (Y * Y + Z * Z) / 12, m * (X * X + Z * Z) / 12, m * (X * X + Y * Y) / 12]
+        )
+
+        r = box.get_moments_of_inertia(density=self.DENSITY)
+        assert sorted(r["principal_moments"]) == pytest.approx(centroidal, **EXACT)
+        assert sorted(r["radii_of_gyration"]) == pytest.approx(
+            sorted(math.sqrt(i / m) for i in centroidal), **EXACT
+        )
+
+    def test_moments_scale_with_density(self, box):
+        """The old code hardcoded steel; a caller could not tell."""
+        steel = box.get_moments_of_inertia(density=7850.0)["moments_of_inertia"]["Ixx"]
+        water = box.get_moments_of_inertia(density=1000.0)["moments_of_inertia"]["Ixx"]
+        assert steel / water == pytest.approx(7.85, **EXACT)
+
+    def test_the_mass_property_path_reports_convergence(self, box):
+        r = box.get_mass_properties(density=self.DENSITY)
+        assert "relative_accuracy_achieved" in r
+        assert "compute_status" in r
+        assert r["moments_of_inertia"]["Ixx"] == pytest.approx(
+            box.get_moments_of_inertia(density=self.DENSITY)["moments_of_inertia"]["Ixx"],
+            **EXACT,
+        )
+
+
 class TestInvariantsThatNeedNoReferenceValue:
     """Cross-checks between paths that report the same quantity.
 
