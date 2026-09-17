@@ -42,12 +42,12 @@ which succeeds and builds nothing.
 
 | | count | |
 |---|---|---|
-| Verified live | **176** | the body or the target collection must change, or the result becomes an error |
-| Refuse honestly | 37 | return `unsupported: True` -- 34 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
+| Verified live | **175** | the body or the target collection must change, or the result becomes an error |
+| Refuse honestly | 38 | return `unsupported: True` -- 35 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
 | Neither | **0** | |
 | **Total `create_*`** | **213** | |
 
-Of the 176, 127 are face-count checks and 49 are collection-growth checks:
+Of the 175, 126 are face-count checks and 49 are collection-growth checks:
 15 reference planes (`RefPlanes`), 15 surfaces (the five `Constructions.*Surfaces`
 summed), 9 that reshape or annotate (`Models.*.Etches`, `.Threads`, `.Drafts`,
 `.FaceRotates`; `PartsLists`, `DraftBendTables`), 3 surface blends
