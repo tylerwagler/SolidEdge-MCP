@@ -46,7 +46,11 @@ class _Watchdog:
                     title = ctypes.create_unicode_buffer(512)
                     user32.GetWindowTextW(hwnd, title, 512)
                     self.titles.append(title.value)
-                    btn = user32.GetDlgItem(hwnd, 1) or user32.GetDlgItem(hwnd, 2)
+                    btn = (
+                        user32.GetDlgItem(hwnd, 1)
+                        or user32.GetDlgItem(hwnd, 2)
+                        or user32.GetDlgItem(hwnd, 7)  # IDNO: a Yes/No question
+                    )
                     if btn:
                         user32.SendMessageW(btn, 0x00F5, 0, 0)
                 return True

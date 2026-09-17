@@ -26,8 +26,8 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 118 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,953 | mocked COM; catch shape, not truth |
-| Integration tests | 55 | drive real Solid Edge; 19 pin exact values against a known box, and there are now assembly, draft and sheet-metal fixtures |
+| Unit tests | 2,933 | mocked COM; catch shape, not truth |
+| Integration tests | 62 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, and there are assembly, draft and sheet-metal fixtures |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
@@ -42,13 +42,13 @@ which succeeds and builds nothing.
 
 | | count | |
 |---|---|---|
-| Verified live | **175** | the body or the target collection must change, or the result becomes an error |
-| Refuse honestly | 38 | return `unsupported: True` -- 35 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
+| Verified live | **162** | the body or the target collection must change, or the result becomes an error |
+| Refuse honestly | 51 | return `unsupported: True` -- 48 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
 | Neither | **0** | |
 | **Total `create_*`** | **213** | |
 
-Of the 175, 126 are face-count checks and 49 are collection-growth checks:
-15 reference planes (`RefPlanes`), 15 surfaces (the five `Constructions.*Surfaces`
+Of the 162, 116 are face-count checks and 46 are collection-growth checks:
+15 reference planes (`RefPlanes`), 12 surfaces (the five `Constructions.*Surfaces`
 summed), 9 that reshape or annotate (`Models.*.Etches`, `.Threads`, `.Drafts`,
 `.FaceRotates`; `PartsLists`, `DraftBendTables`), 3 surface blends
 (`Models.*.Rounds` + `.Blends`), 2 sketches (`ProfileSets`), and 6 document
@@ -75,18 +75,19 @@ All seven are ratchets: a new violation fails the suite.
 
 Ordered by how much risk each removes, not by effort.
 
-### 1. Live verification is barely reproducible
+### 1. Live verification is reproducible for what has been fixed, not for everything
 
-**13 integration tests, touching 16 of 118 tools.** All 14 assembly tools, all 18
-draft/export tools, all 11 sheet-metal tools and all 6 surface tools have none.
-Almost every bug found so far was
-caught by a throwaway script that was then thrown away. Three have been
-converted (`tests/integration/test_reported_values.py`) and each was
-mutation-tested by restoring the original defect. The rest are gone.
+**62 integration tests across 8 files.** They pin the known-answer box, the
+reported values and units, the document creators and fixtures, drawing views,
+the tier-1 features, and -- added in the live-fix round of 2026-09-17 --
+`tests/integration/test_wrong_members_and_lost_values.py`: the face rotates,
+the planar-face refusal of `delete_blend`, a revolve angle found and set in
+degrees, the symbol-file origin round trip, and the swept-surface refusal.
+Each was mutation-tested when written. Most tools still have no integration
+test of their own; `scripts/live_sweep.py` is what drives all 118 once, and
+its record (below) is the coverage that exists for the rest.
 
-This is the largest gap, because it is the one that lets fixed bugs come back.
-
-### 2. Numeric correctness -- now checked, one item open
+### 2. Numeric correctness -- checked, the last item closed
 
 `tests/integration/test_known_answer_box.py` builds a 0.08 x 0.048 x 0.03 m box
 and asserts, at float-noise tolerance, every number that can be computed by
@@ -104,40 +105,65 @@ slots shifted so the side constant was reported as the distance and the real
 value stringified into a non-existent `face_ref`; a cone `half_angle` and the
 camera's perspective field of view reported in radians.
 
-**Open:** `Variable.Value` for an *angular* variable is unconfirmed. Neither
-`Variables.Add(name, "45 deg")` nor an explicit `units_type` would create one
-on this install, and `query_variables("*")` returns only user-defined variables
--- `doc.Variables.Count` reads 4 while the query reports 0 -- so a revolve's own
-angle dimension cannot be observed through this server either. Two things are
-established: a bare-number formula is read in the *document's* units (on an
-inch template `"0.785398"` became 0.0199 m), and the variable query never sees
-dimension variables. Whether angular values arrive in radians is not.
+**Closed (2026-09-17):** an angular variable holds radians. The revolve's own
+angle dimension (`RevolvedProtrusion_1_FiniteAngle`, system name `Dimension 346`)
+reads 1.5707963 for 90 degrees and `UnitsType` reports `igUnitAngle`. It was
+invisible before because `Variables.Query` was called with
+`NamedBy=seVariableNameByUser`, which sees only user-named variables, and
+`Variables.Item(i)` enumerates a dimension as a nameless entry; `ByBoth` and
+`Item("<display name>")` reach it. `Variable.Units` is a member of nothing --
+the read of it was suppressed on every variable, so no units were ever
+reported. Variables now carry `units`, `units_type` and, for angles,
+`value_degrees`; `set_variable` takes degrees for an angular variable.
 
 ### 3. Known-broken, with the evidence
 
-`scripts/live_sweep.py` drove all 118 tools once through the real server and
-recorded every outcome in `reference/LIVE_SWEEP.md`. What it left as
-known-broken, each with the evidence that closes the question on this install:
+`scripts/live_sweep.py` drives all 118 tools through the real server and
+records every outcome in `reference/LIVE_SWEEP.md`. The run of 2026-09-17 08:24,
+on the fixed code: **99 OK, 23 refuse honestly, 3 FAIL, 0 NOOP** across 125
+cases (from 93 / 15 / 14 / 2 the day before). The three FAILs are the sweep's
+own deliberate probes -- a missing macro, a plain cylinder asked for a thread
+(`Threads.Add` wants a tapped hole's `HoleData`), a plane asked for NURBS data
+-- each answered with an explanation. Seven earlier FAIL rows were the sweep's
+inputs, not the tools (a planar face for `delete_blend`, a circle where a
+louver needs a line, a constraint without its elements, ...); they were
+corrected so the record separates the two. What the sweep and the probes
+behind it leave as known-broken, each with the evidence that closes the
+question on this install:
 
 | tool / method | evidence |
 |---|---|
-| `create_flange` (basic) | 24 face/edge combinations through the tool and 18 `FlangeSide`/`ThicknessSide` combinations through raw COM on a fresh tab: every one builds nothing or answers `E_POINTER`. `Flanges.Add` never builds from a `Face.Edges` edge here. Reports honestly via the decorator. |
-| `create_lofted_surface`, `_v2`, `create_swept_surface` | `E_INVALIDARG` / `E_FAIL` with a base feature and without, while `create_extruded_surface` builds beside them. A "requires a base feature" guard masked this for years; it is gone and the COM error shows. |
+| `create_flange`, all 8 methods | `Flanges.Add`, `AddByMatchFace` and `AddByBendDeductionOrBendAllowance` record a Flange with a 90-degree bend angle and a radius that never solves: range, volume and face count unchanged after `Recompute`, `Flange.Status` raises, the UI draws only its outline (8 of 12 tab edges accept the call, each tried on a fresh document; the optional `ThicknessSide`/`InsideRadius`/`DimSide`/`BendAngle` and every `*Side*` constant change the recorded feature and nothing else). `AddSync*` raise 0x80004021 in an ordered document; `AddFlangeByFace` raises `E_POINTER`. Refuses before COM. |
+| `create_louver` (basic) | `Louvers.Add` records `Louver_1` that never solves, with the line on the base plane or a plane through the top face, both directions, 1 and 3 mm deep, and every `Type`/`RoundType`/`DieRadius`/`DimensionType` combination (nine placements). Refuses before COM. |
+| `create_contour_flange` (ex) | `ContourFlanges.AddEx` and `Add` answer `E_FAIL` to 52 open-profile placements: from the tab's corner and from the interior of an edge, on the base planes and on planes perpendicular to the edge, both projection sides. Refuses before COM. |
+| `create_lofted_surface`, `create_bounded_surface` | `LoftedSurfaces.Add` answers `E_INVALIDARG` to 13 argument shapes including the one that builds `Models.AddLoftedProtrusion` from the same two profiles; `BlueSurfs.Add` answers it whatever `Origins` holds (the declared dispatch array of section circles, the profiles, `None`). Both refuse before COM. `_v2` is not probed. |
+| `create_swept_surface` | builds on a fresh instance once `Origins=[element]` and `OriginRefs=keypoint` (`comutil.profile_origin_element` records the shape; `None` for both is the `E_FAIL` it used to return) -- and took the Solid Edge process down on 3 of 5 calls once a session had been through a few documents. A crash is worse than a refusal; refuses before COM. |
+| `wiring(type="wire")` | `Wires.Add` wants wire-path curves in `PathArray`, 3D sketch segments this server cannot draw (the structural-frame gap); it was handed occurrences and answered `E_FAIL`. Refuses before COM. |
+| `convert_by_file_path` | `Application.ConvertByFilePath` returns in ~1.6 s reporting nothing wrong and writes nothing, for nine output formats (stp, step, x_t, igs, jt, pdf, dxf, stl, par); `SaveCopyAs` on the opened document writes the STEP at once. Refuses and points at `export_file`. |
 | `create_assembly_swept_protrusion` | `E_INVALIDARG` with `Origins` as inner VARIANTs (the shape the part-level sweep needs) and `E_FAIL` as plain tuples or lists; the argument shape is not the cause. |
-| `create_contour_flange` | `E_FAIL`; it needs an open profile against a specific edge the sketch tools cannot guarantee. |
 | `select_set(action="all")` | `SelectSet.AddAll` answers `E_FAIL` whatever the selection holds; now refuses honestly. |
-| `draft_config(action="get_origin")` | raw `DISP_E_BADINDEX`; not yet investigated. |
-| `face_operation(rotate_by_edge)` | raw `E_INVALIDARG` on a box face; not yet investigated. |
 | `create_weldment` without a template | raised a modal that hung the server; now refuses before COM. |
 
-Fixed because the sweep found them: `convert_by_file_path` reported
-"converted" with no output on disk; vertices came back as one-element points;
-extent slots were shifted so the side constant was reported as the distance;
-`create_assembly_hole` passed no hole data and Solid Edge recorded nothing
-(with a `HoleData` it cuts, faces 6 -> 7); the two assembly protrusions take
-no scope parts and were being measured against occurrence bodies they cannot
-touch (they are recorded, `ExtrudedProtrusions.Count` 0 -> 1, and are now
-verified by that); eight surface creators refused without a solid on a
+Fixed in the live-fix round of 2026-09-17, each driven live and pinned:
+`face_operation` (both rotates) raised `E_INVALIDARG` because `FaceRotates.Add`
+was given the wrong members of `FaceRotateConstants` (1, 1, 2 and 2, 1, 0 for
+ByGeometry=2, RecreateBlends=6, AxisEnd=4 / ByPoints=1, None=0 -- the comments
+beside the literals named the members correctly and the values wrongly);
+`delete_topology(blend)` accepted a planar face and built nothing (a cylinder
+face removes the round, 26 -> 23 faces) and now refuses the planar one;
+`draft_config(get_origin)` lost its values because `GetSymbolFileOrigin`'s
+parameters are declared `[in]` and the late-bound call returns `None` -- it now
+goes through `InvokeTypes` with `[in, out]` by-reference doubles, and says
+plainly when no origin is set (`DISP_E_BADINDEX`, inside `excepinfo`); the
+variables findings above.
+
+Fixed because the earlier sweep found them: vertices came back as one-element
+points; extent slots were shifted so the side constant was reported as the
+distance; `create_assembly_hole` passed no hole data and Solid Edge recorded
+nothing (with a `HoleData` it cuts, faces 6 -> 7); the two assembly protrusions
+take no scope parts and were being measured against occurrence bodies they
+cannot touch (they are recorded, `ExtrudedProtrusions.Count` 0 -> 1, and are
+now verified by that); eight surface creators refused without a solid on a
 precondition Solid Edge does not have.
 
 ### 4. The swallow surface is only partly audited
@@ -167,9 +193,9 @@ There is no state where this is finished, because Solid Edge keeps its own
 counsel. A defensible bar:
 
 - [x] every tool driven live at least once, with the result recorded (`scripts/live_sweep.py` -> `reference/LIVE_SWEEP.md`)
-- [x] every bug fixed this far pinned by a test that fails without the fix (55 integration tests, each mutation-tested when written)
+- [x] every bug fixed this far pinned by a test that fails without the fix (62 integration tests, each mutation-tested when written)
 - [x] the 49 unverified creators given a collection-growth check
-- [x] one numeric-correctness check per measurement tool (angular variables excepted, see above)
+- [x] one numeric-correctness check per measurement tool (angular variables included, see above)
 - [ ] the branch merged
 
 ## How to re-measure

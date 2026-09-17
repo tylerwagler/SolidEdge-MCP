@@ -60,7 +60,13 @@ def _watchdog() -> None:
                 title = ctypes.create_unicode_buffer(512)
                 user32.GetWindowTextW(hwnd, title, 512)
                 modals.append(title.value)
-                btn = user32.GetDlgItem(hwnd, 2) or user32.GetDlgItem(hwnd, 1)
+                # IDCANCEL, IDOK, then IDNO: a Yes/No question (the Predict-toolbar
+                # prompt on a fresh instance) has neither of the first two.
+                btn = (
+                    user32.GetDlgItem(hwnd, 2)
+                    or user32.GetDlgItem(hwnd, 1)
+                    or user32.GetDlgItem(hwnd, 7)
+                )
                 if btn:
                     user32.SendMessageW(btn, 0x00F5, 0, 0)
             return True
@@ -189,6 +195,9 @@ CONTEXTS: dict[str, list[Step]] = {
     "box_loft": _box() + _loft_profiles(),
     "box_sweep": _box() + _sweep_profiles(),
     "box_round": _box() + [("create_round", {"method": "all_edges", "radius": 0.002})],
+    "cylinder": _part()
+    + _circle_closed()
+    + [("create_extrude", {"method": "finite", "distance": 0.03})],
     "sheet": _sheet(),
     "sheet_rect_closed": [("create_document", {"type": "sheet_metal"})] + _rect_closed(),
     "sheet_circle_closed": _sheet() + _circle_closed(),
@@ -202,6 +211,7 @@ CONTEXTS: dict[str, list[Step]] = {
     "asm2": _asm(2),
     "asm_circle_closed": _asm(1) + _circle_closed(),
     "draft": _draft(),
+    "draft_origin": _draft() + [("draft_config", {"action": "set_origin", "x": 0.1, "y": 0.2})],
     "draft_line": _draft()
     + [("draw_sheet_geometry", {"shape": "line", "x1": 0.02, "y1": 0.02, "x2": 0.12, "y2": 0.02})],
     "draft_link": _draft_link(),
@@ -242,7 +252,7 @@ CASES: list[Case] = [
     Case("import_file", {"file_path": str(BOX)}, "none"),
     Case("undo_redo", {"action": "undo"}, "box"),
     # diagnostics
-    Case("diagnose_api", {}, "none"),
+    Case("diagnose_api", {}, "part"),
     Case("diagnose_feature_tool", {"feature_index": 0}, "box"),
     # sketching
     Case("manage_sketch", {"action": "create", "plane": "Top"}, "part"),
@@ -257,8 +267,7 @@ CASES: list[Case] = [
         {
             "type": "geometric",
             "constraint_type": "Horizontal",
-            "element1_type": "line",
-            "element1_index": 0,
+            "elements": [["line", 1]],  # this tool documents 1-based element indices
         },
         "part_sketch_rect",
     ),
@@ -330,7 +339,7 @@ CASES: list[Case] = [
     Case("create_revolved_surface", {"method": "finite", "angle": 90.0}, "part_rev_closed"),
     Case("create_lofted_surface", {"method": "basic"}, "part_loft"),
     Case("create_swept_surface", {"method": "basic", "path_profile_index": 0}, "part_sweep"),
-    Case("create_bounded_surface", {}, "part_rect_closed"),
+    Case("create_bounded_surface", {}, "part_loft"),
     Case("create_mirror", {"method": "basic", "feature_name": F, "mirror_plane_index": 2}, "box"),
     Case(
         "create_pattern",
@@ -348,7 +357,7 @@ CASES: list[Case] = [
     Case(
         "create_thread",
         {"method": "basic", "face_index": 0, "thread_diameter": 0.006, "thread_depth": 0.01},
-        "box",
+        "cylinder",
     ),
     Case("create_blend", {"method": "basic", "radius": 0.002, "face_index": 0}, "box"),
     Case("create_split", {}, "box"),
@@ -356,7 +365,7 @@ CASES: list[Case] = [
     Case("create_web_network", {"thickness": 0.002, "depth": 0.01}, "box_circle_closed"),
     Case("create_reinforcement", {"type": "rib", "thickness": 0.002}, "box_circle_closed"),
     Case("add_body", {"method": "basic", "body_type": "Solid", "body_name": "B2"}, "box"),
-    Case("delete_topology", {"type": "blend"}, "box_round"),
+    Case("delete_topology", {"type": "blend", "face_index": 6}, "box_round"),
     Case(
         "face_operation",
         {"type": "rotate_by_edge", "face_index": 0, "edge_index": 0, "angle": 5.0},
@@ -391,7 +400,7 @@ CASES: list[Case] = [
     Case("create_dimple", {"method": "basic", "depth": 0.005}, "sheet_circle_closed"),
     Case("create_drawn_cutout", {"method": "basic", "depth": 0.005}, "sheet_circle_closed"),
     Case(
-        "create_louver", {"method": "basic", "depth": 0.003, "height": 0.005}, "sheet_circle_closed"
+        "create_louver", {"method": "basic", "depth": 0.003, "height": 0.005}, "sheet_line_closed"
     ),
     Case(
         "create_lofted_flange",
@@ -502,7 +511,7 @@ CASES: list[Case] = [
         {"method": "basic", "part_filename": str(BOX), "path_indices": [0]},
         "asm",
     ),
-    Case("wiring", {"type": "wire", "path_indices": [0]}, "asm"),
+    Case("wiring", {"type": "wire", "path_indices": [0], "path_directions": [True]}, "asm"),
     # draft
     Case("manage_sheet", {"action": "add"}, "draft"),
     Case("query_sheet", {"type": "dimensions"}, "draft"),
@@ -546,7 +555,8 @@ CASES: list[Case] = [
     ),
     Case("manage_annotation_data", {"action": "get_symbols"}, "draft"),
     Case("print_control", {"action": "get_printer"}, "draft"),
-    Case("draft_config", {"action": "get_origin"}, "draft"),
+    Case("draft_config", {"action": "set_origin", "x": 0.1, "y": 0.2}, "draft"),
+    Case("draft_config", {"action": "get_origin"}, "draft_origin"),
     Case(
         "manage_sheet",
         {"action": "create_drawing", "views": ["Front", "Top"]},
