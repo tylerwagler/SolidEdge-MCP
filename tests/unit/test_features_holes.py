@@ -255,6 +255,29 @@ class TestDeleteBlend:
         assert "error" in result
         assert "Invalid face index" in result["error"]
 
+    def test_planar_face_is_refused_before_the_call(self, feature_mgr, managers):
+        """DeleteBlends.Add accepts a planar face and builds nothing (SE 2026)."""
+        from solidedge_mcp.backends.constants import GNTTypePropertyConstants
+
+        _, _, _, _, model, _ = managers
+        face = model.Body.Faces.return_value.Item.return_value
+        face.Geometry.Type = GNTTypePropertyConstants.igPlane
+
+        result = feature_mgr.create_delete_blend(0)
+
+        assert "planar" in result["error"]
+        model.DeleteBlends.Add.assert_not_called()
+
+    def test_cylinder_face_is_passed_to_solid_edge(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        face = model.Body.Faces.return_value.Item.return_value
+        face.Geometry.Type = -114972029  # igCylinder
+
+        result = feature_mgr.create_delete_blend(0)
+
+        assert result["status"] == "created"
+        model.DeleteBlends.Add.assert_called_once_with(face)
+
 
 # ============================================================================
 # HOLE FROM TO

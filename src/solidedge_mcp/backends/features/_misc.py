@@ -9,6 +9,7 @@ from solidedge_mcp.backends.errors import error_result
 from ..comutil import com_get
 from ..constants import (
     FaceQueryConstants,
+    FaceRotateConstants,
     PatternOffsetTypeConstants,
     PatternTypeConstants,
 )
@@ -581,8 +582,20 @@ class MiscFeaturesMixin:
             angle_rad = math.radians(angle)
 
             face_rotates = model.FaceRotates
-            # igFaceRotateByGeometry = 1, igFaceRotateRecreateBlends = 1, igFaceRotateAxisEnd = 2
-            face_rotates.Add(face, 1, 1, None, None, edge, 2, angle_rad)
+            # FaceRotates.Add(FacesToBeRotated, FaceRotateType, BlendRecreation,
+            #   startPointFor2PointAxis, endPointFor2PointAxis, axisObject,
+            #   axisStartOrEnd, Angle). The literals this replaced (1, 1, ..., 2)
+            # named the wrong members and raised E_INVALIDARG on every call.
+            face_rotates.Add(
+                face,
+                FaceRotateConstants.igFaceRotateByGeometry,
+                FaceRotateConstants.igFaceRotateRecreateBlends,
+                None,
+                None,
+                edge,
+                FaceRotateConstants.igFaceRotateAxisEnd,
+                angle_rad,
+            )
 
             return {
                 "status": "created",
@@ -648,8 +661,17 @@ class MiscFeaturesMixin:
             angle_rad = math.radians(angle)
 
             face_rotates = model.FaceRotates
-            # igFaceRotateByPoints = 2, igFaceRotateRecreateBlends = 1, igFaceRotateNone = 0
-            face_rotates.Add(face, 2, 1, point1, point2, None, 0, angle_rad)
+            # Same signature as by edge; (2, 1, ..., 0) raised E_INVALIDARG.
+            face_rotates.Add(
+                face,
+                FaceRotateConstants.igFaceRotateByPoints,
+                FaceRotateConstants.igFaceRotateRecreateBlends,
+                point1,
+                point2,
+                None,
+                FaceRotateConstants.igFaceRotateNone,
+                angle_rad,
+            )
 
             return {
                 "status": "created",

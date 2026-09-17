@@ -460,6 +460,7 @@ class KeyPointTypeConstants:
 
     igKeyPointStart = 1
     igKeyPointEnd = 2
+    igKeyPointCenter = 4
 
 
 class ReferenceElementConstants:
@@ -830,3 +831,36 @@ DOCUMENT_TYPE_NAMES: dict[int, str] = {
     12: "part viewer",
     13: "draft viewer",
 }
+
+
+class FaceRotateConstants:
+    """part.tlb > FaceRotateConstants: every enum argument of FaceRotates.Add.
+
+    Verified on Solid Edge 2026: the literals these replaced (1, 1 and 2 for
+    a rotate by edge; 2, 1 and 0 for one by points) named the wrong members
+    and raised E_INVALIDARG on every call. These build.
+    """
+
+    igFaceRotateNone = 0
+    igFaceRotateByPoints = 1
+    igFaceRotateByGeometry = 2
+    igFaceRotateAxisStart = 3
+    igFaceRotateAxisEnd = 4
+    igFaceRotateIgnoreBlends = 5
+    igFaceRotateRecreateBlends = 6
+    igFaceRotateBySynchronousRotate = 7
+
+
+class UnitTypeConstants:
+    """framewrk.tlb > UnitTypeConstants, what Variable.UnitsType reports.
+
+    The members a variable table commonly holds; the enum has 63.
+    """
+
+    igUnitDistance = 1
+    igUnitAngle = 2
+    igUnitMass = 3
+    igUnitArea = 13
+    igUnitDensity = 16
+    igUnitVolume = 56
+    igUnitScalar = 58

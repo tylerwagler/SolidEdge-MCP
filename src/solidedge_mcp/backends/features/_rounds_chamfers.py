@@ -7,6 +7,7 @@ from solidedge_mcp.backends.errors import error_result
 from ..comutil import com_get
 from ..constants import (
     FaceQueryConstants,
+    GNTTypePropertyConstants,
 )
 from ..logging import get_logger
 from ._base import verifies_collection_growth, verifies_geometry
@@ -815,6 +816,19 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
 
+            # DeleteBlends.Add takes a planar face without complaint and then
+            # builds nothing (Solid Edge 2026: a cylinder face went 26 -> 23
+            # faces, a planar one left the body untouched). Refuse it here and
+            # say which faces qualify.
+            geometry_type = com_get(com_get(face, "Geometry"), "Type")
+            if geometry_type == GNTTypePropertyConstants.igPlane:
+                return {
+                    "error": (
+                        f"Face {face_index} is planar; delete_blend removes blend "
+                        "(round) faces such as a cylinder, sphere or torus. Use "
+                        "get_face_geometry to find one."
+                    )
+                }
             delete_blends = model.DeleteBlends
             delete_blends.Add(face)
 

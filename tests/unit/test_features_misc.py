@@ -9,6 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import FaceRotateConstants
+
 
 @pytest.fixture
 def managers():
@@ -827,7 +829,16 @@ class TestFaceRotateByEdge:
         assert result["status"] == "created"
         assert result["type"] == "face_rotate"
         assert result["method"] == "by_edge"
-        model.FaceRotates.Add.assert_called_once()
+        # FaceRotateConstants: ByGeometry=2, RecreateBlends=6, AxisEnd=4. The
+        # literals 1, 1 and 2 this replaced raised E_INVALIDARG on Solid Edge 2026.
+        args = model.FaceRotates.Add.call_args.args
+        assert args[1:3] == (
+            FaceRotateConstants.igFaceRotateByGeometry,
+            FaceRotateConstants.igFaceRotateRecreateBlends,
+        )
+        assert args[3] is None and args[4] is None
+        assert args[6] == FaceRotateConstants.igFaceRotateAxisEnd
+        assert args[7] == pytest.approx(math.radians(5.0))
 
     def test_invalid_face(self):
         fm, model = self._make_fm_with_body()
@@ -883,7 +894,17 @@ class TestFaceRotateByPoints:
         result = fm.create_face_rotate_by_points(0, 0, 1, 5.0)
         assert result["status"] == "created"
         assert result["method"] == "by_points"
-        model.FaceRotates.Add.assert_called_once()
+        # ByPoints=1, RecreateBlends=6, the two vertices, no axis object, None=0.
+        model.FaceRotates.Add.assert_called_once_with(
+            face,
+            FaceRotateConstants.igFaceRotateByPoints,
+            FaceRotateConstants.igFaceRotateRecreateBlends,
+            v1,
+            v2,
+            None,
+            FaceRotateConstants.igFaceRotateNone,
+            pytest.approx(math.radians(5.0)),
+        )
 
     def test_no_features(self):
         from solidedge_mcp.backends.features import FeatureManager
