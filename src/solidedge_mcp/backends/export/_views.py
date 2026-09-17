@@ -67,7 +67,15 @@ class ViewsMixin:
             view = dvs.Item(view_index + 1)
             view.ScaleFactor = scale
 
-            return {"status": "set", "view_index": view_index, "scale": scale}
+            # Report what the view holds, not what was asked: a write Solid
+            # Edge quietly clamps or ignores would otherwise be reported as
+            # applied. set_drawing_view_orientation reads back the same way.
+            return {
+                "status": "set",
+                "view_index": view_index,
+                "scale": scale,
+                "reads_back": view.ScaleFactor,
+            }
         except Exception as e:
             return error_result(e)
 

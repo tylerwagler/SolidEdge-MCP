@@ -209,7 +209,6 @@ class SurfacesMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
 
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
@@ -230,29 +229,24 @@ class SurfacesMixin:
                 for p in all_profiles
             ]
 
-            if models.Count > 0:
-                # Proves a base feature exists; the surface goes on Constructions.
-                models.Item(1)
-                # Surfaces live on doc.Constructions; Model has no
-                # LoftedSurfaces property, so this always raised.
-                loft_surfaces = doc.Constructions.LoftedSurfaces
-                loft_surfaces.Add(
-                    len(all_profiles),
-                    v_sections,
-                    v_types,
-                    v_origins,
-                    ExtentTypeConstants.igNone,  # StartExtentType
-                    ExtentTypeConstants.igNone,  # EndExtentType
-                    0,
-                    0.0,  # StartTangentType, StartTangentMagnitude
-                    0,
-                    0.0,  # EndTangentType, EndTangentMagnitude
-                    0,
-                    None,  # NumGuideCurves, GuideCurves
-                    want_end_caps,
-                )
-            else:
-                return {"error": "Lofted surface requires an existing base feature."}
+            # Surfaces live on doc.Constructions; Model has no
+            # LoftedSurfaces property, so this always raised.
+            loft_surfaces = doc.Constructions.LoftedSurfaces
+            loft_surfaces.Add(
+                len(all_profiles),
+                v_sections,
+                v_types,
+                v_origins,
+                ExtentTypeConstants.igNone,  # StartExtentType
+                ExtentTypeConstants.igNone,  # EndExtentType
+                0,
+                0.0,  # StartTangentType, StartTangentMagnitude
+                0,
+                0.0,  # EndTangentType, EndTangentMagnitude
+                0,
+                None,  # NumGuideCurves, GuideCurves
+                want_end_caps,
+            )
 
             self.sketch_manager.clear_accumulated_profiles()
 
@@ -283,14 +277,6 @@ class SurfacesMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            # Proves a base feature exists; the surface goes on Constructions.
-            models.Item(1)
-
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
             if len(all_profiles) < 2:
@@ -563,11 +549,6 @@ class SurfacesMixin:
             if not refaxis:
                 return {"error": "No axis of revolution set. Use set_axis_of_revolution() first."}
 
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
             angle_rad = math.radians(angle)
 
             v_profiles = [profile]
@@ -622,12 +603,6 @@ class SurfacesMixin:
             if not refaxis:
                 return {"error": "No axis of revolution set. Use set_axis_of_revolution() first."}
 
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
-
             v_profiles = [profile]
 
             # Surfaces live on doc.Constructions; Model has no
@@ -669,7 +644,6 @@ class SurfacesMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
 
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
@@ -678,12 +652,6 @@ class SurfacesMixin:
                     "error": f"Lofted surface requires at least 2 profiles, "
                     f"got {len(all_profiles)}."
                 }
-
-            if models.Count == 0:
-                return {"error": "Lofted surface requires an existing base feature."}
-
-            # Proves a base feature exists; the surface goes on Constructions.
-            models.Item(1)
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
@@ -745,14 +713,6 @@ class SurfacesMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "Swept surface requires an existing base feature."}
-
-            # Proves a base feature exists; the surface goes on Constructions.
-            models.Item(1)
-
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
             if len(all_profiles) < 2:
@@ -959,11 +919,6 @@ class SurfacesMixin:
                     "closing the sketch."
                 }
 
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
-
             angle_rad = math.radians(angle)
             profile_array = [profile]
 
@@ -1021,12 +976,6 @@ class SurfacesMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "Bounded surface requires an existing base feature."}
-            # Proves a base feature exists; the surface goes on Constructions.
-            models.Item(1)
-
             all_profiles = self.sketch_manager.get_accumulated_profiles()
             if len(all_profiles) < 2:
                 return {
@@ -1100,11 +1049,6 @@ class SurfacesMixin:
                     "Use set_axis_of_revolution() before "
                     "closing the sketch."
                 }
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-            models.Item(1)  # proves a base feature exists; the surface goes on Constructions
 
             angle_rad = math.radians(angle)
             profile_array = [profile]

@@ -51,7 +51,28 @@ class TestSetDrawingViewScale:
         result = em.set_drawing_view_scale(0, 0.5)
         assert result["status"] == "set"
         assert result["scale"] == 0.5
+        assert result["reads_back"] == 0.5
         assert view.ScaleFactor == 0.5
+
+    def test_a_write_the_view_did_not_keep_shows_in_reads_back(self, export_mgr):
+        """The setter used to echo the value it was asked for. A scale Solid
+        Edge clamps or ignores must be visible, so ScaleFactor is read back."""
+        em, doc = export_mgr
+        view = MagicMock()
+        type(view).ScaleFactor = property(lambda self: 1.0, lambda self, v: None)
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.set_drawing_view_scale(0, 0.25)
+
+        assert result["scale"] == 0.25, "what was asked"
+        assert result["reads_back"] == 1.0, "what the view actually holds"
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr

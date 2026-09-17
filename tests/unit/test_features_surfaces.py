@@ -183,14 +183,19 @@ class TestLoftedSurface:
         assert "error" in result
         assert "at least 2" in result["error"]
 
-    def test_no_base_feature(self, feature_mgr, managers):
+    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
+        """A construction surface needs no solid. This used to refuse with
+        "requires an existing base feature" -- a precondition Solid Edge does
+        not have, which masked the call behind it."""
         _, sketch_mgr, _, models, _, _ = managers
         models.Count = 0
         p1, p2 = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+
         result = feature_mgr.create_lofted_surface()
-        assert "error" in result
-        assert "base feature" in result["error"].lower()
+
+        assert "base feature" not in str(result.get("error", "")).lower()
+        assert result.get("status") == "created", result
 
 
 # ============================================================================
@@ -216,12 +221,15 @@ class TestSweptSurface:
         assert "error" in result
         assert "at least 2" in result["error"]
 
-    def test_no_base_feature(self, feature_mgr, managers):
+    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
         _, sketch_mgr, _, models, _, _ = managers
         models.Count = 0
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
+
         result = feature_mgr.create_swept_surface()
-        assert "error" in result
-        assert "No base feature" in result["error"]
+
+        assert "base feature" not in str(result.get("error", "")).lower()
+        assert result.get("status") == "created", result
 
     def test_with_end_caps(self, feature_mgr, managers):
         _, sketch_mgr, _, _, model, _ = managers
@@ -462,14 +470,15 @@ class TestCreateLoftedSurfaceV2:
         assert "error" in result
         assert "at least 2 profiles" in result["error"]
 
-    def test_no_base_feature(self, feature_mgr, managers):
+    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
         _, sketch_mgr, _, models, _, _ = managers
         sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
         models.Count = 0
 
         result = feature_mgr.create_lofted_surface_v2()
-        assert "error" in result
-        assert "base feature" in result["error"]
+
+        assert "base feature" not in str(result.get("error", "")).lower()
+        assert result.get("status") == "created", result
 
 
 # ============================================================================
@@ -500,13 +509,15 @@ class TestCreateSweptSurfaceEx:
         assert "error" in result
         assert "at least 2 profiles" in result["error"]
 
-    def test_no_base_feature(self, feature_mgr, managers):
+    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
         _, sketch_mgr, _, models, _, _ = managers
         models.Count = 0
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
 
         result = feature_mgr.create_swept_surface_ex()
-        assert "error" in result
-        assert "base feature" in result["error"]
+
+        assert "base feature" not in str(result.get("error", "")).lower()
+        assert result.get("status") == "created", result
 
 
 # ============================================================================

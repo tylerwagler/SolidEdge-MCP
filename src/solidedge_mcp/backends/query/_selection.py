@@ -165,22 +165,21 @@ class SelectionMixin:
             return error_result(e)
 
     def select_all(self) -> dict[str, Any]:
+        """Refuse: SelectSet.AddAll answers E_FAIL on Solid Edge 2026.
+
+        Verified live on a part with a body: AddAll raises 0x80004005 with the
+        selection empty and again with a feature already selected, and the
+        raw call raises the same outside this server. An honest refusal beats
+        a call that always fails.
         """
-        Select all objects in the active document.
-
-        Uses SelectSet.AddAll() to add all selectable objects.
-
-        Returns:
-            Dict with status and new selection count
-        """
-        try:
-            doc = self.doc_manager.get_active_document()
-            select_set = doc.SelectSet
-            select_set.AddAll()
-
-            return {"status": "selected_all", "selection_count": select_set.Count}
-        except Exception as e:
-            return error_result(e)
+        return {
+            "error": (
+                "SelectSet.AddAll answers E_FAIL on Solid Edge 2026 whatever the "
+                "selection holds. Add objects one at a time with "
+                "select_set(action='add', object_type=..., index=...)."
+            ),
+            "unsupported": True,
+        }
 
     def select_copy(self) -> dict[str, Any]:
         """

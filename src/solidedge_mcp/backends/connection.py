@@ -5,6 +5,8 @@ Handles connecting to and managing Solid Edge application instances.
 """
 
 import contextlib
+import os
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -29,6 +31,26 @@ def _looks_dead(exc: BaseException) -> bool:
     """Heuristic for dead-proxy errors that are not typed com_error."""
     text = str(exc)
     return any(m in text for m in _DEAD_MARKERS)
+
+
+def _wait_for_file(path: str, timeout: float = 20.0) -> int | None:
+    """The file's size once it exists and has stopped growing, or None.
+
+    A conversion may still be writing when the COM call returns; two equal
+    non-zero size readings a short interval apart is taken as finished.
+    """
+    deadline = time.monotonic() + timeout
+    last: int | None = None
+    while time.monotonic() < deadline:
+        if os.path.exists(path):
+            size = os.path.getsize(path)
+            if size and size == last:
+                return size
+            last = size
+        time.sleep(0.25)
+    if os.path.exists(path) and os.path.getsize(path):
+        return os.path.getsize(path)
+    return None
 
 
 class SolidEdgeConnection:
@@ -562,16 +584,35 @@ class SolidEdgeConnection:
         Returns:
             Dict with status
         """
+        if not os.path.exists(input_path):
+            return {"error": f"Input path does not exist: {input_path}. Nothing was converted."}
         try:
             app = self._get_app()
             app.ConvertByFilePath(input_path, output_path)
+        except Exception as e:
+            return error_result(e)
+
+        # ConvertByFilePath returns without saying whether it did anything,
+        # and can return before the writer has finished. Verified live: it
+        # returned in 1.1 s reporting nothing wrong, and no file appeared.
+        # The output is what says a conversion happened.
+        size = _wait_for_file(output_path)
+        if size is None:
             return {
-                "status": "converted",
+                "error": (
+                    f"ConvertByFilePath returned without writing {output_path}; "
+                    "nothing was converted. Check that the output extension is a "
+                    "format Solid Edge can write and that the input opens."
+                ),
                 "input": input_path,
                 "output": output_path,
             }
-        except Exception as e:
-            return error_result(e)
+        return {
+            "status": "converted",
+            "input": input_path,
+            "output": output_path,
+            "size_bytes": size,
+        }
 
     def get_default_template_path(self, doc_type: int) -> dict[str, Any]:
         """

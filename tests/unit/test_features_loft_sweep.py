@@ -166,13 +166,17 @@ class TestCreateBoundedSurface:
         assert "error" in result
         assert "at least 2 profiles" in result["error"]
 
-    def test_no_base_feature(self, feature_mgr, managers):
+    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
+        """A construction surface needs no solid; the old guard was a
+        precondition Solid Edge does not have."""
         _, sketch_mgr, _, models, _, _ = managers
         sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
         models.Count = 0
 
         result = feature_mgr.create_bounded_surface()
-        assert "error" in result
+
+        assert "base feature" not in str(result.get("error", "")).lower()
+        assert result.get("status") == "created", result
 
 
 # ============================================================================
