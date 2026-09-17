@@ -566,6 +566,18 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
+        # The ordered Flanges.Add never solves (see _flanges_unsupported), but
+        # Flanges.AddSync does in a synchronous document, so a caller who only
+        # knows "make a flange" gets the working call when the document allows.
+        doc = self.doc_manager.get_active_document()
+        if self._require_synchronous_sheet(doc) is None:
+            return self.create_flange_sync(
+                face_index,
+                edge_index,
+                flange_length,
+                inside_radius=inside_radius if inside_radius is not None else 0.001,
+                bend_angle=bend_angle,
+            )
         return self._flanges_unsupported(
             "create_flange",
             face_index=face_index,
@@ -994,94 +1006,25 @@ class SheetMetalMixin:
         Returns:
             Dict with status and thread info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
-
-            cyl_face = faces.Item(face_index + 1)
-
-            # A thread runs around a cylinder. Only a cylindrical face reports
-            # a Radius, and naming a flat one used to reach COM anyway and come
-            # back with a bare E_INVALIDARG that named nothing.
-            radius = com_get(com_get(cyl_face, "Geometry"), "Radius")
-            if not isinstance(radius, int | float) or isinstance(radius, bool):
-                return {
-                    "error": (
-                        f"Face {face_index} is not cylindrical, so it cannot carry a "
-                        f"thread. Read solidedge://geometry/face/N to find the "
-                        f"cylindrical face of the hole or boss you mean."
-                    ),
-                    "face_index": face_index,
-                }
-
-            if thread_diameter is None:
-                thread_diameter = float(radius) * 2
-
-            # Find the end face adjacent to the cylinder
-            end_face = self._find_cylinder_end_face(body, cyl_face)
-            if end_face is None:
-                return {
-                    "error": "Could not find an end face adjacent to the "
-                    "cylindrical face. The Threads API requires both a "
-                    "cylinder face and its end cap face."
-                }
-
-            # Create HoleData for a tapped hole (igTappedHole = 37)
-            hole_data_collection = com_get(doc, "HoleDataCollection")
-            if hole_data_collection is None:
-                return {"error": "HoleDataCollection not available on this document type."}
-
-            hole_data = hole_data_collection.Add(
-                HoleType=37,
-                HoleDiameter=thread_diameter,
-            )
-
-            if thread_depth is not None:
-                hole_data.ThreadDepth = thread_depth
-
-            # Plain lists. The VARIANT(VT_ARRAY | VT_DISPATCH, ...) wrapper
-            # that Rounds.Add wants makes no difference here; both forms reach
-            # the same E_INVALIDARG, so the argument shape is not the problem.
-            cyl_arr = [cyl_face]
-            end_arr = [end_face]
-
-            threads = model.Threads
-            if physical:
-                threads.AddEx(hole_data, 1, cyl_arr, end_arr, True)
-            else:
-                threads.Add(hole_data, 1, cyl_arr, end_arr)
-
-            result = {
-                "status": "created",
-                "type": "physical_thread" if physical else "cosmetic_thread",
-                "face_index": face_index,
-                "diameter": thread_diameter,
-                "diameter_mm": thread_diameter * 1000,
-            }
-            if thread_depth is not None:
-                result["thread_depth"] = thread_depth
-
-            return result
-        except Exception as e:
-            return error_result(
-                e,
-                context=(
-                    "Solid Edge would not thread this face. Threads.Add wants the "
-                    "HoleData of a tapped hole, and a bare diameter is not enough "
-                    "for every thread standard; cut the hole with "
-                    "create_hole(method='threaded') so the thread data comes with "
-                    "it, or add the thread in the Solid Edge UI"
-                ),
-            )
+        # Threads.Add(HoleData, 1, [cylinder], [end face]) answers E_INVALIDARG
+        # on Solid Edge 2026 for an extruded boss and for a cut hole alike, with
+        # every HoleData this server can build: igTappedHole bare, with
+        # ThreadMinorDiameter and ThreadDepth, igRegularThread with
+        # ThreadExternalDiameter; a ThreadDescription ("M8") is refused by
+        # HoleDataCollection.Add itself. A thread that comes with its hole
+        # (create_hole(method='threaded')) is the route that works.
+        return {
+            "error": (
+                "Threads.Add will not thread an existing cylindrical face on Solid "
+                "Edge 2026 (E_INVALIDARG for a boss and a hole, every HoleData tried). "
+                "Cut a threaded hole with create_hole(method='threaded') instead."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "thread_diameter": thread_diameter,
+            "thread_depth": thread_depth,
+            "physical": physical,
+        }
 
     @verifies_geometry
     def create_slot(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
@@ -1372,6 +1315,11 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
+        doc = self.doc_manager.get_active_document()
+        if self._require_synchronous_sheet(doc) is None:
+            return self.create_flange_sync_with_bend_calc(
+                face_index, edge_index, flange_length, bend_deduction=bend_deduction
+            )
         return self._flanges_unsupported(
             "create_flange_with_bend_calc",
             face_index=face_index,
@@ -1518,50 +1466,23 @@ class SheetMetalMixin:
         Returns:
             Dict with status and contour flange info
         """
-        try:
-            profile = self.sketch_manager.get_active_sketch()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            dir_side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            # AddSync(pProfile, pRefEdge, varExtentType, varProjectionSide,
-            #   varProjectionDistance, varBendRadius, vtBRType, vtBRWidth,
-            #   vtBRLength, vtCRType, ...)
-            contour_flanges.AddSync(
-                profile,
-                edge,
-                ExtentTypeConstants.igFinite,
-                dir_side,
-                thickness,
-                bend_radius,
-                0,  # vtBRType
-                0.0,  # vtBRWidth
-                0.0,  # vtBRLength
-                0,  # vtCRType
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "contour_flange_sync",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "thickness": thickness,
-                "bend_radius": bend_radius,
-                "direction": direction,
-            }
-        except Exception as e:
-            return error_result(e)
+        # ContourFlanges.AddSync(profile, edge, igFinite, side, distance, radius,
+        # ...) answers E_INVALIDARG in a synchronous document with the open line
+        # drawn from the tab edge on the perpendicular base plane, both
+        # projection sides (Solid Edge 2026), as AddEx does in an ordered one.
+        return {
+            "error": (
+                "ContourFlanges.AddSync rejects the open profile this server can draw "
+                "(E_INVALIDARG on Solid Edge 2026, both sides). Use create_flange in a "
+                "synchronous document, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "edge_index": edge_index,
+            "thickness": thickness,
+            "bend_radius": bend_radius,
+            "direction": direction,
+        }
 
     @verifies_geometry
     def create_contour_flange_sync_with_bend(

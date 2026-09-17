@@ -52,6 +52,19 @@ class TestSynchronousFlange:
         flange = stack.doc.get_active_document().Models.Item(1).Flanges.Item(1)
         assert flange.BendRadius == pytest.approx(0.003)
 
+    def test_the_basic_method_routes_to_add_sync_in_a_synchronous_document(
+        self, stack, new_sheet_metal
+    ):
+        assert stack.query.set_modeling_mode("synchronous")["status"] == "changed"
+        _tab(stack)
+        fi, ei = _horizontal_edge(stack)
+        before = stack.query.get_face_count()["face_count"]
+
+        r = stack.feature.create_flange(fi, ei, 0.02)
+
+        assert r["status"] == "created", r
+        assert stack.query.get_face_count()["face_count"] > before
+
     def test_an_ordered_document_is_refused_without_a_dead_feature(self, stack, new_sheet_metal):
         _tab(stack)
         fi, ei = _horizontal_edge(stack)

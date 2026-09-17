@@ -26,8 +26,8 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 118 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,943 | mocked COM; catch shape, not truth |
-| Integration tests | 68 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 6 pin the synchronous flange, the split and the thicken, and there are assembly, draft and sheet-metal fixtures |
+| Unit tests | 2,936 | mocked COM; catch shape, not truth |
+| Integration tests | 69 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 7 pin the synchronous flange, the split and the thicken, and there are assembly, draft and sheet-metal fixtures |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
@@ -42,12 +42,12 @@ which succeeds and builds nothing.
 
 | | count | |
 |---|---|---|
-| Verified live | **163** | the body or the target collection must change, or the result becomes an error |
-| Refuse honestly | 50 | return `unsupported: True` -- 47 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
+| Verified live | **160** | the body or the target collection must change, or the result becomes an error |
+| Refuse honestly | 53 | return `unsupported: True` -- 50 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
 | Neither | **0** | |
 | **Total `create_*`** | **213** | |
 
-Of the 163, 116 are face-count checks and 47 are collection-growth checks:
+Of the 160, 114 are face-count checks and 46 are collection-growth checks:
 15 reference planes (`RefPlanes`), 11 surfaces (the five `Constructions.*Surfaces`
 summed), 1 split (`Models.*.Splits`, because the first model keeps its faces), 9 that reshape or annotate (`Models.*.Etches`, `.Threads`, `.Drafts`,
 `.FaceRotates`; `PartsLists`, `DraftBendTables`), 3 surface blends
@@ -77,7 +77,7 @@ Ordered by how much risk each removes, not by effort.
 
 ### 1. Live verification is reproducible for what has been fixed, not for everything
 
-**68 integration tests across 9 files.** They pin the known-answer box, the
+**69 integration tests across 9 files.** They pin the known-answer box, the
 reported values and units, the document creators and fixtures, drawing views,
 the tier-1 features, and -- added in the live-fix round of 2026-09-17 --
 `tests/integration/test_wrong_members_and_lost_values.py`: the face rotates,
@@ -123,12 +123,12 @@ reported. Variables now carry `units`, `units_type` and, for angles,
 
 `scripts/live_sweep.py` drives all 118 tools through the real server and
 records every outcome in `reference/LIVE_SWEEP.md`. The latest run, on
-2026-09-17 after the synchronous flange, the split and the thicken were wired:
-**102 OK, 21 refuse honestly, 3 FAIL, 0 NOOP** across 126 cases (from
-93 / 15 / 14 / 2 the day before). The three FAILs are the sweep's
-own deliberate probes -- a missing macro, a plain cylinder asked for a thread
-(`Threads.Add` wants a tapped hole's `HoleData`), a plane asked for NURBS data
--- each answered with an explanation. Seven earlier FAIL rows were the sweep's
+2026-09-17 after the synchronous flange, the split and the thicken were wired
+and the thread and contour-flange-sync calls were driven to their refusals:
+**102 OK, 22 refuse honestly, 2 FAIL, 0 NOOP** across 126 cases (from
+93 / 15 / 14 / 2 the day before). The remaining FAILs are the sweep's
+own deliberate probes -- a missing macro, a plane asked for NURBS data -- each
+answered with an explanation. Seven earlier FAIL rows were the sweep's
 inputs, not the tools (a planar face for `delete_blend`, a circle where a
 louver needs a line, a constraint without its elements, ...); they were
 corrected so the record separates the two. What the sweep and the probes
@@ -137,7 +137,9 @@ question on this install:
 
 | tool / method | evidence |
 |---|---|
-| `create_flange`, the 6 ordered methods | `Flanges.Add`, `AddByMatchFace` and `AddByBendDeductionOrBendAllowance` record a Flange with a 90-degree bend angle and a radius that never solves: range, volume and face count unchanged after `Recompute`, `Flange.Status` raises, the UI draws only its outline (8 of 12 tab edges accept the call, each tried on a fresh document; the optional parameters and every `*Side*` constant change the recorded feature and nothing else); `AddFlangeByFace` raises `E_POINTER`. Refuse before COM. **The two `sync` methods build** in a document set to synchronous before its base tab (`AddSync` on every horizontal edge, 6 -> 14 faces, `InsideRadius` and `BendAngle` honoured); in an ordered document they raise 0x80004021, and switching after an ordered tab answers `E_FAIL`, so they refuse rather than switch. |
+| `create_thread` (basic, physical) | `Threads.Add(HoleData, 1, [cylinder], [end face])` answers `E_INVALIDARG` for an extruded boss and for a cut hole alike, with every `HoleData` this server can build (`igTappedHole` bare, with `ThreadMinorDiameter`/`ThreadDepth`, `igRegularThread` with `ThreadExternalDiameter`); a `ThreadDescription` is refused by `HoleDataCollection.Add` itself. Refuses before COM and points at `create_hole(method='threaded')`, which carries its thread. |
+| `create_contour_flange` (sync) | `ContourFlanges.AddSync` answers `E_INVALIDARG` in a synchronous document with the open line from the tab edge on the perpendicular base plane, both sides. Refuses before COM; `sync_with_bend`/`sync_ex` are not driven. |
+| `create_flange`, the 6 ordered methods | `Flanges.Add`, `AddByMatchFace` and `AddByBendDeductionOrBendAllowance` record a Flange with a 90-degree bend angle and a radius that never solves: range, volume and face count unchanged after `Recompute`, `Flange.Status` raises, the UI draws only its outline (8 of 12 tab edges accept the call, each tried on a fresh document; the optional parameters and every `*Side*` constant change the recorded feature and nothing else); `AddFlangeByFace` raises `E_POINTER`. Refuse before COM. **The two `sync` methods build** in a document set to synchronous before its base tab, and `basic` / `with_bend_calc` route to them when the document is synchronous (`AddSync` on every horizontal edge, 6 -> 14 faces, `InsideRadius` and `BendAngle` honoured); in an ordered document they raise 0x80004021, and switching after an ordered tab answers `E_FAIL`, so they refuse rather than switch. |
 | `create_louver` (basic, sync) | `Louvers.Add` records `Louver_1` that never solves, with the line on the base plane or a plane through the top face, both directions, 1 and 3 mm deep, and every `Type`/`RoundType`/`DieRadius`/`DimensionType` combination (nine placements); `Louvers.AddSync` on a synchronous tab's top face answers 0x807B0086. Refuses before COM. |
 | `create_contour_flange` (ex) | `ContourFlanges.AddEx` and `Add` answer `E_FAIL` to 52 open-profile placements: from the tab's corner and from the interior of an edge, on the base planes and on planes perpendicular to the edge, both projection sides. Refuses before COM. |
 | `create_lofted_surface`, `_v2`, `create_bounded_surface` | `LoftedSurfaces.Add` answers `E_INVALIDARG` to 13 argument shapes including the one that builds `Models.AddLoftedProtrusion` from the same two profiles, `Add2` answers it to the same profiles, and `BlueSurfs.Add` answers it whatever `Origins` holds (the declared dispatch array of section circles, the profiles, `None`). All three refuse before COM. |

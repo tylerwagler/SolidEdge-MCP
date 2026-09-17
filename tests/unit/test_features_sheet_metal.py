@@ -128,26 +128,15 @@ class TestCreateContourFlangeEx:
 
 
 class TestCreateContourFlangeSync:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
-        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_sync"
-        model.ContourFlanges.AddSync.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
+    """ContourFlanges.AddSync answered E_INVALIDARG in a synchronous document (SE 2026)."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005)
-        assert "error" in result
-        assert "No active sketch" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_contour_flange_sync(99, 0, 0.005)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005, bend_radius=0.002)
+        assert result["unsupported"] is True
+        assert "AddSync" in result["error"]
+        assert result["thickness"] == 0.005
+        model.ContourFlanges.AddSync.assert_not_called()
 
 
 # ============================================================================
@@ -737,52 +726,17 @@ class TestRequireOpenProfile:
         assert manager._require_open_profile(MagicMock(), "bend") is None
 
 
-class TestThreadNeedsACylinder:
-    """A thread runs around a cylinder, and only a cylinder reports a Radius.
+class TestCreateThreadRefuses:
+    """Threads.Add answered E_INVALIDARG for a boss and a hole with every HoleData (SE 2026)."""
 
-    Naming a flat face used to reach COM anyway and come back with a bare
-    E_INVALIDARG that named nothing. Verified on Solid Edge 2026 against a
-    box with a through hole: face 0 is a plane, face 6 is the cylinder.
-    """
-
-    def _part(self, managers, radius):
-        _, _, _doc, _models, model, _ = managers
-        faces = MagicMock()
-        faces.Count = 7
-        face = MagicMock()
-        if radius is None:
-            del face.Geometry.Radius
-        else:
-            face.Geometry.Radius = radius
-        faces.Item.return_value = face
-        model.Body.Faces.return_value = faces
-        return model, face
-
-    def test_a_flat_face_is_refused_before_com(self, feature_mgr, managers):
-        model, _face = self._part(managers, radius=None)
-
-        result = feature_mgr.create_thread(face_index=0, thread_diameter=0.008)
-
-        assert "not cylindrical" in result["error"]
-        assert result["face_index"] == 0
+    def test_refuses_before_any_com(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        result = feature_mgr.create_thread(0, thread_diameter=0.006, thread_depth=0.01)
+        assert result["unsupported"] is True
+        assert "create_hole(method='threaded')" in result["error"]
+        assert result["thread_diameter"] == 0.006
         model.Threads.Add.assert_not_called()
-
-    def test_an_index_out_of_range_is_still_caught_first(self, feature_mgr, managers):
-        model, _face = self._part(managers, radius=0.004)
-
-        result = feature_mgr.create_thread(face_index=99)
-
-        assert "Invalid face index" in result["error"]
-        model.Threads.Add.assert_not_called()
-
-    def test_a_cylinder_gets_past_the_guard(self, feature_mgr, managers):
-        """It goes on to look for the end cap rather than stopping here."""
-        model, _face = self._part(managers, radius=0.004)
-
-        result = feature_mgr.create_thread(face_index=6)
-
-        assert "not cylindrical" not in result.get("error", "")
-        model.Threads.Add.assert_not_called()  # the mock has no end cap to find
+        doc.HoleDataCollection.Add.assert_not_called()
 
 
 # ============================================================================
@@ -932,3 +886,31 @@ class TestCreateFlangeSyncWithBendCalc:
         _, model, _, _ = _sync_tab(managers, mode=2)
         assert feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.02)["unsupported"] is True
         model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_not_called()
+
+
+class TestCreateFlangeBasicRoutesToSync:
+    """A caller who only knows 'make a flange' gets AddSync when the document allows."""
+
+    def test_synchronous_document_builds_through_add_sync(self, feature_mgr, managers):
+        _, model, _, edge = _sync_tab(managers)
+
+        result = feature_mgr.create_flange(1, 0, 0.02, inside_radius=0.003, bend_angle=30.0)
+
+        assert result["status"] == "created"
+        args = model.Flanges.AddSync.call_args.args
+        assert args[0] is edge and args[1] == 0.02 and args[3] == 0.003
+        assert args[11] == pytest.approx(math.radians(30.0))
+        model.Flanges.Add.assert_not_called()
+
+    def test_ordered_document_still_refuses(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers, mode=2)
+        result = feature_mgr.create_flange(1, 0, 0.02)
+        assert result["unsupported"] is True
+        model.Flanges.AddSync.assert_not_called()
+        model.Flanges.Add.assert_not_called()
+
+    def test_with_bend_calc_routes_the_same_way(self, feature_mgr, managers):
+        _, model, _, edge = _sync_tab(managers)
+        result = feature_mgr.create_flange_with_bend_calc(1, 0, 0.02)
+        assert result["status"] == "created"
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once_with(edge, 0.02)
