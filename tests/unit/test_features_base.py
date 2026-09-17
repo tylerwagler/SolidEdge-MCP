@@ -17,8 +17,10 @@ class _Counter:
 
 
 class _Body:
-    def __init__(self, face_count):
+    def __init__(self, face_count, volume=None):
         self.face_count = face_count
+        if volume is not None:
+            self.Volume = volume
 
     def Faces(self, _query):
         return _Counter(self.face_count)
@@ -117,10 +119,12 @@ def test_conservative_when_faces_not_readable():
 
 def test_no_geometry_created_logic():
     f = FeatureManagerBase._no_geometry_created
-    assert f((1, 6), (1, 6)) is True  # body unchanged
-    assert f((1, 6), (1, 8)) is False  # faces changed
-    assert f((0, 0), (1, 6)) is False  # base solid appeared
-    assert f((None, None), (None, None)) is False  # unknown -> no claim
+    assert f((1, 6, None), (1, 6, None)) is True  # body unchanged
+    assert f((1, 6, None), (1, 8, None)) is False  # faces changed
+    assert f((0, 0, None), (1, 6, None)) is False  # base solid appeared
+    assert f((None, None, None), (None, None, None)) is False  # unknown -> no claim
+    assert f((1, 6, 1.0), (1, 6, 2.0)) is False  # same faces, volume changed
+    assert f((1, 6, 1.0), (1, 6, 1.0)) is True  # same faces, same volume
 
 
 # ---------------------------------------------------------------------------
@@ -131,14 +135,15 @@ def test_no_geometry_created_logic():
 def test_snapshot_sums_faces_across_all_bodies():
     doc = _FakeDoc(models_count=3, face_count=6, extra_face_counts=(10, 4))
     mgr = _Mgr(doc)
-    assert mgr._geometry_snapshot() == (3, 20)
-    # Every body was visited, 1-indexed, exactly once.
-    assert doc.Models.item_calls == [1, 2, 3]
+    assert mgr._geometry_snapshot() == (3, 20, None)
+    # Every body was visited, 1-indexed, for its faces (the volume pass stops
+    # at the first body without a Volume).
+    assert doc.Models.item_calls[:3] == [1, 2, 3]
 
 
 def test_single_body_snapshot_unchanged():
     mgr = _Mgr(_FakeDoc(models_count=1, face_count=6))
-    assert mgr._geometry_snapshot() == (1, 6)
+    assert mgr._geometry_snapshot() == (1, 6, None)
 
 
 def test_change_on_second_body_counts_as_geometry_created():
@@ -193,7 +198,7 @@ def test_conservative_when_any_body_unreadable():
     # None, never a partial sum from body 1 alone.
     doc = _FakeDoc(models_count=2, face_count=6, extra_face_counts=(MagicMock(),))
     mgr = _Mgr(doc)
-    assert mgr._geometry_snapshot() == (2, None)
+    assert mgr._geometry_snapshot() == (2, None, None)
     assert mgr.make(new_faces=6)["status"] == "created"  # cannot prove -> pass through
 
 
@@ -201,7 +206,7 @@ def test_conservative_when_a_body_raises():
     # Models.Count claims 3 bodies but Item(3) raises: total is None, not 16.
     doc = _FakeDoc(models_count=3, face_count=6, extra_face_counts=(10,))
     mgr = _Mgr(doc)
-    assert mgr._geometry_snapshot() == (3, None)
+    assert mgr._geometry_snapshot() == (3, None, None)
     assert mgr.make(new_faces=6)["status"] == "created"
 
 
@@ -211,7 +216,7 @@ def test_unittest_mock_document_bails_out():
     doc.Models.Count = 1
     doc.Models.Item.return_value.Body.Faces.return_value.Count = 6
     mgr = _Mgr(doc)
-    assert mgr._geometry_snapshot() == (None, None)
+    assert mgr._geometry_snapshot() == (None, None, None)
     doc.Models.Item.assert_not_called()
 
 
@@ -306,3 +311,38 @@ class TestProfileOrigin:
         profile.Lines2d.Count = 2
         profile.Lines2d.Item.side_effect = Exception("no such element")
         assert profile_origin(profile) == (0.02, 0.03)
+
+
+class TestVolumeDecidesWhenFacesDoNot:
+    """A mirror of a box across its own face keeps 6 faces and doubles the volume."""
+
+    @staticmethod
+    def _doc(models_count, face_count, volume):
+        doc = _FakeDoc(models_count, face_count)
+        for i in range(models_count):
+            doc.bodies[i].Volume = volume
+        return doc
+
+    def test_a_volume_change_with_the_same_faces_passes_through(self):
+        doc = self._doc(1, 6, 1.0)
+        mgr = _Mgr(doc)
+        assert mgr._geometry_snapshot() == (1, 6, 1.0)
+
+        def build(self_):
+            doc.bodies[0].Volume = 2.0
+            return {"status": "created"}
+
+        assert verifies_geometry(build)(mgr) == {"status": "created"}
+
+    def test_the_same_faces_and_volume_is_still_a_no_op(self):
+        doc = self._doc(1, 6, 1.0)
+        mgr = _Mgr(doc)
+        result = verifies_geometry(lambda self_: {"status": "created"})(mgr)
+        assert "error" in result
+        assert "volume" in result["error"]
+
+    def test_an_unreadable_volume_leaves_the_face_verdict(self):
+        doc = _FakeDoc(1, 6)  # no Volume on the body
+        mgr = _Mgr(doc)
+        assert mgr._geometry_snapshot() == (1, 6, None)
+        assert "error" in verifies_geometry(lambda self_: {"status": "created"})(mgr)

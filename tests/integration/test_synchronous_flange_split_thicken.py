@@ -105,3 +105,23 @@ class TestThicken:
         assert r["status"] == "created", r
         assert stack.doc.get_active_document().Models.Count == 1
         assert stack.query.get_face_count()["face_count"] == 12
+
+
+class TestMirrorSeenByVolume:
+    def test_a_mirror_across_the_boxes_own_face_is_real_geometry(self, stack, new_part):
+        """Six faces before and after; the volume doubles, and the check must see it."""
+        assert stack.query.set_modeling_mode("synchronous")["status"] == "changed"
+        stack.sketch.create_sketch("Top")
+        stack.sketch.draw_rectangle(0, 0, 0.08, 0.048)
+        stack.sketch.close_sketch()
+        assert stack.feature.create_extrude(0.03)["status"] == "created"
+        name = stack.feature.list_features()["features"][0]["name"]
+        volume_before = stack.doc.get_active_document().Models.Item(1).Body.Volume
+
+        r = stack.feature.create_mirror(name, 2)
+
+        assert r["status"] == "created", r
+        assert stack.query.get_face_count()["face_count"] == 6
+        # re-read: the Body proxy held across the mirror is stale afterwards
+        volume_after = stack.doc.get_active_document().Models.Item(1).Body.Volume
+        assert volume_after == pytest.approx(2 * volume_before, rel=1e-6)

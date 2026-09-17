@@ -26,28 +26,30 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 118 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,936 | mocked COM; catch shape, not truth |
-| Integration tests | 69 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 7 pin the synchronous flange, the split and the thicken, and there are assembly, draft and sheet-metal fixtures |
+| Unit tests | 2,938 | mocked COM; catch shape, not truth |
+| Integration tests | 70 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 8 pin the synchronous flange, the split, the thicken and the mirror only the volume can see, and there are assembly, draft and sheet-metal fixtures |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
 
 Two decorator families snapshot the document before and after a creator runs
 and downgrade a false success to an explicit error. `@verifies_geometry` (and
-`@verifies_assembly_geometry`) watch the body's face count; for creators that
-build no solid -- a plane, a surface, a sketch, a document -- that count never
+`@verifies_assembly_geometry`) watch the body's face count and, since
+2026-09-17, the total body volume -- a mirror of a box across its own face is
+a wider box with the same six faces, and read as a no-op until the volume was
+in the snapshot; for creators that build no solid -- a plane, a surface, a sketch, a document -- that count never
 moves, so `@verifies_collection_growth(...)` watches the COM collection their
 `Add` lands in instead. This is the only kind of check that catches a call
 which succeeds and builds nothing.
 
 | | count | |
 |---|---|---|
-| Verified live | **160** | the body or the target collection must change, or the result becomes an error |
-| Refuse honestly | 53 | return `unsupported: True` -- 50 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
+| Verified live | **161** | the body or the target collection must change, or the result becomes an error |
+| Refuse honestly | 52 | return `unsupported: True` -- 49 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
 | Neither | **0** | |
 | **Total `create_*`** | **213** | |
 
-Of the 160, 114 are face-count checks and 46 are collection-growth checks:
+Of the 161, 115 are face-count checks and 46 are collection-growth checks:
 15 reference planes (`RefPlanes`), 11 surfaces (the five `Constructions.*Surfaces`
 summed), 1 split (`Models.*.Splits`, because the first model keeps its faces), 9 that reshape or annotate (`Models.*.Etches`, `.Threads`, `.Drafts`,
 `.FaceRotates`; `PartsLists`, `DraftBendTables`), 3 surface blends
@@ -77,7 +79,7 @@ Ordered by how much risk each removes, not by effort.
 
 ### 1. Live verification is reproducible for what has been fixed, not for everything
 
-**69 integration tests across 9 files.** They pin the known-answer box, the
+**70 integration tests across 9 files.** They pin the known-answer box, the
 reported values and units, the document creators and fixtures, drawing views,
 the tier-1 features, and -- added in the live-fix round of 2026-09-17 --
 `tests/integration/test_wrong_members_and_lost_values.py`: the face rotates,
@@ -124,8 +126,9 @@ reported. Variables now carry `units`, `units_type` and, for angles,
 `scripts/live_sweep.py` drives all 118 tools through the real server and
 records every outcome in `reference/LIVE_SWEEP.md`. The latest run, on
 2026-09-17 after the synchronous flange, the split and the thicken were wired
-and the thread and contour-flange-sync calls were driven to their refusals:
-**102 OK, 22 refuse honestly, 2 FAIL, 0 NOOP** across 126 cases (from
+and the thread and contour-flange-sync calls were driven to their refusals, with
+a synchronous box for the synchronous-only creators:
+**105 OK, 22 refuse honestly, 2 FAIL, 0 NOOP** across 129 cases (from
 93 / 15 / 14 / 2 the day before). The remaining FAILs are the sweep's
 own deliberate probes -- a missing macro, a plane asked for NURBS data -- each
 answered with an explanation. Seven earlier FAIL rows were the sweep's
@@ -137,6 +140,7 @@ question on this install:
 
 | tool / method | evidence |
 |---|---|
+| `create_blend` | `Blends.Add(1, SelectSetArray, RadiusArray, ...)` answers `E_FAIL` with nested edge arrays plain or VARIANT-wrapped, one edge or a face's four (Solid Edge 2026). `create_round` takes the same edges through `Rounds.Add`. Refuses before COM. |
 | `create_thread` (basic, physical) | `Threads.Add(HoleData, 1, [cylinder], [end face])` answers `E_INVALIDARG` for an extruded boss and for a cut hole alike, with every `HoleData` this server can build (`igTappedHole` bare, with `ThreadMinorDiameter`/`ThreadDepth`, `igRegularThread` with `ThreadExternalDiameter`); a `ThreadDescription` is refused by `HoleDataCollection.Add` itself. Refuses before COM and points at `create_hole(method='threaded')`, which carries its thread. |
 | `create_contour_flange` (sync) | `ContourFlanges.AddSync` answers `E_INVALIDARG` in a synchronous document with the open line from the tab edge on the perpendicular base plane, both sides. Refuses before COM; `sync_with_bend`/`sync_ex` are not driven. |
 | `create_flange`, the 6 ordered methods | `Flanges.Add`, `AddByMatchFace` and `AddByBendDeductionOrBendAllowance` record a Flange with a 90-degree bend angle and a radius that never solves: range, volume and face count unchanged after `Recompute`, `Flange.Status` raises, the UI draws only its outline (8 of 12 tab edges accept the call, each tried on a fresh document; the optional parameters and every `*Side*` constant change the recorded feature and nothing else); `AddFlangeByFace` raises `E_POINTER`. Refuse before COM. **The two `sync` methods build** in a document set to synchronous before its base tab, and `basic` / `with_bend_calc` route to them when the document is synchronous (`AddSync` on every horizontal edge, 6 -> 14 faces, `InsideRadius` and `BendAngle` honoured); in an ordered document they raise 0x80004021, and switching after an ordered tab answers `E_FAIL`, so they refuse rather than switch. |
@@ -158,7 +162,8 @@ pinned: `create_flange(method='sync')` (above); `create_split(plane_index)`
 design bodies, Models 1 -> 2); `thicken(method='basic')`
 (`Models.AddThickenFeature` over `Constructions.Item(n).Body.Faces` turns an
 extruded surface into a 12-face solid for all three sides -- the surface's own
-`Faces` property raises).
+`Faces` property raises; `thicken(method='sync')` makes the same call, since
+`Thickens.AddSync` lives on a Model and a surface-only document has none).
 
 Fixed in the live-fix round of 2026-09-17, each driven live and pinned:
 `face_operation` (both rotates) raised `E_INVALIDARG` because `FaceRotates.Add`

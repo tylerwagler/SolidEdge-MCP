@@ -17,8 +17,8 @@ def thicken(
     basic: Models.AddThickenFeature over the faces of construction surface
     surface_index (0-based, in document order; make one with
     create_extruded_surface first). thickness in meters; direction is
-    'Both' | 'Normal' | 'Reverse'. sync is unsupported (Thickens.AddSync
-    needs the bounding loop, which cannot be selected here).
+    'Both' | 'Normal' | 'Reverse'. sync makes the same call (Thickens.AddSync
+    lives on a Model, and a surface-only document has none).
     """
     err = validate_numerics(thickness=thickness)
     if err:
@@ -29,7 +29,9 @@ def thicken(
                 thickness=thickness, direction=direction, surface_index=surface_index
             )
         case "sync":
-            return feature_manager.create_thicken_sync(thickness=thickness, direction=direction)
+            return feature_manager.create_thicken_sync(
+                thickness=thickness, direction=direction, surface_index=surface_index
+            )
         case _:
             return {"error": f"Unknown method: {method}"}
 

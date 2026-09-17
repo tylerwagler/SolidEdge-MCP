@@ -100,7 +100,7 @@ def verifies_geometry(fn: _Creator[_P]) -> _Creator[_P]:
             return {
                 "error": (
                     f"{fn.__name__} reported success but created no geometry: the "
-                    f"body's face count did not change. {_why_nothing(fn.__name__)}"
+                    f"body's face count and volume did not change. {_why_nothing(fn.__name__)}"
                 ),
                 "attempted": result.get("type"),
                 "models_before": before[0],
@@ -402,8 +402,8 @@ class FeatureManagerBase:
         self.doc_manager = document_manager
         self.sketch_manager = sketch_manager
 
-    def _geometry_snapshot(self) -> tuple[int | None, int | None]:
-        """Return (models_count, total_face_count); None for unreadable.
+    def _geometry_snapshot(self) -> tuple[int | None, int | None, float | None]:
+        """Return (models_count, total_face_count, total_volume); None for unreadable.
 
         Used by @verifies_geometry to detect feature calls that silently
         created nothing. total_face_count is 0 when no body exists yet, the
@@ -413,18 +413,23 @@ class FeatureManagerBase:
         what lets multi-body creators that change only body 2+ register as
         real geometry. ``type(x) is int`` guards against MagicMock values in
         unit tests.
+
+        total_volume is the sum of every body's Volume, for the changes a face
+        count cannot see: a mirror of a box across its own face is a wider box
+        with the same six faces (Solid Edge 2026, where that read as a no-op).
         """
         try:
             doc = self.doc_manager.get_active_document()
         except Exception:
-            return (None, None)
+            return (None, None, None)
         # Geometry verification needs a real Solid Edge document. Against a
         # unittest.mock double there is nothing real to measure (its counts are
         # arbitrary), so stay inert rather than invent failures in unit tests.
         if type(doc).__module__.startswith("unittest.mock"):
-            return (None, None)
+            return (None, None, None)
         models: int | None = None
         faces: int | None = None
+        volume: float | None = None
         with contextlib.suppress(Exception):
             count = doc.Models.Count
             models = count if type(count) is int else None
@@ -432,7 +437,8 @@ class FeatureManagerBase:
             faces = 0  # no body yet -> definitively zero faces
         elif models is not None and models > 0:
             faces = self._total_face_count(doc, models)
-        return (models, faces)
+            volume = self._total_volume(doc, models)
+        return (models, faces, volume)
 
     @staticmethod
     def _total_face_count(doc: Any, models_count: int) -> int | None:
@@ -454,9 +460,23 @@ class FeatureManagerBase:
         return total
 
     @staticmethod
+    def _total_volume(doc: Any, models_count: int) -> float | None:
+        """Sum Body.Volume over Models.Item(1..models_count); None if any is unreadable."""
+        total = 0.0
+        try:
+            for i in range(1, models_count + 1):
+                volume = com_get(doc.Models.Item(i).Body, "Volume")
+                if type(volume) is not float:
+                    return None
+                total += volume
+        except Exception:
+            return None
+        return total
+
+    @staticmethod
     def _no_geometry_created(
-        before: tuple[int | None, int | None],
-        after: tuple[int | None, int | None],
+        before: tuple[int | None, int | None, float | None],
+        after: tuple[int | None, int | None, float | None],
     ) -> bool:
         """True only when we can PROVE the operation changed no geometry.
 
@@ -469,7 +489,13 @@ class FeatureManagerBase:
             return False  # base solid appeared
         fb, fa = before[1], after[1]
         if fb is not None and fa is not None:
-            return fa == fb  # body unchanged -> nothing was built
+            if fa != fb:
+                return False
+            # Same faces: the volume decides when it can be read on both sides.
+            vb, va = before[2], after[2]
+            if vb is not None and va is not None:
+                return abs(va - vb) <= 1e-12 * max(1.0, abs(vb))
+            return True  # body unchanged -> nothing was built
         return False
 
     def _get_ref_plane(self, doc: Any, plane_index: int = 1) -> Any:

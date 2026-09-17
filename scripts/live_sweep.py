@@ -195,6 +195,12 @@ CONTEXTS: dict[str, list[Step]] = {
     "box_loft": _box() + _loft_profiles(),
     "box_sweep": _box() + _sweep_profiles(),
     "box_round": _box() + [("create_round", {"method": "all_edges", "radius": 0.002})],
+    "box_sync": [
+        ("create_document", {"type": "part"}),
+        ("manage_feature_tree", {"action": "set_mode", "mode": "synchronous"}),
+    ]
+    + _rect_closed()
+    + [("create_extrude", {"method": "finite", "distance": 0.03})],
     "box_plane": _box()
     + [("create_ref_plane", {"method": "offset", "parent_plane_index": 1, "distance": 0.015})],
     "part_surface": _part()
@@ -336,6 +342,11 @@ CASES: list[Case] = [
         {"shape": "cylinder", "x1": 0.02, "y1": 0.02, "z1": 0.0, "radius": 0.005, "height": 0.03},
         "box",
     ),
+    Case(
+        "create_primitive_cutout",
+        {"shape": "cylinder", "x1": 0.02, "y1": 0.02, "z1": 0.0, "radius": 0.005, "height": 0.03},
+        "box_sync",
+    ),
     Case("create_loft", {"method": "solid"}, "part_loft"),
     Case("create_lofted_cutout", {"method": "basic"}, "box_loft"),
     Case("create_sweep", {"method": "solid", "path_profile_index": 0}, "part_sweep"),
@@ -352,6 +363,9 @@ CASES: list[Case] = [
     Case("create_swept_surface", {"method": "basic", "path_profile_index": 0}, "part_sweep"),
     Case("create_bounded_surface", {}, "part_loft"),
     Case("create_mirror", {"method": "basic", "feature_name": F, "mirror_plane_index": 2}, "box"),
+    Case(
+        "create_mirror", {"method": "basic", "feature_name": F, "mirror_plane_index": 2}, "box_sync"
+    ),
     Case(
         "create_pattern",
         {
@@ -373,6 +387,7 @@ CASES: list[Case] = [
     Case("create_blend", {"method": "basic", "radius": 0.002, "face_index": 0}, "box"),
     Case("create_split", {"plane_index": 4}, "box_plane"),
     Case("thicken", {"method": "basic", "thickness": 0.002}, "part_surface"),
+    Case("thicken", {"method": "sync", "thickness": 0.002}, "part_surface"),
     Case("create_web_network", {"thickness": 0.002, "depth": 0.01}, "box_circle_closed"),
     Case("create_reinforcement", {"type": "rib", "thickness": 0.002}, "box_circle_closed"),
     Case("add_body", {"method": "basic", "body_type": "Solid", "body_name": "B2"}, "box"),

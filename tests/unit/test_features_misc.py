@@ -1173,22 +1173,22 @@ class TestCreateLouverSync:
 
 
 class TestCreateThickenSync:
-    """Thickens.AddSync needs the surface faces and bounding loop."""
+    """The same AddThickenFeature call, in either mode."""
 
-    def test_unsupported(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_thicken_sync(0.002)
-        assert result["unsupported"] is True
-        assert result["thickness"] == 0.002
-        assert "Faces" in result["error"]
-        model.Thickens.AddSync.assert_not_called()
+    def test_delegates_to_the_basic_thicken(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        doc.Constructions.Count = 1
+        faces = doc.Constructions.Item.return_value.Body.Faces.return_value
+        faces.Count = 2
+        face_objects = [MagicMock(), MagicMock()]
+        faces.Item.side_effect = lambda i: face_objects[i - 1]
 
-    def test_unsupported_reverse(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
         result = feature_mgr.create_thicken_sync(0.003, direction="Reverse")
-        assert result["unsupported"] is True
+
+        assert result["status"] == "created"
+        assert result["type"] == "thicken_sync"
         assert result["direction"] == "Reverse"
-        model.Thickens.AddSync.assert_not_called()
+        models.AddThickenFeature.assert_called_once_with(1, 0.003, 2, face_objects)
 
 
 # ============================================================================

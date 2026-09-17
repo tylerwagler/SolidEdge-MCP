@@ -460,8 +460,9 @@ class RoundsChamfersMixin:
         """
         return {
             "error": (
-                "Blends.Add takes a SelectSetArray, which this server cannot "
-                "build, so an edge-driven blend is not reachable. Use "
+                "Blends.Add takes a SelectSetArray; every shape tried answers E_FAIL "
+                "on Solid Edge 2026 (nested edge arrays, plain or VARIANT-wrapped, "
+                "one edge or a face's four), so an edge-driven blend is not reachable. Use "
                 "create_round(radius=...), which takes the same edges through "
                 "Rounds.Add and produces the same geometry."
             ),

@@ -867,35 +867,29 @@ class MiscFeaturesMixin:
             return error_result(e)
 
     @verifies_geometry
-    def create_thicken_sync(self, thickness: float, direction: str = "Both") -> dict[str, Any]:
+    def create_thicken_sync(
+        self, thickness: float, direction: str = "Both", surface_index: int = 0
+    ) -> dict[str, Any]:
         """
-        Create a synchronous thicken feature.
+        Thicken a construction surface in a synchronous document.
 
-        NOT AVAILABLE via COM automation. Thickens.AddSync takes
-        (Side, dOffsetDistance, Faces, Loop): the Faces argument is a SAFEARRAY
-        of the surface faces to thicken and Loop is the bounding loop, neither of
-        which this server can select. The call is never made.
+        Thickens.AddSync lives on a Model, and a document that holds only a
+        construction surface has none; Models.AddThickenFeature is the call
+        that makes the solid in both modes (verified on Solid Edge 2026 in a
+        synchronous part: Models 0 -> 1). So this is thicken_surface.
 
         Args:
             thickness: Thicken thickness in meters
             direction: 'Both', 'Normal', or 'Reverse'
+            surface_index: 0-based construction surface to thicken
 
         Returns:
-            Dict with an unsupported error
+            Dict with status and thicken info
         """
-        return {
-            "error": (
-                "Synchronous thicken is not available through this server: "
-                "Thickens.AddSync(Side, dOffsetDistance, Faces, Loop) requires "
-                "the surface faces and bounding loop to thicken, which cannot be "
-                "selected through this API. Thicken the surface in the Solid "
-                "Edge UI."
-            ),
-            "unsupported": True,
-            "type": "thicken_sync",
-            "thickness": thickness,
-            "direction": direction,
-        }
+        result = self.thicken_surface(thickness, direction=direction, surface_index=surface_index)
+        if "status" in result:
+            result["type"] = "thicken_sync"
+        return result
 
     @verifies_geometry
     def create_mirror_sync_ex(self, feature_name: str, mirror_plane_index: int) -> dict[str, Any]:
