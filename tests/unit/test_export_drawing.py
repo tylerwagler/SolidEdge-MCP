@@ -88,14 +88,30 @@ class TestCreateDraftDocument:
         assert result["status"] == "created"
         app.Documents.Add.assert_called_once()
 
-    def test_with_template(self, doc_mgr):
+    def test_with_a_template_that_exists(self, doc_mgr, tmp_path):
         dm, app = doc_mgr
+        template = tmp_path / "a3.dft"
+        template.write_bytes(b"")
         draft_doc = MagicMock()
         draft_doc.Name = "Draft1.dft"
         app.Documents.Add.return_value = draft_doc
 
-        result = dm.create_draft("C:/templates/a3.dft")
+        result = dm.create_draft(str(template))
+
         assert result["status"] == "created"
+        app.Documents.Add.assert_called_once_with(str(template))
+
+    def test_a_template_that_does_not_exist_is_refused_not_ignored(self, doc_mgr):
+        """This used to fall through silently to the default draft, so a
+        caller who asked for a template got a plain sheet and no word that
+        their path had been ignored."""
+        dm, app = doc_mgr
+
+        result = dm.create_draft("C:/templates/a3.dft")
+
+        assert "error" in result
+        assert "Template not found" in result["error"]
+        app.Documents.Add.assert_not_called()
 
 
 # ============================================================================

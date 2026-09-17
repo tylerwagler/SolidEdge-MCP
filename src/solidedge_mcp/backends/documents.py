@@ -19,6 +19,36 @@ from .validation import guard_overwrite
 _logger = get_logger(__name__)
 
 
+def _missing_template(template: str) -> dict[str, Any]:
+    """A template the caller named but that is not on disk.
+
+    This used to fall through silently to the default document, so a caller
+    who asked for a template got a plain part and no word that their path was
+    ignored. It is refused before any COM call is made.
+    """
+    return {"error": f"Template not found: {template}. Nothing was created."}
+
+
+#: Why create_weldment needs an explicit template on this Solid Edge.
+#: Documents.Add("SolidEdge.WeldmentDocument") is a registered ProgID, and
+#: Solid Edge 2026 accepts it -- then goes looking for its default weldment
+#: template, and on an install without the weldment environment that file
+#: does not exist. It answers with a modal "Path not found" that
+#: DisplayAlerts does not suppress, which blocks the one UI thread and hangs
+#: this server until someone dismisses it by hand; only then does the call
+#: return 0x80030003. Verified live. The server cannot know in advance whether
+#: the template is present, so the ProgID route is never taken.
+_NO_WELDMENT_TEMPLATE: dict[str, Any] = {
+    "error": (
+        "create_weldment needs a template path on this Solid Edge. Without one "
+        'Documents.Add("SolidEdge.WeldmentDocument") looks for a default '
+        "weldment template that is not installed, and raises a modal dialog "
+        "that hangs the server. Pass template=<path to a .pwd> that exists."
+    ),
+    "unsupported": True,
+}
+
+
 class DocumentManager:
     """Manages Solid Edge documents"""
 
@@ -42,7 +72,9 @@ class DocumentManager:
         try:
             app = self.connection.get_application()
 
-            if template and os.path.exists(template):
+            if template:
+                if not os.path.exists(template):
+                    return _missing_template(template)
                 doc = app.Documents.Add(template)
             else:
                 doc = app.Documents.Add("SolidEdge.PartDocument")
@@ -67,7 +99,9 @@ class DocumentManager:
         try:
             app = self.connection.get_application()
 
-            if template and os.path.exists(template):
+            if template:
+                if not os.path.exists(template):
+                    return _missing_template(template)
                 doc = app.Documents.Add(template)
             else:
                 doc = app.Documents.Add("SolidEdge.AssemblyDocument")
@@ -92,7 +126,9 @@ class DocumentManager:
         try:
             app = self.connection.get_application()
 
-            if template and os.path.exists(template):
+            if template:
+                if not os.path.exists(template):
+                    return _missing_template(template)
                 doc = app.Documents.Add(template)
             else:
                 doc = app.Documents.Add("SolidEdge.SheetMetalDocument")
@@ -117,7 +153,9 @@ class DocumentManager:
         try:
             app = self.connection.get_application()
 
-            if template and os.path.exists(template):
+            if template:
+                if not os.path.exists(template):
+                    return _missing_template(template)
                 doc = app.Documents.Add(template)
             else:
                 doc = app.Documents.Add("SolidEdge.DraftDocument")
@@ -436,10 +474,12 @@ class DocumentManager:
         try:
             app = self.connection.get_application()
 
-            if template and os.path.exists(template):
+            if template:
+                if not os.path.exists(template):
+                    return _missing_template(template)
                 doc = app.Documents.Add(template)
             else:
-                doc = app.Documents.Add("SolidEdge.WeldmentDocument")
+                return _NO_WELDMENT_TEMPLATE
 
             self.active_document = doc
 

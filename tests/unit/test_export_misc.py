@@ -491,16 +491,84 @@ class TestIsConnected:
 
 
 class TestCreateWeldment:
-    def test_success(self, doc_mgr):
+    """The ProgID route raises a modal that hangs the server; it is never taken.
+
+    Documents.Add("SolidEdge.WeldmentDocument") is accepted by Solid Edge 2026,
+    which then looks for a default weldment template. On an install without the
+    weldment environment that file is absent, and the answer is a modal "Path
+    not found" that DisplayAlerts does not suppress. Verified live: the call
+    blocked until dismissed by hand, then returned 0x80030003.
+    """
+
+    def test_without_a_template_it_refuses_before_any_com_call(self, doc_mgr):
         dm, app = doc_mgr
-        doc = MagicMock()
-        doc.Name = "Weld1.pwd"
-        doc.FullName = "C:/weld.pwd"
-        app.Documents.Add.return_value = doc
 
         result = dm.create_weldment()
+
+        assert "error" in result
+        assert result["unsupported"] is True
+        assert "template" in result["error"]
+        app.Documents.Add.assert_not_called()
+
+    def test_with_an_existing_template_it_opens_that_file(self, doc_mgr, tmp_path):
+        dm, app = doc_mgr
+        template = tmp_path / "weld.pwd"
+        template.write_bytes(b"")
+        doc = MagicMock()
+        doc.Name = "Weld1.pwd"
+        doc.FullName = str(template)
+        app.Documents.Add.return_value = doc
+
+        result = dm.create_weldment(template=str(template))
+
         assert result["status"] == "created"
         assert result["type"] == "Weldment"
+        app.Documents.Add.assert_called_once_with(str(template))
+
+    def test_a_missing_template_is_refused_not_ignored(self, doc_mgr):
+        dm, app = doc_mgr
+
+        result = dm.create_weldment(template=r"C:\nowhere\weld.pwd")
+
+        assert "error" in result
+        assert "Template not found" in result["error"]
+        app.Documents.Add.assert_not_called()
+
+
+class TestAMissingTemplateIsNeverSilentlyIgnored:
+    """Every document creator used to fall through to the default document
+    when the caller's template was not on disk, so a caller who asked for a
+    template got a plain part and no word that their path was ignored."""
+
+    @pytest.mark.parametrize(
+        "creator", ["create_part", "create_assembly", "create_sheet_metal", "create_draft"]
+    )
+    def test_refuses_before_any_com_call(self, doc_mgr, creator):
+        dm, app = doc_mgr
+
+        result = getattr(dm, creator)(template=r"C:\nowhere\template.xxx")
+
+        assert "error" in result, creator
+        assert "Template not found" in result["error"], creator
+        app.Documents.Add.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("creator", "progid"),
+        [
+            ("create_part", "SolidEdge.PartDocument"),
+            ("create_assembly", "SolidEdge.AssemblyDocument"),
+            ("create_sheet_metal", "SolidEdge.SheetMetalDocument"),
+            ("create_draft", "SolidEdge.DraftDocument"),
+        ],
+    )
+    def test_no_template_still_takes_the_progid_route(self, doc_mgr, creator, progid):
+        dm, app = doc_mgr
+        app.Documents.Add.return_value = MagicMock(Name="New", FullName="")
+
+        result = getattr(dm, creator)()
+
+        assert result["status"] == "created", (creator, result)
+        app.Documents.Add.assert_called_once_with(progid)
 
 
 # ============================================================================
