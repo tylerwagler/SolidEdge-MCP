@@ -21,10 +21,23 @@ from ..constants import (
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
+from ._base import verify_collection_growth_on_creators
 
 _logger = get_logger(__name__)
 
 
+# A surface is construction geometry, not body material, so the face count
+# that verifies_geometry watches never moves for one. Every creator here
+# lands in one of five Constructions sub-collections, and which one depends
+# on the call, so all five are summed: a surface that lands in a sibling
+# collection is still growth, not a no-op.
+@verify_collection_growth_on_creators(
+    "Constructions.ExtrudedSurfaces",
+    "Constructions.RevolvedSurfaces",
+    "Constructions.LoftedSurfaces",
+    "Constructions.SweptSurfaces",
+    "Constructions.BlueSurfs",
+)
 class SurfacesMixin:
     """Mixin providing surface creation methods."""
 

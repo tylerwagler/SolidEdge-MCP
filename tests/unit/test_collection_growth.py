@@ -292,6 +292,13 @@ class TestTheCollectionBackedCreatorsAreWrapped:
             "create_face_rotate_by_points",
         )
 
+    def test_every_surface_creator(self):
+        from solidedge_mcp.backends.features._surfaces import SurfacesMixin
+
+        creators = [n for n in vars(SurfacesMixin) if n.startswith("create_")]
+        assert len(creators) == 15, creators
+        self._wrapped("solidedge_mcp.backends.features._surfaces", "SurfacesMixin", *creators)
+
     def test_draft_tables(self):
         self._wrapped(
             "solidedge_mcp.backends.export._drawing",
