@@ -4,7 +4,9 @@ import contextlib
 import math
 from typing import Any
 
-from solidedge_mcp.backends.errors import error_result
+import pythoncom
+
+from solidedge_mcp.backends.errors import com_hresult, error_result
 
 from ..comutil import owned_style_for
 from ..constants import DraftPrintOrientationConstants
@@ -390,14 +392,38 @@ class DraftMixin:
             if err:
                 return err
 
-            # GetSymbolFileOrigin(pxOrigin as VT_R8*, pyOrigin as VT_R8*).
-            # Both parameters are declared [in]; pywin32 requires them to be
-            # supplied and hands the filled values back as the return value.
-            result = doc.GetSymbolFileOrigin(0.0, 0.0)
+            # GetSymbolFileOrigin(pxOrigin as VT_R8*, pyOrigin as VT_R8*). The
+            # type library declares both [in], so the ordinary late-bound call
+            # returns None and the values are lost. Invoking with the parameters
+            # declared [in, out] by reference hands them back (verified on
+            # Solid Edge 2026: (0.1, 0.2) after SetSymbolFileOrigin(0.1, 0.2)).
+            ole = doc._oleobj_
+            dispid = ole.GetIDsOfNames(0, "GetSymbolFileOrigin")
+            byref_r8 = pythoncom.VT_BYREF | pythoncom.VT_R8
+            try:
+                x, y = ole.InvokeTypes(
+                    dispid,
+                    0,
+                    pythoncom.DISPATCH_METHOD,
+                    (pythoncom.VT_VOID, 0),
+                    ((byref_r8, 3), (byref_r8, 3)),
+                    0.0,
+                    0.0,
+                )
+            except pythoncom.com_error as e:
+                # DISP_E_BADINDEX is what a draft with no origin answers; it
+                # arrives inside excepinfo under DISP_E_EXCEPTION.
+                if com_hresult(e) == 0x8002000B:
+                    return {
+                        "error": (
+                            "This draft has no symbol file origin. Set one with set_origin first."
+                        )
+                    }
+                raise
             return {
                 "status": "success",
-                "x": result[0],
-                "y": result[1],
+                "x": x,
+                "y": y,
             }
         except Exception as e:
             return error_result(e)

@@ -9,6 +9,7 @@ Uses unittest.mock to simulate COM objects.
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
+import pythoncom
 
 from solidedge_mcp.backends.constants import DocumentTypeConstants
 
@@ -745,17 +746,36 @@ class TestSetDraftGlobalParameter:
 
 
 class TestGetSymbolFileOrigin:
-    def test_success(self, export_mgr):
+    """GetSymbolFileOrigin's parameters are declared [in] VT_R8*, so a plain
+    late-bound call returns None; the values come back only through InvokeTypes
+    with the parameters declared [in, out] by reference (verified on SE 2026)."""
+
+    @staticmethod
+    def _ole(doc):
+        ole = doc._oleobj_
+        ole.GetIDsOfNames.return_value = 7
+        return ole
+
+    def test_values_come_back_by_reference(self, export_mgr):
         em, doc = export_mgr
         doc.Sheets = MagicMock()
-        doc.GetSymbolFileOrigin.return_value = (0.05, 0.10)
+        ole = self._ole(doc)
+        ole.InvokeTypes.return_value = (0.05, 0.10)
 
         result = em.get_symbol_file_origin()
-        assert result["status"] == "success"
-        assert result["x"] == 0.05
-        assert result["y"] == 0.10
-        # GetSymbolFileOrigin(pxOrigin, pyOrigin) - both must be supplied
-        doc.GetSymbolFileOrigin.assert_called_once_with(0.0, 0.0)
+
+        assert result == {"status": "success", "x": 0.05, "y": 0.10}
+        byref_r8 = pythoncom.VT_BYREF | pythoncom.VT_R8
+        ole.InvokeTypes.assert_called_once_with(
+            7,
+            0,
+            pythoncom.DISPATCH_METHOD,
+            (pythoncom.VT_VOID, 0),
+            ((byref_r8, 3), (byref_r8, 3)),
+            0.0,
+            0.0,
+        )
+        doc.GetSymbolFileOrigin.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
@@ -764,13 +784,44 @@ class TestGetSymbolFileOrigin:
         result = em.get_symbol_file_origin()
         assert "error" in result
 
-    def test_com_error(self, export_mgr):
+    def test_no_origin_set_is_said_plainly(self, export_mgr):
         em, doc = export_mgr
         doc.Sheets = MagicMock()
-        doc.GetSymbolFileOrigin.side_effect = Exception("No origin set")
+        ole = self._ole(doc)
+        ole.InvokeTypes.side_effect = pythoncom.com_error(
+            -2147352565, "Exception occurred.", None, None
+        )
 
         result = em.get_symbol_file_origin()
+
+        assert "no symbol file origin" in result["error"].lower()
+        assert "set_origin" in result["error"]
+
+    def test_no_origin_inside_excepinfo_is_said_plainly(self, export_mgr):
+        """Solid Edge raises DISP_E_EXCEPTION with BADINDEX as the inner scode."""
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+        ole = self._ole(doc)
+        ole.InvokeTypes.side_effect = pythoncom.com_error(
+            -2147352567, "Exception occurred.", (0, None, None, None, 0, -2147352565), None
+        )
+
+        result = em.get_symbol_file_origin()
+
+        assert "no symbol file origin" in result["error"].lower()
+
+    def test_another_com_error_is_reported_as_itself(self, export_mgr):
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+        ole = self._ole(doc)
+        ole.InvokeTypes.side_effect = pythoncom.com_error(
+            -2147467259, "Exception occurred.", None, None
+        )
+
+        result = em.get_symbol_file_origin()
+
         assert "error" in result
+        assert "no symbol file origin" not in result["error"].lower()
 
 
 # ============================================================================

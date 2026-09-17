@@ -1,15 +1,53 @@
 """Variable management and custom properties."""
 
 import contextlib
+import math
 from typing import Any
 
 from solidedge_mcp.backends.errors import describe_exception, error_result
 
 from ..comutil import com_get
-from ..constants import VariableNameBy, seVariableTypeConstants
+from ..constants import UnitTypeConstants, VariableNameBy, seVariableTypeConstants
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
+
+# framewrk.tlb > UnitTypeConstants, the values Variable.UnitsType reports.
+_UNIT_TYPE_NAMES: dict[int, str] = {
+    UnitTypeConstants.igUnitDistance: "distance",
+    UnitTypeConstants.igUnitAngle: "angle",
+    UnitTypeConstants.igUnitMass: "mass",
+    UnitTypeConstants.igUnitArea: "area",
+    UnitTypeConstants.igUnitDensity: "density",
+    UnitTypeConstants.igUnitVolume: "volume",
+    UnitTypeConstants.igUnitScalar: "scalar",
+}
+
+
+def _is_angle(var: Any) -> bool:
+    return com_get(var, "UnitsType") == UnitTypeConstants.igUnitAngle
+
+
+def _units_of(var: Any) -> dict[str, Any]:
+    """The units fields of a variable: ``units`` and, for an angle, ``value_degrees``.
+
+    ``Variable.Units`` is a member of nothing, so the read of it that this
+    replaces was suppressed on every variable and no units were ever
+    reported. ``UnitsType`` is the real property. Verified on Solid Edge
+    2026: a revolve's angle reports igUnitAngle and holds radians, so the
+    degrees are added beside the raw value.
+    """
+    out: dict[str, Any] = {}
+    units_type = com_get(var, "UnitsType")
+    if type(units_type) is not int:
+        return out
+    out["units_type"] = units_type
+    out["units"] = _UNIT_TYPE_NAMES.get(units_type, f"unit_type_{units_type}")
+    if units_type == UnitTypeConstants.igUnitAngle:
+        value = com_get(var, "Value")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            out["value_degrees"] = math.degrees(value)
+    return out
 
 
 class VariablesMixin:
@@ -21,37 +59,19 @@ class VariablesMixin:
         """
         Get all variables from the active document.
 
-        Queries the Variables collection using Query() to list all
-        variable names, values, and formulas.
+        Lists through ``Variables.Query`` in both name spaces (see
+        query_variables). Enumerating ``Variables.Item(i)`` instead, as this
+        did, shows a dimension as a nameless entry and misses it (Solid Edge
+        2026), so the listing had no dimensions and two ``Var_n`` placeholders.
 
         Returns:
             Dict with list of variables
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            variables = doc.Variables
-
-            var_list = []
-            for i in range(1, variables.Count + 1):
-                try:
-                    var = variables.Item(i)
-                    var_info = {
-                        "index": i - 1,
-                        "name": com_get(var, "DisplayName", f"Var_{i}"),
-                    }
-                    with contextlib.suppress(Exception):
-                        var_info["value"] = var.Value
-                    with contextlib.suppress(Exception):
-                        var_info["formula"] = var.Formula
-                    with contextlib.suppress(Exception):
-                        var_info["units"] = var.Units
-                    var_list.append(var_info)
-                except Exception:
-                    var_list.append({"index": i - 1, "name": f"Var_{i}"})
-
-            return {"variables": var_list, "count": len(var_list)}
-        except Exception as e:
-            return error_result(e)
+        result = self.query_variables("*")
+        if "error" in result:
+            return result
+        var_list = [{"index": i, **entry} for i, entry in enumerate(result["matches"])]
+        return {"variables": var_list, "count": len(var_list)}
 
     @staticmethod
     def _find_variable(variables: Any, name: str) -> Any:
@@ -65,10 +85,21 @@ class VariablesMixin:
         type library marks read-only. The caller now acts outside the loop,
         where a failure surfaces as itself.
         """
+        # Variables.Item(name) resolves a display name directly, and it is
+        # the only route to a dimension: enumerated by index, a dimension is
+        # a nameless entry (Solid Edge 2026, where Item(i) shows
+        # RevolvedProtrusion_1_FiniteAngle as Name '' / DisplayName None and
+        # Item("RevolvedProtrusion_1_FiniteAngle") returns it). The answer is
+        # checked against both names because a mock, or a lenient lookup,
+        # can hand back something else.
+        with contextlib.suppress(Exception):
+            var = variables.Item(name)
+            if name in (com_get(var, "DisplayName"), com_get(var, "Name")):
+                return var
         for i in range(1, com_get(variables, "Count", 0) + 1):
             with contextlib.suppress(Exception):
                 var = variables.Item(i)
-                if com_get(var, "DisplayName", "") == name:
+                if name in (com_get(var, "DisplayName", ""), com_get(var, "Name", "")):
                     return var
         return None
 
@@ -95,8 +126,7 @@ class VariablesMixin:
                 result["value"] = var.Value
             with contextlib.suppress(Exception):
                 result["formula"] = var.Formula
-            with contextlib.suppress(Exception):
-                result["units"] = var.Units
+            result.update(_units_of(var))
             return result
         except Exception as e:
             return error_result(e)
@@ -121,12 +151,14 @@ class VariablesMixin:
                 return {"error": f"Variable '{name}' not found"}
 
             old_value = var.Value
-            var.Value = value
+            # An angular variable holds radians; the tool boundary is degrees.
+            var.Value = math.radians(value) if _is_angle(var) else value
             return {
                 "status": "updated",
                 "name": name,
                 "old_value": old_value,
                 "new_value": com_get(var, "Value", value),
+                **_units_of(var),
             }
         except Exception as e:
             return error_result(e)
@@ -238,6 +270,15 @@ class VariablesMixin:
         a bare ``Query("w*")`` misses ``Width`` -- which is the other reason
         to pass it explicitly.
 
+        NamedBy picks the name space the pattern is matched in, and it is a
+        filter, not a preference: seVariableNameByUser sees only user-named
+        variables, seVariableNameBySystem only system-named ones (dimensions
+        such as ``Dimension 346`` / ``RevolvedProtrusion_1_FiniteAngle`` and
+        the PhysicalProperties_* pair). Passing ByUser, as this did, hid every
+        dimension and physical property; ByBoth finds all of them (Solid Edge
+        2026, where the per-type union with ByBoth returned every variable
+        the bare ``Query("*")`` does).
+
         Args:
             pattern: Search pattern with wildcards (e.g., "*Length*", "V?").
             case_insensitive: Whether to ignore case (default True).
@@ -261,7 +302,7 @@ class VariablesMixin:
                 try:
                     results = variables.Query(
                         pattern,
-                        VariableNameBy.seVariableNameByUser,
+                        VariableNameBy.seVariableNameByBoth,
                         var_type,
                         case_insensitive,
                     )
@@ -280,6 +321,7 @@ class VariablesMixin:
                         entry: dict[str, Any] = {"name": name}
                         with contextlib.suppress(Exception):
                             entry["value"] = var.Value
+                            entry.update(_units_of(var))
                         with contextlib.suppress(Exception):
                             entry["formula"] = var.Formula
                         matches.append(entry)

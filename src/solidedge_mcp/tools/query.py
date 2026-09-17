@@ -70,7 +70,8 @@ def manage_variable(
 ) -> dict[str, Any]:
     """Manage document variables (Variable Table).
 
-    set: name + value, always in meters. add/set_formula: name + formula, a
+    set: name + value in meters, or degrees for an angular variable (the
+    result carries units and value_degrees). add/set_formula: name + formula, a
     string whose bare numbers are read in the DOCUMENT's units -- on an inch
     template "0.025" means 0.025 inch, so write "25 mm" to mean 25 mm. The
     result reports the value Solid Edge computed. A constant formula is stored

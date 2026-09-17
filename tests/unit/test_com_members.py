@@ -42,6 +42,8 @@ UNVERIFIED: frozenset[str] = frozenset(
         "DEBUG",
         "Dispatch",
         "EnsureDispatch",
+        "GetIDsOfNames",  # IDispatch itself, via doc._oleobj_ (export/_draft.py)
+        "InvokeTypes",  # same: declared-type invoke for [in, out] parameters
         "Formatter",
         "GetActiveObject",
         "Logger",

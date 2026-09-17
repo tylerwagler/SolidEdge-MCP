@@ -4,6 +4,7 @@ Unit tests for QueryManager backend methods (_variables.py mixin).
 Uses unittest.mock to simulate COM objects.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,103 +33,62 @@ def query_mgr(doc_mgr):
 # ============================================================================
 
 
+def _query_returns(doc, *vars_):
+    """Variables.Query answers every (pattern, NamedBy, VarType) with these variables."""
+    found = MagicMock()
+    found.Count = len(vars_)
+    found.Item.side_effect = lambda i: (None, *vars_)[i]
+    doc.Variables.Query.return_value = found
+    return found
+
+
 class TestGetVariables:
-    def test_success(self, query_mgr):
+    def test_lists_through_the_query(self, query_mgr):
         qm, doc = query_mgr
         var1 = MagicMock()
         var1.DisplayName = "Width"
         var1.Value = 0.1
         var1.Formula = "100 mm"
-        var1.Units = "m"
+        var1.UnitsType = 1
 
         var2 = MagicMock()
-        var2.DisplayName = "Height"
-        var2.Value = 0.05
-        var2.Formula = "50 mm"
-        var2.Units = "m"
-
-        variables = MagicMock()
-        variables.Count = 2
-        variables.Item.side_effect = lambda i: [None, var1, var2][i]
-        doc.Variables = variables
+        var2.DisplayName = "RevolvedProtrusion_1_FiniteAngle"
+        var2.Value = 1.5707963267948966
+        var2.Formula = ""
+        var2.UnitsType = 2
+        _query_returns(doc, var1, var2)
 
         result = qm.get_variables()
+
         assert result["count"] == 2
-        assert result["variables"][0]["name"] == "Width"
-        assert result["variables"][0]["value"] == 0.1
-        assert result["variables"][1]["name"] == "Height"
+        assert result["variables"][0] == {
+            "index": 0,
+            "name": "Width",
+            "value": 0.1,
+            "units_type": 1,
+            "units": "distance",
+            "formula": "100 mm",
+        }
+        assert result["variables"][1]["name"] == "RevolvedProtrusion_1_FiniteAngle"
+        assert result["variables"][1]["value_degrees"] == pytest.approx(90.0)
+        # in both name spaces: a dimension is system-named
+        for call in doc.Variables.Query.call_args_list:
+            assert call.args[1] == 2
+        doc.Variables.Item.assert_not_called()
 
     def test_empty(self, query_mgr):
         qm, doc = query_mgr
-        variables = MagicMock()
-        variables.Count = 0
-        doc.Variables = variables
+        _query_returns(doc)
 
         result = qm.get_variables()
         assert result["count"] == 0
         assert result["variables"] == []
 
-
-class TestGetVariable:
-    def test_found(self, query_mgr):
+    def test_a_broken_query_is_reported(self, query_mgr):
         qm, doc = query_mgr
-        var = MagicMock()
-        var.DisplayName = "Width"
-        var.Value = 0.1
-        var.Formula = "100 mm"
-        var.Units = "m"
+        doc.Variables.Query.side_effect = Exception("Query unavailable")
 
-        variables = MagicMock()
-        variables.Count = 1
-        variables.Item.return_value = var
-        doc.Variables = variables
-
-        result = qm.get_variable("Width")
-        assert result["name"] == "Width"
-        assert result["value"] == 0.1
-
-    def test_not_found(self, query_mgr):
-        qm, doc = query_mgr
-        var = MagicMock()
-        var.DisplayName = "Width"
-
-        variables = MagicMock()
-        variables.Count = 1
-        variables.Item.return_value = var
-        doc.Variables = variables
-
-        result = qm.get_variable("Nonexistent")
-        assert "error" in result
-
-
-class TestSetVariable:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
-        var = MagicMock()
-        var.DisplayName = "Width"
-        var.Value = 0.1
-
-        variables = MagicMock()
-        variables.Count = 1
-        variables.Item.return_value = var
-        doc.Variables = variables
-
-        result = qm.set_variable("Width", 0.2)
-        assert result["status"] == "updated"
-        assert result["old_value"] == 0.1
-        assert result["new_value"] == 0.2
-
-    def test_not_found(self, query_mgr):
-        qm, doc = query_mgr
-        var = MagicMock()
-        var.DisplayName = "Width"
-
-        variables = MagicMock()
-        variables.Count = 1
-        variables.Item.return_value = var
-        doc.Variables = variables
-
-        result = qm.set_variable("Nonexistent", 0.5)
+        result = qm.get_variables()
         assert "error" in result
 
 
@@ -271,8 +231,9 @@ class TestQueryVariables:
 
         assert result["count"] == 1
         assert result["matches"][0]["name"] == "Width"
-        # NamedBy=seVariableNameByUser, VarType=seVariableType_UserDefined.
-        variables.Query.assert_any_call("W*", 0, self.USER, True)
+        # NamedBy=seVariableNameByBoth (ByUser hides every dimension and
+        # physical property), VarType=seVariableType_UserDefined.
+        variables.Query.assert_any_call("W*", 2, self.USER, True)
         # Never the 0 that made Solid Edge return nothing.
         for call in variables.Query.call_args_list:
             assert call.args[2] != 0
@@ -673,3 +634,120 @@ class TestDeleteCustomProperty:
 
         result = qm.delete_custom_property("Nonexistent")
         assert "error" in result
+
+
+# ============================================================================
+# UNITS: Variable.UnitsType, and degrees at the boundary for angles
+# ============================================================================
+
+
+def _one_variable(doc, **attrs):
+    """A Variables collection holding a single variable with the given attributes."""
+    var = MagicMock()
+    for name, value in attrs.items():
+        setattr(var, name, value)
+    variables = MagicMock()
+    variables.Count = 1
+    variables.Item.side_effect = lambda i: [None, var][i]
+    doc.Variables = variables
+    _query_returns(doc, var)
+    return var
+
+
+class TestFindVariable:
+    def test_a_dimension_is_found_by_name_when_the_index_loop_cannot_see_it(self, query_mgr):
+        """Item(i) shows a dimension as a nameless entry; Item(name) returns it (SE 2026)."""
+        qm, doc = query_mgr
+        dimension = MagicMock()
+        dimension.Name = "Dimension 346"
+        dimension.DisplayName = "RevolvedProtrusion_1_FiniteAngle"
+        dimension.Value = 1.0
+        dimension.UnitsType = 2
+        nameless = MagicMock()
+        nameless.Name = ""
+        nameless.DisplayName = None
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.side_effect = lambda key: (
+            dimension if key == dimension.DisplayName else nameless
+        )
+        doc.Variables = variables
+
+        result = qm.get_variable("RevolvedProtrusion_1_FiniteAngle")
+
+        assert result["value"] == 1.0
+        assert result["units"] == "angle"
+
+    def test_an_item_that_answers_with_another_variable_is_not_taken(self, query_mgr):
+        qm, doc = query_mgr
+        other = MagicMock()
+        other.Name = other.DisplayName = "Width"
+        variables = MagicMock()
+        variables.Count = 1
+        variables.Item.return_value = other
+        doc.Variables = variables
+
+        assert "error" in qm.get_variable("Missing")
+
+
+class TestVariableUnits:
+    """``Variable.Units`` is a member of nothing; ``UnitsType`` is the real property.
+
+    The old read of ``Units`` was suppressed on every variable, so no units were
+    ever reported and an angle's radians passed as if they were a length.
+    """
+
+    def test_angle_reports_units_and_degrees(self, query_mgr):
+        qm, doc = query_mgr
+        _one_variable(doc, Name="Angle_1", DisplayName="Angle_1", Value=math.pi / 2, UnitsType=2)
+
+        result = qm.get_variable("Angle_1")
+
+        assert result["units"] == "angle"
+        assert result["units_type"] == 2
+        assert result["value"] == pytest.approx(math.pi / 2)
+        assert result["value_degrees"] == pytest.approx(90.0)
+
+    def test_distance_reports_units_without_degrees(self, query_mgr):
+        qm, doc = query_mgr
+        _one_variable(doc, Name="Width", DisplayName="Width", Value=0.1, UnitsType=1)
+
+        result = qm.get_variable("Width")
+
+        assert result["units"] == "distance"
+        assert "value_degrees" not in result
+
+    def test_an_unreadable_units_type_reports_no_units(self, query_mgr):
+        qm, doc = query_mgr
+        _one_variable(doc, Name="X", DisplayName="X", Value=0.1)  # UnitsType stays a MagicMock
+
+        result = qm.get_variable("X")
+
+        assert "units" not in result and "value_degrees" not in result
+
+    def test_get_variables_carries_units(self, query_mgr):
+        qm, doc = query_mgr
+        _one_variable(doc, Name="Angle_1", DisplayName="Angle_1", Value=math.pi, UnitsType=2)
+
+        result = qm.get_variables()
+
+        assert result["variables"][0]["units"] == "angle"
+        assert result["variables"][0]["value_degrees"] == pytest.approx(180.0)
+
+    def test_set_angle_takes_degrees_and_writes_radians(self, query_mgr):
+        qm, doc = query_mgr
+        var = _one_variable(doc, Name="Angle_1", DisplayName="Angle_1", Value=0.0, UnitsType=2)
+
+        result = qm.set_variable("Angle_1", 30.0)
+
+        assert var.Value == pytest.approx(math.radians(30.0))
+        assert result["status"] == "updated"
+        assert result["units"] == "angle"
+
+    def test_set_distance_writes_the_value_as_given(self, query_mgr):
+        qm, doc = query_mgr
+        var = _one_variable(doc, Name="Width", DisplayName="Width", Value=0.0, UnitsType=1)
+
+        qm.set_variable("Width", 0.5)
+
+        assert var.Value == 0.5
