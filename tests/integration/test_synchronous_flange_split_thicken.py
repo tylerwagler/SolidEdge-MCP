@@ -153,3 +153,22 @@ class TestBead:
 
         assert r["status"] == "created", r
         assert stack.query.get_face_count()["face_count"] == before + 14
+
+
+class TestLoftedFlange:
+    def test_two_open_lines_on_parallel_planes_make_a_sheet(self, stack, new_sheet_metal):
+        stack.sketch.create_sketch("Top")
+        stack.sketch.draw_line(0.0, 0.0, 0.08, 0.0)
+        stack.sketch.close_sketch(closed=False)
+        assert stack.feature.create_ref_plane_by_offset(1, 0.03)["status"] == "created"
+        stack.sketch.create_sketch_on_plane_index(4)
+        stack.sketch.draw_line(0.0, 0.01, 0.08, 0.01)
+        stack.sketch.close_sketch(closed=False)
+        doc = stack.doc.get_active_document()
+        assert doc.Models.Count == 0
+
+        r = stack.feature.create_lofted_flange(0.002)
+
+        assert r["status"] == "created", r
+        assert doc.Models.Count == 1
+        assert stack.query.get_face_count()["face_count"] == 6

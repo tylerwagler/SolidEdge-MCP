@@ -892,6 +892,8 @@ class FeaturePropertyConstants:
     igNullConstant = 0
     igNormalSideDummy = 7
     igReverseNormalSideDummy = 8
+    igStart = 29  # OriginRefs of a lofted flange: the section's start keypoint
+    igNFType = 57  # BnParamType of a lofted flange
     igAddRound = 101
     igCircular = 120
     igPunchedEnd = 123

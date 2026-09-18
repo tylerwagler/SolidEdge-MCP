@@ -220,11 +220,10 @@ def create_lofted_flange(
 ) -> dict[str, Any]:
     """Create a lofted flange between two sketch profiles (sheet metal).
 
-    Dimensions in meters. bend_radius applies to 'advanced' only, which uses
-    bend deduction/allowance; 'basic' and 'ex' take thickness alone.
-    Every method is unsupported: Models.AddLoftedFlange* needs cross-section
-    profiles with a per-section origin, origin reference and vertex map that
-    cannot be built here. Create the lofted flange in the Solid Edge UI.
+    Sketch two OPEN profiles (lines/arcs) on different planes, closing each
+    with closed=false, then call this. Meters. 'basic' uses a 1 mm bend
+    radius, 'advanced' takes bend_radius; thickness is the document's and is
+    echoed. 'ex' (AddLoftedFlangeEx) is not driven live and refuses.
     """
     err = validate_numerics(thickness=thickness, bend_radius=bend_radius)
     if err:

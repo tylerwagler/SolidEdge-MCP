@@ -16,6 +16,7 @@ from ..constants import (
     FaceQueryConstants,
     FeaturePropertyConstants,
     KeyPointExtentConstants,
+    LoftSweepConstants,
     ModelingModeConstants,
     OffsetSideConstants,
     SETargetConstructionBodyOption,
@@ -204,6 +205,63 @@ class SheetMetalMixin:
         except Exception as e:
             return error_result(e)
 
+    def _lofted_flange(self, bend_radius: float, label: str, **echo: Any) -> dict[str, Any]:
+        """Models.AddLoftedFlange over the accumulated open profiles.
+
+        The argument shape is the community sample's, verified on Solid Edge
+        2026 with this server's ProfileSets profiles as well: Origins holds
+        each section's first Line2d/Arc2d OBJECT (a coordinate array answers
+        DISP_E_TYPEMISMATCH), OriginRefs holds igStart per section (a
+        KeyPointType value answers E_FAIL), and BnParamType is igNFType.
+        Two open lines on parallel planes give a 6-face sheet (Models 0 -> 1).
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profiles = self.sketch_manager.get_accumulated_profiles()
+            if len(profiles) < 2:
+                return {
+                    "error": (
+                        f"A lofted flange needs at least 2 open profiles on different planes, "
+                        f"got {len(profiles)}."
+                    )
+                }
+            origins = []
+            for index, profile in enumerate(profiles):
+                err = self._require_open_profile(profile, "lofted flange")
+                if err:
+                    return err
+                element = None
+                for collection in ("Lines2d", "Arcs2d"):
+                    items = com_get(profile, collection)
+                    if items is not None and com_get(items, "Count", 0):
+                        element = items.Item(1)
+                        break
+                if element is None:
+                    return {"error": f"Profile {index} has no line or arc to take its origin from."}
+                origins.append(element)
+            n = len(profiles)
+            doc.Models.AddLoftedFlange(
+                n,
+                list(profiles),
+                [LoftSweepConstants.igProfileBasedCrossSection] * n,
+                origins,
+                [FeaturePropertyConstants.igStart] * n,
+                DirectionConstants.igRight,
+                bend_radius,
+                0.33,
+                FeaturePropertyConstants.igNFType,
+            )
+            self.sketch_manager.clear_accumulated_profiles()
+            return {
+                "status": "created",
+                "type": label,
+                "num_profiles": n,
+                "bend_radius": bend_radius,
+                **echo,
+            }
+        except Exception as e:
+            return error_result(e)
+
     @verifies_geometry
     def create_lofted_flange(self, thickness: float) -> dict[str, Any]:
         """
@@ -215,19 +273,8 @@ class SheetMetalMixin:
         cross-section profiles plus an origin and origin reference for each one,
         none of which this server can supply. The call is never made.
         """
-        return {
-            "error": (
-                "Lofted flanges are not available through this server: "
-                "Models.AddLoftedFlange answers DISP_E_TYPEMISMATCH or E_FAIL to "
-                "every Origins/OriginRefs shape tried on Solid Edge 2026 -- "
-                "coordinate arrays, VARIANT R8 arrays with I4 or plain refs, the "
-                "sections' own lines with keypoint refs, the profiles themselves. "
-                "Create the lofted flange in the Solid Edge UI."
-            ),
-            "unsupported": True,
-            "type": "lofted_flange",
-            "thickness": thickness,
-        }
+        # The sheet's thickness comes from the document; it is echoed only.
+        return self._lofted_flange(0.001, "lofted_flange", thickness=thickness)
 
     @verifies_geometry
     def create_web_network(
@@ -414,18 +461,9 @@ class SheetMetalMixin:
         references, vertex maps, bend-divide and auto-relief settings - which
         this server cannot supply. The call is never made.
         """
-        return {
-            "error": (
-                "Lofted flanges are not available through this server: "
-                "Models.AddLoftedFlangeByBendDeductionOrBendAllowance needs 25 "
-                "arguments including cross-section profiles, per-section origins "
-                "and vertex maps. Create the lofted flange in the Solid Edge UI."
-            ),
-            "unsupported": True,
-            "type": "lofted_flange_advanced",
-            "thickness": thickness,
-            "bend_radius": bend_radius,
-        }
+        if bend_radius <= 0:
+            return {"error": "bend_radius must be positive (meters)."}
+        return self._lofted_flange(bend_radius, "lofted_flange_advanced", thickness=thickness)
 
     @verifies_geometry
     def create_lofted_flange_ex(self, thickness: float) -> dict[str, Any]:
@@ -439,10 +477,9 @@ class SheetMetalMixin:
         """
         return {
             "error": (
-                "Lofted flanges are not available through this server: "
-                "Models.AddLoftedFlangeEx needs 25 arguments including "
-                "cross-section profiles, per-section origins and vertex maps. "
-                "Create the lofted flange in the Solid Edge UI."
+                "Lofted flanges build through method='basic' or 'advanced' "
+                "(Models.AddLoftedFlange); the AddLoftedFlangeEx variant has not been "
+                "driven live. Use one of those."
             ),
             "unsupported": True,
             "type": "lofted_flange_ex",
@@ -1065,10 +1102,11 @@ class SheetMetalMixin:
             "error": (
                 "Threads.Add will not thread an existing cylindrical face on Solid "
                 "Edge 2026: E_INVALIDARG for a boss and a hole with every HoleData "
-                "tried, including the shape a UI-made thread holds (HoleType 36, "
-                "ThreadSetting igRegularThread, external/nominal/minor diameters, a "
-                "standard description). Cut a threaded hole with "
-                "create_hole(method='threaded') instead."
+                "tried, including one filled in through Standard/Size/"
+                "ThreadDataByDescription with a depth, and every end-face choice. The "
+                "Solid Edge developer community reports the same for a decade "
+                "(community.sw.siemens.com, 'Parameters for Threads.Add Method'): a "
+                "thread has to come with its hole. Use create_hole(method='threaded')."
             ),
             "unsupported": True,
             "face_index": face_index,

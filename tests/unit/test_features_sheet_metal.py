@@ -604,26 +604,62 @@ class TestCreateWebNetwork:
         models.AddWebNetwork.assert_not_called()
 
 
-class TestLoftedFlangesUnsupported:
-    """Every AddLoftedFlange* overload needs cross-section profiles."""
+class TestCreateLoftedFlange:
+    """AddLoftedFlange with Line2d origins and igStart refs (SE 2026: Models 0 -> 1)."""
 
-    def test_basic(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        result = feature_mgr.create_lofted_flange(0.001)
-        assert result["unsupported"] is True
-        assert result["thickness"] == 0.001
+    @staticmethod
+    def _profiles(sketch_mgr, n=2):
+        profiles = []
+        for i in range(n):
+            p = MagicMock(name=f"profile{i}")
+            for name in ("Circles2d", "Ellipses2d", "Boundaries2d"):
+                getattr(p, name).Count = 0
+            p.Lines2d.Count = 1
+            profiles.append(p)
+        sketch_mgr.get_accumulated_profiles.return_value = profiles
+        return profiles
+
+    def test_basic_builds_between_two_open_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, doc, models, _, _ = managers
+        p1, p2 = self._profiles(sketch_mgr)
+
+        result = feature_mgr.create_lofted_flange(0.002)
+
+        assert result["status"] == "created"
+        assert result["num_profiles"] == 2
+        models.AddLoftedFlange.assert_called_once_with(
+            2,
+            [p1, p2],
+            [48, 48],
+            [p1.Lines2d.Item.return_value, p2.Lines2d.Item.return_value],
+            [29, 29],
+            2,
+            0.001,
+            0.33,
+            57,
+        )
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_advanced_passes_the_bend_radius(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        self._profiles(sketch_mgr)
+        result = feature_mgr.create_lofted_flange_advanced(0.002, 0.004)
+        assert result["status"] == "created"
+        assert models.AddLoftedFlange.call_args.args[6] == 0.004
+
+    def test_fewer_than_two_or_a_closed_profile_is_refused(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        self._profiles(sketch_mgr, n=1)
+        assert "at least 2" in feature_mgr.create_lofted_flange(0.002)["error"]
+        p1, _ = self._profiles(sketch_mgr)
+        p1.Circles2d.Count = 1
+        assert "error" in feature_mgr.create_lofted_flange(0.002)
         models.AddLoftedFlange.assert_not_called()
 
-    def test_advanced(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        result = feature_mgr.create_lofted_flange_advanced(0.001, 0.002)
-        assert result["unsupported"] is True
-        assert result["bend_radius"] == 0.002
-        models.AddLoftedFlangeByBendDeductionOrBendAllowance.assert_not_called()
-
-    def test_ex(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        result = feature_mgr.create_lofted_flange_ex(0.001)
+    def test_ex_still_refuses(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        self._profiles(sketch_mgr)
+        result = feature_mgr.create_lofted_flange_ex(0.002)
         assert result["unsupported"] is True
         models.AddLoftedFlangeEx.assert_not_called()
 

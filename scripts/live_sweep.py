@@ -217,6 +217,16 @@ CONTEXTS: dict[str, list[Step]] = {
     + _rect_closed()
     + [("create_sheet_metal_base", {"type": "tab", "thickness": 0.002})],
     "sheet_rect_closed": [("create_document", {"type": "sheet_metal"})] + _rect_closed(),
+    "sheet_loft_lines": [
+        ("create_document", {"type": "sheet_metal"}),
+        ("manage_sketch", {"action": "create", "plane": "Top"}),
+        ("draw", {"shape": "line", "x1": 0.0, "y1": 0.0, "x2": 0.08, "y2": 0.0}),
+        ("manage_sketch", {"action": "close", "closed": False}),
+        ("create_ref_plane", {"method": "offset", "parent_plane_index": 1, "distance": 0.03}),
+        ("manage_sketch", {"action": "create_on_plane", "plane_index": 4}),
+        ("draw", {"shape": "line", "x1": 0.0, "y1": 0.01, "x2": 0.08, "y2": 0.01}),
+        ("manage_sketch", {"action": "close", "closed": False}),
+    ],
     "sheet_circle_closed": _sheet() + _circle_closed(),
     "sheet_line_closed": _sheet()
     + [
@@ -443,7 +453,12 @@ CASES: list[Case] = [
     Case(
         "create_lofted_flange",
         {"method": "basic", "thickness": 0.002, "bend_radius": 0.002},
-        "sheet",
+        "sheet_loft_lines",
+    ),
+    Case(
+        "create_lofted_flange",
+        {"method": "advanced", "thickness": 0.002, "bend_radius": 0.002},
+        "sheet_loft_lines",
     ),
     Case("create_slot", {"method": "basic", "width": 0.004, "depth": 0.01}, "sheet_line_closed"),
     Case("create_stamped", {"type": "bead", "depth": 0.002}, "sheet_line_closed"),
