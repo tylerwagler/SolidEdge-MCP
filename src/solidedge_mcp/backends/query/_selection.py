@@ -6,6 +6,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
+from ..constants import DocumentTypeConstants
 from ..logging import get_logger
 from ._base import all_faces, body_of
 
@@ -165,21 +166,31 @@ class SelectionMixin:
             return error_result(e)
 
     def select_all(self) -> dict[str, Any]:
-        """Refuse: SelectSet.AddAll answers E_FAIL on Solid Edge 2026.
+        """Select everything on the active draft sheet.
 
-        Verified live on a part with a body: AddAll raises 0x80004005 with the
-        selection empty and again with a feature already selected, and the
-        raw call raises the same outside this server. An honest refusal beats
-        a call that always fails.
+        ``SelectSet.AddAll`` is a 2D call: Siemens' reference shows it only on a
+        draft with an active sheet, and on Solid Edge 2026 it selects every
+        sheet entity there (two drawn, two selected) while a part with a body
+        answers E_FAIL whatever the selection holds. Parts are refused before
+        the call; use select_set(action='add', ...) there.
         """
-        return {
-            "error": (
-                "SelectSet.AddAll answers E_FAIL on Solid Edge 2026 whatever the "
-                "selection holds. Add objects one at a time with "
-                "select_set(action='add', object_type=..., index=...)."
-            ),
-            "unsupported": True,
-        }
+        try:
+            doc = self.doc_manager.get_active_document()
+            if com_get(doc, "Type") != DocumentTypeConstants.igDraftDocument:
+                return {
+                    "error": (
+                        "SelectSet.AddAll selects 2D sheet entities and answers E_FAIL in a "
+                        "part or assembly on Solid Edge 2026. Open a draft, or add objects "
+                        "one at a time with select_set(action='add', object_type=..., "
+                        "index=...)."
+                    ),
+                    "unsupported": True,
+                }
+            select_set = doc.SelectSet
+            select_set.AddAll()
+            return {"status": "selected", "count": com_get(select_set, "Count")}
+        except Exception as e:
+            return error_result(e)
 
     def select_copy(self) -> dict[str, Any]:
         """

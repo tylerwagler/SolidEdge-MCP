@@ -26,8 +26,8 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 119 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,957 | mocked COM; catch shape, not truth |
-| Integration tests | 78 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 11 pin the synchronous flange, the split, the thicken, the slot, the bead, the lofted flange and the mirror only the volume can see, 5 pin 3D sketch lines, structural frames along them (both methods) and planar relations through References, and there are assembly, draft and sheet-metal fixtures |
+| Unit tests | 2,958 | mocked COM; catch shape, not truth |
+| Integration tests | 79 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 11 pin the synchronous flange, the split, the thicken, the slot, the bead, the lofted flange and the mirror only the volume can see, 5 pin 3D sketch lines, structural frames along them (both methods) and planar relations through References, and there are assembly, draft and sheet-metal fixtures |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
@@ -79,7 +79,7 @@ Ordered by how much risk each removes, not by effort.
 
 ### 1. Live verification is reproducible for what has been fixed, not for everything
 
-**78 integration tests across 10 files.** They pin the known-answer box, the
+**79 integration tests across 10 files.** They pin the known-answer box, the
 reported values and units, the document creators and fixtures, drawing views,
 the tier-1 features, and -- added in the live-fix round of 2026-09-17 --
 `tests/integration/test_wrong_members_and_lost_values.py`: the face rotates,
@@ -136,8 +136,8 @@ records every outcome in `reference/LIVE_SWEEP.md`. The latest run, on
 2026-09-17 after the synchronous flange, the split and the thicken were wired
 and the thread and contour-flange-sync calls were driven to their refusals, with
 a synchronous box for the synchronous-only creators, and slots, 3D sketch lines
-and structural frames wired: **114 OK, 16 refuse honestly, 2 FAIL, 0 NOOP**
-across 132 cases (from 93 / 15 / 14 / 2 the day before). The remaining FAILs are the sweep's
+and structural frames wired: **115 OK, 16 refuse honestly, 2 FAIL, 0 NOOP**
+across 133 cases (from 93 / 15 / 14 / 2 the day before). The remaining FAILs are the sweep's
 own deliberate probes -- a missing macro, a plane asked for NURBS data -- each
 answered with an explanation. Seven earlier FAIL rows were the sweep's
 inputs, not the tools (a planar face for `delete_blend`, a circle where a
@@ -160,11 +160,10 @@ question on this install:
 | `wiring(type="wire")` | `Wires.Add` answers `E_FAIL` given occurrences and given a 3D sketch line drawn with `draw_3d_line` alike (Solid Edge 2026). Refuses before COM. |
 | `convert_by_file_path` | `Application.ConvertByFilePath` returns in ~1.6 s reporting nothing wrong and writes nothing, for nine output formats (stp, step, x_t, igs, jt, pdf, dxf, stl, par); `SaveCopyAs` on the opened document writes the STEP at once. Refuses and points at `export_file`. |
 | `create_assembly_swept_protrusion` | `E_INVALIDARG` with `Origins` as inner VARIANTs (the shape the part-level sweep needs) and `E_FAIL` as plain tuples or lists; the argument shape is not the cause. |
-| `select_set(action="all")` | `SelectSet.AddAll` answers `E_FAIL` whatever the selection holds, on the document's select set and on `Application.ActiveSelectSet` alike; refuses honestly. |
 | `create_weldment` without a template | raised a modal that hung the server; now refuses before COM. |
 
 Turned from refusals into working creators on 2026-09-17, each driven live and
-pinned: `add_assembly_relation(planar|axial)`, `add_assembly_constraint(mate|align|planar_align|axial_align)` (`AssemblyDocument.CreateReference(occurrence, face)` wraps a face of the occurrence's part document in the Reference that `Relations3d.AddPlanar`/`AddAxial` want -- Siemens' "Working with References" page; faces, RefPlanes and AsmRefPlanes handed over directly all answered 0x80040225. Planar constraining points are the faces' range midpoints. Two placed boxes mate, two cylinders go coaxial: Relations3d grows by one); `create_lofted_flange` (basic, advanced: `Models.AddLoftedFlange` with `Origins` = each section's first `Line2d`/`Arc2d` object, `OriginRefs` = `igStart` per section and `igNFType` last -- the community sample's shape, verified on this server's own profiles; two open lines on parallel planes give a 6-face sheet); `create_stamped(bead)` (`Beads.Add` with the cross-section a UI-made bead
+pinned: `select_set(action='all')` on a draft (`SelectSet.AddAll` is a 2D sheet call -- Siemens' only example is a draft with an active sheet -- and selects every sheet entity there; a part or assembly answers E_FAIL and is refused before the call); `add_assembly_relation(planar|axial)`, `add_assembly_constraint(mate|align|planar_align|axial_align)` (`AssemblyDocument.CreateReference(occurrence, face)` wraps a face of the occurrence's part document in the Reference that `Relations3d.AddPlanar`/`AddAxial` want -- Siemens' "Working with References" page; faces, RefPlanes and AsmRefPlanes handed over directly all answered 0x80040225. Planar constraining points are the faces' range midpoints. Two placed boxes mate, two cylinders go coaxial: Relations3d grows by one); `create_lofted_flange` (basic, advanced: `Models.AddLoftedFlange` with `Origins` = each section's first `Line2d`/`Arc2d` object, `OriginRefs` = `igStart` per section and `igNFType` last -- the community sample's shape, verified on this server's own profiles; two open lines on parallel planes give a 6-face sheet); `create_stamped(bead)` (`Beads.Add` with the cross-section a UI-made bead
 reports -- circular, rounded, punched ends -- and `BeadSide` = the two
 `*SideDummy` members; igLeft/igRight answer E_FAIL; 6 -> 20 faces on the base
 plane and on a plane through the sheet face alike); `create_slot` (`Slots.Add` along an open line with a finite or

@@ -8,6 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
 
 @pytest.fixture
 def doc_mgr():
@@ -229,22 +231,26 @@ class TestSelectRemove:
 
 
 class TestSelectAll:
-    """SelectSet.AddAll answers E_FAIL on Solid Edge 2026 whatever the selection
-    holds -- verified live with the selection empty, with a feature already
-    selected, and through the raw COM call. It is refused before any COM call
-    rather than attempted and reported as a bare HRESULT."""
+    """SelectSet.AddAll is a draft-sheet call; a part is refused before it (SE 2026)."""
 
-    def test_refuses_honestly_without_touching_com(self, query_mgr):
+    def test_a_draft_selects_everything_on_the_sheet(self, query_mgr):
         qm, doc = query_mgr
-        select_set = MagicMock()
-        doc.SelectSet = select_set
+        doc.Type = DocumentTypeConstants.igDraftDocument
+        doc.SelectSet.Count = 2
 
         result = qm.select_all()
 
-        assert "error" in result
+        assert result == {"status": "selected", "count": 2}
+        doc.SelectSet.AddAll.assert_called_once_with()
+
+    def test_a_part_is_refused_without_the_call(self, query_mgr):
+        qm, doc = query_mgr
+        doc.Type = DocumentTypeConstants.igPartDocument
+
+        result = qm.select_all()
+
         assert result["unsupported"] is True
-        assert "AddAll" in result["error"]
-        select_set.AddAll.assert_not_called()
+        doc.SelectSet.AddAll.assert_not_called()
 
 
 # ============================================================================
