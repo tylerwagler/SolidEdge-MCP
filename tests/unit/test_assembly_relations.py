@@ -177,31 +177,66 @@ class TestGetRelationInfo:
 # ============================================================================
 
 
+def _assembly_with_faces(doc, n_occurrences=2, radius=None):
+    """Occurrences whose part documents expose one face each, with a range for the midpoint."""
+    doc.Type = 3  # igAssemblyDocument
+    doc.Occurrences.Count = n_occurrences
+    occurrences, faces, refs = [], [], {}
+    for i in range(n_occurrences):
+        occ = MagicMock(name=f"occ{i}")
+        face = MagicMock(name=f"face{i}")
+        face.Geometry.Radius = radius
+        face.GetRange.return_value = (0.0, 0.0, float(i), 0.08, 0.048, float(i))
+        faces_coll = occ.OccurrenceDocument.Models.Item.return_value.Body.Faces.return_value
+        faces_coll.Count = 1
+        faces_coll.Item.return_value = face
+        occ.OccurrenceDocument.Models.Count = 1
+        occurrences.append(occ)
+        faces.append(face)
+    doc.Occurrences.Item.side_effect = lambda i: occurrences[i - 1]
+    doc.CreateReference.side_effect = lambda occ, face: refs.setdefault(
+        id(face), MagicMock(name="ref")
+    )
+    doc.Relations3d.Count = 1
+    return occurrences, faces, refs
+
+
 class TestAddPlanarRelation:
-    """AddPlanar needs Face/Edge geometry this server cannot select."""
+    """AddPlanar on References from CreateReference, with on-face constraining points."""
 
-    def test_unsupported_does_not_call_com(self, asm_mgr):
+    def test_mates_two_faces_through_references(self, asm_mgr):
         am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        doc.Occurrences = occurrences
-        relations = MagicMock()
-        doc.Relations3d = relations
+        occs, faces, refs = _assembly_with_faces(doc)
 
-        result = am.add_planar_relation(0, 1, 0.01, "Align")
+        result = am.add_planar_relation(0, 1, orientation="Antialign")
 
-        assert result["unsupported"] is True
-        assert "planar faces" in result["error"].lower()
-        relations.AddPlanar.assert_not_called()
-        occurrences.Item.assert_not_called()
+        assert result["status"] == "created"
+        assert result["mated"] is True
+        doc.CreateReference.assert_any_call(occs[0], faces[0])
+        doc.CreateReference.assert_any_call(occs[1], faces[1])
+        doc.Relations3d.AddPlanar.assert_called_once_with(
+            refs[id(faces[0])], refs[id(faces[1])], True, [0.04, 0.024, 0.0], [0.04, 0.024, 1.0]
+        )
 
-    def test_unsupported_even_without_assembly(self, asm_mgr):
+    def test_align_passes_normals_not_aligned(self, asm_mgr):
         am, doc = asm_mgr
-        doc.Type = IG_PART_DOCUMENT
+        _assembly_with_faces(doc)
+        am.add_planar_relation(0, 1, orientation="Align")
+        assert doc.Relations3d.AddPlanar.call_args.args[2] is False
 
-        result = am.add_planar_relation(0, 1, 0.01, "Align")
+    def test_a_curved_face_or_offset_is_refused(self, asm_mgr):
+        am, doc = asm_mgr
+        _assembly_with_faces(doc, radius=0.01)
+        assert "planar" in am.add_planar_relation(0, 1)["error"]
+        _assembly_with_faces(doc)
+        assert "offset" in am.add_planar_relation(0, 1, offset=0.01)["error"]
+        doc.Relations3d.AddPlanar.assert_not_called()
 
-        assert result["unsupported"] is True
+    def test_bad_indices_are_refused(self, asm_mgr):
+        am, doc = asm_mgr
+        _assembly_with_faces(doc)
+        assert "Invalid occurrence index" in am.add_planar_relation(0, 5)["error"]
+        assert "Invalid face index" in am.add_planar_relation(0, 1, face2_index=3)["error"]
         doc.Relations3d.AddPlanar.assert_not_called()
 
 
@@ -211,37 +246,47 @@ class TestAddPlanarRelation:
 
 
 class TestAddAxialRelation:
-    def test_success(self, asm_mgr):
-        am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
-        doc.Occurrences = occurrences
-        relations = MagicMock()
-        doc.Relations3d = relations
+    """AddAxial on References to cylindrical faces."""
 
-        result = am.add_axial_relation(0, 1, "Antialign")
+    def test_makes_two_cylinders_coaxial(self, asm_mgr):
+        am, doc = asm_mgr
+        occs, faces, refs = _assembly_with_faces(doc, radius=0.01)
+
+        result = am.add_axial_relation(0, 1, orientation="Antialign")
+
         assert result["status"] == "created"
         assert result["relation_type"] == "Axial"
-        assert result["orientation"] == "Antialign"
-        # NormalsAligned is VT_BOOL: "Antialign" must not become a truthy 2
-        relations.AddAxial.assert_called_once_with(occ1, occ2, False)
+        doc.Relations3d.AddAxial.assert_called_once_with(
+            refs[id(faces[0])], refs[id(faces[1])], False
+        )
 
-    def test_not_assembly(self, asm_mgr):
+    def test_a_planar_face_is_refused(self, asm_mgr):
         am, doc = asm_mgr
-        doc.Type = IG_PART_DOCUMENT
-        result = am.add_axial_relation(0, 1)
-        assert "error" in result
+        _assembly_with_faces(doc, radius=None)
+        assert "cylindrical" in am.add_axial_relation(0, 1)["error"]
+        doc.Relations3d.AddAxial.assert_not_called()
 
-    def test_invalid_index(self, asm_mgr):
+
+class TestConstraintsDelegate:
+    def test_mate_is_a_planar_relation_with_normals_aligned(self, asm_mgr):
         am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-        doc.Relations3d = MagicMock()
-        result = am.add_axial_relation(0, 5)
-        assert "error" in result
+        _assembly_with_faces(doc)
+        result = am.create_mate("Mate", 0, 1, face1_index=0, face2_index=0)
+        assert result["status"] == "created" and result["mate_type"] == "Mate"
+        assert doc.Relations3d.AddPlanar.call_args.args[2] is True
+
+    def test_align_constraints_are_planar_aligned(self, asm_mgr):
+        am, doc = asm_mgr
+        _assembly_with_faces(doc)
+        assert am.add_align_constraint(0, 1)["status"] == "created"
+        assert am.add_planar_align_constraint(0, 1)["status"] == "created"
+        assert all(c.args[2] is False for c in doc.Relations3d.AddPlanar.call_args_list)
+
+    def test_axial_align_is_an_axial_relation(self, asm_mgr):
+        am, doc = asm_mgr
+        _assembly_with_faces(doc, radius=0.01)
+        assert am.add_axial_align_constraint(0, 1)["status"] == "created"
+        doc.Relations3d.AddAxial.assert_called_once()
 
 
 # ============================================================================
@@ -794,13 +839,12 @@ class TestAddAxialRelationOrientation:
 
     def test_align_is_true(self, asm_mgr):
         am, doc = asm_mgr
-        occ1, occ2 = MagicMock(), MagicMock()
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        occurrences.Item.side_effect = lambda i: {1: occ1, 2: occ2}[i]
-        doc.Occurrences = occurrences
-        relations = MagicMock()
-        doc.Relations3d = relations
-
+        _assembly_with_faces(doc, radius=0.01)
         am.add_axial_relation(0, 1, "Align")
-        relations.AddAxial.assert_called_once_with(occ1, occ2, True)
+        assert doc.Relations3d.AddAxial.call_args.args[2] is True
+
+    def test_antialign_is_false(self, asm_mgr):
+        am, doc = asm_mgr
+        _assembly_with_faces(doc, radius=0.01)
+        am.add_axial_relation(0, 1, "Antialign")
+        assert doc.Relations3d.AddAxial.call_args.args[2] is False

@@ -481,14 +481,16 @@ def add_assembly_constraint(
     component2_index: int = 0,
     mate_type: str = "Mate",
     angle: float = 0,
+    face1_index: int = 0,
+    face2_index: int = 0,
 ) -> dict[str, Any]:
-    """Add a face-selection constraint between two components (0-based indices).
+    """Constrain two components (0-based indices) through their faces.
 
-    NOTE: the COM API cannot pick faces, so the backend currently reports
-    that these must be created in the Solid Edge UI. Prefer
-    add_assembly_relation for programmatic relations.
-    mate_type (mate only): free text such as 'Planar', 'Axial', 'Insert'.
-    angle in degrees (angle only).
+    mate / align / planar_align relate planar faces face1_index and
+    face2_index (0-based faces of each component's body): mate makes them
+    touch, align aligns them. axial_align makes two cylindrical faces
+    coaxial. angle takes angle in degrees. All go through
+    AssemblyDocument.CreateReference, the documented route.
     """
     err = validate_numerics(angle=angle)
     if err:
@@ -499,18 +501,29 @@ def add_assembly_constraint(
                 mate_type=mate_type,
                 component1_index=component1_index,
                 component2_index=component2_index,
+                face1_index=face1_index,
+                face2_index=face2_index,
             )
         case "align":
             return assembly_manager.add_align_constraint(
-                component1_index=component1_index, component2_index=component2_index
+                component1_index=component1_index,
+                component2_index=component2_index,
+                face1_index=face1_index,
+                face2_index=face2_index,
             )
         case "planar_align":
             return assembly_manager.add_planar_align_constraint(
-                component1_index=component1_index, component2_index=component2_index
+                component1_index=component1_index,
+                component2_index=component2_index,
+                face1_index=face1_index,
+                face2_index=face2_index,
             )
         case "axial_align":
             return assembly_manager.add_axial_align_constraint(
-                component1_index=component1_index, component2_index=component2_index
+                component1_index=component1_index,
+                component2_index=component2_index,
+                face1_index=face1_index,
+                face2_index=face2_index,
             )
         case "angle":
             return assembly_manager.add_angle_constraint(
@@ -534,14 +547,16 @@ def add_assembly_relation(
     angle: float = 0.0,
     ratio1: float = 1.0,
     ratio2: float = 1.0,
+    face1_index: int = 0,
+    face2_index: int = 0,
 ) -> dict[str, Any]:
-    """Add a Relations3d relation between two occurrences (0-based indices).
+    """Add a 3D relation between two occurrences (0-based indices).
 
-    axial: orientation - the only supported type. 'planar', 'angular',
-    'point', 'tangent' and 'gear' are unsupported: Relations3d.AddPlanar /
-    AddAngular / AddPoint / AddTangent / AddGear all take the specific Face,
-    Edge or KeyPoint elements being constrained, which this server cannot
-    select. Add those relations in the Solid Edge UI.
+    planar and axial take face1_index/face2_index, the 0-based faces of each
+    occurrence's body (list them with the part's face query): planar wants
+    planar faces, axial cylindrical ones. orientation 'Antialign' mates
+    planar faces (they touch); 'Align' aligns them. offset applies to nothing
+    here and must be 0. angular: angle in degrees. gear: ratio1/ratio2.
     """
     err = validate_numerics(offset=offset, angle=angle, ratio1=ratio1, ratio2=ratio2)
     if err:
@@ -553,12 +568,16 @@ def add_assembly_relation(
                 occurrence2_index=occurrence2_index,
                 offset=offset,
                 orientation=orientation,
+                face1_index=face1_index,
+                face2_index=face2_index,
             )
         case "axial":
             return assembly_manager.add_axial_relation(
                 occurrence1_index=occurrence1_index,
                 occurrence2_index=occurrence2_index,
                 orientation=orientation,
+                face1_index=face1_index,
+                face2_index=face2_index,
             )
         case "angular":
             return assembly_manager.add_angular_relation(

@@ -37,3 +37,28 @@ class TestStructuralFrame:
 
         assert r["status"] == "created", r
         assert doc.StructuralFrames.Count == 1
+
+
+class TestRelations:
+    def test_a_planar_mate_between_two_placed_boxes(self, stack, new_assembly, saved_part):
+        doc = stack.doc.get_active_document()
+        doc.Occurrences.AddByFilename(str(saved_part))
+        second = doc.Occurrences.AddByFilename(str(saved_part))
+        second.Move(0.2, 0.0, 0.0)
+        before = doc.Relations3d.Count
+
+        r = stack.assembly.add_planar_relation(0, 1, orientation="Antialign")
+
+        assert r["status"] == "created", r
+        assert doc.Relations3d.Count == before + 1
+
+    def test_a_mate_constraint_takes_the_same_route(self, stack, new_assembly, saved_part):
+        doc = stack.doc.get_active_document()
+        doc.Occurrences.AddByFilename(str(saved_part))
+        doc.Occurrences.AddByFilename(str(saved_part)).Move(0.2, 0.0, 0.0)
+        before = doc.Relations3d.Count
+
+        r = stack.assembly.create_mate("Mate", 0, 1)
+
+        assert r["status"] == "created", r
+        assert doc.Relations3d.Count == before + 1

@@ -6,6 +6,8 @@ from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
 
+from ..constants import FaceQueryConstants
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
 from ._base import com_get
 
@@ -15,65 +17,104 @@ _logger = get_logger(__name__)
 class RelationsMixin:
     """Mixin providing assembly relation/constraint methods."""
 
-    def create_mate(
-        self, mate_type: str, component1_index: int, component2_index: int
-    ) -> dict[str, Any]:
+    def _face_reference(
+        self, doc: Any, occurrence_index: int, face_index: int, cylindrical: bool = False
+    ) -> tuple[Any, list[float]] | dict[str, Any]:
+        """A Reference to a face of an occurrence, plus a point on that face.
+
+        Relations take Reference objects, not faces: ``Relations3d.AddPlanar``
+        answers 0x80040225 to faces read from the occurrence's part document
+        (and to its RefPlanes and the assembly's own), and ``Occurrence.Body``
+        raises. ``AssemblyDocument.CreateReference(Occurrence, Entity)`` wraps
+        the part-document face with the path to it -- the "Working with
+        References" route in Siemens' reference -- and with that both
+        ``AddPlanar`` and ``AddAxial`` build (Solid Edge 2026). The constraining
+        points of a planar relation must lie on the faces; the face range's
+        midpoint, in the part's coordinates, is what worked.
         """
-        Create a mate/assembly relationship between components.
-
-        Note: Actual mate creation requires face/edge selection which cannot
-        be done programmatically without specific geometry references.
-
-        Args:
-            mate_type: Type of mate - 'Planar', 'Axial', 'Insert', 'Match', 'Parallel', 'Angle'
-            component1_index: Index of first component
-            component2_index: Index of second component
-
-        Returns:
-            Dict with status and mate info
-        """
-        try:
-            _logger.info(
-                "Creating mate: type=%s, components=%d,%d",
-                mate_type,
-                component1_index,
-                component2_index,
-            )
-            doc = self.doc_manager.get_active_document()
-
-            err = self._require_assembly(doc)
-            if err:
-                return err
-
-            occurrences = doc.Occurrences
-
-            if component1_index >= occurrences.Count or component2_index >= occurrences.Count:
-                return {"error": "Invalid component index"}
-
-            # Mate creation requires face/edge selection
+        occurrences = doc.Occurrences
+        count = com_get(occurrences, "Count", 0)
+        if occurrence_index < 0 or occurrence_index >= count:
+            return {"error": f"Invalid occurrence index: {occurrence_index}. Count: {count}"}
+        occurrence = occurrences.Item(occurrence_index + 1)
+        part = com_get(occurrence, "OccurrenceDocument")
+        models = com_get(part, "Models")
+        if models is None or not com_get(models, "Count", 0):
             return {
-                "error": "Mate creation requires face/edge "
-                "selection which is not available via "
-                "COM automation. Use Solid Edge UI to "
-                "create mates.",
-                "unsupported": True,
-                "mate_type": mate_type,
-                "component1": component1_index,
-                "component2": component2_index,
+                "error": f"Occurrence {occurrence_index} has no solid body to take a face from."
             }
-        except Exception as e:
-            _logger.error(f"Failed to create mate: {e}")
-            return error_result(e)
+        faces = models.Item(1).Body.Faces(FaceQueryConstants.igQueryAll)
+        n_faces = com_get(faces, "Count", 0)
+        if face_index < 0 or face_index >= n_faces:
+            return {
+                "error": (
+                    f"Invalid face index {face_index} for occurrence {occurrence_index}: "
+                    f"its body has {n_faces} faces (0-based)."
+                )
+            }
+        face = faces.Item(face_index + 1)
+        radius = com_get(com_get(face, "Geometry"), "Radius")
+        if cylindrical and radius is None:
+            return {
+                "error": (
+                    f"Face {face_index} of occurrence {occurrence_index} is not cylindrical; "
+                    "an axial relation needs a cylinder or cone on each part."
+                )
+            }
+        if not cylindrical and radius is not None:
+            return {
+                "error": (
+                    f"Face {face_index} of occurrence {occurrence_index} is curved; a planar "
+                    "relation needs a planar face on each part."
+                )
+            }
+        reference = doc.CreateReference(occurrence, face)
+        r = face.GetRange([0.0] * 6)
+        flat: list[float] = []
+        for item in r:
+            flat.extend(item if isinstance(item, tuple) else (item,))
+        midpoint = [(flat[0] + flat[3]) / 2, (flat[1] + flat[4]) / 2, (flat[2] + flat[5]) / 2]
+        return reference, midpoint
 
-    def add_align_constraint(self, component1_index: int, component2_index: int) -> dict[str, Any]:
-        """Add an align constraint between two components (requires UI for face selection)"""
-        return {
-            "error": "Constraint creation requires face/edge selection. Use Solid Edge UI.",
-            "unsupported": True,
-            "constraint_type": "align",
-            "component1": component1_index,
-            "component2": component2_index,
-        }
+    @verifies_collection_growth("Relations3d")
+    def create_mate(
+        self,
+        mate_type: str,
+        component1_index: int,
+        component2_index: int,
+        face1_index: int = 0,
+        face2_index: int = 0,
+    ) -> dict[str, Any]:
+        """Mate a planar face of one component to a planar face of another.
+
+        A mate is a planar relation with NormalsAligned True; see
+        ``add_planar_relation``. mate_type is echoed.
+        """
+        result = self.add_planar_relation(
+            component1_index,
+            component2_index,
+            orientation="Antialign",
+            face1_index=face1_index,
+            face2_index=face2_index,
+        )
+        result.setdefault("mate_type", mate_type)
+        return result
+
+    def add_align_constraint(
+        self,
+        component1_index: int,
+        component2_index: int,
+        face1_index: int = 0,
+        face2_index: int = 0,
+    ) -> dict[str, Any]:
+        """Align a planar face of one component with one of another (see add_planar_relation)."""
+        return self.add_planar_relation(
+            component1_index,
+            component2_index,
+            orientation="Align",
+            face1_index=face1_index,
+            face2_index=face2_index,
+        )
 
     def add_angle_constraint(
         self, component1_index: int, component2_index: int, angle: float
@@ -89,28 +130,36 @@ class RelationsMixin:
         }
 
     def add_planar_align_constraint(
-        self, component1_index: int, component2_index: int
+        self,
+        component1_index: int,
+        component2_index: int,
+        face1_index: int = 0,
+        face2_index: int = 0,
     ) -> dict[str, Any]:
-        """Add a planar align constraint (requires UI for face selection)"""
-        return {
-            "error": "Constraint creation requires face/edge selection. Use Solid Edge UI.",
-            "unsupported": True,
-            "constraint_type": "planar_align",
-            "component1": component1_index,
-            "component2": component2_index,
-        }
+        """Same as add_align_constraint: a planar relation with the normals aligned."""
+        return self.add_planar_relation(
+            component1_index,
+            component2_index,
+            orientation="Align",
+            face1_index=face1_index,
+            face2_index=face2_index,
+        )
 
     def add_axial_align_constraint(
-        self, component1_index: int, component2_index: int
+        self,
+        component1_index: int,
+        component2_index: int,
+        face1_index: int = 0,
+        face2_index: int = 0,
     ) -> dict[str, Any]:
-        """Add an axial align constraint (requires UI for face selection)"""
-        return {
-            "error": "Constraint creation requires face/edge selection. Use Solid Edge UI.",
-            "unsupported": True,
-            "constraint_type": "axial_align",
-            "component1": component1_index,
-            "component2": component2_index,
-        }
+        """Make two components' cylindrical faces coaxial (see add_axial_relation)."""
+        return self.add_axial_relation(
+            component1_index,
+            component2_index,
+            orientation="Align",
+            face1_index=face1_index,
+            face2_index=face2_index,
+        )
 
     def _validate_occurrences(
         self, doc: Any, occurrence1_index: int, occurrence2_index: int
@@ -266,103 +315,112 @@ class RelationsMixin:
             _logger.error(f"Failed to get relation info: {e}")
             return error_result(e)
 
+    @verifies_collection_growth("Relations3d")
     def add_planar_relation(
         self,
         occurrence1_index: int,
         occurrence2_index: int,
         offset: float = 0.0,
         orientation: str = "Align",
+        face1_index: int = 0,
+        face2_index: int = 0,
     ) -> dict[str, Any]:
-        """
-        Add a planar relation between two assembly components.
+        """Relate a planar face of one occurrence to a planar face of another.
 
-        NOT AVAILABLE via COM automation. The real signature is
-        ``Relations3d.AddPlanar(Plane1, Plane2, NormalsAligned,
-        ConstrainingPoint1, ConstrainingPoint2)``: ``Plane1``/``Plane2`` are
-        planar Faces or reference planes on the two parts, not the
-        occurrences themselves, and the constraining points are 3-element
-        arrays picked on those faces. This server cannot select a face, so
-        the call can never be formed; it returns an ``unsupported`` error
-        dict without touching COM. The signature is kept so tool dispatch
-        keeps working.
+        ``Relations3d.AddPlanar(Plane1, Plane2, NormalsAligned, ConstrainingPoint1,
+        ConstrainingPoint2)`` on References from ``_face_reference``.
+        NormalsAligned True mates the faces (they touch, normals opposed as
+        Solid Edge counts it), False aligns them; ``orientation='Antialign'``
+        mates, anything else aligns. Verified on Solid Edge 2026 between two
+        placed boxes: Relations3d grows by one PlanarRelation3d.
 
         Args:
-            occurrence1_index: 0-based index of first component
-            occurrence2_index: 0-based index of second component
-            offset: Offset distance in meters (default 0.0)
-            orientation: "Align", "Antialign", or "NotSpecified"
-
-        Returns:
-            Dict with an ``unsupported`` error
+            occurrence1_index, occurrence2_index: 0-based occurrences.
+            offset: not carried by AddPlanar; must be 0.
+            orientation: 'Align' or 'Antialign' (mate).
+            face1_index, face2_index: 0-based faces of each occurrence's body.
         """
-        _logger.warning("add_planar_relation is not available via COM automation")
-        del occurrence1_index, occurrence2_index, offset, orientation
-        return {
-            "error": (
-                "Planar relations need two planar faces in the assembly's own topology "
-                "(Relations3d.AddPlanar takes Plane1, Plane2, NormalsAligned, "
-                "ConstrainingPoint1, ConstrainingPoint2). Occurrence.Body.Faces raises "
-                "E_FAIL and faces read from the occurrence's part document answer "
-                "0x80040225 (Solid Edge 2026), as do its RefPlanes and the assembly's "
-                "own AsmRefPlanes, so this server cannot form the call. "
-                "Add the relation in the Solid Edge UI."
-            ),
-            "unsupported": True,
-        }
+        if offset:
+            return {
+                "error": (
+                    "AddPlanar takes no offset; a planar relation is made at zero offset "
+                    "(set one afterwards in the Solid Edge UI)."
+                ),
+                "offset": offset,
+            }
+        try:
+            doc = self.doc_manager.get_active_document()
+            err = self._require_assembly(doc)
+            if err:
+                return err
+            first = self._face_reference(doc, occurrence1_index, face1_index)
+            if isinstance(first, dict):
+                return first
+            second = self._face_reference(doc, occurrence2_index, face2_index)
+            if isinstance(second, dict):
+                return second
+            (ref1, point1), (ref2, point2) = first, second
+            mated = orientation == "Antialign"
+            doc.Relations3d.AddPlanar(ref1, ref2, mated, point1, point2)
+            return {
+                "status": "created",
+                "relation_type": "Planar",
+                "orientation": orientation,
+                "mated": mated,
+                "occurrence1_index": occurrence1_index,
+                "occurrence2_index": occurrence2_index,
+                "face1_index": face1_index,
+                "face2_index": face2_index,
+                "relations": com_get(doc.Relations3d, "Count"),
+            }
+        except Exception as e:
+            return error_result(e)
 
+    @verifies_collection_growth("Relations3d")
     def add_axial_relation(
         self,
         occurrence1_index: int,
         occurrence2_index: int,
         orientation: str = "Align",
+        face1_index: int = 0,
+        face2_index: int = 0,
     ) -> dict[str, Any]:
-        """
-        Add an axial relation between two assembly components.
+        """Make two occurrences' cylindrical faces coaxial.
 
-        Uses ``Relations3d.AddAxial(Axis1, Axis2, NormalsAligned)``.
-
-        WARNING: the argument count is right but the argument *kinds* are
-        probably not. ``Axis1``/``Axis2`` are cylindrical faces or reference
-        axes on the two parts; this passes the occurrences themselves, which
-        Solid Edge is likely to reject with a type mismatch. Unlike the other
-        relation types the call is left in place because it is at least
-        well-formed, but it is unverified against live Solid Edge.
+        ``Relations3d.AddAxial(Axis1, Axis2, NormalsAligned)`` on References from
+        ``_face_reference`` (cylindrical faces). Verified on Solid Edge 2026
+        between two placed cylinders: Relations3d grows by one AxialRelation3d.
+        Handing it occurrences, as this did, answered E_FAIL.
 
         Args:
-            occurrence1_index: 0-based index of first component
-            occurrence2_index: 0-based index of second component
-            orientation: "Align" (1), "Antialign" (2), or "NotSpecified" (0)
-
-        Returns:
-            Dict with status and relation info
+            occurrence1_index, occurrence2_index: 0-based occurrences.
+            orientation: 'Align' or 'Antialign' (normals opposed).
+            face1_index, face2_index: 0-based cylindrical faces of each body.
         """
         try:
-            _logger.info(
-                "Adding axial relation: occ1=%d, occ2=%d",
-                occurrence1_index,
-                occurrence2_index,
-            )
             doc = self.doc_manager.get_active_document()
-            occ1, occ2, err = self._validate_occurrences(doc, occurrence1_index, occurrence2_index)
+            err = self._require_assembly(doc)
             if err:
                 return err
-
-            # NormalsAligned is VT_BOOL, not an orientation enum: passing the
-            # old 0/1/2 codes made "Antialign" (2) coerce to True.
-            normals_aligned = orientation == "Align"
-
-            relations = doc.Relations3d
-            relations.AddAxial(occ1, occ2, normals_aligned)
-
+            first = self._face_reference(doc, occurrence1_index, face1_index, cylindrical=True)
+            if isinstance(first, dict):
+                return first
+            second = self._face_reference(doc, occurrence2_index, face2_index, cylindrical=True)
+            if isinstance(second, dict):
+                return second
+            aligned = orientation != "Antialign"
+            doc.Relations3d.AddAxial(first[0], second[0], aligned)
             return {
                 "status": "created",
                 "relation_type": "Axial",
+                "orientation": orientation,
                 "occurrence1_index": occurrence1_index,
                 "occurrence2_index": occurrence2_index,
-                "orientation": orientation,
+                "face1_index": face1_index,
+                "face2_index": face2_index,
+                "relations": com_get(doc.Relations3d, "Count"),
             }
         except Exception as e:
-            _logger.error(f"Failed to add axial relation: {e}")
             return error_result(e)
 
     def add_angular_relation(
