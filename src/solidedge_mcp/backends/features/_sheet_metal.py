@@ -11,6 +11,7 @@ from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
 from ..constants import (
+    BendCalculationMethodConstants,
     DirectionConstants,
     ExtentTypeConstants,
     FaceQueryConstants,
@@ -478,8 +479,8 @@ class SheetMetalMixin:
         return {
             "error": (
                 "Lofted flanges build through method='basic' or 'advanced' "
-                "(Models.AddLoftedFlange); the AddLoftedFlangeEx variant has not been "
-                "driven live. Use one of those."
+                "(Models.AddLoftedFlange); AddLoftedFlangeEx answers E_FAIL to the same "
+                "shape on Solid Edge 2026. Use one of those."
             ),
             "unsupported": True,
             "type": "lofted_flange_ex",
@@ -1501,17 +1502,6 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        if bend_deduction:
-            return {
-                "error": (
-                    "A bend deduction through AddSyncByBendDeductionOrBendAllowance "
-                    "(BendCalculationMethod, BendCalculationMethodValue) has not been "
-                    "driven live; only the default calculation is. Pass bend_deduction=0 "
-                    "or use create_flange(method='sync')."
-                ),
-                "unsupported": True,
-                "bend_deduction": bend_deduction,
-            }
         try:
             doc = self.doc_manager.get_active_document()
             err = self._require_synchronous_sheet(doc)
@@ -1521,9 +1511,25 @@ class SheetMetalMixin:
             if isinstance(located, dict):
                 return located
             model, edge = located
-            # Verified on Solid Edge 2026: the two-argument form builds the same
-            # flange AddSync does (6 -> 14 faces).
-            model.Flanges.AddSyncByBendDeductionOrBendAllowance(edge, flange_length)
+            # AddSyncByBendDeductionOrBendAllowance(pLocatedEdge, FlangeLength,
+            #   ThicknessSide, InsideRadius, DimSide, BRType, BRWidth, BRLength, CRType,
+            #   NeutralFactor, BnParamType, BendAngle, FlangeType,
+            #   PartialFlangeStartPoint, BendCalculationMethod,
+            #   BendCalculationMethodValue). Verified on Solid Edge 2026: the
+            # two-argument form builds the same flange AddSync does (6 -> 14
+            # faces), and with method BendDeduction and a value the flange reads
+            # back GetBendCalculationMethodAndValue == (1, value).
+            if bend_deduction:
+                empty = VARIANT(pythoncom.VT_EMPTY, None)
+                model.Flanges.AddSyncByBendDeductionOrBendAllowance(
+                    edge,
+                    flange_length,
+                    *([empty] * 12),
+                    BendCalculationMethodConstants.BendCalculationMethodBendDeduction,
+                    bend_deduction,
+                )
+            else:
+                model.Flanges.AddSyncByBendDeductionOrBendAllowance(edge, flange_length)
             return {
                 "status": "created",
                 "type": "flange_sync_with_bend_calc",
@@ -1663,51 +1669,25 @@ class SheetMetalMixin:
         Returns:
             Dict with status and contour flange info
         """
-        try:
-            profile = self.sketch_manager.get_active_sketch()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            dir_side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            # AddSyncByBendDeductionOrBendAllowance(pProfile, pRefEdge,
-            #   varExtentType, varProjectionSide, varProjectionDistance,
-            #   varBendRadius, vtBRType, vtBRWidth, vtBRLength, vtCRType, ...)
-            contour_flanges.AddSyncByBendDeductionOrBendAllowance(
-                profile,
-                edge,
-                ExtentTypeConstants.igFinite,
-                dir_side,
-                thickness,
-                bend_radius,
-                0,  # vtBRType
-                0.0,  # vtBRWidth
-                0.0,  # vtBRLength
-                0,  # vtCRType
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "contour_flange_sync_with_bend",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "thickness": thickness,
-                "bend_radius": bend_radius,
-                "direction": direction,
-                "bend_deduction": bend_deduction,
-            }
-        except Exception as e:
-            return error_result(e)
+        # ContourFlanges.AddSyncByBendDeductionOrBendAllowance answers
+        # E_INVALIDARG in a synchronous document
+        # with the open line from the tab edge on the perpendicular base plane
+        # (Solid Edge 2026), as AddSync does and as AddEx/Add do in an ordered one.
+        return {
+            "error": (
+                "ContourFlanges.AddSyncByBendDeductionOrBendAllowance rejects the open "
+                "profile this server can "
+                "draw (E_INVALIDARG on Solid Edge 2026). Use create_flange in a "
+                "synchronous document, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "edge_index": edge_index,
+            "thickness": thickness,
+            "bend_radius": bend_radius,
+            "direction": direction,
+            "bend_deduction": bend_deduction,
+        }
 
     @verifies_geometry
     def create_hem(
@@ -2465,60 +2445,22 @@ class SheetMetalMixin:
         Returns:
             Dict with status and contour flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face_index: {face_index}. Body has {faces.Count} faces."}
-
-            face = faces.Item(face_index + 1)
-            edges = face.Edges
-            if edge_index < 0 or edge_index >= edges.Count:
-                return {"error": f"Invalid edge_index: {edge_index}. Face has {edges.Count} edges."}
-
-            edge = edges.Item(edge_index + 1)
-            dir_const = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            contour_flanges.AddSyncEx(
-                profile,
-                edge,
-                ExtentTypeConstants.igFinite,
-                dir_const,
-                thickness,
-                bend_radius,
-                0,
-                0.001,
-                0.001,
-                0,
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "contour_flange_sync_ex",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "thickness": thickness,
-                "bend_radius": bend_radius,
-            }
-        except Exception as e:
-            return error_result(e)
+        # ContourFlanges.AddSyncEx answers E_INVALIDARG in a synchronous document
+        # with the open line from the tab edge on the perpendicular base plane
+        # (Solid Edge 2026), as AddSync does and as AddEx/Add do in an ordered one.
+        return {
+            "error": (
+                "ContourFlanges.AddSyncEx rejects the open profile this server can "
+                "draw (E_INVALIDARG on Solid Edge 2026). Use create_flange in a "
+                "synchronous document, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "edge_index": edge_index,
+            "thickness": thickness,
+            "bend_radius": bend_radius,
+            "direction": direction,
+        }
 
     @verifies_geometry
     def create_bend(

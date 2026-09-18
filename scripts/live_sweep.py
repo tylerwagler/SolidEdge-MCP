@@ -433,6 +433,17 @@ CASES: list[Case] = [
         {"method": "sync", "face_index": 1, "edge_index": 0, "flange_length": 0.02},
         "sheet_sync",
     ),
+    Case(
+        "create_flange",
+        {
+            "method": "sync_with_bend_calc",
+            "face_index": 1,
+            "edge_index": 0,
+            "flange_length": 0.02,
+            "bend_deduction": 0.001,
+        },
+        "sheet_sync",
+    ),
     Case("create_bend", {"method": "basic", "bend_angle": 90.0}, "sheet_line_closed"),
     Case(
         "create_contour_flange",

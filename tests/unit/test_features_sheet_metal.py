@@ -145,26 +145,14 @@ class TestCreateContourFlangeSync:
 
 
 class TestCreateContourFlangeSyncWithBend:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
-        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_sync_with_bend"
-        model.ContourFlanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
+    """AddSyncByBendDeductionOrBendAllowance answered E_INVALIDARG in a sync document."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005)
-        assert "error" in result
-        assert "No active sketch" in result["error"]
-
-    def test_bend_deduction_returned(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005, bend_deduction=0.001)
-        assert result["status"] == "created"
-        assert result["bend_deduction"] == 0.001
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005, bend_radius=0.002)
+        assert result["unsupported"] is True
+        assert "AddSyncByBendDeductionOrBendAllowance" in result["error"]
+        model.ContourFlanges.AddSyncByBendDeductionOrBendAllowance.assert_not_called()
 
 
 # ============================================================================
@@ -394,46 +382,14 @@ class TestCreateContourFlangeV3:
 
 
 class TestCreateContourFlangeSyncEx:
-    def test_success(self, feature_mgr, managers):
+    """ContourFlanges.AddSyncEx answered E_INVALIDARG in a synchronous document (SE 2026)."""
+
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 3
-        face = MagicMock()
-        edge = MagicMock()
-        edges = MagicMock()
-        edges.Count = 4
-        edges.Item.return_value = edge
-        face.Edges = edges
-        faces.Item.return_value = face
-        body.Faces.return_value = faces
-
-        contour = MagicMock()
-        contour.Name = "ContourSyncEx1"
-        model.ContourFlanges.AddSyncEx.return_value = contour
-
-        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.001)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_sync_ex"
-        model.ContourFlanges.AddSyncEx.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.001)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 1
-        body.Faces.return_value = faces
-
-        result = feature_mgr.create_contour_flange_sync_ex(5, 0, 0.001)
-        assert "error" in result
-        assert "Invalid face_index" in result["error"]
+        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.005, bend_radius=0.002)
+        assert result["unsupported"] is True
+        assert "AddSyncEx" in result["error"]
+        model.ContourFlanges.AddSyncEx.assert_not_called()
 
 
 # ============================================================================
@@ -910,13 +866,19 @@ class TestCreateFlangeSyncWithBendCalc:
         assert result["status"] == "created"
         model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once_with(edge, 0.02)
 
-    def test_a_bend_deduction_is_refused_as_unverified(self, feature_mgr, managers):
-        _, model, _, _ = _sync_tab(managers)
+    def test_a_bend_deduction_goes_in_as_method_1_and_the_value(self, feature_mgr, managers):
+        import pythoncom
+
+        _, model, _, edge = _sync_tab(managers)
 
         result = feature_mgr.create_flange_sync_with_bend_calc(1, 0, 0.02, bend_deduction=0.001)
 
-        assert result["unsupported"] is True
-        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_not_called()
+        assert result["status"] == "created"
+        args = model.Flanges.AddSyncByBendDeductionOrBendAllowance.call_args.args
+        assert args[0] is edge and args[1] == 0.02
+        assert len(args) == 16
+        assert all(a.varianttype == pythoncom.VT_EMPTY for a in args[2:14])
+        assert args[14:] == (1, 0.001)
 
     def test_an_ordered_document_is_refused(self, feature_mgr, managers):
         _, model, _, _ = _sync_tab(managers, mode=2)

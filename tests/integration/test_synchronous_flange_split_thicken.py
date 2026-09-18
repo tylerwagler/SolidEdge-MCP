@@ -65,6 +65,18 @@ class TestSynchronousFlange:
         assert r["status"] == "created", r
         assert stack.query.get_face_count()["face_count"] > before
 
+    def test_a_bend_deduction_reads_back_from_the_flange(self, stack, new_sheet_metal):
+        assert stack.query.set_modeling_mode("synchronous")["status"] == "changed"
+        _tab(stack)
+        fi, ei = _horizontal_edge(stack)
+
+        r = stack.feature.create_flange_sync_with_bend_calc(fi, ei, 0.02, bend_deduction=0.001)
+
+        assert r["status"] == "created", r
+        flange = stack.doc.get_active_document().Models.Item(1).Flanges.Item(1)
+        method, value = flange.GetBendCalculationMethodAndValue()
+        assert (method, value) == (1, pytest.approx(0.001))
+
     def test_an_ordered_document_is_refused_without_a_dead_feature(self, stack, new_sheet_metal):
         _tab(stack)
         fi, ei = _horizontal_edge(stack)

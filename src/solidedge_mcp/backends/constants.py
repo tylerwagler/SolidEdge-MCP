@@ -898,3 +898,15 @@ class FeaturePropertyConstants:
     igCircular = 120
     igPunchedEnd = 123
     igRegularSlot = 235
+
+
+class BendCalculationMethodConstants:
+    """part.tlb > BendCalculationMethodConstants: Flanges.AddSyncByBendDeductionOrBendAllowance.
+
+    Verified on Solid Edge 2026: method 1 with a value reads back from
+    Flange.GetBendCalculationMethodAndValue as (1, value), method 2 as (2, value).
+    """
+
+    BendCalculationMethodNeutralFactor = 0
+    BendCalculationMethodBendDeduction = 1
+    BendCalculationMethodBendAllowance = 2
