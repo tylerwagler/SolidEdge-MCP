@@ -2,7 +2,7 @@
 
 AI-assisted CAD through the [Model Context Protocol](https://modelcontextprotocol.io). Create, analyze, modify, and export Solid Edge models from Claude or any MCP client.
 
-**117 tools** · **54 resources** · **4 prompts** · Windows only (COM automation) · MIT
+**119 tools** · **53 resources + 2 guides** · **4 prompts** · Windows only (COM automation) · MIT
 
 ## What it does
 
@@ -14,6 +14,15 @@ AI-assisted CAD through the [Model Context Protocol](https://modelcontextprotoco
 - **Drafts**: drawing views, annotations, dimensions, parts lists
 - **Query**: geometry, mass properties, feature tree, variables, materials
 - **Export**: STEP, STL, IGES, JT, Parasolid, PDF, DXF, images
+
+## How much of it works
+
+Every number here is measured, and [`reference/VERIFICATION_STATUS.md`](reference/VERIFICATION_STATUS.md) carries the commands that regenerate it.
+
+- **164 of the 213 `create_*` backend methods verify their own result.** The body's face count and volume, or the COM collection the feature lands in, must change; otherwise the call reports an error instead of `status: "created"`. A call that succeeds and builds nothing was this server's defining bug, and it can no longer pass silently.
+- **The other 49 refuse before touching COM**, returning `unsupported: True` with the evidence: a Solid Edge defect, a call that crashes the process, or an object only the UI can select. Each is listed with its evidence in the status document. The largest groups are swept and lofted surfaces, threads on an existing cylinder, ordered flanges and louvers, contour flanges, blends, wires, and assembly patterns and mirrors.
+- **Every tool has been driven against a real Solid Edge.** `scripts/live_sweep.py` records the outcome of all 119 in [`reference/LIVE_SWEEP.md`](reference/LIVE_SWEEP.md): 116 OK, 16 honest refusals and 2 deliberate error probes across 134 cases on Solid Edge 2026.
+- 80 integration tests pin the fixes and a known-answer box; the unit tests cover shape, not truth.
 
 ## Requirements
 
@@ -85,8 +94,8 @@ src/solidedge_mcp/
 ├── prompts/           # Server instructions, guides, prompt templates
 ├── tools/             # MCP surface: one module per area, register() each
 │   ├── _registry.py   #   register_tool/register_resource: COM thread + annotations
-│   ├── features/      #   58 feature tools split by family
-│   ├── resources.py   #   52 read-only solidedge:// resources
+│   ├── features/      #   50 feature tools split by family
+│   ├── resources.py   #   53 read-only solidedge:// resources
 │   └── guide.py       #   solidedge://guide/* resources
 └── backends/          # pywin32 COM automation
     ├── connection.py  # attach/start Solid Edge, liveness + reconnect
@@ -114,11 +123,11 @@ uv run ruff check . && uv run ruff format --check .
 uv run mypy src/
 ```
 
-CI runs lint, format, type check, and unit tests on `windows-latest` for every push and pull request.
+CI runs lint, format, type check, and unit tests on `windows-latest` for pushes to `master` and every pull request. That is a weak gate: the COM audits skip when the gitignored type-library dump is absent, and no runner has Solid Edge, so the audits, `pytest -m integration` and `scripts/live_sweep.py` run only on a machine that does. Run them before tagging a release.
 
 ### COM conformance
 
-Unit tests mock COM with objects that answer to any attribute, so a misspelled member or a wrong argument count passes them and only fails against real Solid Edge. Six checks close that gap using the scraped type libraries:
+Unit tests mock COM with objects that answer to any attribute, so a misspelled member or a wrong argument count passes them and only fails against real Solid Edge. Six checks close that gap using the scraped type libraries, and four more need none:
 
 ```bash
 uv run python scripts/audit_com_signatures.py --by-file

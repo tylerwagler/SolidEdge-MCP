@@ -1,5 +1,7 @@
 # Add MCP Resources for Read-Only Data
 
+> **Historical.** This plan was carried out in February 2026. The counts below describe the state it planned for, not the current server; `VERIFICATION_STATUS.md` carries the measured numbers.
+
 ## Goal
 Convert pure read-only tools to **MCP Resources** (`@mcp.resource`) to reduce tool noise, enable client-side caching, and make the LLM's decision space cleaner. The existing tools remain registered for backward compatibility (dual-registration) unless opted out.
 

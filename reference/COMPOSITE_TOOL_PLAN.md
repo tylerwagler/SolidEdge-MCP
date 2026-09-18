@@ -1,5 +1,7 @@
 # Composite Tool Consolidation Plan (Revised)
 
+> **Historical.** This plan was carried out in February 2026. The counts below describe the state it planned for, not the current server; `VERIFICATION_STATUS.md` carries the measured numbers.
+
 ## Goal
 Reduce tool count from **514 → ~130** by merging related tools into **composite tools** that use a `method` or `type` discriminator parameter. No functionality is lost — the backend calls remain the same.
 

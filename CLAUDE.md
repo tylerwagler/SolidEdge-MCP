@@ -34,6 +34,10 @@ uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid E
 
 CI (`.github/workflows/ci.yml`, windows-latest) runs ruff check, ruff format --check, mypy, pytest. Keep all four green.
 
+## Releasing
+
+The version lives in `pyproject.toml`, `src/solidedge_mcp/__init__.py` and the top entry of `CHANGELOG.md`; `tests/unit/test_version.py` fails when they disagree. To cut a release: bump all three, `uv lock`, run the full gate (the four CI checks, the seven audits, `pytest -m integration` and `scripts/live_sweep.py` against a live Solid Edge), re-measure `reference/VERIFICATION_STATUS.md`, commit, then `git tag -a v<version>`. Release candidates are PEP 440 (`0.1.0rc1`); tags carry a `v`.
+
 ## Layout
 
 ```

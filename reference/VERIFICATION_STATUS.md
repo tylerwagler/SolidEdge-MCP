@@ -1,6 +1,6 @@
 # Verification Status
 
-**Last measured: 2026-09-16**, against Solid Edge 2026 (226.00.01.04), branch `modernize`.
+**Last measured: 2026-09-18**, against Solid Edge 2026 (226.00.01.04), branch `modernize`.
 
 Regenerate every number here with the commands in [How to re-measure](#how-to-re-measure).
 Nothing in this document is an estimate.
@@ -26,7 +26,7 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 119 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,954 | mocked COM; catch shape, not truth |
+| Unit tests | 2,969 (12 skip) | mocked COM; catch shape, not truth |
 | Integration tests | 80 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 11 pin the synchronous flange, the split, the thicken, the slot, the bead, the lofted flange and the mirror only the volume can see, 5 pin 3D sketch lines, structural frames along them (both methods) and planar relations through References, and there are assembly, draft and sheet-metal fixtures |
 | Structural audits | 7 | all at zero but one documented finding |
 
@@ -89,7 +89,7 @@ degrees, the symbol-file origin round trip, and the swept-surface refusal;
 document (and the ordered refusal leaving no dead feature), a split by a
 reference plane, and a thicken for all three sides. Each was mutation-tested
 when written. Most tools still have no integration
-test of their own; `scripts/live_sweep.py` is what drives all 118 once, and
+test of their own; `scripts/live_sweep.py` is what drives all 119 once, and
 its record (below) is the coverage that exists for the rest.
 
 ### 2. Numeric correctness -- checked, the last item closed
@@ -133,11 +133,11 @@ those refusals final on this install.
 
 `scripts/live_sweep.py` drives all 119 tools through the real server and
 records every outcome in `reference/LIVE_SWEEP.md`. The latest run, on
-2026-09-17 after the synchronous flange, the split and the thicken were wired
-and the thread and contour-flange-sync calls were driven to their refusals, with
-a synchronous box for the synchronous-only creators, and slots, 3D sketch lines
-and structural frames wired: **116 OK, 16 refuse honestly, 2 FAIL, 0 NOOP**
-across 134 cases (from 93 / 15 / 14 / 2 the day before). The remaining FAILs are the sweep's
+2026-09-18 for the `0.1.0rc1` candidate with everything of the 17th and 18th
+in (synchronous flanges with a bend deduction, splits, thickens, slots, beads,
+lofted flanges, 3D sketch lines, structural frames, assembly relations through
+References, select-all on drafts): **116 OK, 16 refuse honestly, 2 FAIL, 0 NOOP**
+across 134 cases (from 93 / 15 / 14 / 2 on 2026-09-16). The remaining FAILs are the sweep's
 own deliberate probes -- a missing macro, a plane asked for NURBS data -- each
 answered with an explanation. Seven earlier FAIL rows were the sweep's
 inputs, not the tools (a planar face for `delete_blend`, a circle where a
@@ -222,9 +222,11 @@ audit is inert and no COM call is ever made. Green CI is a far weaker signal
 than green locally: the live suite, the audits and `scripts/live_sweep.py` are
 the gates that matter, and they run only where Solid Edge does.
 
-### 6. Nothing is pushed
+### 6. What is shipped
 
-`master` has not moved since the merge of #3. No PR.
+`modernize` is pushed to `origin` and carries the first release candidate,
+`0.1.0rc1` (2026-09-18, `CHANGELOG.md`, tag `v0.1.0rc1`). `master` has not moved
+since the merge of #3. No PR.
 
 ## What "done" would mean
 
@@ -232,7 +234,7 @@ There is no state where this is finished, because Solid Edge keeps its own
 counsel. A defensible bar:
 
 - [x] every tool driven live at least once, with the result recorded (`scripts/live_sweep.py` -> `reference/LIVE_SWEEP.md`)
-- [x] every bug fixed this far pinned by a test that fails without the fix (62 integration tests, each mutation-tested when written)
+- [x] every bug fixed this far pinned by a test that fails without the fix (80 integration tests, each mutation-tested when written)
 - [x] the 49 unverified creators given a collection-growth check
 - [x] one numeric-correctness check per measurement tool (angular variables included, see above)
 - [ ] the branch merged

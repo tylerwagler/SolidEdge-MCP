@@ -1,6 +1,6 @@
 [project]
 name = "solidedge-mcp"
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "Solid Edge MCP server for AI-assisted CAD design — create, analyze, modify, and export"
 readme = "README.md"
 license = "MIT"
