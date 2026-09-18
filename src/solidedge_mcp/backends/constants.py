@@ -882,11 +882,17 @@ class SETargetConstructionBodyOption:
 
 
 class FeaturePropertyConstants:
-    """constant.tlb > FeaturePropertyConstants, the members Slots.Add takes.
+    """constant.tlb > FeaturePropertyConstants, the members Slots.Add and Beads.Add take.
 
     The enum has no slot end-condition member; 0 (igNullConstant) is what
-    cuts on Solid Edge 2026.
+    cuts on Solid Edge 2026. A bead's side is one of the two *SideDummy
+    members, which is what a UI-made bead reports; igLeft/igRight fail.
     """
 
     igNullConstant = 0
+    igNormalSideDummy = 7
+    igReverseNormalSideDummy = 8
+    igAddRound = 101
+    igCircular = 120
+    igPunchedEnd = 123
     igRegularSlot = 235

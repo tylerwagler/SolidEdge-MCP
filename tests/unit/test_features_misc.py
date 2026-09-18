@@ -370,17 +370,41 @@ class TestCreateDrawnCutout:
 
 
 class TestCreateBead:
-    """Beads.Add needs a full 13-argument bead cross-section."""
+    """Beads.Add with a UI-made bead's shape and a *SideDummy side (SE 2026: 6 -> 20 faces)."""
 
-    def test_unsupported(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        beads = MagicMock()
-        model.Beads = beads
-        result = feature_mgr.create_bead(0.003)
-        assert result["unsupported"] is True
-        assert result["depth"] == 0.003
-        assert "cross-section" in result["error"]
-        beads.Add.assert_not_called()
+    @staticmethod
+    def _open(profile):
+        for name in ("Circles2d", "Ellipses2d", "Boundaries2d"):
+            getattr(profile, name).Count = 0
+
+    def test_builds_with_the_circular_rounded_punched_shape(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        self._open(profile)
+
+        result = feature_mgr.create_bead(0.004)
+
+        assert result["status"] == "created"
+        assert result["width"] == pytest.approx(0.006)
+        args = model.Beads.Add.call_args.args
+        assert args[:5] == (1, [profile], 120, 0.004, pytest.approx(0.006))
+        assert args[5] == pytest.approx(math.radians(15.0))
+        assert args[6:] == (0.004, 0.0, 0.002, 101, 7, 123, pytest.approx(0.006))
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_reverse_uses_the_other_side_dummy_and_a_given_width(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        self._open(profile)
+        feature_mgr.create_bead(0.004, direction="Reverse", width=0.01)
+        args = model.Beads.Add.call_args.args
+        assert args[4] == 0.01 and args[10] == 8 and args[12] == 0.01
+
+    def test_a_closed_profile_or_no_depth_is_refused(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        profile.Circles2d.Count = 1
+        assert "error" in feature_mgr.create_bead(0.004)
+        self._open(profile)
+        assert "error" in feature_mgr.create_bead(0.0)
+        model.Beads.Add.assert_not_called()
 
 
 # ============================================================================

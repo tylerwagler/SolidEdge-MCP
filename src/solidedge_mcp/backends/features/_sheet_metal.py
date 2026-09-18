@@ -218,9 +218,11 @@ class SheetMetalMixin:
         return {
             "error": (
                 "Lofted flanges are not available through this server: "
-                "Models.AddLoftedFlange needs cross-section profiles with an "
-                "origin and origin reference for each section. Create the lofted "
-                "flange in the Solid Edge UI."
+                "Models.AddLoftedFlange answers DISP_E_TYPEMISMATCH or E_FAIL to "
+                "every Origins/OriginRefs shape tried on Solid Edge 2026 -- "
+                "coordinate arrays, VARIANT R8 arrays with I4 or plain refs, the "
+                "sections' own lines with keypoint refs, the profiles themselves. "
+                "Create the lofted flange in the Solid Edge UI."
             ),
             "unsupported": True,
             "type": "lofted_flange",
@@ -804,7 +806,9 @@ class SheetMetalMixin:
             return error_result(e)
 
     @verifies_geometry
-    def create_bead(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
+    def create_bead(
+        self, depth: float, direction: str = "Normal", width: float | None = None
+    ) -> dict[str, Any]:
         """
         Create a bead feature (sheet metal stiffener).
 
@@ -823,19 +827,61 @@ class SheetMetalMixin:
         Returns:
             Dict with an unsupported error
         """
-        return {
-            "error": (
-                "Bead features are not available through this server: Beads.Add "
-                "needs a full bead cross-section (type, height, width, taper "
-                "angle, form/punch/die radii, round option, end condition and "
-                "end punch width) that this tool cannot supply. Create the bead "
-                "in the Solid Edge UI."
-            ),
-            "unsupported": True,
-            "type": "bead",
-            "depth": depth,
-            "direction": direction,
+        sides = {
+            "Normal": FeaturePropertyConstants.igNormalSideDummy,
+            "Reverse": FeaturePropertyConstants.igReverseNormalSideDummy,
         }
+        side = sides.get(direction)
+        if side is None:
+            return {"error": f"Invalid direction: {direction}. Use 'Normal' or 'Reverse'."}
+        if depth <= 0:
+            return {"error": "A bead needs a positive depth (its height above the sheet, meters)."}
+        bead_width = width if width else 1.5 * depth
+        try:
+            doc = self.doc_manager.get_active_document()
+            profile = self.sketch_manager.get_active_sketch()
+            if not profile:
+                return {"error": "No active sketch profile. Create and close a sketch first."}
+            err = self._require_open_profile(profile, "bead")
+            if err:
+                return err
+            models = doc.Models
+            if models.Count == 0:
+                return {"error": "No base feature exists. Create a sheet metal base feature first."}
+            model = models.Item(1)
+            # Beads.Add(nNumPathProfiles, ProfileArray, BeadType, BeadHeight, BeadWidth,
+            #   BeadTaperAngle, BeadFormRadius, BeadPunchRadius, BeadDieRadius,
+            #   BeadRoundOption, BeadSide, EndConditionType, EndPunchWidth). The
+            # values are the shape a UI-made bead reports (Training/JigSaw/JS-0005):
+            # circular section, rounded, punched ends, and a *SideDummy side --
+            # igLeft/igRight answer E_FAIL. Verified on Solid Edge 2026 on the base
+            # plane and on a plane through the top face alike: 6 -> 20 faces for an
+            # interior line, 6 -> 14 for one spanning the sheet.
+            model.Beads.Add(
+                1,
+                [profile],
+                FeaturePropertyConstants.igCircular,
+                depth,
+                bead_width,
+                math.radians(15.0),
+                depth,  # form radius
+                0.0,  # punch radius
+                depth / 2.0,  # die radius
+                FeaturePropertyConstants.igAddRound,
+                side,
+                FeaturePropertyConstants.igPunchedEnd,
+                bead_width,  # end punch width
+            )
+            self.sketch_manager.clear_accumulated_profiles()
+            return {
+                "status": "created",
+                "type": "bead",
+                "depth": depth,
+                "width": bead_width,
+                "direction": direction,
+            }
+        except Exception as e:
+            return error_result(e)
 
     @verifies_geometry
     def create_louver(
@@ -867,10 +913,11 @@ class SheetMetalMixin:
         # rather than leave a dead feature behind.
         return {
             "error": (
-                "Louvers.Add records a louver that Solid Edge 2026 never solves "
-                "(no geometry, whatever the placement or type), and Louvers.AddSync "
-                "on a synchronous tab face answers 0x807B0086. Use the Solid Edge "
-                "UI for louvers; create_dimple and create_drawn_cutout work."
+                "Louvers.Add records a louver that Solid Edge 2026 never solves -- "
+                "no geometry with the values a UI-made louver holds, on a plane through "
+                "the sheet face with a ProfileDefiningFace recorded -- and Louvers.AddSync "
+                "answers 0x807B0086. Use the Solid Edge UI for louvers; create_dimple, "
+                "create_drawn_cutout and create_stamped(bead) work."
             ),
             "unsupported": True,
             "depth": depth,
@@ -1017,8 +1064,11 @@ class SheetMetalMixin:
         return {
             "error": (
                 "Threads.Add will not thread an existing cylindrical face on Solid "
-                "Edge 2026 (E_INVALIDARG for a boss and a hole, every HoleData tried). "
-                "Cut a threaded hole with create_hole(method='threaded') instead."
+                "Edge 2026: E_INVALIDARG for a boss and a hole with every HoleData "
+                "tried, including the shape a UI-made thread holds (HoleType 36, "
+                "ThreadSetting igRegularThread, external/nominal/minor diameters, a "
+                "standard description). Cut a threaded hole with "
+                "create_hole(method='threaded') instead."
             ),
             "unsupported": True,
             "face_index": face_index,
@@ -1490,9 +1540,12 @@ class SheetMetalMixin:
             # drawn through ProfileSets satisfies it. Say so, without the call.
             return {
                 "error": (
-                    "ContourFlanges.AddEx rejects every open profile this server "
-                    "can draw (E_FAIL on Solid Edge 2026). Use create_flange's sync "
-                    "methods, create_lofted_flange, or the Solid Edge UI."
+                    "ContourFlanges.AddEx and Add reject every open profile this server "
+                    "can draw (E_FAIL on Solid Edge 2026): 52 placements on the base and "
+                    "perpendicular planes, plus the shape a UI-made contour flange holds "
+                    "(igToEndOfEdge, a line starting a thickness off the edge on a plane "
+                    "through it). Use create_flange in a synchronous document, or the "
+                    "Solid Edge UI."
                 ),
                 "unsupported": True,
                 "thickness": thickness,

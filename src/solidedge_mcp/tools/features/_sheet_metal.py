@@ -488,20 +488,22 @@ def sheet_metal_misc(
 def create_stamped(
     type: Literal["bead", "gusset"] = "bead",
     depth: float = 0.0,
+    width: float = 0.0,
 ) -> dict[str, Any]:
     """Create a stamped feature from the active sketch: a bead or a gusset.
 
-    depth in meters (the gusset uses it as the material thickness).
-    'bead' (unsupported: Beads.Add needs a full bead cross-section - type,
-    height, width, taper angle, form/punch/die radii, end condition - that
-    this tool cannot supply); use 'gusset', or add the bead in the UI.
+    depth in meters (a bead's height above the sheet; the gusset uses it as
+    the material thickness). bead: sketch an OPEN line (on the base plane or a
+    plane through the sheet face, either works), then call this; width
+    defaults to 1.5 x depth. Beads.Add builds it with a circular, rounded,
+    punched-end cross-section.
     """
-    err = validate_numerics(depth=depth)
+    err = validate_numerics(depth=depth, width=width)
     if err:
         return err
     match type:
         case "bead":
-            return feature_manager.create_bead(depth=depth)
+            return feature_manager.create_bead(depth=depth, width=width or None)
         case "gusset":
             # The backend parameter is the plate thickness; this tool only
             # exposes `depth`, which is what Solid Edge uses for it here.

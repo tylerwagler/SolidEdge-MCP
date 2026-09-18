@@ -26,8 +26,8 @@ So this document tracks the other question: **does it actually do what it says?*
 |---|---|---|
 | Tools | 119 | the MCP action surface |
 | Resources | 53 + 2 guides | read-only `solidedge://` endpoints |
-| Unit tests | 2,949 | mocked COM; catch shape, not truth |
-| Integration tests | 74 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 9 pin the synchronous flange, the split, the thicken, the slot and the mirror only the volume can see, 3 pin 3D sketch lines and structural frames along them (both methods), and there are assembly, draft and sheet-metal fixtures |
+| Unit tests | 2,951 | mocked COM; catch shape, not truth |
+| Integration tests | 75 | drive real Solid Edge; 19 pin exact values against a known box, 7 pin the wrong-member and lost-value fixes, 10 pin the synchronous flange, the split, the thicken, the slot, the bead and the mirror only the volume can see, 3 pin 3D sketch lines and structural frames along them (both methods), and there are assembly, draft and sheet-metal fixtures |
 | Structural audits | 7 | all at zero but one documented finding |
 
 ### Creator verification
@@ -44,12 +44,12 @@ which succeeds and builds nothing.
 
 | | count | |
 |---|---|---|
-| Verified live | **161** | the body or the target collection must change, or the result becomes an error |
-| Refuse honestly | 52 | return `unsupported: True` -- 49 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
+| Verified live | **162** | the body or the target collection must change, or the result becomes an error |
+| Refuse honestly | 51 | return `unsupported: True` -- 48 outright, plus 3 that refuse one argument value and otherwise work (`create_extrude`/`create_revolve` with `operation="Intersect"`, `create_revolve_full` with a treatment) |
 | Neither | **0** | |
 | **Total `create_*`** | **213** | |
 
-Of the 161, 115 are face-count checks and 46 are collection-growth checks:
+Of the 162, 116 are face-count checks and 46 are collection-growth checks:
 15 reference planes (`RefPlanes`), 11 surfaces (the five `Constructions.*Surfaces`
 summed), 1 split (`Models.*.Splits`, because the first model keeps its faces), 9 that reshape or annotate (`Models.*.Etches`, `.Threads`, `.Drafts`,
 `.FaceRotates`; `PartsLists`, `DraftBendTables`), 3 surface blends
@@ -79,7 +79,7 @@ Ordered by how much risk each removes, not by effort.
 
 ### 1. Live verification is reproducible for what has been fixed, not for everything
 
-**74 integration tests across 10 files.** They pin the known-answer box, the
+**75 integration tests across 10 files.** They pin the known-answer box, the
 reported values and units, the document creators and fixtures, drawing views,
 the tier-1 features, and -- added in the live-fix round of 2026-09-17 --
 `tests/integration/test_wrong_members_and_lost_values.py`: the face rotates,
@@ -123,12 +123,20 @@ reported. Variables now carry `units`, `units_type` and, for angles,
 
 ### 3. Known-broken, with the evidence
 
+How the argument shapes were found without the SDK: the install's Training
+folder holds parts with every feature this server could not build, and a
+feature made in the UI reports its parameters. `Training/JigSaw/JS-0005.PSM`
+gave the bead its side constants; `sesscfl.psm`, `Pin1.par` and the transition
+parts gave the louver, thread, contour flange and lofted flange the values
+they were then retried with -- and still refused with, which is what makes
+those refusals final on this install.
+
 `scripts/live_sweep.py` drives all 119 tools through the real server and
 records every outcome in `reference/LIVE_SWEEP.md`. The latest run, on
 2026-09-17 after the synchronous flange, the split and the thicken were wired
 and the thread and contour-flange-sync calls were driven to their refusals, with
 a synchronous box for the synchronous-only creators, and slots, 3D sketch lines
-and structural frames wired: **109 OK, 20 refuse honestly, 2 FAIL, 0 NOOP**
+and structural frames wired: **110 OK, 19 refuse honestly, 2 FAIL, 0 NOOP**
 across 131 cases (from 93 / 15 / 14 / 2 the day before). The remaining FAILs are the sweep's
 own deliberate probes -- a missing macro, a plane asked for NURBS data -- each
 answered with an explanation. Seven earlier FAIL rows were the sweep's
@@ -140,7 +148,6 @@ question on this install:
 
 | tool / method | evidence |
 |---|---|
-| `create_stamped(bead)` | `Beads.Add(1, [line], BeadType, height, width, taper, form/punch/die radii, round option, side, end condition, end punch width)` answers `E_FAIL` for circular, U and V beads with formed, punched and lanced ends (Solid Edge 2026). Refuses before COM. |
 | `simplify(method="auto")` | `Models.AddAutoSimplify(1, [model.Body], True, "")` took the Solid Edge 2026 process down (RPC_S_CALL_FAILED, then the server gone); the parameter wants occurrences. Refuses before COM. |
 | `create_blend` | `Blends.Add(1, SelectSetArray, RadiusArray, ...)` answers `E_FAIL` with nested edge arrays plain or VARIANT-wrapped, one edge or a face's four (Solid Edge 2026). `create_round` takes the same edges through `Rounds.Add`. Refuses before COM. |
 | `create_thread` (basic, physical) | `Threads.Add(HoleData, 1, [cylinder], [end face])` answers `E_INVALIDARG` for an extruded boss and for a cut hole alike, with every `HoleData` this server can build (`igTappedHole` bare, with `ThreadMinorDiameter`/`ThreadDepth`, `igRegularThread` with `ThreadExternalDiameter`); a `ThreadDescription` is refused by `HoleDataCollection.Add` itself. Refuses before COM and points at `create_hole(method='threaded')`, which carries its thread. |
@@ -159,7 +166,10 @@ question on this install:
 | `create_weldment` without a template | raised a modal that hung the server; now refuses before COM. |
 
 Turned from refusals into working creators on 2026-09-17, each driven live and
-pinned: `create_slot` (`Slots.Add` along an open line with a finite or
+pinned: `create_stamped(bead)` (`Beads.Add` with the cross-section a UI-made bead
+reports -- circular, rounded, punched ends -- and `BeadSide` = the two
+`*SideDummy` members; igLeft/igRight answer E_FAIL; 6 -> 20 faces on the base
+plane and on a plane through the sheet face alike); `create_slot` (`Slots.Add` along an open line with a finite or
 through-all extent cuts, 6 -> 10 faces; `igLeft` and a closed profile record a
 slot that removes nothing, so `direction='Reverse'` refuses); `draw_3d_line`
 (`Sketches3D.Add()` + `Lines3D.Add(x1, y1, z1, x2, y2, z2)`, a new tool) and

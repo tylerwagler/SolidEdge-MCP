@@ -139,3 +139,17 @@ class TestSlot:
 
         assert r["status"] == "created", r
         assert stack.query.get_face_count()["face_count"] == before + 4
+
+
+class TestBead:
+    def test_an_open_line_on_the_base_plane_makes_a_bead(self, stack, new_sheet_metal):
+        _tab(stack)
+        stack.sketch.create_sketch("Top")
+        stack.sketch.draw_line(0.02, 0.024, 0.06, 0.024)
+        stack.sketch.close_sketch(closed=False)
+        before = stack.query.get_face_count()["face_count"]
+
+        r = stack.feature.create_bead(0.004)
+
+        assert r["status"] == "created", r
+        assert stack.query.get_face_count()["face_count"] == before + 14
