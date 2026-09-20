@@ -11,6 +11,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants, FoldTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -19,6 +25,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -44,7 +51,28 @@ class TestSetDrawingViewScale:
         result = em.set_drawing_view_scale(0, 0.5)
         assert result["status"] == "set"
         assert result["scale"] == 0.5
+        assert result["reads_back"] == 0.5
         assert view.ScaleFactor == 0.5
+
+    def test_a_write_the_view_did_not_keep_shows_in_reads_back(self, export_mgr):
+        """The setter used to echo the value it was asked for. A scale Solid
+        Edge clamps or ignores must be visible, so ScaleFactor is read back."""
+        em, doc = export_mgr
+        view = MagicMock()
+        type(view).ScaleFactor = property(lambda self: 1.0, lambda self, v: None)
+        sheet = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = view
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.set_drawing_view_scale(0, 0.25)
+
+        assert result["scale"] == 0.25, "what was asked"
+        assert result["reads_back"] == 1.0, "what the view actually holds"
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr
@@ -165,7 +193,7 @@ class TestAddProjectedView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_projected_view(0, "Up", 0.2, 0.3)
         assert "error" in result
@@ -190,47 +218,63 @@ class TestAddProjectedView:
 # ============================================================================
 
 
+def one_view(doc, view=None):
+    """Wire a draft document up to a single drawing view."""
+    sheet = MagicMock()
+    view = view if view is not None else MagicMock()
+    dvs = MagicMock()
+    dvs.Count = 1
+    dvs.Item.return_value = view
+    del dvs._oleobj_
+    sheet.DrawingViews = dvs
+    doc.ActiveSheet = sheet
+    sheets = MagicMock()
+    sheets.Count = 1
+    doc.Sheets = sheets
+    return sheet, view
+
+
 class TestMoveDrawingView:
+    """SetOrigin is the only way to move a view; OriginX cannot be assigned."""
+
     def test_success(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        view = MagicMock()
-        view.Name = "View 1"
-
-        dvs = MagicMock()
-        dvs.Count = 1
-        dvs.Item.return_value = view
-        sheet.DrawingViews = dvs
-
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
+        _sheet, view = one_view(doc)
+        view.GetOrigin.return_value = (0.15, 0.20)
 
         result = em.move_drawing_view(0, 0.15, 0.20)
-        assert isinstance(result, dict)
+
+        assert result["status"] == "moved"
+        assert result["origin"] == [0.15, 0.20]
+        view.SetOrigin.assert_called_once_with(0.15, 0.20)
+
+    def test_does_not_assign_originx(self, export_mgr):
+        """Assigning OriginX raises "can not be set", so it must not be tried."""
+        em, doc = export_mgr
+        _sheet, view = one_view(doc)
+
+        em.move_drawing_view(0, 0.15, 0.20)
+
+        assert "OriginX" not in view.mock_calls.__str__()
+
+    def test_com_error(self, export_mgr):
+        em, doc = export_mgr
+        _sheet, view = one_view(doc)
+        view.SetOrigin.side_effect = Exception("COM error")
+
+        assert "error" in em.move_drawing_view(0, 0.15, 0.20)
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
-        result = em.move_drawing_view(0, 0.15, 0.20)
-        assert "error" in result
+        assert "error" in em.move_drawing_view(0, 0.15, 0.20)
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 1
-        sheet.DrawingViews = dvs
+        one_view(doc)
 
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
-
-        result = em.move_drawing_view(5, 0.15, 0.20)
-        assert "error" in result
+        assert "error" in em.move_drawing_view(5, 0.15, 0.20)
 
 
 # ============================================================================
@@ -239,50 +283,62 @@ class TestMoveDrawingView:
 
 
 class TestShowHiddenEdges:
-    def test_success(self, export_mgr):
+    """The view property that holds is Defaults_ShowHiddenEdges.
+
+    DrawingView.ShowHiddenEdges raises "can not be set", and
+    ModelMember.ShowHiddenEdges accepts the write then reads back unchanged.
+    """
+
+    def test_show(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        view = MagicMock()
-        view.Name = "View 1"
-
-        dvs = MagicMock()
-        dvs.Count = 1
-        dvs.Item.return_value = view
-        sheet.DrawingViews = dvs
-
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
+        _sheet, view = one_view(doc)
 
         result = em.show_hidden_edges(0, True)
-        assert isinstance(result, dict)
+
+        assert result["status"] == "updated"
+        assert result["show_hidden_edges"] is True
+        assert view.Defaults_ShowHiddenEdges is True
+
+    def test_hide(self, export_mgr):
+        em, doc = export_mgr
+        _sheet, view = one_view(doc)
+
+        result = em.show_hidden_edges(0, False)
+
+        assert result["show_hidden_edges"] is False
+        assert view.Defaults_ShowHiddenEdges is False
+
+    def test_a_view_that_reverts_is_reported_as_a_failure(self, export_mgr):
+        """A silent revert must not be dressed up as success."""
+        em, doc = export_mgr
+
+        class Stubborn:
+            Defaults_ShowHiddenEdges = False
+
+            def __setattr__(self, name, value):
+                pass  # accepts the write, keeps the old value
+
+            def Update(self):
+                pass
+
+        _sheet, _view = one_view(doc, view=Stubborn())
+
+        result = em.show_hidden_edges(0, True)
+
+        assert "error" in result
+        assert "did not accept" in result["error"]
+
+    def test_invalid_index(self, export_mgr):
+        em, doc = export_mgr
+        one_view(doc)
+
+        assert "error" in em.show_hidden_edges(5, True)
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
-        result = em.show_hidden_edges(0, True)
-        assert "error" in result
-
-    def test_hide_edges(self, export_mgr):
-        em, doc = export_mgr
-        sheet = MagicMock()
-        view = MagicMock()
-        view.Name = "View 1"
-
-        dvs = MagicMock()
-        dvs.Count = 1
-        dvs.Item.return_value = view
-        sheet.DrawingViews = dvs
-
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
-
-        result = em.show_hidden_edges(0, False)
-        assert isinstance(result, dict)
+        assert "error" in em.show_hidden_edges(0, True)
 
 
 # ============================================================================
@@ -291,45 +347,82 @@ class TestShowHiddenEdges:
 
 
 class TestSetDrawingViewDisplayMode:
-    def test_success(self, export_mgr):
+    """A DrawingView has no SetRenderMode and no DisplayMode.
+
+    SetRenderMode belongs to the 3D window View in framewrk.tlb. Shading,
+    ShadingShowVisibleEdges and Defaults_ShowHiddenEdges are what a drawing
+    view really exposes.
+    """
+
+    def test_shaded(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        view = MagicMock()
-
-        dvs = MagicMock()
-        dvs.Count = 1
-        dvs.Item.return_value = view
-        sheet.DrawingViews = dvs
-
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
+        _sheet, view = one_view(doc)
 
         result = em.set_drawing_view_display_mode(0, "Shaded")
-        assert isinstance(result, dict)
 
-    def test_not_draft(self, export_mgr):
+        assert result["status"] == "updated"
+        assert view.Shading is True
+        assert view.ShadingShowVisibleEdges is False
+        view.SetRenderMode.assert_not_called()
+
+    def test_shaded_with_edges(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        _sheet, view = one_view(doc)
+
+        em.set_drawing_view_display_mode(0, "ShadedWithEdges")
+
+        assert view.Shading is True
+        assert view.ShadingShowVisibleEdges is True
+
+    def test_wireframe_shows_every_edge(self, export_mgr):
+        em, doc = export_mgr
+        _sheet, view = one_view(doc)
+
+        em.set_drawing_view_display_mode(0, "Wireframe")
+
+        assert view.Shading is False
+        assert view.Defaults_ShowHiddenEdges is True
+
+    def test_hidden_edges_visible_hides_obscured_edges(self, export_mgr):
+        em, doc = export_mgr
+        _sheet, view = one_view(doc)
+
+        em.set_drawing_view_display_mode(0, "HiddenEdgesVisible")
+
+        assert view.Shading is False
+        assert view.Defaults_ShowHiddenEdges is False
+
+    def test_a_view_refusing_everything_is_an_error(self, export_mgr):
+        em, doc = export_mgr
+
+        class Refuses:
+            def __setattr__(self, name, value):
+                raise AttributeError(name)
+
+            def Update(self):
+                pass
+
+        one_view(doc, view=Refuses())
 
         result = em.set_drawing_view_display_mode(0, "Shaded")
+
         assert "error" in result
+        assert "accepted none" in result["error"]
 
     def test_invalid_mode(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 1
-        sheet.DrawingViews = dvs
-
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
+        one_view(doc)
 
         result = em.set_drawing_view_display_mode(0, "InvalidMode")
+
         assert "error" in result
+        assert "Wireframe" in result["error"]
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        doc.Type = IG_PART_DOCUMENT
+
+        assert "error" in em.set_drawing_view_display_mode(0, "Shaded")
 
 
 # ============================================================================
@@ -338,47 +431,44 @@ class TestSetDrawingViewDisplayMode:
 
 
 class TestGetDrawingViewInfo:
-    def test_success(self, export_mgr):
+    def test_reports_the_origin(self, export_mgr):
+        """origin_x and origin_y were always missing: there is no OriginX."""
         em, doc = export_mgr
-        sheet = MagicMock()
-        view = MagicMock()
+        _sheet, view = one_view(doc)
         view.Name = "View 1"
         view.ScaleFactor = 1.0
-
-        dvs = MagicMock()
-        dvs.Count = 1
-        dvs.Item.return_value = view
-        sheet.DrawingViews = dvs
-
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
+        view.GetOrigin.return_value = (0.2, 0.15)
+        view.Defaults_ShowHiddenEdges = True
+        view.Defaults_ShowTangentEdges = False
 
         result = em.get_drawing_view_info(0)
-        assert isinstance(result, dict)
+
+        assert result["name"] == "View 1"
+        assert result["origin_x"] == 0.2
+        assert result["origin_y"] == 0.15
+        assert result["show_hidden_edges"] is True
+        assert result["show_tangent_edges"] is False
+
+    def test_a_view_without_an_origin_omits_it(self, export_mgr):
+        em, doc = export_mgr
+        _sheet, view = one_view(doc)
+        view.GetOrigin.side_effect = Exception("no origin")
+
+        result = em.get_drawing_view_info(0)
+
+        assert "origin_x" not in result
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
-        result = em.get_drawing_view_info(0)
-        assert "error" in result
+        assert "error" in em.get_drawing_view_info(0)
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 1
-        sheet.DrawingViews = dvs
+        one_view(doc)
 
-        doc.ActiveSheet = sheet
-        sheets = MagicMock()
-        sheets.Count = 1
-        doc.Sheets = sheets
-
-        result = em.get_drawing_view_info(5)
-        assert "error" in result
+        assert "error" in em.get_drawing_view_info(5)
 
 
 # ============================================================================
@@ -407,7 +497,7 @@ class TestSetDrawingViewOrientation:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.set_drawing_view_orientation(0, "Front")
         assert "error" in result
@@ -493,52 +583,56 @@ class TestGetDrawingViewModelLink:
 
 
 class TestShowTangentEdges:
+    """The view property that holds is Defaults_ShowTangentEdges.
+
+    ModelMember.ShowTangentEdges exists and accepts the write, but reads back
+    unchanged, so routing it there stopped the exception without changing
+    anything. Verified against Solid Edge 2026.
+    """
+
     def test_show(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        view = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 1
-        dvs.Item.return_value = view
-        del dvs._oleobj_
-        sheet.DrawingViews = dvs
-        doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
+        _sheet, view = one_view(doc)
 
         result = em.show_tangent_edges(0, True)
+
         assert result["status"] == "updated"
         assert result["show_tangent_edges"] is True
-        assert view.ShowTangentEdges is True
+        assert view.Defaults_ShowTangentEdges is True
 
     def test_hide(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        view = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 1
-        dvs.Item.return_value = view
-        del dvs._oleobj_
-        sheet.DrawingViews = dvs
-        doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
+        _sheet, view = one_view(doc)
 
         result = em.show_tangent_edges(0, False)
-        assert result["status"] == "updated"
+
         assert result["show_tangent_edges"] is False
-        assert view.ShowTangentEdges is False
+        assert view.Defaults_ShowTangentEdges is False
+
+    def test_does_not_write_to_the_model_member(self, export_mgr):
+        em, doc = export_mgr
+        _sheet, view = one_view(doc)
+        member = MagicMock()
+        members = MagicMock()
+        members.Count = 1
+        members.Item.return_value = member
+        view.ModelMembers = members
+
+        em.show_tangent_edges(0, True)
+
+        members.Item.assert_not_called()
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 1
-        del dvs._oleobj_
-        sheet.DrawingViews = dvs
-        doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
+        one_view(doc)
 
-        result = em.show_tangent_edges(5, True)
-        assert "error" in result
+        assert "error" in em.show_tangent_edges(5, True)
+
+    def test_not_draft(self, export_mgr):
+        em, doc = export_mgr
+        doc.Type = IG_PART_DOCUMENT
+
+        assert "error" in em.show_tangent_edges(0, True)
 
 
 # ============================================================================
@@ -564,10 +658,16 @@ class TestAddDetailView:
         assert result["type"] == "detail_view"
         assert result["parent_view_index"] == 0
         assert result["scale"] == 2.0
+        # AddByDetailEnvelope(From, x1, y1, Radius, Scale, x2, y2) - Scale sits
+        # between the envelope radius and the placement point.
+        dvs.AddByDetailEnvelope.assert_called_once_with(
+            parent_view, 0.05, 0.05, 0.01, 2.0, 0.2, 0.1
+        )
+        dvs.AddDetailView.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_detail_view(0, 0.05, 0.05, 0.01, 0.2, 0.1)
         assert "error" in result
@@ -608,10 +708,14 @@ class TestAddAuxiliaryView:
         assert result["status"] == "added"
         assert result["type"] == "auxiliary_view"
         assert result["fold_direction"] == "Up"
+        # AddByFold(From, foldDir, x, y) is the fold-direction entry point.
+        # AddByAuxiliaryFold wants a fold line picked on the parent view.
+        dvs.AddByFold.assert_called_once_with(parent_view, FoldTypeConstants.igFoldUp, 0.2, 0.3)
+        dvs.AddByAuxiliaryFold.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_auxiliary_view(0, 0.2, 0.3)
         assert "error" in result
@@ -650,11 +754,12 @@ class TestAddDraftView:
         assert result["status"] == "added"
         assert result["type"] == "draft_view"
         assert result["position"] == [0.15, 0.10]
-        dvs.AddDraftView.assert_called_once_with(0.15, 0.10)
+        # AddDraftView(Scale, x1, y1) - the scale is the first argument.
+        dvs.AddDraftView.assert_called_once_with(1.0, 0.15, 0.10)
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_draft_view(0.15, 0.10)
         assert "error" in result
@@ -679,11 +784,18 @@ class TestAddDraftView:
 
 
 class TestAlignDrawingViews:
-    def test_align(self, export_mgr):
-        em, doc = export_mgr
+    """DrawingViews.Align/Unalign act on the document select set.
+
+    DrawingView.AlignToView and RemoveAlignment are in no Solid Edge type
+    library, and Align() raises outright when nothing is selected.
+    """
+
+    def _two_views(self, doc):
         sheet = MagicMock()
         view1 = MagicMock()
+        view1.GetOrigin.return_value = (0.1, 0.1)
         view2 = MagicMock()
+        view2.GetOrigin.return_value = (0.2, 0.2)
         dvs = MagicMock()
         dvs.Count = 2
         dvs.Item.side_effect = lambda i: {1: view1, 2: view2}[i]
@@ -691,40 +803,67 @@ class TestAlignDrawingViews:
         sheet.DrawingViews = dvs
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
+        return dvs, view1, view2
+
+    def test_align_selects_both_views_then_calls_align(self, export_mgr):
+        em, doc = export_mgr
+        dvs, view1, view2 = self._two_views(doc)
+        select_set = MagicMock()
+        doc.SelectSet = select_set
 
         result = em.align_drawing_views(0, 1, True)
-        assert result["status"] == "aligned"
-        view1.AlignToView.assert_called_once_with(view2)
 
-    def test_unalign(self, export_mgr):
+        assert result["status"] == "aligned"
+        dvs.Align.assert_called_once()
+        added = [call.args[0] for call in select_set.Add.call_args_list]
+        assert added == [view1, view2]
+        view1.AlignToView.assert_not_called()
+
+    def test_unalign_calls_unalign(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        view1 = MagicMock()
-        view2 = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 2
-        dvs.Item.side_effect = lambda i: {1: view1, 2: view2}[i]
-        del dvs._oleobj_
-        sheet.DrawingViews = dvs
-        doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
+        dvs, view1, _view2 = self._two_views(doc)
+        doc.SelectSet = MagicMock()
 
         result = em.align_drawing_views(0, 1, False)
+
         assert result["status"] == "unaligned"
-        view1.RemoveAlignment.assert_called_once()
+        dvs.Unalign.assert_called_once()
+        view1.RemoveAlignment.assert_not_called()
+
+    def test_the_selection_is_cleared_afterwards(self, export_mgr):
+        em, doc = export_mgr
+        dvs, _view1, _view2 = self._two_views(doc)
+        select_set = MagicMock()
+        doc.SelectSet = select_set
+        dvs.Align.side_effect = Exception("nothing to align")
+
+        em.align_drawing_views(0, 1, True)
+
+        assert select_set.RemoveAll.call_count == 2
+
+    def test_says_so_when_neither_view_moved(self, export_mgr):
+        em, doc = export_mgr
+        self._two_views(doc)
+        doc.SelectSet = MagicMock()
+
+        result = em.align_drawing_views(0, 1, True)
+
+        assert "fold relationship" in result["note"]
+
+    def test_refuses_one_view_against_itself(self, export_mgr):
+        em, doc = export_mgr
+        self._two_views(doc)
+
+        result = em.align_drawing_views(1, 1, True)
+
+        assert "error" in result
+        assert "two different views" in result["error"]
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr
-        sheet = MagicMock()
-        dvs = MagicMock()
-        dvs.Count = 1
-        del dvs._oleobj_
-        sheet.DrawingViews = dvs
-        doc.ActiveSheet = sheet
-        doc.Sheets = MagicMock()
+        self._two_views(doc)
 
-        result = em.align_drawing_views(0, 5, True)
-        assert "error" in result
+        assert "error" in em.align_drawing_views(0, 5, True)
 
 
 # ============================================================================
@@ -765,7 +904,7 @@ class TestActivateDrawingView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.activate_drawing_view(0)
         assert "error" in result
@@ -804,7 +943,7 @@ class TestDeactivateDrawingView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.deactivate_drawing_view(0)
         assert "error" in result
@@ -903,7 +1042,7 @@ class TestAddAssemblyDrawingViewEx:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_assembly_drawing_view_ex()
         assert "error" in result
@@ -940,7 +1079,7 @@ class TestAddDrawingViewWithConfig:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_drawing_view_with_config()
         assert "error" in result
@@ -1223,7 +1362,7 @@ class TestUpdateAllViews:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.update_all_views()
         assert "error" in result

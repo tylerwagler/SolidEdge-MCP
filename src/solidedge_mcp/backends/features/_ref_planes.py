@@ -1,7 +1,8 @@
 """Reference plane creation operations."""
 
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
@@ -10,10 +11,15 @@ from ..constants import (
     ReferenceElementConstants,
 )
 from ..logging import get_logger
+from ._base import verify_collection_growth_on_creators
 
 _logger = get_logger(__name__)
 
 
+# Every creator here ends in a RefPlanes.Add*, and a plane is not a solid,
+# so the face count that verifies_geometry watches never moves for them.
+# The plane collection is what has to grow.
+@verify_collection_growth_on_creators("RefPlanes")
 class RefPlaneMixin:
     """Mixin providing reference plane creation methods."""
 
@@ -64,7 +70,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance(
         self, distance: float, curve_end: str = "End", pivot_plane_index: int = 2
@@ -72,8 +78,8 @@ class RefPlaneMixin:
         """
         Create a reference plane normal to a curve at a specified distance from an endpoint.
 
-        Uses RefPlanes.AddNormalToCurveAtDistance(pCurve, Distance, bIgnoreNatural,
-        NormalSide, [bFlip], [bOrient], [orientSurface]).
+        Full signature: AddNormalToCurveAtDistance(Curve, PlanePoint,
+        OrientationPlaneOrPivot, PivotOrigin, Distance, [Local], [ParentCurve]).
         Requires an active sketch profile that defines the curve.
 
         Args:
@@ -93,12 +99,26 @@ class RefPlaneMixin:
 
             ref_planes = doc.RefPlanes
 
-            # igCurveEnd = 2, igCurveStart = 1
-            ignore_natural = curve_end == "End"
-            # NormalSide: igRight = 2
-            normal_side = DirectionConstants.igRight
+            if pivot_plane_index < 1 or pivot_plane_index > ref_planes.Count:
+                return {
+                    "error": f"Invalid pivot_plane_index: {pivot_plane_index}. "
+                    f"Document has {ref_planes.Count} reference planes."
+                }
+            pivot_plane = ref_planes.Item(pivot_plane_index)
 
-            ref_planes.AddNormalToCurveAtDistance(profile, distance, ignore_natural, normal_side)
+            plane_point = (
+                ReferenceElementConstants.igCurveEnd
+                if curve_end == "End"
+                else ReferenceElementConstants.igCurveStart
+            )
+
+            ref_planes.AddNormalToCurveAtDistance(
+                profile,
+                plane_point,
+                pivot_plane,
+                ReferenceElementConstants.igPivotStart,
+                distance,
+            )
 
             return {
                 "status": "created",
@@ -108,7 +128,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_arc_ratio(
         self, ratio: float, curve_end: str = "End", pivot_plane_index: int = 2
@@ -143,8 +163,9 @@ class RefPlaneMixin:
 
             ignore_natural = curve_end == "End"
             normal_side = DirectionConstants.igRight
-            # igPivotEnd = 2
-            pivot_end_const = 2
+            # igPivotEnd is 4. This was 2, which is igNormalSide -- a side of
+            # a plane, not an end of the pivot.
+            pivot_end_const = ReferenceElementConstants.igPivotEnd
 
             ref_planes.AddNormalToCurveAtArcLengthRatio(
                 profile, ratio, ignore_natural, normal_side, pivot_plane, pivot_end_const
@@ -158,7 +179,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance_along(
         self, distance_along: float, curve_end: str = "End", pivot_plane_index: int = 2
@@ -189,7 +210,9 @@ class RefPlaneMixin:
 
             ignore_natural = curve_end == "End"
             normal_side = DirectionConstants.igRight
-            pivot_end_const = 2
+            # igPivotEnd is 4. This was 2, which is igNormalSide -- a side of
+            # a plane, not an end of the pivot.
+            pivot_end_const = ReferenceElementConstants.igPivotEnd
 
             ref_planes.AddNormalToCurveAtDistanceAlongCurve(
                 profile, distance_along, ignore_natural, normal_side, pivot_plane, pivot_end_const
@@ -203,7 +226,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_parallel_by_tangent(
         self, parent_plane_index: int, face_index: int, normal_side: str = "Normal"
@@ -264,7 +287,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_to_curve(
         self, curve_end: str = "End", pivot_plane_index: int = 2
@@ -292,10 +315,18 @@ class RefPlaneMixin:
             ref_planes = doc.RefPlanes
             pivot_plane = ref_planes.Item(pivot_plane_index)
 
-            # igCurveEnd = 2, igCurveStart = 1
-            curve_end_const = 2 if curve_end == "End" else 1
+            # igCurveStart is 14 and igCurveEnd is 15. These were 1 and 2,
+            # which are igReverseNormalSide and igNormalSide -- sides of a
+            # plane, not ends of a curve, so the call answered E_FAIL.
+            curve_end_const = (
+                ReferenceElementConstants.igCurveEnd
+                if curve_end == "End"
+                else ReferenceElementConstants.igCurveStart
+            )
             # igPivotEnd = 2
-            pivot_end_const = 2
+            # igPivotEnd is 4. This was 2, which is igNormalSide -- a side of
+            # a plane, not an end of the pivot.
+            pivot_end_const = ReferenceElementConstants.igPivotEnd
 
             ref_planes.AddNormalToCurve(
                 profile, curve_end_const, pivot_plane, pivot_end_const, True
@@ -311,7 +342,7 @@ class RefPlaneMixin:
                 "new_plane_index": new_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_by_angle(
         self, parent_plane_index: int, angle: float, normal_side: str = "Normal"
@@ -319,9 +350,12 @@ class RefPlaneMixin:
         """
         Create a reference plane at an angle to an existing plane.
 
-        Uses RefPlanes.AddAngularByAngle(ParentPlane, Angle, NormalSide).
-        Type library: AddAngularByAngle(ParentPlane: IDispatch, Angle: VT_R8,
-        NormalSide: FeaturePropertyConstants, [Edge: VT_VARIANT]).
+        NOT AVAILABLE via COM automation. The real signature is
+        AddAngularByAngle(ParentPlane, Angle, NormalSide, Pivot, PivotOrigin,
+        [Local]). Pivot is the linear element the new plane rotates about (an
+        edge or reference axis, with PivotOrigin naming its start or end), and
+        that is a user selection this server cannot make. Guessing a pivot would
+        put the plane at the wrong place, so the call is never made.
 
         Args:
             parent_plane_index: Index of parent plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
@@ -329,43 +363,23 @@ class RefPlaneMixin:
             normal_side: 'Normal' (igRight=2) or 'Reverse' (igLeft=1)
 
         Returns:
-            Dict with status and new plane index
+            Dict with an unsupported error
         """
-        try:
-            import math
-
-            doc = self.doc_manager.get_active_document()
-            ref_planes = doc.RefPlanes
-
-            if parent_plane_index < 1 or parent_plane_index > ref_planes.Count:
-                return {
-                    "error": f"Invalid plane index: {parent_plane_index}. Count: {ref_planes.Count}"
-                }
-
-            parent = ref_planes.Item(parent_plane_index)
-
-            side_map = {
-                "Normal": DirectionConstants.igRight,
-                "Reverse": DirectionConstants.igLeft,
-            }
-            side_const = side_map.get(normal_side, DirectionConstants.igRight)
-
-            # Angle in radians for the COM API
-            angle_rad = math.radians(angle)
-
-            ref_planes.AddAngularByAngle(parent, angle_rad, side_const)
-
-            return {
-                "status": "created",
-                "type": "reference_plane",
-                "method": "angular_by_angle",
-                "parent_plane": parent_plane_index,
-                "angle_degrees": angle,
-                "normal_side": normal_side,
-                "new_plane_index": ref_planes.Count,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "error": (
+                "Angular reference planes are not available through this server: "
+                "RefPlanes.AddAngularByAngle needs a Pivot linear element (an "
+                "edge or reference axis) to rotate about, which cannot be "
+                "selected here. Use create_ref_plane(method='by_offset') or "
+                "create the angled plane in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "reference_plane",
+            "method": "angular_by_angle",
+            "parent_plane": parent_plane_index,
+            "angle_degrees": angle,
+            "normal_side": normal_side,
+        }
 
     def create_ref_plane_by_3_points(
         self,
@@ -382,8 +396,12 @@ class RefPlaneMixin:
         """
         Create a reference plane through 3 points in space.
 
-        Uses RefPlanes.AddBy3Points(Point1X, Point1Y, Point1Z, ...).
-        Type library: AddBy3Points(9x VT_R8 params) -> RefPlane*.
+        NOT AVAILABLE via COM automation. AddBy3Points does not take nine
+        coordinates: its real signature is (NumEdges, EdgeSet,
+        KeyPointTypeConstants, [Local]), so the plane is built through three
+        keypoints of existing edges rather than through free XYZ points. This
+        server has no way to turn coordinates into those edge keypoints, so the
+        call is never made.
 
         Args:
             x1, y1, z1: First point coordinates (meters)
@@ -391,32 +409,33 @@ class RefPlaneMixin:
             x3, y3, z3: Third point coordinates (meters)
 
         Returns:
-            Dict with status and new plane index
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            ref_planes = doc.RefPlanes
-
-            ref_planes.AddBy3Points(x1, y1, z1, x2, y2, z2, x3, y3, z3)
-
-            return {
-                "status": "created",
-                "type": "reference_plane",
-                "method": "by_3_points",
-                "point1": [x1, y1, z1],
-                "point2": [x2, y2, z2],
-                "point3": [x3, y3, z3],
-                "new_plane_index": ref_planes.Count,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "error": (
+                "A reference plane through three free points is not available "
+                "through this server: RefPlanes.AddBy3Points(NumEdges, EdgeSet, "
+                "KeyPointTypeConstants) builds the plane from keypoints of "
+                "existing edges, not from XYZ coordinates. Use "
+                "create_ref_plane(method='by_offset') or place the plane in the "
+                "Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "reference_plane",
+            "method": "by_3_points",
+            "point1": [x1, y1, z1],
+            "point2": [x2, y2, z2],
+            "point3": [x3, y3, z3],
+        }
 
     def create_ref_plane_midplane(self, plane1_index: int, plane2_index: int) -> dict[str, Any]:
         """
         Create a reference plane midway between two existing planes.
 
-        Uses RefPlanes.AddMidPlane(Plane1, Plane2).
-        Useful for symmetry operations.
+        Uses RefPlanes.AddMidPlane(ParentPlane, ParallelPlane, Pivot,
+        PivotOrigin, Local, FlipNormal). The mid-plane is fixed by the two
+        parent planes, so no pivot is passed (the pivot only steers the local
+        axis orientation).
 
         Args:
             plane1_index: Index of first plane (1=Top/XY, 2=Right/YZ, 3=Front/XZ)
@@ -437,7 +456,14 @@ class RefPlaneMixin:
             plane1 = ref_planes.Item(plane1_index)
             plane2 = ref_planes.Item(plane2_index)
 
-            ref_planes.AddMidPlane(plane1, plane2)
+            ref_planes.AddMidPlane(
+                plane1,
+                plane2,
+                None,
+                ReferenceElementConstants.igPivotStart,
+                False,
+                False,
+            )
 
             return {
                 "status": "created",
@@ -448,7 +474,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_keypoint(
         self, keypoint_type: str = "End", pivot_plane_index: int = 2
@@ -516,7 +542,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_cylinder_angle(
         self, face_index: int, angle: float, parent_plane_index: int = 1
@@ -581,7 +607,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_cylinder_keypoint(
         self, face_index: int, keypoint_type: str = "End", parent_plane_index: int = 1
@@ -649,7 +675,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_surface_keypoint(
         self, face_index: int, keypoint_type: str = "End", parent_plane_index: int = 1
@@ -716,7 +742,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance_v2(
         self,
@@ -728,14 +754,16 @@ class RefPlaneMixin:
         """
         Create a reference plane normal to a curve at a distance from the curve.
 
-        Uses RefPlanes.AddNormalToCurveAtDistance(Curve, OrientationPlane,
-        Distance, normalOrientation, selectedCurveEnd).
+        Full signature: AddNormalToCurveAtDistance(Curve, PlanePoint,
+        OrientationPlaneOrPivot, PivotOrigin, Distance, [Local], [ParentCurve]).
+        There is no NormalSide argument, so normal_side is echoed back but not
+        passed to COM.
 
         Args:
             curve_edge_index: 0-based edge index on the body to use as curve
             orientation_plane_index: 1-based index of the orientation reference plane
             distance: Distance from curve endpoint in meters
-            normal_side: Normal orientation (1=igLeft, 2=igRight)
+            normal_side: Kept for backwards compatibility; not used by this call
 
         Returns:
             Dict with status and new plane index
@@ -761,7 +789,11 @@ class RefPlaneMixin:
             orient_plane = ref_planes.Item(orientation_plane_index)
 
             ref_planes.AddNormalToCurveAtDistance(
-                curve, orient_plane, distance, normal_side, ReferenceElementConstants.igCurveEnd
+                curve,
+                ReferenceElementConstants.igCurveEnd,
+                orient_plane,
+                ReferenceElementConstants.igPivotStart,
+                distance,
             )
 
             return {
@@ -769,10 +801,11 @@ class RefPlaneMixin:
                 "type": "ref_plane_normal_at_distance_v2",
                 "curve_edge_index": curve_edge_index,
                 "distance": distance,
+                "normal_side": normal_side,
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_arc_ratio_v2(
         self,
@@ -784,8 +817,9 @@ class RefPlaneMixin:
         """
         Create a reference plane normal to a curve at an arc-length ratio.
 
-        Uses RefPlanes.AddNormalToCurveAtArcLengthRatio(Curve, OrientationPlane,
-        Ratio, normalOrientation, selectedCurveEnd).
+        Full signature: AddNormalToCurveAtArcLengthRatio(Curve, OrientationPlane,
+        ArcLengthRatio, XAxisRotation, normalOrientation, arcLengthRatioOrigin,
+        [Local], [ParentCurve]). XAxisRotation is passed as 0.0.
 
         Args:
             curve_edge_index: 0-based edge index on the body to use as curve
@@ -820,7 +854,12 @@ class RefPlaneMixin:
             orient_plane = ref_planes.Item(orientation_plane_index)
 
             ref_planes.AddNormalToCurveAtArcLengthRatio(
-                curve, orient_plane, ratio, normal_side, ReferenceElementConstants.igCurveEnd
+                curve,
+                orient_plane,
+                ratio,
+                0.0,
+                normal_side,
+                ReferenceElementConstants.igCurveEnd,
             )
 
             return {
@@ -831,7 +870,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_normal_at_distance_along_v2(
         self,
@@ -843,8 +882,9 @@ class RefPlaneMixin:
         """
         Create a reference plane normal to a curve at a distance along the curve.
 
-        Uses RefPlanes.AddNormalToCurveAtDistanceAlongCurve(Curve, OrientationPlane,
-        Distance, normalOrientation, selectedCurveEnd).
+        Full signature: AddNormalToCurveAtDistanceAlongCurve(Curve,
+        OrientationPlane, Distance, XAxisRotation, normalOrientation,
+        distanceOrigin, [Local], [ParentCurve]). XAxisRotation is passed as 0.0.
 
         Args:
             curve_edge_index: 0-based edge index on the body to use as curve
@@ -876,7 +916,12 @@ class RefPlaneMixin:
             orient_plane = ref_planes.Item(orientation_plane_index)
 
             ref_planes.AddNormalToCurveAtDistanceAlongCurve(
-                curve, orient_plane, distance, normal_side, ReferenceElementConstants.igCurveEnd
+                curve,
+                orient_plane,
+                distance,
+                0.0,
+                normal_side,
+                ReferenceElementConstants.igCurveEnd,
             )
 
             return {
@@ -887,7 +932,7 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_ref_plane_tangent_parallel(
         self,
@@ -942,4 +987,4 @@ class RefPlaneMixin:
                 "new_plane_index": ref_planes.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -1,10 +1,14 @@
 # Solid Edge Type Library Implementation Map
 
-Generated: 2026-02-18 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
-Current: 110 composite MCP tools + 52 MCP resources = 162 endpoints
+Generated: 2026-02-18, counts reconciled 2026-09-18 | Source: 40 type libraries, 2,240 interfaces, 21,237 methods
+Current: 119 composite MCP tools + 53 MCP resources + 2 guide resources = 174 endpoints
 
 This document maps every actionable COM API surface from the Solid Edge type libraries
 against our current MCP tool coverage. It identifies gaps and prioritizes what to implement next.
+
+> A checked box here means the call is **wired**, not that it works. Whether a wired call
+> builds what it claims, refuses with evidence, or has never been driven is the question
+> `VERIFICATION_STATUS.md` answers; read that before trusting a checkmark below.
 
 ## Coverage Summary
 
@@ -17,21 +21,21 @@ against our current MCP tool coverage. It identifies gaps and prioritizes what t
 | **Geometry/Topology** |     2    |     0    |     2   |      0      |       15 /  19       |
 | **Total**             | **77**   |  **57**  |  **16** |    **4**    | **397 / 413 (96%)**  |
 
-**110 composite MCP tools + 52 MCP resources** registered. Tools use match/case dispatch
+**119 composite MCP tools + 53 MCP resources + 2 guide resources** registered. Tools use match/case dispatch
 to consolidate related methods into single composites (e.g. `create_extrude(method=...)` covers
-11 extrusion methods). 52 read-only endpoints use MCP Resources with `solidedge://` URIs.
+11 extrusion methods). 53 read-only endpoints use MCP Resources with `solidedge://` URIs.
 
-## Tool Count by Category (107 tools + 52 resources)
+## Tool Count by Category (119 tools + 53 resources + 2 guides)
 
 | Category                  | Tools | Description |
 |:--------------------------|:-----:|:---|
 | **Connection/App**        | 7     | manage_connection, app_command, app_config, convert_by_file_path, arrange_windows, get_active_command, run_macro |
 | **Documents**             | 7     | create_document, open_document, close_document, save_document, undo_redo, activate_document, import_file |
-| **Sketching**             | 5     | manage_sketch, draw, sketch_modify, sketch_constraint, sketch_project |
-| **Features (Part)**       | 49    | 45 composites (extrude, revolve, cutouts, loft, sweep, helix, rounds, chamfers, holes, ref planes, patterns, mirror, surfaces, sheet metal, body ops, simplify, manage) + 4 standalone |
+| **Sketching**             | 7     | manage_sketch, draw, sketch_modify, sketch_advanced_modify, sketch_constraint, sketch_project, draw_3d_line |
+| **Features (Part)**       | 50    | extrude, revolve, cutouts, loft, sweep, helix, primitives, rounds, chamfers, blends, holes, threads, ref planes, patterns, mirror, split, face operations, surfaces, thicken, sheet metal (base, flanges, lofted flange, bend, slot, drawn cutout, dimple, louver, stamped, misc), simplify, manage_feature |
 | **Query/Analysis**        | 14    | measure, manage_variable/property/material, set_appearance, manage_layer, select_set, edit_feature_extent, manage_feature_tree, query_edge/face/body/bspline, recompute |
-| **Export/Drawing**        | 14    | export_file, add_drawing_view, manage_drawing_view, add_annotation, add_2d_dimension, camera_control, display_control, manage_sheet, print_control, query_sheet, manage_annotation_data, add_smart_frame, draft_config, create_table |
-| **Assembly**              | 12    | add_assembly_component, manage_component, query_component, set_component_appearance, transform_component, add_assembly_constraint, add_assembly_relation, manage_relation, assembly_feature, virtual_component, structural_frame, wiring |
+| **Export/Drawing**        | 18    | export_file, add_drawing_view, manage_drawing_view, add_annotation, add_dimension_annotation, add_symbol_annotation, add_2d_dimension, camera_control, set_camera, display_control, manage_sheet, print_control, query_sheet, draw_sheet_geometry, manage_annotation_data, add_smart_frame, draft_config, create_table |
+| **Assembly**              | 14    | add_assembly_component, manage_component, query_component, set_component_appearance, transform_component, set_component_orientation, rotate_component, add_assembly_constraint, add_assembly_relation, manage_relation, assembly_feature, virtual_component, structural_frame, wiring |
 | **Diagnostics**           | 2     | diagnose_api, diagnose_feature |
 
 ## Part 1: Part Feature Collections (Part.tlb)
@@ -275,8 +279,8 @@ are known broken due to SAFEARRAY(VT_DISPATCH) marshaling issues in late binding
 - [x] `AddSync` - via `create_thicken_sync`
 
 #### MirrorCopies Collection (4 methods)
-- ~~`Add` / `AddSync` - Mirror copy (partially broken - feature tree entry but no geometry)~~
-- [x] `AddSyncEx` - via `create_mirror_sync_ex` (implemented, though may have same geometry limitation)
+- [x] `AddSync` - via `create_mirror`, synchronous documents only; the mirrored feature must itself have been built synchronously (verified live, volume-checked). Ordered `Add` records a feature and builds nothing.
+- ~~`AddSyncEx`~~ - `create_mirror_sync_ex` refuses: the signature is not usable through late binding
 
 #### Etches Collection
 - [x] `Add` - via `create_etch`
@@ -688,12 +692,14 @@ Key interfaces for precise geometry queries:
 
 ## Known Limitations
 
-1. **Assembly constraints** require face/edge geometry selection which is complex to automate via COM
+The authoritative list of what refuses and why, with the evidence for each, is `VERIFICATION_STATUS.md`. This is the wiring-level view.
+
+1. **Assembly relations** take `Reference` objects, not faces: `AssemblyDocument.CreateReference(occurrence, face)`. Planar and axial relations and the mate/align constraints build that way; the angle constraint still refuses (no way to pick its elements).
 2. **Feature patterns** (non-Ex variants): `AddByRectangular`, `AddByCircular`, `AddByCurve` require SAFEARRAY(IDispatch) that fails in late binding. Use `Ex` variants instead.
 3. **RecognizeAndCreatePatterns**: SAFEARRAY(Hole*) + in/out array params — infeasible in late binding
 4. **Shell/Thinwalls** requires face selection for open faces, not automatable via COM
 5. **Cutout via models.Add*Cutout** does NOT work - must use collection-level methods (ExtrudedCutouts.AddFiniteMulti)
-6. **Mirror copy**: `Add` / `AddSync` create feature tree entry but no geometry via COM (partially broken). `AddSyncEx` is implemented but may have same limitation.
+6. **Mirror copy**: ordered `Add` records a feature and builds nothing; `AddSync` builds when the part and the mirrored feature are synchronous, and `create_mirror` is volume-verified. `AddSyncEx` refuses.
 7. **Extrude thin wall/infinite** via models.AddExtrudedProtrusionWithThinWall has unknown extra params
 8. **Event sinks** (GetModelessTaskEventSource, SensorEvents): require COM event sink setup, not feasible in MCP tool model
 9. **BlueSurf full editing** (21 methods): Multiple SAFEARRAY(VT_DISPATCH) params for guide curves — basic creation works but full editing interface infeasible

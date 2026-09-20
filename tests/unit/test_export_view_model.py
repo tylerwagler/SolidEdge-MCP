@@ -6,9 +6,16 @@ camera dynamics, and coordinate transforms.
 Uses unittest.mock to simulate COM objects.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
+
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
 
 
 @pytest.fixture
@@ -18,6 +25,7 @@ def view_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
 
     window = MagicMock()
@@ -85,6 +93,20 @@ class TestGetCamera:
         result = vm.get_camera()
         assert result["perspective"] is True
         assert result["scale_or_angle"] == 0.785
+        # ScaleOrAngle is a field-of-view angle in radians when perspective is
+        # on; the boundary reports degrees. Verified live: set 0.5, read 0.5.
+        assert result["field_of_view_radians"] == 0.785
+        assert result["field_of_view_degrees"] == pytest.approx(math.degrees(0.785))
+        assert "scale" not in result
+
+    def test_orthographic_names_it_a_scale(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        view_obj.GetCamera.return_value = (1, 2, 3, 0, 0, 0, 0, 1, 0, False, 1.5)
+
+        result = vm.get_camera()
+
+        assert result["scale"] == 1.5
+        assert "field_of_view_degrees" not in result
 
 
 class TestSetCamera:
@@ -99,14 +121,23 @@ class TestSetCamera:
             1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, False, 1.0
         )
 
-    def test_with_perspective(self, view_mgr):
+    def test_with_perspective_takes_degrees_and_sends_radians(self, view_mgr):
+        """This test used to pin 0.785 passing straight through -- radians in,
+        radians out -- against the project's degrees-at-the-boundary rule."""
         vm, doc, view_obj = view_mgr
-        result = vm.set_camera(0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, 0.785)
+        result = vm.set_camera(0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, 45.0)
         assert result["status"] == "camera_set"
         assert result["perspective"] is True
         assert result["up"] == [0.0, 0.0, 1.0]
         view_obj.SetCamera.assert_called_once_with(
-            0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, 0.785
+            0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, True, pytest.approx(math.radians(45.0))
+        )
+
+    def test_orthographic_scale_is_not_converted(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        vm.set_camera(1.0, 2.0, 3.0, 0.0, 0.0, 0.0, perspective=False, scale_or_angle=2.5)
+        view_obj.SetCamera.assert_called_once_with(
+            1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, False, 2.5
         )
 
     def test_no_window(self):
@@ -124,12 +155,16 @@ class TestSetCamera:
 class TestRotateCamera:
     def test_success(self, view_mgr):
         vm, doc, view_obj = view_mgr
-        result = vm.rotate_camera(0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        result = vm.rotate_camera(math.radians(90.0), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
         assert result["status"] == "camera_rotated"
-        assert result["angle_rad"] == 0.5
+        # The backend takes radians; the answer is in the degrees the tool
+        # layer -- and the caller -- speak.
+        assert result["angle_degrees"] == pytest.approx(90.0)
         assert result["center"] == [0.0, 0.0, 0.0]
         assert result["axis"] == [0.0, 1.0, 0.0]
-        view_obj.RotateCamera.assert_called_once_with(0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        view_obj.RotateCamera.assert_called_once_with(
+            pytest.approx(math.radians(90.0)), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0
+        )
 
     def test_custom_axis(self, view_mgr):
         vm, doc, view_obj = view_mgr
@@ -317,4 +352,46 @@ class TestTransformScreenToModel:
         dm.get_active_document.return_value = doc
         vm = ViewModel(dm)
         result = vm.transform_screen_to_model(0, 0)
+        assert "error" in result
+
+
+# ============================================================================
+# SET VIEW BACKGROUND (ViewStyle.SetGradientBackground)
+# ============================================================================
+
+
+class TestSetViewBackground:
+    """The background lives on ViewStyle; View has no SetBackgroundColor."""
+
+    def test_uses_view_style_gradient(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        style = MagicMock()
+        view_obj.ViewStyle = style
+
+        result = vm.set_view_background(255, 128, 64)
+
+        assert result["status"] == "updated"
+        assert result["color"] == [255, 128, 64]
+        ole_color = 255 | (128 << 8) | (64 << 16)
+        # SetGradientBackground(eType, crColor1, crColor2, [x], [y]);
+        # 2 is seGradientTypeVertical. Both stops match for a flat background.
+        style.SetGradientBackground.assert_called_once_with(2, ole_color, ole_color)
+        view_obj.SetBackgroundColor.assert_not_called()
+
+    def test_no_view_style(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        type(view_obj).ViewStyle = property(
+            lambda self: (_ for _ in ()).throw(Exception("no ViewStyle"))
+        )
+        try:
+            result = vm.set_view_background(0, 0, 0)
+            assert "error" in result
+        finally:
+            del type(view_obj).ViewStyle
+
+    def test_no_window(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        doc.Windows.Count = 0
+
+        result = vm.set_view_background(0, 0, 0)
         assert "error" in result

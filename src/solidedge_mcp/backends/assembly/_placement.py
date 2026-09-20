@@ -2,10 +2,12 @@
 
 import math
 import os
-import traceback
 from typing import Any
 
+from solidedge_mcp.backends.errors import error_result
+
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -36,8 +38,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -59,15 +62,13 @@ class PlacementMixin:
             return {
                 "status": "added",
                 "file_path": file_path,
-                "name": (
-                    occurrence.Name if hasattr(occurrence, "Name") else os.path.basename(file_path)
-                ),
+                "name": com_get(occurrence, "Name", os.path.basename(file_path)),
                 "position": position,
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
             _logger.error(f"Failed to add component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # Alias for MCP tool compatibility
     place_component = add_component
@@ -103,8 +104,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             ax_rad = math.radians(angle_x)
@@ -118,16 +120,14 @@ class PlacementMixin:
             return {
                 "status": "added",
                 "file_path": file_path,
-                "name": occurrence.Name
-                if hasattr(occurrence, "Name")
-                else os.path.basename(file_path),
+                "name": com_get(occurrence, "Name", os.path.basename(file_path)),
                 "origin": [origin_x, origin_y, origin_z],
                 "angles_degrees": [angle_x, angle_y, angle_z],
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
             _logger.error(f"Failed to add component with transform: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_family_member(
         self,
@@ -145,9 +145,9 @@ class PlacementMixin:
         Args:
             file_path: Path to the Family of Parts file (.par)
             family_member_name: Name of the family member to place
-            x: X position in meters (unused, placement is at origin)
-            y: Y position in meters (unused, placement is at origin)
-            z: Z position in meters (unused, placement is at origin)
+            x: X position in meters
+            y: Y position in meters
+            z: Z position in meters
 
         Returns:
             Dict with status and component info
@@ -159,22 +159,31 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddFamilyByFilename(file_path, family_member_name)
+
+            # AddFamilyByFilename always places at the origin, and x/y/z used to
+            # be accepted and dropped: the caller asked for a position, the part
+            # landed at 0,0,0 and the result still said "added". Move it, the
+            # same way add_family_with_transform does.
+            if (x, y, z) != (0, 0, 0):
+                occ.PutTransform(x, y, z, 0.0, 0.0, 0.0)
 
             return {
                 "status": "added",
                 "file_path": file_path,
                 "family_member": family_member_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
+                "position": [x, y, z],
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
             _logger.error(f"Failed to add family member: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_family_with_transform(
         self,
@@ -205,15 +214,17 @@ class PlacementMixin:
         try:
             _logger.info(
                 "Adding family member with transform: %s from %s",
-                family_member_name, file_path,
+                family_member_name,
+                file_path,
             )
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddFamilyByFilename(file_path, family_member_name)
@@ -228,14 +239,14 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": file_path,
                 "family_member": family_member_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "origin": [origin_x, origin_y, origin_z],
                 "angles_degrees": [angle_x, angle_y, angle_z],
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
             _logger.error(f"Failed to add family member with transform: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_family_with_matrix(
         self,
@@ -267,8 +278,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddFamilyWithMatrix(family_file_path, matrix, member_name)
@@ -280,14 +292,14 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": family_file_path,
                 "family_member": member_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "position": position,
                 "matrix": matrix,
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
             _logger.error(f"Failed to add family member with matrix: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_by_template(
         self,
@@ -313,8 +325,9 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occ = occurrences.AddByTemplate(file_path, template_name)
@@ -323,12 +336,12 @@ class PlacementMixin:
                 "status": "added",
                 "file_path": file_path,
                 "template_name": template_name,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
             _logger.error(f"Failed to add component by template: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_adjustable_part(
         self,
@@ -344,9 +357,9 @@ class PlacementMixin:
 
         Args:
             file_path: Path to the part file (.par)
-            x: X position in meters (unused, placement is at origin)
-            y: Y position in meters (unused, placement is at origin)
-            z: Z position in meters (unused, placement is at origin)
+            x: X position in meters
+            y: Y position in meters
+            z: Z position in meters
 
         Returns:
             Dict with status and component info
@@ -358,22 +371,47 @@ class PlacementMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
-            occ = occurrences.AddAsAdjustablePart(file_path)
+            try:
+                occ = occurrences.AddAsAdjustablePart(file_path)
+            except Exception as exc:
+                # AddAsAdjustablePart answers E_INVALIDARG for any part that is
+                # not already an adjustable part, which reads as a bad argument
+                # when the argument is fine. Reproduced on Solid Edge 2026 with
+                # an ordinary .par, at the origin and offset alike.
+                if "0x80070057" in str(exc) or "-2147024809" in str(exc):
+                    return {
+                        "error": (
+                            f"{file_path} is not an adjustable part. Solid Edge only "
+                            f"accepts a part already built as one -- with adjustable "
+                            f"variables defined in the part -- and answers anything "
+                            f"else with E_INVALIDARG. Add it with method='basic', or "
+                            f"make it adjustable in the Solid Edge UI first."
+                        ),
+                        "file_path": file_path,
+                    }
+                raise
+
+            # AddAsAdjustablePart has no transform overload, so x/y/z were
+            # accepted and dropped. Place, then move.
+            if (x, y, z) != (0, 0, 0):
+                occ.PutTransform(x, y, z, 0.0, 0.0, 0.0)
 
             return {
                 "status": "added",
                 "file_path": file_path,
                 "adjustable": True,
-                "name": occ.Name if hasattr(occ, "Name") else "Unknown",
+                "name": com_get(occ, "Name", "Unknown"),
+                "position": [x, y, z],
                 "index": occurrences.Count - 1,
             }
         except Exception as e:
             _logger.error(f"Failed to add adjustable part: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def reorder_occurrence(
         self,
@@ -397,8 +435,9 @@ class PlacementMixin:
             _logger.info(f"Reordering occurrence {component_index} to {target_index}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -414,7 +453,11 @@ class PlacementMixin:
                 }
 
             occurrence = occurrences.Item(component_index + 1)
-            occurrences.ReorderOccurrence(occurrence, target_index + 1)
+            target = occurrences.Item(target_index + 1)
+            # ReorderOccurrence(OccurrenceToReorder as VT_DISPATCH,
+            #     TargetOccurrence as VT_DISPATCH, AfterTarget as VT_BOOL).
+            # The second argument is the target occurrence, not its index.
+            occurrences.ReorderOccurrence(occurrence, target, True)
 
             return {
                 "status": "reordered",
@@ -423,4 +466,4 @@ class PlacementMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to reorder occurrence: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

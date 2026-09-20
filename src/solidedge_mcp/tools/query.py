@@ -8,15 +8,18 @@ Composite tools use a discriminator parameter (type/action/property/target)
 to dispatch to the correct backend method via match/case.
 """
 
-from typing import Any
+from typing import Any, Literal
 
+from solidedge_mcp.backends.constants import DirectionConstants, ExtentTypeConstants
+from solidedge_mcp.backends.query import DEFAULT_PAGE_LIMIT
 from solidedge_mcp.managers import query_manager
+from solidedge_mcp.tools._registry import register_tool
 
 # ── Group 59: measure ──────────────────────────────────────────────
 
 
 def measure(
-    type: str = "distance",
+    type: Literal["distance", "angle"] = "distance",
     x1: float = 0.0,
     y1: float = 0.0,
     z1: float = 0.0,
@@ -27,17 +30,18 @@ def measure(
     y3: float = 0.0,
     z3: float = 0.0,
 ) -> dict[str, Any]:
-    """Measure distance or angle between 3D points.
+    """Measure between 3D points (meters). Read-only.
 
-    type: 'distance' | 'angle'
-
-    Coordinates in meters. 'angle' returns degrees at vertex (x2,y2,z2).
+    distance: point1 to point2. angle: degrees at vertex point2 between
+    point1 and point3.
     """
     match type:
         case "distance":
-            return query_manager.measure_distance(x1, y1, z1, x2, y2, z2)
+            return query_manager.measure_distance(x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2)
         case "angle":
-            return query_manager.measure_angle(x1, y1, z1, x2, y2, z2, x3, y3, z3)
+            return query_manager.measure_angle(
+                x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2, x3=x3, y3=y3, z3=z3
+            )
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -46,7 +50,16 @@ def measure(
 
 
 def manage_variable(
-    action: str = "set",
+    action: Literal[
+        "set",
+        "add",
+        "query",
+        "rename",
+        "translate",
+        "copy_clipboard",
+        "add_from_clipboard",
+        "set_formula",
+    ] = "set",
     name: str = "",
     value: float | None = None,
     formula: str | None = None,
@@ -55,36 +68,43 @@ def manage_variable(
     pattern: str = "*",
     case_insensitive: bool = True,
 ) -> dict[str, Any]:
-    """Manage document variables.
+    """Manage document variables (Variable Table).
 
-    action: 'set' | 'add' | 'query' | 'rename' | 'translate'
-            | 'copy_clipboard' | 'add_from_clipboard' | 'set_formula'
+    set: name + value in meters, or degrees for an angular variable (the
+    result carries units and value_degrees). add/set_formula: name + formula, a
+    string whose bare numbers are read in the DOCUMENT's units -- on an inch
+    template "0.025" means 0.025 inch, so write "25 mm" to mean 25 mm. The
+    result reports the value Solid Edge computed. A constant formula is stored
+    as a value and reads back with an empty formula; only expressions such as
+    "Width * 2" survive as formulas.
+    rename: name + new_name. query: wildcard pattern [+ case_insensitive].
+    translate/copy_clipboard/add_from_clipboard: name [+ units_type].
     """
     match action:
         case "set":
             if value is None:
                 return {"error": "value is required for 'set' action"}
-            return query_manager.set_variable(name, value)
+            return query_manager.set_variable(name=name, value=value)
         case "add":
             if formula is None:
                 return {"error": "formula is required for 'add' action"}
-            return query_manager.add_variable(name, formula, units_type)
+            return query_manager.add_variable(name=name, formula=formula, units_type=units_type)
         case "query":
-            return query_manager.query_variables(pattern, case_insensitive)
+            return query_manager.query_variables(pattern=pattern, case_insensitive=case_insensitive)
         case "rename":
             if new_name is None:
                 return {"error": "new_name is required for 'rename' action"}
-            return query_manager.rename_variable(name, new_name)
+            return query_manager.rename_variable(old_name=name, new_name=new_name)
         case "translate":
-            return query_manager.translate_variable(name)
+            return query_manager.translate_variable(name=name)
         case "copy_clipboard":
-            return query_manager.copy_variable_to_clipboard(name)
+            return query_manager.copy_variable_to_clipboard(name=name)
         case "add_from_clipboard":
-            return query_manager.add_variable_from_clipboard(name, units_type)
+            return query_manager.add_variable_from_clipboard(name=name, units_type=units_type)
         case "set_formula":
             if formula is None:
                 return {"error": "formula is required for 'set_formula' action"}
-            return query_manager.set_variable_formula(name, formula)
+            return query_manager.set_variable_formula(name=name, formula=formula)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -93,21 +113,18 @@ def manage_variable(
 
 
 def manage_property(
-    action: str,
+    action: Literal["set_document", "set_custom", "delete_custom"],
     name: str = "",
     value: str = "",
 ) -> dict[str, Any]:
-    """Manage document and custom properties.
-
-    action: 'set_document' | 'set_custom' | 'delete_custom'
-    """
+    """Set a document (Title, Author, ...) or custom property, or delete a custom one."""
     match action:
         case "set_document":
-            return query_manager.set_document_property(name, value)
+            return query_manager.set_document_property(name=name, value=value)
         case "set_custom":
-            return query_manager.set_custom_property(name, value)
+            return query_manager.set_custom_property(name=name, value=value)
         case "delete_custom":
-            return query_manager.delete_custom_property(name)
+            return query_manager.delete_custom_property(name=name)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -116,23 +133,22 @@ def manage_property(
 
 
 def manage_material(
-    action: str = "set",
+    action: Literal["set", "set_density", "set_by_name", "get_library"] = "set",
     material_name: str = "",
     density: float = 0.0,
 ) -> dict[str, Any]:
-    """Manage material assignment and density.
+    """Assign material to the active part.
 
-    action: 'set' | 'set_density' | 'set_by_name' | 'get_library'
-
-    density is in kg/m3.
+    set/set_by_name: material_name from the material library.
+    set_density: density in kg/m3. get_library: list library materials.
     """
     match action:
         case "set":
-            return query_manager.set_material(material_name)
+            return query_manager.set_material(material_name=material_name)
         case "set_density":
-            return query_manager.set_material_density(density)
+            return query_manager.set_material_density(density=density)
         case "set_by_name":
-            return query_manager.set_material_by_name(material_name)
+            return query_manager.set_material_by_name(material_name=material_name)
         case "get_library":
             return query_manager.get_material_library()
         case _:
@@ -143,7 +159,7 @@ def manage_material(
 
 
 def set_appearance(
-    target: str,
+    target: Literal["body_color", "face_color", "opacity", "reflectivity"],
     red: int = 0,
     green: int = 0,
     blue: int = 0,
@@ -151,21 +167,22 @@ def set_appearance(
     opacity: float = 1.0,
     reflectivity: float = 0.0,
 ) -> dict[str, Any]:
-    """Set visual appearance of the active part body or a face.
+    """Set part body or face appearance.
 
-    target: 'body_color' | 'face_color' | 'opacity' | 'reflectivity'
-
-    RGB values 0-255. opacity/reflectivity 0.0-1.0.
+    body_color: RGB 0-255. face_color: 0-based face_index + RGB.
+    opacity/reflectivity: 0.0-1.0 on the body.
     """
     match target:
         case "body_color":
-            return query_manager.set_body_color(red, green, blue)
+            return query_manager.set_body_color(red=red, green=green, blue=blue)
         case "face_color":
-            return query_manager.set_face_color(face_index, red, green, blue)
+            return query_manager.set_face_color(
+                face_index=face_index, red=red, green=green, blue=blue
+            )
         case "opacity":
-            return query_manager.set_body_opacity(opacity)
+            return query_manager.set_body_opacity(opacity=opacity)
         case "reflectivity":
-            return query_manager.set_body_reflectivity(reflectivity)
+            return query_manager.set_body_reflectivity(reflectivity=reflectivity)
         case _:
             return {"error": f"Unknown target: {target}"}
 
@@ -174,28 +191,29 @@ def set_appearance(
 
 
 def manage_layer(
-    action: str,
+    action: Literal["add", "activate", "set_properties", "delete"],
     name_or_index: str | int = "",
     show: bool | None = None,
     selectable: bool | None = None,
 ) -> dict[str, Any]:
-    """Manage layers in the active document.
+    """Manage document layers by name (str) or 0-based index (int).
 
-    action: 'add' | 'activate' | 'set_properties' | 'delete'
-
-    name_or_index accepts either a string name or integer index.
+    add requires a name. set_properties: show/selectable (None = unchanged).
+    delete removes the layer.
     """
     match action:
         case "add":
             if not isinstance(name_or_index, str):
                 return {"error": "name_or_index must be a string for 'add' action"}
-            return query_manager.add_layer(name_or_index)
+            return query_manager.add_layer(name=name_or_index)
         case "activate":
-            return query_manager.activate_layer(name_or_index)
+            return query_manager.activate_layer(name_or_index=name_or_index)
         case "set_properties":
-            return query_manager.set_layer_properties(name_or_index, show, selectable)
+            return query_manager.set_layer_properties(
+                name_or_index=name_or_index, show=show, selectable=selectable
+            )
         case "delete":
-            return query_manager.delete_layer(name_or_index)
+            return query_manager.delete_layer(name_or_index=name_or_index)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -204,23 +222,33 @@ def manage_layer(
 
 
 def select_set(
-    action: str,
-    object_type: str = "",
+    action: Literal[
+        "clear",
+        "add",
+        "remove",
+        "all",
+        "copy",
+        "cut",
+        "delete",
+        "suspend_display",
+        "resume_display",
+        "refresh_display",
+    ],
+    object_type: Literal["feature", "face", "plane"] = "feature",
     index: int = 0,
 ) -> dict[str, Any]:
-    """Manage the document selection set.
+    """Manipulate the document SelectSet.
 
-    action: 'clear' | 'add' | 'remove' | 'all' | 'copy' | 'cut'
-            | 'delete' | 'suspend_display' | 'resume_display'
-            | 'refresh_display'
+    add: object_type + 0-based index. remove: 0-based index within the
+    selection. cut/delete remove the selected objects from the model.
     """
     match action:
         case "clear":
             return query_manager.clear_select_set()
         case "add":
-            return query_manager.select_add(object_type, index)
+            return query_manager.select_add(object_type=object_type, index=index)
         case "remove":
-            return query_manager.select_remove(index)
+            return query_manager.select_remove(index=index)
         case "all":
             return query_manager.select_all()
         case "copy":
@@ -241,18 +269,55 @@ def select_set(
 
 # ── Group 66: edit_feature_extent ─────────────────────────────────
 
+_EXTENT_TYPE_CONSTANTS: dict[str, int] = {
+    "finite": ExtentTypeConstants.igFinite,
+    "through_all": ExtentTypeConstants.igThroughAll,
+    "none": ExtentTypeConstants.igNone,
+}
+
+_OFFSET_SIDE_CONSTANTS: dict[str, int] = {
+    "left": DirectionConstants.igLeft,
+    "right": DirectionConstants.igRight,
+}
+
+#: constant.tlb > FeaturePropertyConstants, the ExtentSide/ThicknessSide slot.
+_SIDE_CONSTANTS: dict[str, int] = {
+    "left": DirectionConstants.igLeft,
+    "right": DirectionConstants.igRight,
+    "symmetric": DirectionConstants.igSymmetric,
+}
+
 
 def edit_feature_extent(
-    property: str,
+    property: Literal[
+        "get_direction1",
+        "set_direction1",
+        "get_direction2",
+        "set_direction2",
+        "get_thin_wall",
+        "set_thin_wall",
+        "get_from_face",
+        "set_from_face",
+        "get_body_array",
+        "set_body_array",
+        "get_to_face",
+        "set_to_face",
+        "get_direction1_treatment",
+        "apply_direction1_treatment",
+    ],
     feature_name: str = "",
-    extent_type: int = 0,
+    extent_type: Literal["finite", "through_all", "none"] = "finite",
     distance: float = 0.0,
-    wall_type: int = 0,
-    thickness1: float = 0.0,
-    thickness2: float = 0.0,
+    extent_side: Literal["left", "right", "symmetric"] = "right",
+    thickness: float = 0.0,
+    thickness_side: Literal["left", "right", "symmetric"] = "right",
+    thin_wall: bool = True,
+    add_end_caps: bool = False,
+    remove_inside_material: bool = False,
     offset: float = 0.0,
     body_indices: list[int] | None = None,
-    offset_side: int = 0,
+    multi_body_cut: bool = True,
+    offset_side: Literal["left", "right"] = "left",
     treatment_type: int = 0,
     draft_side: int = 0,
     draft_angle: float = 0.0,
@@ -262,59 +327,80 @@ def edit_feature_extent(
     crown_radius_or_offset: float = 0.0,
     crown_takeoff_angle: float = 0.0,
 ) -> dict[str, Any]:
-    """Edit feature extent, thin wall, face offset, body array, and treatment properties.
+    """Get/set extent data on the named feature. Meters; angles in degrees.
 
-    property: 'get_direction1' | 'set_direction1' | 'get_direction2' | 'set_direction2'
-              | 'get_thin_wall' | 'set_thin_wall' | 'get_from_face' | 'set_from_face'
-              | 'get_body_array' | 'set_body_array' | 'get_to_face' | 'set_to_face'
-              | 'get_direction1_treatment' | 'apply_direction1_treatment'
-
-    extent_type: 13=Finite, 16=ThroughAll, 44=None. offset_side: 1=igLeft, 2=igRight.
-    Distances/thicknesses in meters. Angles in degrees. body_indices are 0-based.
+    set_direction1/2: extent_type + distance (finite only) + extent_side.
+    set_thin_wall: thickness + thickness_side, plus thin_wall / add_end_caps /
+    remove_inside_material. set_from_face: offset (reuses the face already on
+    the feature; a feature with no from-face cannot be edited here).
+    set_body_array: 0-based body_indices + multi_body_cut.
+    set_to_face: offset_side + distance.
+    apply_direction1_treatment: treatment_type, draft_side, draft_angle,
+    crown_* (raw FeaturePropertyConstants ints).
     """
     match property:
         case "get_direction1":
-            return query_manager.get_direction1_extent(feature_name)
+            return query_manager.get_direction1_extent(feature_name=feature_name)
         case "set_direction1":
-            return query_manager.set_direction1_extent(feature_name, extent_type, distance)
+            return query_manager.set_direction1_extent(
+                feature_name=feature_name,
+                extent_type=_EXTENT_TYPE_CONSTANTS[extent_type],
+                distance=distance,
+                extent_side=_SIDE_CONSTANTS[extent_side],
+            )
         case "get_direction2":
-            return query_manager.get_direction2_extent(feature_name)
+            return query_manager.get_direction2_extent(feature_name=feature_name)
         case "set_direction2":
-            return query_manager.set_direction2_extent(feature_name, extent_type, distance)
+            return query_manager.set_direction2_extent(
+                feature_name=feature_name,
+                extent_type=_EXTENT_TYPE_CONSTANTS[extent_type],
+                distance=distance,
+                extent_side=_SIDE_CONSTANTS[extent_side],
+            )
         case "get_thin_wall":
-            return query_manager.get_thin_wall_options(feature_name)
+            return query_manager.get_thin_wall_options(feature_name=feature_name)
         case "set_thin_wall":
             return query_manager.set_thin_wall_options(
-                feature_name,
-                wall_type,
-                thickness1,
-                thickness2,
+                feature_name=feature_name,
+                thickness=thickness,
+                thickness_side=_SIDE_CONSTANTS[thickness_side],
+                thin_wall=thin_wall,
+                add_end_caps=add_end_caps,
+                remove_inside_material=remove_inside_material,
             )
         case "get_from_face":
-            return query_manager.get_from_face_offset(feature_name)
+            return query_manager.get_from_face_offset(feature_name=feature_name)
         case "set_from_face":
-            return query_manager.set_from_face_offset(feature_name, offset)
+            return query_manager.set_from_face_offset(feature_name=feature_name, offset=offset)
         case "get_body_array":
-            return query_manager.get_body_array(feature_name)
+            return query_manager.get_body_array(feature_name=feature_name)
         case "set_body_array":
-            return query_manager.set_body_array(feature_name, body_indices or [])
+            return query_manager.set_body_array(
+                feature_name=feature_name,
+                body_indices=body_indices or [],
+                multi_body_cut=multi_body_cut,
+            )
         case "get_to_face":
-            return query_manager.get_to_face_offset(feature_name)
+            return query_manager.get_to_face_offset(feature_name=feature_name)
         case "set_to_face":
-            return query_manager.set_to_face_offset(feature_name, offset_side, distance)
+            return query_manager.set_to_face_offset(
+                feature_name=feature_name,
+                offset_side=_OFFSET_SIDE_CONSTANTS[offset_side],
+                distance=distance,
+            )
         case "get_direction1_treatment":
-            return query_manager.get_direction1_treatment(feature_name)
+            return query_manager.get_direction1_treatment(feature_name=feature_name)
         case "apply_direction1_treatment":
             return query_manager.apply_direction1_treatment(
-                feature_name,
-                treatment_type,
-                draft_side,
-                draft_angle,
-                crown_type,
-                crown_side,
-                crown_curvature_side,
-                crown_radius_or_offset,
-                crown_takeoff_angle,
+                feature_name=feature_name,
+                treatment_type=treatment_type,
+                draft_side=draft_side,
+                draft_angle=draft_angle,
+                crown_type=crown_type,
+                crown_side=crown_side,
+                crown_curvature_side=crown_curvature_side,
+                crown_radius_or_offset=crown_radius_or_offset,
+                crown_takeoff_angle=crown_takeoff_angle,
             )
         case _:
             return {"error": f"Unknown property: {property}"}
@@ -324,26 +410,24 @@ def edit_feature_extent(
 
 
 def manage_feature_tree(
-    action: str,
+    action: Literal["rename", "suppress", "unsuppress", "set_mode"],
     feature_name: str = "",
     new_name: str = "",
-    mode: str = "",
+    mode: Literal["ordered", "synchronous"] = "ordered",
 ) -> dict[str, Any]:
-    """Manage features in the design tree.
+    """Rename, suppress or unsuppress a feature by name, or set the modeling mode.
 
-    action: 'rename' | 'suppress' | 'unsuppress' | 'set_mode'
-
-    mode: 'ordered' or 'synchronous' (for set_mode).
+    set_mode: mode ordered/synchronous (ignores feature_name).
     """
     match action:
         case "rename":
-            return query_manager.rename_feature(feature_name, new_name)
+            return query_manager.rename_feature(old_name=feature_name, new_name=new_name)
         case "suppress":
-            return query_manager.suppress_feature(feature_name)
+            return query_manager.suppress_feature(feature_name=feature_name)
         case "unsuppress":
-            return query_manager.unsuppress_feature(feature_name)
+            return query_manager.unsuppress_feature(feature_name=feature_name)
         case "set_mode":
-            return query_manager.set_modeling_mode(mode)
+            return query_manager.set_modeling_mode(mode=mode)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -352,31 +436,36 @@ def manage_feature_tree(
 
 
 def query_edge(
-    property: str,
+    property: Literal["endpoints", "length", "tangent", "geometry", "curvature", "vertex"],
     face_index: int = 0,
     edge_index: int = 0,
     param: float = 0.5,
-    which: str = "start",
+    which: Literal["start", "end"] = "start",
 ) -> dict[str, Any]:
-    """Query edge topology and geometry on a face.
+    """Read edge data (read-only). 0-based face_index and edge_index within that face.
 
-    property: 'endpoints' | 'length' | 'tangent' | 'geometry' | 'curvature' | 'vertex'
-
-    param is a 0.0-1.0 parametric position along the edge. which: 'start' or 'end'.
+    tangent/curvature: at param 0.0-1.0 along the edge. vertex: which start/end.
+    Lengths/points in meters.
     """
     match property:
         case "endpoints":
-            return query_manager.get_edge_endpoints(face_index, edge_index)
+            return query_manager.get_edge_endpoints(face_index=face_index, edge_index=edge_index)
         case "length":
-            return query_manager.get_edge_length(face_index, edge_index)
+            return query_manager.get_edge_length(face_index=face_index, edge_index=edge_index)
         case "tangent":
-            return query_manager.get_edge_tangent(face_index, edge_index, param)
+            return query_manager.get_edge_tangent(
+                face_index=face_index, edge_index=edge_index, param=param
+            )
         case "geometry":
-            return query_manager.get_edge_geometry(face_index, edge_index)
+            return query_manager.get_edge_geometry(face_index=face_index, edge_index=edge_index)
         case "curvature":
-            return query_manager.get_edge_curvature(face_index, edge_index, param)
+            return query_manager.get_edge_curvature(
+                face_index=face_index, edge_index=edge_index, param=param
+            )
         case "vertex":
-            return query_manager.get_vertex_point(face_index, edge_index, which)
+            return query_manager.get_vertex_point(
+                face_index=face_index, edge_index=edge_index, which=which
+            )
         case _:
             return {"error": f"Unknown property: {property}"}
 
@@ -385,26 +474,24 @@ def query_edge(
 
 
 def query_face(
-    property: str,
+    property: Literal["normal", "geometry", "loops", "curvature"],
     face_index: int = 0,
     u: float = 0.5,
     v: float = 0.5,
 ) -> dict[str, Any]:
-    """Query face topology and geometry.
+    """Read face data (read-only). 0-based face_index.
 
-    property: 'normal' | 'geometry' | 'loops' | 'curvature'
-
-    u, v are parametric coordinates on the face (0.0-1.0).
+    normal/curvature: evaluated at parametric (u, v) in 0.0-1.0.
     """
     match property:
         case "normal":
-            return query_manager.get_face_normal(face_index, u, v)
+            return query_manager.get_face_normal(face_index=face_index, u=u, v=v)
         case "geometry":
-            return query_manager.get_face_geometry(face_index)
+            return query_manager.get_face_geometry(face_index=face_index)
         case "loops":
-            return query_manager.get_face_loops(face_index)
+            return query_manager.get_face_loops(face_index=face_index)
         case "curvature":
-            return query_manager.get_face_curvature(face_index, u, v)
+            return query_manager.get_face_curvature(face_index=face_index, u=u, v=v)
         case _:
             return {"error": f"Unknown property: {property}"}
 
@@ -413,7 +500,19 @@ def query_face(
 
 
 def query_body(
-    property: str,
+    property: Literal[
+        "extreme_point",
+        "faces_by_ray",
+        "shells",
+        "vertices",
+        "shell_info",
+        "point_inside",
+        "user_physical_properties",
+        "facet_data",
+        "faces",
+        "edges",
+        "spatial_context",
+    ],
     direction_x: float = 0.0,
     direction_y: float = 0.0,
     direction_z: float = 0.0,
@@ -425,39 +524,56 @@ def query_body(
     z: float = 0.0,
     shell_index: int = 0,
     tolerance: float = 0.0,
+    offset: int = 0,
+    limit: int = DEFAULT_PAGE_LIMIT,
 ) -> dict[str, Any]:
-    """Query body-level topology and geometry.
+    """Read body-level topology (read-only). Meters.
 
-    property: 'extreme_point' | 'faces_by_ray' | 'shells' | 'vertices'
-              | 'shell_info' | 'point_inside' | 'user_physical_properties'
-              | 'facet_data'
+    extreme_point: farthest point along direction_x/y/z.
+    faces_by_ray: ray from origin_x/y/z along direction_x/y/z.
+    shell_info: 0-based shell_index. point_inside: x,y,z.
+    facet_data: tessellate at tolerance (0 = default).
+    spatial_context: body count, bounding box with center, whether the body
+    sits on the origin, the open sketch's plane, and the plane-to-axis map.
 
-    All coordinates and tolerance in meters.
+    faces / edges / vertices / shells are PAGED: they walk the collection one
+    COM call per entity, so they return at most `limit` items starting at the
+    0-based `offset` (default 200, hard ceiling 2000). The reply is
+    {total, offset, limit, items, truncated}; keep raising `offset` by `limit`
+    while `truncated` is true.
     """
     match property:
         case "extreme_point":
-            return query_manager.get_body_extreme_point(direction_x, direction_y, direction_z)
+            return query_manager.get_body_extreme_point(
+                direction_x=direction_x, direction_y=direction_y, direction_z=direction_z
+            )
         case "faces_by_ray":
             return query_manager.get_faces_by_ray(
-                origin_x,
-                origin_y,
-                origin_z,
-                direction_x,
-                direction_y,
-                direction_z,
+                origin_x=origin_x,
+                origin_y=origin_y,
+                origin_z=origin_z,
+                direction_x=direction_x,
+                direction_y=direction_y,
+                direction_z=direction_z,
             )
+        case "faces":
+            return query_manager.get_body_faces(offset=offset, limit=limit)
+        case "edges":
+            return query_manager.get_body_edges(offset=offset, limit=limit)
         case "shells":
-            return query_manager.get_body_shells()
+            return query_manager.get_body_shells(offset=offset, limit=limit)
         case "vertices":
-            return query_manager.get_body_vertices()
+            return query_manager.get_body_vertices(offset=offset, limit=limit)
+        case "spatial_context":
+            return query_manager.get_spatial_context()
         case "shell_info":
-            return query_manager.get_shell_info(shell_index)
+            return query_manager.get_shell_info(shell_index=shell_index)
         case "point_inside":
-            return query_manager.is_point_inside_body(x, y, z)
+            return query_manager.is_point_inside_body(x=x, y=y, z=z)
         case "user_physical_properties":
             return query_manager.get_user_physical_properties()
         case "facet_data":
-            return query_manager.get_body_facet_data(tolerance)
+            return query_manager.get_body_facet_data(tolerance=tolerance)
         case _:
             return {"error": f"Unknown property: {property}"}
 
@@ -466,19 +582,21 @@ def query_body(
 
 
 def query_bspline(
-    type: str,
+    type: Literal["curve", "surface"],
     face_index: int = 0,
     edge_index: int = 0,
 ) -> dict[str, Any]:
-    """Query B-spline (NURBS) metadata from edges or faces.
+    """Read NURBS metadata (read-only). curve: 0-based face_index + edge_index.
 
-    type: 'curve' | 'surface'
+    surface: 0-based face_index.
     """
     match type:
         case "curve":
-            return query_manager.get_bspline_curve_info(face_index, edge_index)
+            return query_manager.get_bspline_curve_info(
+                face_index=face_index, edge_index=edge_index
+            )
         case "surface":
-            return query_manager.get_bspline_surface_info(face_index)
+            return query_manager.get_bspline_surface_info(face_index=face_index)
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -486,11 +604,8 @@ def query_bspline(
 # ── Composite: recompute ──────────────────────────────────────────
 
 
-def recompute(scope: str = "model") -> dict[str, Any]:
-    """Recompute the active model or document.
-
-    scope: 'model' | 'document'
-    """
+def recompute(scope: Literal["model", "document"] = "model") -> dict[str, Any]:
+    """Recompute the active model (feature tree) or the whole document."""
     match scope:
         case "model":
             return query_manager.recompute()
@@ -505,17 +620,18 @@ def recompute(scope: str = "model") -> dict[str, Any]:
 
 def register(mcp: Any) -> None:
     """Register query tools with the MCP server."""
-    mcp.tool()(measure)
-    mcp.tool()(manage_variable)
-    mcp.tool()(manage_property)
-    mcp.tool()(manage_material)
-    mcp.tool()(set_appearance)
-    mcp.tool()(manage_layer)
-    mcp.tool()(select_set)
-    mcp.tool()(edit_feature_extent)
-    mcp.tool()(manage_feature_tree)
-    mcp.tool()(query_edge)
-    mcp.tool()(query_face)
-    mcp.tool()(query_body)
-    mcp.tool()(query_bspline)
-    mcp.tool()(recompute)
+    tags = {"query"}
+    register_tool(mcp, measure, tags=tags, read_only=True)
+    register_tool(mcp, manage_variable, tags=tags)
+    register_tool(mcp, manage_property, tags=tags, destructive=True)
+    register_tool(mcp, manage_material, tags=tags)
+    register_tool(mcp, set_appearance, tags=tags, idempotent=True)
+    register_tool(mcp, manage_layer, tags=tags, destructive=True)
+    register_tool(mcp, select_set, tags=tags, destructive=True)
+    register_tool(mcp, edit_feature_extent, tags=tags)
+    register_tool(mcp, manage_feature_tree, tags=tags)
+    register_tool(mcp, query_edge, tags=tags, read_only=True)
+    register_tool(mcp, query_face, tags=tags, read_only=True)
+    register_tool(mcp, query_body, tags=tags, read_only=True)
+    register_tool(mcp, query_bspline, tags=tags, read_only=True)
+    register_tool(mcp, recompute, tags=tags, idempotent=True)

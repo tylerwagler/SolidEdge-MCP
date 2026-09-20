@@ -1,8 +1,10 @@
 """Document properties, feature counts, reference planes, modeling mode, and recompute."""
 
 import contextlib
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.comutil import com_get
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import ModelingModeConstants
 from ..logging import get_logger
@@ -19,26 +21,25 @@ class DocumentQueryMixin:
             doc = self.doc_manager.get_active_document()
 
             properties = {
-                "name": doc.Name if hasattr(doc, "Name") else "Unknown",
-                "path": doc.FullName if hasattr(doc, "FullName") else "Unsaved",
-                "modified": not doc.Saved if hasattr(doc, "Saved") else False,
-                "read_only": doc.ReadOnly if hasattr(doc, "ReadOnly") else False,
+                "name": com_get(doc, "Name", "Unknown"),
+                "path": com_get(doc, "FullName", "Unsaved"),
+                "modified": com_get(doc, "Dirty", False),
+                "read_only": com_get(doc, "ReadOnly", False),
             }
 
-            # Try to get summary info
-            try:
-                if hasattr(doc, "SummaryInfo"):
-                    summary = doc.SummaryInfo
-                    if hasattr(summary, "Title"):
-                        properties["title"] = summary.Title
-                    if hasattr(summary, "Author"):
-                        properties["author"] = summary.Author
-                    if hasattr(summary, "Subject"):
-                        properties["subject"] = summary.Subject
-                    if hasattr(summary, "Comments"):
-                        properties["comments"] = summary.Comments
-            except Exception:
-                pass
+            # Summary info. com_get rather than hasattr: the probe reads False
+            # both for a member that is absent and for one whose getter raised.
+            summary = com_get(doc, "SummaryInfo")
+            if summary is not None:
+                for key, member in (
+                    ("title", "Title"),
+                    ("author", "Author"),
+                    ("subject", "Subject"),
+                    ("comments", "Comments"),
+                ):
+                    value = com_get(summary, member)
+                    if value is not None:
+                        properties[key] = value
 
             # Add body topology info
             try:
@@ -51,7 +52,7 @@ class DocumentQueryMixin:
 
             return properties
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_document_property(self, name: str, value: str) -> dict[str, Any]:
         """
@@ -69,10 +70,9 @@ class DocumentQueryMixin:
             doc = self.doc_manager.get_active_document()
 
             # SummaryInfo contains standard document properties
-            if not hasattr(doc, "SummaryInfo"):
+            summary = com_get(doc, "SummaryInfo")
+            if summary is None:
                 return {"error": "SummaryInfo not available on this document"}
-
-            summary = doc.SummaryInfo
 
             prop_map = {
                 "Title": "Title",
@@ -93,7 +93,7 @@ class DocumentQueryMixin:
 
             return {"status": "set", "property": name, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_count(self) -> dict[str, Any]:
         """Get count of features in the document"""
@@ -102,69 +102,30 @@ class DocumentQueryMixin:
 
             counts = {}
 
-            if hasattr(doc, "DesignEdgebarFeatures"):
-                counts["features"] = doc.DesignEdgebarFeatures.Count
-
-            if hasattr(doc, "Models"):
-                counts["models"] = doc.Models.Count
-
-            if hasattr(doc, "ProfileSets"):
-                counts["sketches"] = doc.ProfileSets.Count
-
-            if hasattr(doc, "RefPlanes"):
-                counts["ref_planes"] = doc.RefPlanes.Count
-
-            if hasattr(doc, "Variables"):
-                counts["variables"] = doc.Variables.Count
+            for key, member in (
+                ("features", "DesignEdgebarFeatures"),
+                ("models", "Models"),
+                ("sketches", "ProfileSets"),
+                ("ref_planes", "RefPlanes"),
+                ("variables", "Variables"),
+            ):
+                collection = com_get(doc, member)
+                count = com_get(collection, "Count")
+                if count is not None:
+                    counts[key] = count
 
             return counts
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def list_features(self) -> dict[str, Any]:
-        """
-        List all features in the active document.
-
-        Uses Model.Features collection and DesignEdgebarFeatures for the feature tree.
-
-        Returns:
-            Dict with list of features
-        """
-        try:
-            doc, model = self._get_first_model()
-
-            features = []
-
-            # Use DesignEdgebarFeatures for the full feature tree
-            if hasattr(doc, "DesignEdgebarFeatures"):
-                debf = doc.DesignEdgebarFeatures
-                for i in range(1, debf.Count + 1):
-                    try:
-                        feat = debf.Item(i)
-                        feat_info = {
-                            "index": i - 1,
-                            "name": feat.Name if hasattr(feat, "Name") else f"Feature_{i}",
-                        }
-                        features.append(feat_info)
-                    except Exception:
-                        features.append({"index": i - 1, "name": f"Feature_{i}"})
-            else:
-                # Fallback to Model.Features
-                model_features = model.Features
-                for i in range(1, model_features.Count + 1):
-                    try:
-                        feat = model_features.Item(i)
-                        feat_info = {
-                            "index": i - 1,
-                            "name": feat.Name if hasattr(feat, "Name") else f"Feature_{i}",
-                        }
-                        features.append(feat_info)
-                    except Exception:
-                        features.append({"index": i - 1, "name": f"Feature_{i}"})
-
-            return {"features": features, "count": len(features)}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+    # QueryManager once carried a second list_features() of its own. It
+    # numbered DesignEdgebarFeatures from zero, so it counted the reference
+    # planes as features and every index it reported was three too high --
+    # the same bug fixed in get_feature_status. Nothing called it: the
+    # solidedge://model/features resource has always used
+    # feature_manager.list_features(), which enumerates Models.Item(n).Features
+    # and is the index every index-taking tool speaks. It is deleted rather
+    # than fixed, because two enumerations under one name is how they drift.
 
     def get_ref_planes(self) -> dict[str, Any]:
         """
@@ -179,10 +140,10 @@ class DocumentQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "RefPlanes"):
+            ref_planes = com_get(doc, "RefPlanes")
+            if ref_planes is None:
                 return {"error": "Document does not have reference planes"}
 
-            ref_planes = doc.RefPlanes
             planes = []
 
             default_names = {1: "Top (XZ)", 2: "Front (XY)", 3: "Right (YZ)"}
@@ -215,7 +176,7 @@ class DocumentQueryMixin:
                 "create_ref_plane_by_offset",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_modeling_mode(self) -> dict[str, Any]:
         """
@@ -239,7 +200,7 @@ class DocumentQueryMixin:
             except Exception:
                 return {"error": "ModelingMode not available on this document type"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_modeling_mode(self, mode: str) -> dict[str, Any]:
         """
@@ -283,7 +244,7 @@ class DocumentQueryMixin:
             except Exception as e:
                 return {"error": f"Cannot change modeling mode: {e}"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def recompute(self) -> dict[str, Any]:
         """
@@ -312,7 +273,7 @@ class DocumentQueryMixin:
 
             return {"status": "recomputed"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def recompute_document(self) -> dict[str, Any]:
         """
@@ -329,4 +290,4 @@ class DocumentQueryMixin:
             doc.Recompute()
             return {"status": "recomputed_document"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

@@ -8,9 +8,16 @@ GetOccurrenceStyle, GetFaceStyle, GetOccurrence.
 Uses unittest.mock to simulate COM objects.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
+
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
 
 
 @pytest.fixture
@@ -20,6 +27,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -32,6 +40,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -43,14 +52,15 @@ def asm_mgr_with_sketch():
 
 class TestGetOccurrenceBoundingBox:
     def test_success(self, asm_mgr):
+        """GetRangeBox returns the points; it does not fill the buffers.
+
+        This test used to mock it as mutating its arguments, which is not what
+        pywin32 does with an [in,out] SAFEARRAY. Real components therefore came
+        back with a zero-sized box, verified against Solid Edge 2026.
+        """
         am, doc = asm_mgr
         occ = MagicMock()
-
-        def mock_get_range_box(min_pt, max_pt):
-            min_pt[0], min_pt[1], min_pt[2] = 0.0, 0.0, 0.0
-            max_pt[0], max_pt[1], max_pt[2] = 0.1, 0.2, 0.3
-
-        occ.GetRangeBox = mock_get_range_box
+        occ.GetRangeBox.return_value = ((0.0, 0.0, 0.0), (0.1, 0.2, 0.3))
 
         occurrences = MagicMock()
         occurrences.Count = 2
@@ -62,6 +72,10 @@ class TestGetOccurrenceBoundingBox:
         assert result["min"] == [0.0, 0.0, 0.0]
         assert result["max"] == [0.1, 0.2, 0.3]
         assert result["size"] == pytest.approx([0.1, 0.2, 0.3])
+        # Two plain lists, sized 3, and nothing else.
+        args, kwargs = occ.GetRangeBox.call_args
+        assert args == ([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+        assert not kwargs
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
@@ -148,7 +162,7 @@ class TestGetBom:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_bom()
         assert "error" in result
@@ -233,7 +247,7 @@ class TestGetDocumentTree:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_document_tree()
         assert "error" in result
@@ -248,7 +262,8 @@ class TestGetComponentDisplayName:
     def test_success(self, asm_mgr):
         am, doc = asm_mgr
         occ = MagicMock()
-        occ.DisplayName = "Bolt M10x30"
+        # Occurrence has no DisplayName; Name is what Solid Edge shows.
+        del occ.DisplayName
         occ.Name = "Bolt_1"
         occ.OccurrenceFileName = "C:/parts/bolt.par"
         occurrences = MagicMock()
@@ -257,7 +272,7 @@ class TestGetComponentDisplayName:
         doc.Occurrences = occurrences
 
         result = am.get_component_display_name(0)
-        assert result["display_name"] == "Bolt M10x30"
+        assert result["display_name"] == "Bolt_1"
         assert result["name"] == "Bolt_1"
         assert result["file_name"] == "C:/parts/bolt.par"
 
@@ -272,7 +287,7 @@ class TestGetComponentDisplayName:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_component_display_name(0)
         assert "error" in result
@@ -303,7 +318,9 @@ class TestGetOccurrenceDocument:
         result = am.get_occurrence_document(0)
         assert result["document_name"] == "bolt.par"
         assert result["full_name"] == "C:/parts/bolt.par"
-        assert result["type"] == 1
+        # A bare 1 does not say "part"; the name leads and the code follows.
+        assert result["type"] == "part"
+        assert result["type_code"] == 1
         assert result["read_only"] is False
 
     def test_invalid_index(self, asm_mgr):
@@ -317,7 +334,7 @@ class TestGetOccurrenceDocument:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_occurrence_document(0)
         assert "error" in result
@@ -331,13 +348,17 @@ class TestGetOccurrenceDocument:
 class TestGetSubOccurrences:
     def test_with_children(self, asm_mgr):
         am, doc = asm_mgr
+        # A SubOccurrence names its file SubOccurrenceFileName;
+        # OccurrenceFileName is on Occurrence, so the key was always missing.
         child1 = MagicMock()
         child1.Name = "SubPart_1"
-        child1.OccurrenceFileName = "C:/parts/sub1.par"
+        child1.SubOccurrenceFileName = "C:/parts/sub1.par"
+        del child1.OccurrenceFileName
 
         child2 = MagicMock()
         child2.Name = "SubPart_2"
-        child2.OccurrenceFileName = "C:/parts/sub2.par"
+        child2.SubOccurrenceFileName = "C:/parts/sub2.par"
+        del child2.OccurrenceFileName
 
         sub_occs = MagicMock()
         sub_occs.Count = 2
@@ -382,7 +403,7 @@ class TestGetSubOccurrences:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_sub_occurrences(0)
         assert "error" in result
@@ -394,9 +415,37 @@ class TestGetSubOccurrences:
 
 
 class TestCheckInterference:
+    def test_reports_unsupported_without_calling_com(self, asm_mgr):
+        """CheckInterference cannot be driven from pywin32.
+
+        Status is an [out] enum pointer and NumInterferences an
+        [out, optional] variant, with six more optionals behind them. Every
+        argument shape tried against Solid Edge 2026 failed: supplying buffers
+        gave a buffer-parse error, omitting them DISP_E_TYPEMISMATCH.
+        """
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        occurrences.Item.side_effect = lambda i: MagicMock()
+        doc.Occurrences = occurrences
+
+        result = am.check_interference()
+        assert result["unsupported"] is True
+        assert "bounding_box" in result["error"]
+        doc.CheckInterference.assert_not_called()
+
+    def test_invalid_index_still_validated(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 2
+        doc.Occurrences = occurrences
+
+        result = am.check_interference(99)
+        assert "Invalid component index" in result["error"]
+
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.check_interference()
         assert "error" in result
@@ -464,7 +513,7 @@ class TestIsSubassembly:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.is_subassembly(0)
         assert "error" in result
@@ -476,38 +525,66 @@ class TestIsSubassembly:
 
 
 class TestGetOccurrenceBodies:
-    def test_success(self, asm_mgr):
-        am, doc = asm_mgr
-        body1 = MagicMock()
-        body1.Name = "Body_1"
-        body1.Volume = 0.001
-        body2 = MagicMock()
-        body2.Name = "Body_2"
-        body2.Volume = 0.002
+    """Occurrence.Bodies does not exist; Body is singular."""
 
-        bodies = MagicMock()
-        bodies.Count = 2
-        bodies.Item.side_effect = lambda i: {1: body1, 2: body2}[i]
-
-        occ = MagicMock()
-        occ.Bodies = bodies
+    def _assembly(self, doc, occurrence):
         occurrences = MagicMock()
         occurrences.Count = 2
-        occurrences.Item.return_value = occ
+        occurrences.Item.return_value = occurrence
         doc.Occurrences = occurrences
 
+    def test_reports_the_single_body(self, asm_mgr):
+        am, doc = asm_mgr
+        body = MagicMock()
+        body.Name = "Body_1"
+        body.Volume = 0.001
+        body.IsSolid = True
+        occ = MagicMock()
+        occ.Body = body
+        del occ.Bodies
+        occ.GetSimplifiedBodies.side_effect = Exception("no simplified bodies")
+        self._assembly(doc, occ)
+
         result = am.get_occurrence_bodies(0)
-        assert result["body_count"] == 2
+
+        assert result["body_count"] == 1
         assert result["bodies"][0]["name"] == "Body_1"
         assert result["bodies"][0]["volume"] == 0.001
-        assert result["bodies"][1]["name"] == "Body_2"
+        assert result["bodies"][0]["is_solid"] is True
+
+    def test_adds_the_simplified_bodies(self, asm_mgr):
+        am, doc = asm_mgr
+        main = MagicMock()
+        main.Name = "Body_1"
+        extra = MagicMock()
+        extra.Name = "Body_2"
+        occ = MagicMock()
+        occ.Body = main
+        del occ.Bodies
+        occ.GetSimplifiedBodies.return_value = (1, (extra,))
+        self._assembly(doc, occ)
+
+        result = am.get_occurrence_bodies(0)
+
+        assert [b["name"] for b in result["bodies"]] == ["Body_1", "Body_2"]
+
+    def test_a_component_with_no_body(self, asm_mgr):
+        am, doc = asm_mgr
+        occ = MagicMock()
+        occ.Body = None
+        del occ.Bodies
+        occ.GetSimplifiedBodies.side_effect = Exception("none")
+        self._assembly(doc, occ)
+
+        result = am.get_occurrence_bodies(0)
+
+        assert result["body_count"] == 0
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
-        result = am.get_occurrence_bodies(0)
-        assert "error" in result
+        assert "error" in am.get_occurrence_bodies(0)
 
     def test_invalid_index(self, asm_mgr):
         am, doc = asm_mgr
@@ -515,8 +592,7 @@ class TestGetOccurrenceBodies:
         occurrences.Count = 1
         doc.Occurrences = occurrences
 
-        result = am.get_occurrence_bodies(5)
-        assert "error" in result
+        assert "error" in am.get_occurrence_bodies(5)
 
 
 # ============================================================================
@@ -540,7 +616,7 @@ class TestGetOccurrenceStyle:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_occurrence_style(0)
         assert "error" in result
@@ -573,11 +649,12 @@ class TestGetFaceStyle:
         result = am.get_face_style(0)
         assert result["component_index"] == 0
         assert result["face_style"] == "Aluminum"
-        occ.GetFaceStyle2.assert_called_once()
+        # GetFaceStyle2(vbHonourPrefs as VT_BOOL)
+        occ.GetFaceStyle2.assert_called_once_with(True)
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_face_style(0)
         assert "error" in result
@@ -619,7 +696,7 @@ class TestGetOccurrence:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_occurrence(1)
         assert "error" in result
@@ -634,3 +711,87 @@ class TestGetOccurrence:
         result = am.get_occurrence(99999)
         assert "error" in result
         assert "ID not found" in result["error"]
+
+
+# ============================================================================
+# TRANSFORM UNITS
+# ============================================================================
+
+
+class TestTransformUnits:
+    """GetTransform reports radians; this server's boundary is degrees.
+
+    Every rotation setter (set_component_transform, put_transform_euler,
+    occurrence_rotate) takes degrees, so a caller who read a rotation back
+    and passed it straight to a setter was rotating by 1/57th of what they
+    read. Each read path must hand back degrees.
+    """
+
+    QUARTER_TURN = [0.1, 0.2, 0.3, 0.0, 0.0, math.pi / 2]
+
+    def _occ(self, transform):
+        occ = MagicMock()
+        occ.Name = "Part_1"
+        occ.OccurrenceFileName = "C:/parts/part1.par"
+        occ.GetTransform.return_value = transform
+        occ.Visible = True
+        return occ
+
+    def test_list_components_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        comp = am.list_components()["components"][0]
+        assert comp["position"] == [0.1, 0.2, 0.3]
+        assert comp["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+
+    def test_component_info_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        info = am.get_component_info(0)
+        assert info["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+        assert "rotation_rad" not in info
+
+    def test_component_transform_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        result = am.get_component_transform(0)
+        assert result["origin"] == [0.1, 0.2, 0.3]
+        assert result["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+        assert "rotation_angles" not in result
+
+    def test_get_occurrence_reports_degrees(self, asm_mgr):
+        am, doc = asm_mgr
+        occurrences = MagicMock()
+        occurrences.GetOccurrence.return_value = self._occ(self.QUARTER_TURN)
+        doc.Occurrences = occurrences
+
+        info = am.get_occurrence(42)
+        assert info["rotation_degrees"] == pytest.approx([0.0, 0.0, 90.0])
+
+    def test_round_trip_through_a_setter(self, asm_mgr):
+        """What a read hands back is what a setter accepts."""
+        am, doc = asm_mgr
+        occ = self._occ(self.QUARTER_TURN)
+        occurrences = MagicMock()
+        occurrences.Count = 1
+        occurrences.Item.return_value = occ
+        doc.Occurrences = occurrences
+
+        rotation = am.get_component_transform(0)["rotation_degrees"]
+        am.set_component_transform(0, 0.0, 0.0, 0.0, *rotation)
+
+        # PutTransform takes radians: the degrees we read must arrive back as
+        # the same radians GetTransform reported.
+        assert occ.PutTransform.call_args.args[5] == pytest.approx(math.pi / 2)

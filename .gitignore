@@ -9,8 +9,10 @@ build/
 .pytest_cache/
 *.sqlite3
 .env
-.claude/
-nul
+.claude/settings.local.json
 
 # Generated type library reference (19+ MB JSON)
 reference/typelib_dump.json
+
+# coverage data (uv run pytest --cov)
+.coverage

@@ -2,9 +2,16 @@
 
 import contextlib
 import os
-import traceback
 from typing import Any
 
+import pythoncom
+from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import com_get
+from ..dialogs import dismiss_informational_dialog
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
@@ -14,6 +21,28 @@ class SpecializedMixin:
     """Mixin providing specialized assembly subsystem methods."""
 
     # -- Virtual Components --------------------------------------------------
+
+    def _active_harness(self, doc: Any) -> tuple[Any, dict[str, Any] | None]:
+        """The assembly's harness, creating one when there is none.
+
+        Wires, cables, splices and bundles hang off a Harness, which hangs off
+        AssemblyDocument.Harnesses. Reading them straight from the document
+        raised every time.
+        """
+        harnesses = com_get(doc, "Harnesses")
+        if harnesses is None:
+            return None, {
+                "error": (
+                    "This assembly has no Harnesses collection, so wiring cannot "
+                    "be added. Harness work needs Solid Edge Wire Harness Design."
+                )
+            }
+        try:
+            if int(com_get(harnesses, "Count", 0) or 0):
+                return harnesses.Item(1), None
+            return harnesses.Add(), None
+        except Exception as exc:
+            return None, error_result(exc, context="Could not open a wire harness")
 
     def add_virtual_component(
         self,
@@ -38,8 +67,9 @@ class SpecializedMixin:
             _logger.info(f"Adding virtual component: name={name}, type={component_type}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             type_map = {
                 "Unknown": 1,
@@ -64,7 +94,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add virtual component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_virtual_component_predefined(
         self,
@@ -88,8 +118,9 @@ class SpecializedMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             vc_occs = doc.VirtualComponentOccurrences
             vc_occ = vc_occs.AddAsPreDefined(filename)
@@ -105,7 +136,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add predefined virtual component: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_virtual_component_bidm(
         self,
@@ -131,8 +162,9 @@ class SpecializedMixin:
             _logger.info(f"Adding virtual component via BIDM: doc={doc_number}, rev={revision_id}")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             type_map = {
                 "Unknown": 1,
@@ -158,7 +190,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add virtual component via BIDM: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Tube Operations -----------------------------------------------------
 
@@ -209,7 +241,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to get tube info: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_tube(
         self,
@@ -244,8 +276,9 @@ class SpecializedMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -256,10 +289,7 @@ class SpecializedMixin:
                     return {"error": f"Invalid segment index: {idx}. Count: {occurrences.Count}"}
                 segments.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_segments = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, segments)
+            v_segments = segments
 
             occ = occurrences.AddTube(
                 v_segments,
@@ -286,71 +316,73 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add tube: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Structural Frames ---------------------------------------------------
 
+    @verifies_collection_growth("StructuralFrames")
     def add_structural_frame(
         self,
         part_filename: str,
         path_indices: list[int],
     ) -> dict[str, Any]:
         """
-        Add a structural frame to the assembly.
+        Run a structural frame along 3D sketch lines.
 
-        Uses StructuralFrames.Add with VARIANT-wrapped path array.
+        ``StructuralFrames.Add(PartFileName, NumPaths, Path, GlobalEndConditions,
+        GlobalEndConditionValue, AutoPosition)`` takes the Line3D objects drawn
+        by ``draw_line_3d`` as its Path; verified on Solid Edge 2026 along one
+        and two lines (StructuralFrames.Count grows, an occurrence appears).
+        The first frame in a session raises an informational "Segments group
+        ... 3D Draw" dialog that blocks the call until OK is clicked, so that
+        one dialog is dismissed while the call runs; see backends/dialogs.py.
 
         Args:
-            part_filename: Path to the frame cross-section part file
-            path_indices: 0-based indices of occurrences defining the path
+            part_filename: The frame cross-section part file (must exist).
+            path_indices: 0-based indices of the 3D lines from draw_3d_line.
 
         Returns:
-            Dict with status and frame info
+            Dict with status, frame count, and whether the dialog was dismissed.
         """
         try:
-            _logger.info(
-                "Adding structural frame: part=%s, paths=%d",
-                part_filename, len(path_indices),
-            )
-            if not os.path.exists(part_filename):
-                return {"error": f"File not found: {part_filename}"}
-
             doc = self.doc_manager.get_active_document()
-
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
-
-            occurrences = doc.Occurrences
-
-            paths = []
-            for idx in path_indices:
-                if idx < 0 or idx >= occurrences.Count:
-                    return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
-                paths.append(occurrences.Item(idx + 1))
-
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-
-            frames = doc.StructuralFrames
-            frame = frames.Add(part_filename, len(paths), v_paths)
-
-            result: dict[str, Any] = {
+            err = self._require_assembly(doc)
+            if err:
+                return err
+            if not os.path.exists(part_filename):
+                return {"error": f"Frame part does not exist: {part_filename}"}
+            lines = list(getattr(self.sketch_manager, "lines_3d", None) or [])
+            if not path_indices:
+                return {
+                    "error": (
+                        "path_indices names the 3D lines the frame runs along "
+                        "(draw_3d_line, 0-based); none were given."
+                    )
+                }
+            bad = [i for i in path_indices if i < 0 or i >= len(lines)]
+            if bad:
+                return {
+                    "error": (
+                        f"Invalid path index {bad[0]}: {len(lines)} 3D line(s) drawn in "
+                        "this document with draw_3d_line."
+                    )
+                }
+            path = [lines[i] for i in path_indices]
+            empty = VARIANT(pythoncom.VT_EMPTY, None)
+            with dismiss_informational_dialog("The Segments group of commands") as dialog:
+                doc.StructuralFrames.Add(part_filename, len(path), path, empty, empty, empty)
+            return {
                 "status": "created",
                 "type": "structural_frame",
                 "part_filename": part_filename,
-                "num_paths": len(paths),
+                "path_indices": path_indices,
+                "frames": com_get(doc.StructuralFrames, "Count"),
+                "dialog_dismissed": dialog.dismissed,
             }
-
-            with contextlib.suppress(Exception):
-                result["name"] = frame.Name
-
-            return result
         except Exception as e:
-            _logger.error(f"Failed to add structural frame: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_collection_growth("StructuralFrames")
     def add_structural_frame_by_orientation(
         self,
         part_filename: str,
@@ -358,64 +390,63 @@ class SpecializedMixin:
         path_indices: list[int],
     ) -> dict[str, Any]:
         """
-        Add a structural frame with a specific coordinate system orientation.
+        Structural frames cannot be created through COM automation here.
 
-        Uses StructuralFrames.AddByOrientation.
+        Like ``add_structural_frame``, along 3D sketch lines from ``draw_line_3d``.
 
         Args:
-            part_filename: Path to the frame cross-section part file
-            coord_system_name: Name of the coordinate system to orient by
-            path_indices: 0-based indices of occurrences defining the path
+            part_filename: Unused.
+            coord_system_name: Unused.
+            path_indices: Unused.
 
         Returns:
-            Dict with status and frame info
+            Dict with an ``unsupported`` error.
         """
         try:
-            _logger.info(
-                "Adding structural frame by orientation: part=%s, coord=%s",
-                part_filename, coord_system_name,
-            )
-            if not os.path.exists(part_filename):
-                return {"error": f"File not found: {part_filename}"}
-
             doc = self.doc_manager.get_active_document()
-
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
-
-            occurrences = doc.Occurrences
-
-            paths = []
-            for idx in path_indices:
-                if idx < 0 or idx >= occurrences.Count:
-                    return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
-                paths.append(occurrences.Item(idx + 1))
-
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-
-            frames = doc.StructuralFrames
-            frame = frames.AddByOrientation(coord_system_name, len(paths), v_paths)
-
-            result: dict[str, Any] = {
+            err = self._require_assembly(doc)
+            if err:
+                return err
+            if not os.path.exists(part_filename):
+                return {"error": f"Frame part does not exist: {part_filename}"}
+            lines = list(getattr(self.sketch_manager, "lines_3d", None) or [])
+            if not path_indices:
+                return {
+                    "error": (
+                        "path_indices names the 3D lines the frame runs along "
+                        "(draw_3d_line, 0-based); none were given."
+                    )
+                }
+            bad = [i for i in path_indices if i < 0 or i >= len(lines)]
+            if bad:
+                return {
+                    "error": (
+                        f"Invalid path index {bad[0]}: {len(lines)} 3D line(s) drawn in "
+                        "this document with draw_3d_line."
+                    )
+                }
+            path = [lines[i] for i in path_indices]
+            # StructuralFrames.AddByOrientation(PartFileName, CoOrdinateSystemName,
+            #   NumPaths, Path, PreferredOrientationPlane, GlobalEndConditions,
+            #   GlobalEndConditionValue, AutoPosition). Verified on Solid Edge 2026
+            # with an empty coordinate-system name; the same informational dialog
+            # as Add is dismissed while it runs.
+            empty = VARIANT(pythoncom.VT_EMPTY, None)
+            with dismiss_informational_dialog("The Segments group of commands") as dialog:
+                doc.StructuralFrames.AddByOrientation(
+                    part_filename, coord_system_name, len(path), path, empty, empty, empty, empty
+                )
+            return {
                 "status": "created",
-                "type": "structural_frame_oriented",
+                "type": "structural_frame_by_orientation",
                 "part_filename": part_filename,
-                "coord_system": coord_system_name,
-                "num_paths": len(paths),
+                "coord_system_name": coord_system_name,
+                "path_indices": path_indices,
+                "frames": com_get(doc.StructuralFrames, "Count"),
+                "dialog_dismissed": dialog.dismissed,
             }
-
-            with contextlib.suppress(Exception):
-                result["name"] = frame.Name
-
-            return result
         except Exception as e:
-            _logger.error(f"Failed to add structural frame by orientation: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
-    # -- Splices -------------------------------------------------------------
+            return error_result(e)
 
     def add_splice(
         self,
@@ -444,8 +475,9 @@ class SpecializedMixin:
             _logger.info(f"Adding splice at ({x},{y},{z}) with {len(conductor_indices)} conductors")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -455,12 +487,15 @@ class SpecializedMixin:
                     return {"error": f"Invalid conductor index: {idx}. Count: {occurrences.Count}"}
                 conductors.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
+            v_conductors = conductors
 
-            v_conductors = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, conductors)
-
-            splices = doc.Splices
+            # Splices belongs to a Harness, not to the document; reading it
+            # off the document always raised. A harness is created on
+            # demand so the first wire in an assembly has somewhere to go.
+            harness, err = self._active_harness(doc)
+            if err:
+                return err
+            splices = harness.Splices
             splice = splices.Add(
                 x,
                 y,
@@ -484,7 +519,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add splice: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Wires ---------------------------------------------------------------
 
@@ -508,47 +543,22 @@ class SpecializedMixin:
         Returns:
             Dict with status and wire info
         """
-        try:
-            _logger.info(f"Adding wire with {len(path_indices)} path segments")
-            doc = self.doc_manager.get_active_document()
-
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
-
-            if len(path_indices) != len(path_directions):
-                return {"error": "path_indices and path_directions must have the same length"}
-
-            occurrences = doc.Occurrences
-
-            paths = []
-            for idx in path_indices:
-                if idx < 0 or idx >= occurrences.Count:
-                    return {"error": f"Invalid path index: {idx}. Count: {occurrences.Count}"}
-                paths.append(occurrences.Item(idx + 1))
-
-            import pythoncom
-            from win32com.client import VARIANT
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-            v_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, path_directions)
-
-            wires = doc.Wires
-            wire = wires.Add(len(paths), v_paths, v_dirs, description)
-
-            result: dict[str, Any] = {
-                "status": "created",
-                "type": "wire",
-                "num_paths": len(paths),
-                "description": description,
-            }
-
-            with contextlib.suppress(Exception):
-                result["name"] = wire.Name
-
-            return result
-        except Exception as e:
-            _logger.error(f"Failed to add wire: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        # Wires.Add(NumberOfPaths, PathArray, PathDirectionArray,
+        # ConductorDescription) wants wire-path curves in PathArray: 3D
+        # sketch segments this server cannot draw, the same gap that keeps
+        # structural frames out. This method handed it occurrences instead
+        # and Solid Edge 2026 answered E_FAIL. Say so, without the call.
+        return {
+            "error": (
+                "Wires.Add answers E_FAIL on Solid Edge 2026 given occurrences and "
+                "given a 3D sketch line drawn with draw_3d_line alike. Route wires in "
+                "the Solid Edge UI (Wire Harness Design)."
+            ),
+            "unsupported": True,
+            "path_indices": path_indices,
+            "path_directions": path_directions,
+            "description": description,
+        }
 
     # -- Cables --------------------------------------------------------------
 
@@ -581,8 +591,9 @@ class SpecializedMixin:
             _logger.info(f"Adding cable with {len(path_indices)} paths, {len(wire_indices)} wires")
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             if len(path_indices) != len(path_directions):
                 return {"error": "path_indices and path_directions must have the same length"}
@@ -608,16 +619,19 @@ class SpecializedMixin:
                     return {"error": f"Invalid split path index: {idx}. Count: {occurrences.Count}"}
                 split_paths.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
+            v_paths = paths
+            v_dirs = path_directions
+            v_wires = wires_list
+            v_split_paths = split_paths
+            v_split_dirs = split_dirs
 
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-            v_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, path_directions)
-            v_wires = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, wires_list)
-            v_split_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, split_paths)
-            v_split_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, split_dirs)
-
-            cables = doc.Cables
+            # Cables belongs to a Harness, not to the document; reading it
+            # off the document always raised. A harness is created on
+            # demand so the first wire in an assembly has somewhere to go.
+            harness, err = self._active_harness(doc)
+            if err:
+                return err
+            cables = harness.Cables
             cable = cables.Add(
                 len(paths),
                 v_paths,
@@ -643,7 +657,7 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add cable: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # -- Bundles -------------------------------------------------------------
 
@@ -675,12 +689,14 @@ class SpecializedMixin:
         try:
             _logger.info(
                 "Adding bundle with %d paths, %d conductors",
-                len(path_indices), len(conductor_indices),
+                len(path_indices),
+                len(conductor_indices),
             )
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             if len(path_indices) != len(path_directions):
                 return {"error": "path_indices and path_directions must have the same length"}
@@ -706,16 +722,19 @@ class SpecializedMixin:
                     return {"error": f"Invalid split path index: {idx}. Count: {occurrences.Count}"}
                 split_paths.append(occurrences.Item(idx + 1))
 
-            import pythoncom
-            from win32com.client import VARIANT
+            v_paths = paths
+            v_dirs = path_directions
+            v_conductors = conductors
+            v_split_paths = split_paths
+            v_split_dirs = split_dirs
 
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, paths)
-            v_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, path_directions)
-            v_conductors = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, conductors)
-            v_split_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, split_paths)
-            v_split_dirs = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_BOOL, split_dirs)
-
-            bundles = doc.Bundles
+            # Bundles belongs to a Harness, not to the document; reading it
+            # off the document always raised. A harness is created on
+            # demand so the first wire in an assembly has somewhere to go.
+            harness, err = self._active_harness(doc)
+            if err:
+                return err
+            bundles = harness.Bundles
             bundle = bundles.Add(
                 len(paths),
                 v_paths,
@@ -741,4 +760,4 @@ class SpecializedMixin:
             return result
         except Exception as e:
             _logger.error(f"Failed to add bundle: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

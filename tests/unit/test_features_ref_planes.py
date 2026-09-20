@@ -107,38 +107,31 @@ class TestRefPlaneNormalToCurve:
 
 
 class TestRefPlaneByAngle:
-    def test_success(self, feature_mgr, managers):
+    """AddAngularByAngle needs a Pivot linear element to rotate about."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, _, _ = managers
         ref_planes = MagicMock()
-        ref_planes.Count = 4  # 3 default + 1 new
+        ref_planes.Count = 4
         doc.RefPlanes = ref_planes
 
         result = feature_mgr.create_ref_plane_by_angle(1, 45.0)
-        assert result["status"] == "created"
-        assert result["type"] == "reference_plane"
+        assert result["unsupported"] is True
         assert result["method"] == "angular_by_angle"
         assert result["angle_degrees"] == 45.0
-        ref_planes.AddAngularByAngle.assert_called_once()
+        assert "Pivot" in result["error"]
+        ref_planes.AddAngularByAngle.assert_not_called()
 
-    def test_invalid_plane_index(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
-        ref_planes = MagicMock()
-        ref_planes.Count = 3
-        doc.RefPlanes = ref_planes
-
-        result = feature_mgr.create_ref_plane_by_angle(5, 30.0)
-        assert "error" in result
-        assert "Invalid plane index" in result["error"]
-
-    def test_reverse_side(self, feature_mgr, managers):
+    def test_unsupported_reverse_side(self, feature_mgr, managers):
         _, _, doc, _, _, _ = managers
         ref_planes = MagicMock()
         ref_planes.Count = 4
         doc.RefPlanes = ref_planes
 
         result = feature_mgr.create_ref_plane_by_angle(2, 60.0, normal_side="Reverse")
-        assert result["status"] == "created"
+        assert result["unsupported"] is True
         assert result["normal_side"] == "Reverse"
+        ref_planes.AddAngularByAngle.assert_not_called()
 
 
 # ============================================================================
@@ -147,20 +140,20 @@ class TestRefPlaneByAngle:
 
 
 class TestRefPlaneBy3Points:
-    def test_success(self, feature_mgr, managers):
+    """AddBy3Points builds from edge keypoints, not from XYZ coordinates."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, _, _ = managers
         ref_planes = MagicMock()
         ref_planes.Count = 4
         doc.RefPlanes = ref_planes
 
         result = feature_mgr.create_ref_plane_by_3_points(0, 0, 0, 0.1, 0, 0, 0, 0.1, 0)
-        assert result["status"] == "created"
-        assert result["type"] == "reference_plane"
+        assert result["unsupported"] is True
         assert result["method"] == "by_3_points"
-        assert result["point1"] == [0, 0, 0]
         assert result["point2"] == [0.1, 0, 0]
-        assert result["point3"] == [0, 0.1, 0]
-        ref_planes.AddBy3Points.assert_called_once_with(0, 0, 0, 0.1, 0, 0, 0, 0.1, 0)
+        assert "keypoints" in result["error"]
+        ref_planes.AddBy3Points.assert_not_called()
 
 
 # ============================================================================
@@ -175,13 +168,17 @@ class TestRefPlaneMidPlane:
         ref_planes.Count = 4
         doc.RefPlanes = ref_planes
 
+        plane = ref_planes.Item.return_value
+
         result = feature_mgr.create_ref_plane_midplane(1, 3)
         assert result["status"] == "created"
         assert result["type"] == "reference_plane"
         assert result["method"] == "mid_plane"
         assert result["plane1_index"] == 1
         assert result["plane2_index"] == 3
-        ref_planes.AddMidPlane.assert_called_once()
+        # AddMidPlane(ParentPlane, ParallelPlane, Pivot, PivotOrigin, Local,
+        # FlipNormal); no pivot is needed for a mid-plane.
+        ref_planes.AddMidPlane.assert_called_once_with(plane, plane, None, 3, False, False)
 
     def test_invalid_plane1(self, feature_mgr, managers):
         _, _, doc, _, _, _ = managers
@@ -216,11 +213,42 @@ class TestCreateRefPlaneNormalAtDistance:
         ref_planes.Count = 4
         doc.RefPlanes = ref_planes
 
+        pivot_plane = ref_planes.Item.return_value
+
         result = feature_mgr.create_ref_plane_normal_at_distance(0.05)
         assert result["status"] == "created"
         assert result["type"] == "ref_plane_normal_at_distance"
         assert result["distance"] == 0.05
-        ref_planes.AddNormalToCurveAtDistance.assert_called_once()
+        # AddNormalToCurveAtDistance(Curve, PlanePoint, OrientationPlaneOrPivot,
+        # PivotOrigin, Distance); igCurveEnd = 15, igPivotStart = 3
+        ref_planes.AddNormalToCurveAtDistance.assert_called_once_with(
+            profile, 15, pivot_plane, 3, 0.05
+        )
+
+    def test_curve_start(self, feature_mgr, managers):
+        _, _, doc, _, _, profile = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 4
+        doc.RefPlanes = ref_planes
+        pivot_plane = ref_planes.Item.return_value
+
+        result = feature_mgr.create_ref_plane_normal_at_distance(0.05, curve_end="Start")
+        assert result["status"] == "created"
+        # igCurveStart = 14
+        ref_planes.AddNormalToCurveAtDistance.assert_called_once_with(
+            profile, 14, pivot_plane, 3, 0.05
+        )
+
+    def test_invalid_pivot_plane_index(self, feature_mgr, managers):
+        _, _, doc, _, _, _ = managers
+        ref_planes = MagicMock()
+        ref_planes.Count = 3
+        doc.RefPlanes = ref_planes
+
+        result = feature_mgr.create_ref_plane_normal_at_distance(0.05, pivot_plane_index=9)
+        assert "error" in result
+        assert "Invalid pivot_plane_index" in result["error"]
+        ref_planes.AddNormalToCurveAtDistance.assert_not_called()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -534,7 +562,11 @@ class TestCreateRefPlaneNormalAtDistanceV2:
         assert result["status"] == "created"
         assert result["type"] == "ref_plane_normal_at_distance_v2"
         assert result["distance"] == 0.05
-        ref_planes.AddNormalToCurveAtDistance.assert_called_once()
+        # AddNormalToCurveAtDistance(Curve, PlanePoint, OrientationPlaneOrPivot,
+        # PivotOrigin, Distance); igCurveEnd = 15, igPivotStart = 3
+        ref_planes.AddNormalToCurveAtDistance.assert_called_once_with(
+            edge, 15, ref_planes.Item.return_value, 3, 0.05
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -563,7 +595,8 @@ class TestCreateRefPlaneNormalAtArcRatioV2:
         body = model.Body
         edges = MagicMock()
         edges.Count = 3
-        edges.Item.return_value = MagicMock()
+        edge = MagicMock()
+        edges.Item.return_value = edge
         body.Edges.return_value = edges
         ref_planes = MagicMock()
         ref_planes.Count = 4
@@ -574,7 +607,12 @@ class TestCreateRefPlaneNormalAtArcRatioV2:
         assert result["status"] == "created"
         assert result["type"] == "ref_plane_normal_at_arc_ratio_v2"
         assert result["ratio"] == 0.5
-        ref_planes.AddNormalToCurveAtArcLengthRatio.assert_called_once()
+        # AddNormalToCurveAtArcLengthRatio(Curve, OrientationPlane,
+        # ArcLengthRatio, XAxisRotation, normalOrientation,
+        # arcLengthRatioOrigin); igCurveEnd = 15
+        ref_planes.AddNormalToCurveAtArcLengthRatio.assert_called_once_with(
+            edge, ref_planes.Item.return_value, 0.5, 0.0, 2, 15
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -594,7 +632,8 @@ class TestCreateRefPlaneNormalAtDistanceAlongV2:
         body = model.Body
         edges = MagicMock()
         edges.Count = 3
-        edges.Item.return_value = MagicMock()
+        edge = MagicMock()
+        edges.Item.return_value = edge
         body.Edges.return_value = edges
         ref_planes = MagicMock()
         ref_planes.Count = 4
@@ -605,7 +644,11 @@ class TestCreateRefPlaneNormalAtDistanceAlongV2:
         assert result["status"] == "created"
         assert result["type"] == "ref_plane_normal_at_distance_along_v2"
         assert result["distance"] == 0.02
-        ref_planes.AddNormalToCurveAtDistanceAlongCurve.assert_called_once()
+        # AddNormalToCurveAtDistanceAlongCurve(Curve, OrientationPlane, Distance,
+        # XAxisRotation, normalOrientation, distanceOrigin); igCurveEnd = 15
+        ref_planes.AddNormalToCurveAtDistanceAlongCurve.assert_called_once_with(
+            edge, ref_planes.Item.return_value, 0.02, 0.0, 2, 15
+        )
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers

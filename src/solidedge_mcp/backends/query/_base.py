@@ -4,10 +4,160 @@ Base class for QueryManager providing constructor and shared helpers.
 
 from typing import Any
 
+from ..comutil import com_get
 from ..constants import FaceQueryConstants
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
+
+#: Default number of entities returned by a paged collection query.
+DEFAULT_PAGE_LIMIT = 200
+#: Hard ceiling on ``limit`` so a single call can never walk an entire
+#: imported model (one COM round trip per entity).
+MAX_PAGE_LIMIT = 2000
+
+
+def r8_array(size: int) -> Any:
+    """Buffer for a COM ``SAFEARRAY(VT_R8)*`` ``[in, out]`` parameter.
+
+    Pass a plain Python list. pywin32 marshals it into the SAFEARRAY and
+    returns the filled values in the result tuple; the list itself is not
+    updated in place. Verified against Solid Edge 2026: wrapping it in a
+    ``VARIANT`` (with or without ``VT_BYREF``) raises "Objects for SAFEARRAYS
+    must be sequences (of sequences), or a buffer object" on ``Body.GetRange``.
+    """
+    return [0.0] * size
+
+
+def i4_array(size: int) -> Any:
+    """Buffer for a COM ``SAFEARRAY(VT_I4)*`` ``[in, out]`` parameter."""
+    return [0] * size
+
+
+def bool_array(size: int) -> Any:
+    """Buffer for a COM ``SAFEARRAY(VT_BOOL)*`` ``[in, out]`` parameter."""
+    return [False] * size
+
+
+def dispatch_array(items: Any) -> Any:
+    """Wrap a sequence of COM objects as a ``SAFEARRAY(VT_DISPATCH)``."""
+    return list(items)
+
+
+def page_bounds(total: int, offset: int, limit: int) -> tuple[int, int, int]:
+    """Clamp ``offset``/``limit`` against ``total``.
+
+    Returns ``(start, stop, limit)`` with ``0 <= start <= stop <= total``.
+    A negative or oversized ``limit`` is clamped into
+    ``0..MAX_PAGE_LIMIT``; an ``offset`` past the end yields an empty page.
+    """
+    limit = min(max(int(limit), 0), MAX_PAGE_LIMIT)
+    start = min(max(int(offset), 0), max(total, 0))
+    stop = min(start + limit, max(total, 0))
+    return start, stop, limit
+
+
+def page_result(
+    items: list[Any], total: int, start: int, limit: int, **extra: Any
+) -> dict[str, Any]:
+    """Build the standard paging envelope for a bounded collection query.
+
+    ``truncated`` means "more entities follow this page", so a caller can keep
+    requesting ``offset += limit`` until it is ``False``.
+    """
+    result: dict[str, Any] = {
+        "total": total,
+        "offset": start,
+        "limit": limit,
+        "items": items,
+        "truncated": start + len(items) < total,
+    }
+    result.update(extra)
+    return result
+
+
+#: Why a body stops answering when the modelling mode puts it out of reach.
+_UNREACHABLE = (
+    "The part's body could not be read. A part built in ordered mode and then "
+    "switched to synchronous keeps its geometry on screen but puts it out of "
+    "reach of these queries; switch it back with "
+    "manage_feature_tree(action='set_mode', mode='ordered')."
+)
+
+#: Why a body stops answering when nothing is left to build it.
+_ALL_SUPPRESSED = (
+    "The part's body could not be read because all {count} of its features are "
+    "suppressed, so the part has no solid to measure. Unsuppress one with "
+    "manage_feature(action='unsuppress', index=...)."
+)
+
+
+def _why_no_body(model: Any) -> str:
+    """Which state is hiding this body, as a message the caller can act on.
+
+    Suppressing every feature empties the body exactly as a switch to
+    synchronous does, and the two want opposite advice: one says unsuppress a
+    feature, the other says change the modelling mode. Sending a caller after
+    the mode when the real cause was suppression costs them the whole trip, so
+    the feature tree decides between them. Anything unreadable here falls back
+    to the mode message, which is the only diagnosis this helper used to give.
+
+    Only entries that can be suppressed are counted. DesignEdgebarFeatures
+    also holds the three base reference planes, and RefPlane has no Suppress
+    member at all, so asking every entry never once answered yes -- a part
+    with one suppressed extrusion reads as four entries, three of which
+    cannot be suppressed. Verified on Solid Edge 2026.
+
+    Each answer has to be exactly ``True``, not merely truthy: the claim is
+    only worth making when the tree really said so.
+    """
+    try:
+        features = model.Document.DesignEdgebarFeatures
+        answers = [com_get(features.Item(i), "Suppress") for i in range(1, int(features.Count) + 1)]
+        suppressible = [a for a in answers if isinstance(a, bool)]
+        if suppressible and all(a is True for a in suppressible):
+            return _ALL_SUPPRESSED.format(count=len(suppressible))
+    except Exception:  # noqa: BLE001 - a tree we cannot read tells us nothing
+        pass
+    return _UNREACHABLE
+
+
+def body_of(model: Any) -> Any:
+    """A model's solid body, with a readable error when it cannot be reached.
+
+    Reading Body raises a bare E_FAIL on a part that was built in ordered mode
+    and then switched to synchronous, and reads as None when every feature is
+    suppressed. Both verified on Solid Edge 2026; ``_why_no_body`` says which.
+    """
+    try:
+        body = model.Body
+    except Exception as exc:
+        raise BodyNotReachableError(_why_no_body(model)) from exc
+    if body is None:
+        raise BodyNotReachableError(_why_no_body(model))
+    return body
+
+
+def all_faces(body: Any, model: Any = None) -> Any:
+    """Every face of a body, with a readable error when it cannot be reached.
+
+    A part built in ordered mode and then switched to synchronous keeps its
+    geometry on screen but makes Body.Faces raise a bare E_FAIL, which told a
+    caller nothing about why a measurement suddenly stopped working. Verified
+    on Solid Edge 2026, where Models.Item(n).Features goes empty in the same
+    state. Pass ``model`` to have suppression told apart from that.
+    """
+    try:
+        faces = body.Faces(FaceQueryConstants.igQueryAll)
+        int(faces.Count)  # the call above is lazy; this is what really asks
+    except Exception as exc:
+        message = _why_no_body(model) if model is not None else _UNREACHABLE
+        raise BodyNotReachableError(message) from exc
+    return faces
+
+
+class BodyNotReachableError(Exception):
+    """There is no body to measure, and the message says which state caused it."""
 
 
 class QueryManagerBase:
@@ -19,13 +169,29 @@ class QueryManagerBase:
         self.doc_manager = document_manager
 
     def _get_first_model(self) -> tuple[Any, Any]:
-        """Get the first model from the active document."""
+        """The active document and its first model.
+
+        A part with no model at all and one whose model cannot be reached read
+        the same to a caller, so they are told apart here. The second happens
+        when a part built in ordered mode is switched to synchronous: the
+        geometry stays on screen and Models goes quiet.
+        """
         doc = self.doc_manager.get_active_document()
-        if not hasattr(doc, "Models"):
-            raise Exception("Document does not have a Models collection")
-        models = doc.Models
-        if models.Count == 0:
-            raise Exception("No features in document")
+        models = com_get(doc, "Models")
+        if models is None:
+            raise BodyNotReachableError(
+                "This document has no Models collection, so it holds no solid geometry to measure."
+            )
+        count = com_get(models, "Count", 0)
+        if not count:
+            raise BodyNotReachableError(
+                "This document reports no model. Create a base feature first. "
+                "If the part does have features, they may all be suppressed, or "
+                "it was built in ordered mode and then switched to synchronous, "
+                "which puts the model out of reach; unsuppress with "
+                "manage_feature(action='unsuppress', index=...) or switch back "
+                "with manage_feature_tree(action='set_mode', mode='ordered')."
+            )
         return doc, models.Item(1)
 
     def _find_feature(self, feature_name: str) -> tuple[Any, Any]:
@@ -34,7 +200,7 @@ class QueryManagerBase:
         features = doc.DesignEdgebarFeatures
         for i in range(1, features.Count + 1):
             feat = features.Item(i)
-            if hasattr(feat, "Name") and feat.Name == feature_name:
+            if com_get(feat, "Name") == feature_name:
                 return feat, doc
         return None, doc
 
@@ -46,7 +212,7 @@ class QueryManagerBase:
     def _get_face(self, face_index: int) -> tuple[Any, Any, Any, Any]:
         """Get a specific face by 0-based index. Returns (doc, model, body, face)."""
         doc, model, body = self._get_body()
-        faces = body.Faces(FaceQueryConstants.igQueryAll)
+        faces = all_faces(body, model)
         if face_index < 0 or face_index >= faces.Count:
             raise IndexError(f"Invalid face index: {face_index}. Body has {faces.Count} faces.")
         face = faces.Item(face_index + 1)

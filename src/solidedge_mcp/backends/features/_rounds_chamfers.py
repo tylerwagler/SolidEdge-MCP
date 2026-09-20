@@ -1,18 +1,23 @@
 """Round, chamfer, and blend feature operations."""
 
-import traceback
 from typing import Any
 
-import pythoncom
-from win32com.client import VARIANT
+from solidedge_mcp.backends.errors import error_result
 
+from ..comutil import com_get
 from ..constants import (
     FaceQueryConstants,
+    GNTTypePropertyConstants,
 )
 from ..logging import get_logger
-from ._base import verifies_geometry
+from ._base import verifies_collection_growth, verifies_geometry
 
 _logger = get_logger(__name__)
+
+# constant.tlb > FeaturePropertyConstants: igLeft = 1, igRight = 2. The
+# AddSurfaceBlend calls need a side for each wall face; igRight is the default
+# used here and can be overridden per call.
+_IG_RIGHT = 2
 
 
 class RoundsChamfersMixin:
@@ -33,9 +38,6 @@ class RoundsChamfersMixin:
             Dict with status and round info
         """
         try:
-            import pythoncom
-            from win32com.client import VARIANT
-
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
@@ -54,7 +56,7 @@ class RoundsChamfersMixin:
             for fi in range(1, faces.Count + 1):
                 face = faces.Item(fi)
                 face_edges = face.Edges
-                if not hasattr(face_edges, "Count"):
+                if com_get(face_edges, "Count") is None:
                     continue
                 for ei in range(1, face_edges.Count + 1):
                     edge_list.append(face_edges.Item(ei))
@@ -63,11 +65,8 @@ class RoundsChamfersMixin:
                 return {"error": "No edges found on body"}
 
             # Each edge as its own edge set, all with the same radius
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_R8,
-                [radius] * len(edge_list),
-            )
+            edge_arr = edge_list
+            radius_arr = [radius] * len(edge_list)
 
             rounds = model.Rounds
             rounds.Add(len(edge_list), edge_arr, radius_arr)
@@ -79,7 +78,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     @verifies_geometry
     def create_round_on_face(self, radius: float, face_index: int) -> dict[str, Any]:
@@ -97,9 +96,6 @@ class RoundsChamfersMixin:
             Dict with status and round info
         """
         try:
-            import pythoncom
-            from win32com.client import VARIANT
-
             doc = self.doc_manager.get_active_document()
             models = doc.Models
 
@@ -115,18 +111,15 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []
             for ei in range(1, face_edges.Count + 1):
                 edge_list.append(face_edges.Item(ei))
 
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_R8,
-                [radius] * len(edge_list),
-            )
+            edge_arr = edge_list
+            radius_arr = [radius] * len(edge_list)
 
             rounds = model.Rounds
             rounds.Add(len(edge_list), edge_arr, radius_arr)
@@ -139,86 +132,43 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_variable_round(
-        self, radii: list[float], face_index: int | None = None,
+        self,
+        radii: list[float],
+        face_index: int | None = None,
     ) -> dict[str, Any]:
         """
         Create a variable-radius round (fillet) on body edges.
 
-        Unlike create_round which applies a constant radius, this allows different
-        radii at different points along the edge. Uses model.Rounds.AddVariable().
-        Type library: Rounds.AddVariable(NumberOfEdgeSets, EdgeSetArray, RadiusArray).
+        NOT AVAILABLE via COM automation. Rounds.AddVariable takes
+        (NumberOfEdgeSets, EdgeSetArray, NumberOfVertices, VertexArray,
+        VertexRadiusArray, ...): the radii are per-vertex, and the VertexArray
+        holds the vertex objects at which each radius applies. This server has
+        no way to pick those vertices, so the call is never made.
 
         Args:
-            radii: List of radius values in meters. Each edge gets a corresponding radius.
-                   If fewer radii than edges, the last radius is repeated.
+            radii: List of radius values in meters
             face_index: 0-based face index to apply to (None = all edges)
 
         Returns:
-            Dict with status and variable round info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "No features exist to add variable rounds to"}
-
-            model = models.Item(1)
-            body = model.Body
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if faces.Count == 0:
-                return {"error": "No faces found on body"}
-
-            # Collect edges from specified face or all faces
-            edge_list = []
-            if face_index is not None:
-                if face_index < 0 or face_index >= faces.Count:
-                    return {
-                        "error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."
-                    }
-                face = faces.Item(face_index + 1)
-                face_edges = face.Edges
-                if hasattr(face_edges, "Count"):
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-            else:
-                for fi in range(1, faces.Count + 1):
-                    face = faces.Item(fi)
-                    face_edges = face.Edges
-                    if not hasattr(face_edges, "Count"):
-                        continue
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-
-            if not edge_list:
-                return {"error": "No edges found on body"}
-
-            # Extend radii list to match edge count if needed
-            radius_values = list(radii)
-            while len(radius_values) < len(edge_list):
-                radius_values.append(radius_values[-1])
-
-            # VARIANT wrappers required for Rounds methods
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_R8, radius_values[: len(edge_list)]
-            )
-
-            rounds = model.Rounds
-            rounds.AddVariable(1, edge_arr, radius_arr)
-
-            return {
-                "status": "created",
-                "type": "variable_round",
-                "edge_count": len(edge_list),
-                "radii": radius_values[: len(edge_list)],
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "error": (
+                "Variable-radius rounds are not available through this server: "
+                "Rounds.AddVariable needs a VertexArray naming the vertices each "
+                "radius applies to, which cannot be selected here. Use "
+                "create_round (constant radius) or add the variable round in the "
+                "Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "variable_round",
+            "radii": list(radii),
+            "face_index": face_index,
+        }
 
     @verifies_geometry
     def create_chamfer(self, distance: float) -> dict[str, Any]:
@@ -252,7 +202,7 @@ class RoundsChamfersMixin:
             for fi in range(1, faces.Count + 1):
                 face = faces.Item(fi)
                 face_edges = face.Edges
-                if not hasattr(face_edges, "Count"):
+                if com_get(face_edges, "Count") is None:
                     continue
                 for ei in range(1, face_edges.Count + 1):
                     edge_list.append(face_edges.Item(ei))
@@ -270,7 +220,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     @verifies_geometry
     def create_chamfer_on_face(self, distance: float, face_index: int) -> dict[str, Any]:
@@ -303,7 +253,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []
@@ -321,8 +271,9 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_chamfer_unequal(
         self, distance1: float, distance2: float, face_index: int = 0
     ) -> dict[str, Any]:
@@ -356,7 +307,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []
@@ -375,13 +326,18 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_chamfer_unequal_on_face(
         self, distance1: float, distance2: float, face_index: int
     ) -> dict[str, Any]:
         """
         Create an unequal-setback chamfer on all edges of a specific face.
+
+        Uses Chamfers.AddUnequalSetback(ReferenceFace, NumberOfEdgeSets,
+        EdgeSetArray, SetbackDistance1, SetbackDistance2). The selected face is
+        the reference face the two setbacks are measured from.
 
         Args:
             distance1: First setback distance in meters
@@ -407,7 +363,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             edges = face.Edges
-            if not hasattr(edges, "Count") or edges.Count == 0:
+            if com_get(edges, "Count", 0) == 0:
                 return {"error": f"No edges found on face {face_index}"}
 
             edge_list = []
@@ -415,7 +371,7 @@ class RoundsChamfersMixin:
                 edge_list.append(edges.Item(ei))
 
             chamfers = model.Chamfers
-            chamfers.AddUnequalSetback(len(edge_list), edge_list, distance1, distance2)
+            chamfers.AddUnequalSetback(face, len(edge_list), edge_list, distance1, distance2)
 
             return {
                 "status": "created",
@@ -426,7 +382,7 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     @verifies_geometry
     def create_chamfer_angle(
@@ -461,7 +417,7 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges"}
 
             edge_list = []
@@ -481,76 +437,39 @@ class RoundsChamfersMixin:
                 "edge_count": len(edge_list),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_blend(self, radius: float, face_index: int | None = None) -> dict[str, Any]:
-        """
-        Create a blend (face-to-face fillet) feature.
+        """Report that an edge-driven blend has no COM route.
 
-        Uses model.Blends.Add(NumberOfEdgeSets, EdgeSetArray, RadiusArray).
-        Same VARIANT wrapper pattern as Rounds. Unlike Rounds which fillets edges,
-        Blends create smooth transitions between faces.
+        ``Blends.Add(NumberOfSelectSets, SelectSetArray, RadiusArray, ...)``
+        takes select sets, not edges. This passed a flat list of Edge objects
+        and failed with a bare E_FAIL for every face of a box and for the
+        whole body, with the count both as 1 and as the real length. Verified
+        on Solid Edge 2026.
+
+        ``Rounds.Add`` does take an EdgeSetArray and is what create_round
+        uses, so the same result is one call away.
 
         Args:
-            radius: Blend radius in meters
-            face_index: 0-based face index to apply to (None = all edges)
+            radius: Blend radius in meters.
+            face_index: 0-based face whose edges were to be blended.
 
         Returns:
-            Dict with status and blend info
+            Dict with an ``unsupported`` error naming what to use instead.
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "No features exist to add blends to"}
-
-            model = models.Item(1)
-            body = model.Body
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if faces.Count == 0:
-                return {"error": "No faces found on body"}
-
-            # Collect edges
-            edge_list = []
-            if face_index is not None:
-                if face_index < 0 or face_index >= faces.Count:
-                    return {
-                        "error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."
-                    }
-                face = faces.Item(face_index + 1)
-                face_edges = face.Edges
-                if hasattr(face_edges, "Count"):
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-            else:
-                for fi in range(1, faces.Count + 1):
-                    face = faces.Item(fi)
-                    face_edges = face.Edges
-                    if not hasattr(face_edges, "Count"):
-                        continue
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-
-            if not edge_list:
-                return {"error": "No edges found on body"}
-
-            # VARIANT wrappers (same pattern as Rounds)
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [radius])
-
-            blends = model.Blends
-            blends.Add(1, edge_arr, radius_arr)
-
-            return {
-                "status": "created",
-                "type": "blend",
-                "radius": radius,
-                "edge_count": len(edge_list),
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "error": (
+                "Blends.Add takes a SelectSetArray; every shape tried answers E_FAIL "
+                "on Solid Edge 2026 (nested edge arrays, plain or VARIANT-wrapped, "
+                "one edge or a face's four), so an edge-driven blend is not reachable. Use "
+                "create_round(radius=...), which takes the same edges through "
+                "Rounds.Add and produces the same geometry."
+            ),
+            "unsupported": True,
+            "radius": radius,
+            "face_index": face_index,
+        }
 
     def create_blend_variable(
         self, radius1: float, radius2: float, face_index: int | None = None
@@ -558,8 +477,11 @@ class RoundsChamfersMixin:
         """
         Create a variable-radius blend feature.
 
-        Uses Blends.AddVariable(NumberOfEdgeSets, EdgeSetArray, RadiusArray).
-        Applies varying radius values from radius1 to radius2 along edges.
+        NOT AVAILABLE via COM automation. Blends.AddVariable takes
+        (NumberOfEdgeSets, EdgeSetArray, NumberOfVertices, VertexArray,
+        VertexRadiusArray, ...): the radii are per-vertex and the VertexArray
+        holds the vertex objects each radius applies to. This server has no way
+        to pick those vertices, so the call is never made.
 
         Args:
             radius1: Starting blend radius in meters
@@ -567,75 +489,60 @@ class RoundsChamfersMixin:
             face_index: 0-based face index to apply to (None = all edges)
 
         Returns:
-            Dict with status and blend info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        return {
+            "error": (
+                "Variable-radius blends are not available through this server: "
+                "Blends.AddVariable needs a VertexArray naming the vertices each "
+                "radius applies to, which cannot be selected here. Use "
+                "create_round (constant radius) or add the variable blend in the "
+                "Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "blend_variable",
+            "radius1": radius1,
+            "radius2": radius2,
+            "face_index": face_index,
+        }
 
-            if models.Count == 0:
-                return {"error": "No features exist to add variable blends to"}
-
-            model = models.Item(1)
-            body = model.Body
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if faces.Count == 0:
-                return {"error": "No faces found on body"}
-
-            edge_list = []
-            if face_index is not None:
-                if face_index < 0 or face_index >= faces.Count:
-                    return {
-                        "error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."
-                    }
-                face = faces.Item(face_index + 1)
-                face_edges = face.Edges
-                if hasattr(face_edges, "Count"):
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-            else:
-                for fi in range(1, faces.Count + 1):
-                    face = faces.Item(fi)
-                    face_edges = face.Edges
-                    if not hasattr(face_edges, "Count"):
-                        continue
-                    for ei in range(1, face_edges.Count + 1):
-                        edge_list.append(face_edges.Item(ei))
-
-            if not edge_list:
-                return {"error": "No edges found on body"}
-
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
-            radius_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [radius1, radius2])
-
-            blends = model.Blends
-            blends.AddVariable(1, edge_arr, radius_arr)
-
-            return {
-                "status": "created",
-                "type": "blend_variable",
-                "radius1": radius1,
-                "radius2": radius2,
-                "edge_count": len(edge_list),
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
-    def create_blend_surface(self, face_index1: int, face_index2: int) -> dict[str, Any]:
+    @verifies_collection_growth("Models.*.Rounds", "Models.*.Blends")
+    def create_blend_surface(
+        self,
+        face_index1: int,
+        face_index2: int,
+        radius: float = 0.0,
+        left_face_side: int = _IG_RIGHT,
+        right_face_side: int = _IG_RIGHT,
+        trim_input: bool = True,
+        trim_output: bool = True,
+    ) -> dict[str, Any]:
         """
         Create a surface blend between two faces.
 
-        Uses Blends.AddSurfaceBlend(Face1, Face2). Creates a smooth
-        surface blend transition between two specified faces.
+        Uses Blends.AddSurfaceBlend(LeftWallFace, LeftFaceSide, RightWallFace,
+        RightFaceSide, Radius, TrimInput, TrimOutput, [RollOnSet],
+        [TangentHoldLine], [UseFullRadius], [BlendShapeType],
+        [BlendShapeValue]).
 
         Args:
-            face_index1: 0-based index of the first face
-            face_index2: 0-based index of the second face
+            face_index1: 0-based index of the left wall face
+            face_index2: 0-based index of the right wall face
+            radius: Blend radius in meters (required by the COM call)
+            left_face_side: FeaturePropertyConstants side for the left wall face
+            right_face_side: FeaturePropertyConstants side for the right wall face
+            trim_input: Trim the input wall faces
+            trim_output: Trim the resulting blend surface
 
         Returns:
             Dict with status and blend info
         """
+        if radius <= 0:
+            return {
+                "error": (
+                    "Blends.AddSurfaceBlend requires a positive Radius; pass radius (in meters)."
+                )
+            }
         try:
             doc = self.doc_manager.get_active_document()
             models = doc.Models
@@ -663,17 +570,42 @@ class RoundsChamfersMixin:
             face2 = faces.Item(face_index2 + 1)
 
             blends = model.Blends
-            blends.AddSurfaceBlend(face1, face2)
+            # The five trailing parameters are [in,optional], but Solid Edge
+            # answers a short call with E_POINTER, so they are supplied.
+            blends.AddSurfaceBlend(
+                face1,
+                left_face_side,
+                face2,
+                right_face_side,
+                radius,
+                trim_input,
+                trim_output,
+                None,  # RollOnSet
+                None,  # TangentHoldLine
+                False,  # UseFullRadius
+                0,  # BlendShapeType
+                0.0,  # BlendShapeValue
+            )
 
             return {
                 "status": "created",
                 "type": "blend_surface",
                 "face_index1": face_index1,
                 "face_index2": face_index2,
+                "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(
+                e,
+                context=(
+                    "Solid Edge would not blend these two faces. A surface blend "
+                    "runs between two wall faces with a gap between them, so two "
+                    "faces that already meet at an edge have nowhere for it to go; "
+                    "round that edge with create_round instead"
+                ),
+            )
 
+    @verifies_collection_growth("Models.*.Rounds", "Models.*.Blends")
     def create_round_blend(
         self, face_index1: int, face_index2: int, radius: float
     ) -> dict[str, Any]:
@@ -728,21 +660,35 @@ class RoundsChamfersMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_collection_growth("Models.*.Rounds", "Models.*.Blends")
     def create_round_surface_blend(
-        self, face_index1: int, face_index2: int, radius: float
+        self,
+        face_index1: int,
+        face_index2: int,
+        radius: float,
+        left_face_side: int = _IG_RIGHT,
+        right_face_side: int = _IG_RIGHT,
+        trim_input: bool = True,
+        trim_output: bool = True,
     ) -> dict[str, Any]:
         """
         Create a round surface blend between two faces.
 
-        Uses Rounds.AddSurfaceBlend(Face1, Face2, Radius). Creates a surface
-        blend between two faces with finer control than AddBlend.
+        Uses Rounds.AddSurfaceBlend(LeftWallFace, LeftFaceSide, RightWallFace,
+        RightFaceSide, Radius, TrimInput, TrimOutput, [RollOnSet],
+        [TangentHoldLine], [UseFullRadius], [BlendShapeType],
+        [BlendShapeValue]).
 
         Args:
-            face_index1: 0-based index of the first face
-            face_index2: 0-based index of the second face
+            face_index1: 0-based index of the left wall face
+            face_index2: 0-based index of the right wall face
             radius: Blend radius in meters
+            left_face_side: FeaturePropertyConstants side for the left wall face
+            right_face_side: FeaturePropertyConstants side for the right wall face
+            trim_input: Trim the input wall faces
+            trim_output: Trim the resulting blend surface
 
         Returns:
             Dict with status and blend info
@@ -774,7 +720,15 @@ class RoundsChamfersMixin:
             face2 = faces.Item(face_index2 + 1)
 
             rounds = model.Rounds
-            rounds.AddSurfaceBlend(face1, face2, radius)
+            rounds.AddSurfaceBlend(
+                face1,
+                left_face_side,
+                face2,
+                right_face_side,
+                radius,
+                trim_input,
+                trim_output,
+            )
 
             return {
                 "status": "created",
@@ -784,8 +738,9 @@ class RoundsChamfersMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_delete_hole(
         self, max_diameter: float = 1.0, hole_type: str = "All"
     ) -> dict[str, Any]:
@@ -830,8 +785,9 @@ class RoundsChamfersMixin:
                 "hole_type": hole_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_delete_blend(self, face_index: int) -> dict[str, Any]:
         """
         Delete/remove a blend (fillet) from the model by specifying a face.
@@ -861,9 +817,22 @@ class RoundsChamfersMixin:
 
             face = faces.Item(face_index + 1)
 
+            # DeleteBlends.Add takes a planar face without complaint and then
+            # builds nothing (Solid Edge 2026: a cylinder face went 26 -> 23
+            # faces, a planar one left the body untouched). Refuse it here and
+            # say which faces qualify.
+            geometry_type = com_get(com_get(face, "Geometry"), "Type")
+            if geometry_type == GNTTypePropertyConstants.igPlane:
+                return {
+                    "error": (
+                        f"Face {face_index} is planar; delete_blend removes blend "
+                        "(round) faces such as a cylinder, sphere or torus. Use "
+                        "get_face_geometry to find one."
+                    )
+                }
             delete_blends = model.DeleteBlends
             delete_blends.Add(face)
 
             return {"status": "created", "type": "delete_blend", "face_index": face_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

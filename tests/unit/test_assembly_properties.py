@@ -10,6 +10,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -18,6 +24,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -30,34 +37,41 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
 
 class TestSuppressComponent:
-    def test_suppress(self, asm_mgr):
-        am, doc = asm_mgr
+    def _occurrences(self, doc):
         occ = MagicMock()
         occurrences = MagicMock()
         occurrences.Count = 2
         occurrences.Item.return_value = occ
         doc.Occurrences = occurrences
+        return occ
+
+    def test_suppress_goes_through_the_document(self, asm_mgr):
+        """Occurrence has no Suppress member; AssemblyDocument owns it."""
+        am, doc = asm_mgr
+        occ = self._occurrences(doc)
 
         result = am.suppress_component(0, suppress=True)
         assert result["status"] == "updated"
-        occ.Suppress.assert_called_once()
+        assert result["suppressed"] is True
+        doc.SetSuppressComponent.assert_called_once_with(occ)
+        occ.Suppress.assert_not_called()
 
-    def test_unsuppress(self, asm_mgr):
+    def test_unsuppress_reports_unsupported(self, asm_mgr):
+        """UnSuppress lives on a SuppressComponent that cannot be looked up."""
         am, doc = asm_mgr
-        occ = MagicMock()
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        occurrences.Item.return_value = occ
-        doc.Occurrences = occurrences
+        occ = self._occurrences(doc)
 
         result = am.suppress_component(0, suppress=False)
-        assert result["status"] == "updated"
-        occ.Unsuppress.assert_called_once()
+        assert result["unsupported"] is True
+        assert "UnSuppress" in result["error"]
+        doc.SetSuppressComponent.assert_not_called()
+        occ.Unsuppress.assert_not_called()
 
 
 # ============================================================================
@@ -165,7 +179,7 @@ class TestMakeWritable:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.make_writable(0)
         assert "error" in result
@@ -197,11 +211,12 @@ class TestSwapFamilyMember:
         result = am.swap_family_member(0, "M12")
         assert result["status"] == "swapped"
         assert result["new_member_name"] == "M12"
-        occ.SwapFamilyMember.assert_called_once_with("M12")
+        # SwapFamilyMember(MemberName, SwapAllOccurrences)
+        occ.SwapFamilyMember.assert_called_once_with("M12", False)
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.swap_family_member(0, "M12")
         assert "error" in result

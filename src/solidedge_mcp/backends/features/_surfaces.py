@@ -1,11 +1,13 @@
 """Surface feature operations."""
 
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
 
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import profile_origin
 from ..constants import (
     DirectionConstants,
     DraftSideConstants,
@@ -19,10 +21,23 @@ from ..constants import (
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
+from ._base import verify_collection_growth_on_creators
 
 _logger = get_logger(__name__)
 
 
+# A surface is construction geometry, not body material, so the face count
+# that verifies_geometry watches never moves for one. Every creator here
+# lands in one of five Constructions sub-collections, and which one depends
+# on the call, so all five are summed: a surface that lands in a sibling
+# collection is still growth, not a no-op.
+@verify_collection_growth_on_creators(
+    "Constructions.ExtrudedSurfaces",
+    "Constructions.RevolvedSurfaces",
+    "Constructions.LoftedSurfaces",
+    "Constructions.SweptSurfaces",
+    "Constructions.BlueSurfs",
+)
 class SurfacesMixin:
     """Mixin providing surface creation methods."""
 
@@ -55,10 +70,16 @@ class SurfacesMixin:
             extruded_surfaces = constructions.ExtrudedSurfaces
 
             # Build profile array
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             depth1 = distance
-            depth2 = distance if direction == "Symmetric" else 0.0
+            symmetric = direction == "Symmetric"
+            depth2 = distance if symmetric else 0.0
+            # A second extent of igFinite with a depth of zero is rejected
+            # with E_INVALIDARG, so a one-sided surface must say igNone.
+            # Verified on Solid Edge 2026; the extrude and revolve calls
+            # already do this. Every non-symmetric extruded surface failed.
+            extent2 = ExtentTypeConstants.igFinite if symmetric else ExtentTypeConstants.igNone
             side1 = DirectionConstants.igRight
             side2 = (
                 DirectionConstants.igLeft
@@ -86,7 +107,7 @@ class SurfacesMixin:
                 TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
                 0.0,  # TreatmentCrownRadiusOrOffset1
                 0.0,  # TreatmentCrownTakeOffAngle1
-                ExtentTypeConstants.igFinite,  # ExtentType2
+                extent2,  # ExtentType2
                 side2,  # ExtentSide2
                 depth2,  # FiniteDepth2
                 None,  # KeyPointOrTangentFace2
@@ -114,7 +135,7 @@ class SurfacesMixin:
                 "end_caps": end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface(
         self, angle: float = 360, want_end_caps: bool = False
@@ -149,20 +170,17 @@ class SurfacesMixin:
             models = doc.Models
             angle_rad = math.radians(angle)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
-            # Try collection-level API first (on model), then Models-level
-            if models.Count > 0:
-                model = models.Item(1)
-                rev_surfaces = model.RevolvedSurfaces
-                rev_surfaces.AddFinite(
-                    1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
-                )
-            else:
-                # First feature - use Models method if available
-                models.AddFiniteRevolvedSurface(
-                    1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
-                )
+            # Surfaces live on doc.Constructions. Model has no
+            # RevolvedSurfaces property and Models has no
+            # AddFiniteRevolvedSurface, so both branches raised; the extruded
+            # surface methods in this file already take the right route.
+            del models
+            rev_surfaces = doc.Constructions.RevolvedSurfaces
+            rev_surfaces.AddFinite(
+                1, v_profiles, refaxis, DirectionConstants.igRight, angle_rad, want_end_caps
+            )
 
             self.sketch_manager.clear_accumulated_profiles()
 
@@ -173,7 +191,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_surface(self, want_end_caps: bool = False) -> dict[str, Any]:
         """
@@ -191,7 +209,6 @@ class SurfacesMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
 
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
@@ -201,46 +218,25 @@ class SurfacesMixin:
                     f"got {len(all_profiles)}."
                 }
 
-            _CS = LoftSweepConstants.igProfileBasedCrossSection
-
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
-            v_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(all_profiles))
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles],
-            )
-
-            if models.Count > 0:
-                model = models.Item(1)
-                loft_surfaces = model.LoftedSurfaces
-                loft_surfaces.Add(
-                    len(all_profiles),
-                    v_sections,
-                    v_types,
-                    v_origins,
-                    ExtentTypeConstants.igNone,  # StartExtentType
-                    ExtentTypeConstants.igNone,  # EndExtentType
-                    0,
-                    0.0,  # StartTangentType, StartTangentMagnitude
-                    0,
-                    0.0,  # EndTangentType, EndTangentMagnitude
-                    0,
-                    None,  # NumGuideCurves, GuideCurves
-                    want_end_caps,
-                )
-            else:
-                return {"error": "Lofted surface requires an existing base feature."}
-
-            self.sketch_manager.clear_accumulated_profiles()
-
+            # Constructions.LoftedSurfaces.Add answers E_INVALIDARG to every
+            # argument shape that builds Models.AddLoftedProtrusion from the
+            # same two profiles (Solid Edge 2026: coordinate-array origins,
+            # element origins, VARIANT-wrapped arrays, every extent and tangent
+            # constant, with and without guide curves -- 13 shapes). Say so
+            # rather than raise it.
+            del doc
             return {
-                "status": "created",
-                "type": "lofted_surface",
+                "error": (
+                    "LoftedSurfaces.Add rejects every argument form Solid Edge 2026 "
+                    "accepts for a solid loft (E_INVALIDARG). Use create_loft for a "
+                    "solid, or the Solid Edge UI for a lofted surface."
+                ),
+                "unsupported": True,
                 "num_profiles": len(all_profiles),
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_swept_surface(
         self, path_profile_index: int | None = None, want_end_caps: bool = False
@@ -258,57 +254,28 @@ class SurfacesMixin:
         Returns:
             Dict with status and surface info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            all_profiles = self.sketch_manager.get_accumulated_profiles()
-
-            if len(all_profiles) < 2:
-                return {
-                    "error": f"Swept surface requires at least 2 profiles (path + cross-section), "
-                    f"got {len(all_profiles)}."
-                }
-
-            path_idx = path_profile_index if path_profile_index is not None else 0
-            path_profile = all_profiles[path_idx]
-            cross_sections = [p for i, p in enumerate(all_profiles) if i != path_idx]
-
-            _CS = LoftSweepConstants.igProfileBasedCrossSection
-
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
-
-            swept_surfaces = model.SweptSurfaces
-            swept_surfaces.Add(
-                1,
-                v_paths,
-                _CS,  # Path
-                len(cross_sections),
-                v_sections,
-                _CS,  # Sections
-                None,
-                None,  # Origins, OriginRefs
-                ExtentTypeConstants.igNone,  # StartExtentType
-                ExtentTypeConstants.igNone,  # EndExtentType
-                want_end_caps,
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "swept_surface",
-                "num_cross_sections": len(cross_sections),
-                "want_end_caps": want_end_caps,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        # Constructions.SweptSurfaces.Add takes Solid Edge 2026 down -- the
+        # process, not the call -- once a session has been through a few
+        # documents: three crashes in five calls, each after other work in the
+        # same instance, with a circle section as well as a rectangle. On a
+        # fresh instance the call builds, and the argument shape that does is
+        # worth keeping on record: TraceCurveTypes and CrossSectionTypes are
+        # single igProfileBasedCrossSection values, Origins is [element] where
+        # element comes from profile_origin_element(section), and OriginRefs
+        # is that element's keypoint (igKeyPointCenter for a circle). None for
+        # the origins is E_FAIL. A crash is worse than a refusal, so no call.
+        all_profiles = self.sketch_manager.get_accumulated_profiles()
+        return {
+            "error": (
+                "SweptSurfaces.Add crashes Solid Edge 2026 after other work in the "
+                "same session (3 of 5 calls). Use create_sweep for a solid, or the "
+                "Solid Edge UI for a swept surface."
+            ),
+            "unsupported": True,
+            "num_profiles": len(all_profiles),
+            "path_profile_index": path_profile_index,
+            "want_end_caps": want_end_caps,
+        }
 
     def create_extruded_surface_from_to(
         self, from_plane_index: int, to_plane_index: int
@@ -348,7 +315,7 @@ class SurfacesMixin:
             from_plane = ref_planes.Item(from_plane_index)
             to_plane = ref_planes.Item(to_plane_index)
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             constructions = doc.Constructions
             extruded_surfaces = constructions.ExtrudedSurfaces
@@ -370,7 +337,7 @@ class SurfacesMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_surface_by_keypoint(self, keypoint_type: str = "End") -> dict[str, Any]:
         """
@@ -392,7 +359,7 @@ class SurfacesMixin:
             if not profile:
                 return {"error": "No active sketch profile. Create and close a sketch first."}
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             constructions = doc.Constructions
             extruded_surfaces = constructions.ExtrudedSurfaces
@@ -414,7 +381,7 @@ class SurfacesMixin:
                 "keypoint_type": keypoint_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_surface_by_curves(
         self, distance: float, direction: str = "Normal"
@@ -439,10 +406,16 @@ class SurfacesMixin:
             if not profile:
                 return {"error": "No active sketch profile. Create and close a sketch first."}
 
-            curve_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            curve_array = [profile]
 
             depth1 = distance
-            depth2 = distance if direction == "Symmetric" else 0.0
+            symmetric = direction == "Symmetric"
+            depth2 = distance if symmetric else 0.0
+            # A second extent of igFinite with a depth of zero is rejected
+            # with E_INVALIDARG, so a one-sided surface must say igNone.
+            # Verified on Solid Edge 2026; the extrude and revolve calls
+            # already do this. Every non-symmetric extruded surface failed.
+            extent2 = ExtentTypeConstants.igFinite if symmetric else ExtentTypeConstants.igNone
             side1 = DirectionConstants.igRight
             side2 = (
                 DirectionConstants.igLeft
@@ -472,7 +445,7 @@ class SurfacesMixin:
                 TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
                 0.0,  # TreatmentCrownRadiusOrOffset1
                 0.0,  # TreatmentCrownTakeOffAngle1
-                ExtentTypeConstants.igFinite,  # ExtentType2
+                extent2,  # ExtentType2
                 side2,  # ExtentSide2
                 depth2,  # FiniteDepth2
                 None,  # KeyPointOrTangentFace2
@@ -500,7 +473,7 @@ class SurfacesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface_sync(
         self, angle: float = 360.0, want_end_caps: bool = False
@@ -531,16 +504,13 @@ class SurfacesMixin:
             if not refaxis:
                 return {"error": "No axis of revolution set. Use set_axis_of_revolution() first."}
 
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
             angle_rad = math.radians(angle)
 
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            v_profiles = [profile]
 
-            rev_surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            rev_surfaces = doc.Constructions.RevolvedSurfaces
             rev_surfaces.AddFiniteSync(
                 1,  # NumberOfProfiles
                 v_profiles,  # ProfileArray
@@ -559,7 +529,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface_by_keypoint(
         self, keypoint_type: str = "End", want_end_caps: bool = False
@@ -588,15 +558,11 @@ class SurfacesMixin:
             if not refaxis:
                 return {"error": "No axis of revolution set. Use set_axis_of_revolution() first."}
 
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
+            v_profiles = [profile]
 
-            model = models.Item(1)
-
-            v_profiles = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
-
-            rev_surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            rev_surfaces = doc.Constructions.RevolvedSurfaces
             rev_surfaces.AddFiniteByKeyPoint(
                 1,  # NumberOfProfiles
                 v_profiles,  # ProfileArray
@@ -616,7 +582,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_lofted_surface_v2(self, want_end_caps: bool = False) -> dict[str, Any]:
         """
@@ -631,59 +597,23 @@ class SurfacesMixin:
         Returns:
             Dict with status and surface info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            all_profiles = self.sketch_manager.get_accumulated_profiles()
-
-            if len(all_profiles) < 2:
-                return {
-                    "error": f"Lofted surface requires at least 2 profiles, "
-                    f"got {len(all_profiles)}."
-                }
-
-            if models.Count == 0:
-                return {"error": "Lofted surface requires an existing base feature."}
-
-            model = models.Item(1)
-
-            _CS = LoftSweepConstants.igProfileBasedCrossSection
-
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
-            v_types = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, [_CS] * len(all_profiles))
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in all_profiles],
-            )
-
-            loft_surfaces = model.LoftedSurfaces
-            loft_surfaces.Add2(
-                len(all_profiles),  # NumSections
-                v_sections,  # CrossSections
-                v_types,  # CrossSectionTypes
-                v_origins,  # Origins
-                ExtentTypeConstants.igNone,  # StartExtentType
-                ExtentTypeConstants.igNone,  # EndExtentType
-                0,  # StartTangentType
-                0.0,  # StartTangentMagnitude
-                0,  # EndTangentType
-                0.0,  # EndTangentMagnitude
-                0,  # NumGuideCurves
-                None,  # GuideCurves
-                want_end_caps,  # WantEndCaps
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
+        all_profiles = self.sketch_manager.get_accumulated_profiles()
+        if len(all_profiles) < 2:
             return {
-                "status": "created",
-                "type": "lofted_surface_v2",
-                "num_profiles": len(all_profiles),
-                "want_end_caps": want_end_caps,
+                "error": f"Lofted surface requires at least 2 profiles, got {len(all_profiles)}."
             }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        # LoftedSurfaces.Add2 answers E_INVALIDARG to the same profiles that
+        # Models.AddLoftedProtrusion lofts (Solid Edge 2026), as Add does.
+        return {
+            "error": (
+                "LoftedSurfaces.Add2 rejects the argument form Solid Edge 2026 accepts "
+                "for a solid loft (E_INVALIDARG), as Add does. Use create_loft for a "
+                "solid, or the Solid Edge UI for a lofted surface."
+            ),
+            "unsupported": True,
+            "num_profiles": len(all_profiles),
+            "want_end_caps": want_end_caps,
+        }
 
     def create_swept_surface_ex(
         self, path_profile_index: int | None = None, want_end_caps: bool = False
@@ -704,13 +634,6 @@ class SurfacesMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            if models.Count == 0:
-                return {"error": "Swept surface requires an existing base feature."}
-
-            model = models.Item(1)
-
             all_profiles = self.sketch_manager.get_accumulated_profiles()
 
             if len(all_profiles) < 2:
@@ -726,14 +649,18 @@ class SurfacesMixin:
 
             _CS = LoftSweepConstants.igProfileBasedCrossSection
 
-            v_paths = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [path_profile])
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, cross_sections)
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
+            v_paths = [path_profile]
+            v_sections = cross_sections
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
+                for p in cross_sections
+            ]
 
-            swept_surfaces = model.SweptSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # SweptSurfaces property, so this always raised.
+            swept_surfaces = doc.Constructions.SweptSurfaces
             swept_surfaces.AddEx(
                 1,  # NumCurves
                 v_paths,  # TraceCurves
@@ -757,7 +684,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_extruded_surface_full(
         self,
@@ -811,10 +738,16 @@ class SurfacesMixin:
             )
             draft_angle_rad = math.radians(draft_angle)
 
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
             depth1 = distance
-            depth2 = distance if direction == "Symmetric" else 0.0
+            symmetric = direction == "Symmetric"
+            depth2 = distance if symmetric else 0.0
+            # A second extent of igFinite with a depth of zero is rejected
+            # with E_INVALIDARG, so a one-sided surface must say igNone.
+            # Verified on Solid Edge 2026; the extrude and revolve calls
+            # already do this. Every non-symmetric extruded surface failed.
+            extent2 = ExtentTypeConstants.igFinite if symmetric else ExtentTypeConstants.igNone
             side1 = DirectionConstants.igRight
             side2 = (
                 DirectionConstants.igLeft
@@ -844,7 +777,7 @@ class SurfacesMixin:
                 TreatmentCrownCurvatureSideConstants.seTreatmentCrownCurvatureInside,
                 0.0,  # TreatmentCrownRadiusOrOffset1
                 0.0,  # TreatmentCrownTakeOffAngle1
-                ExtentTypeConstants.igFinite,  # ExtentType2
+                extent2,  # ExtentType2
                 side2,  # ExtentSide2
                 depth2,  # FiniteDepth2
                 None,  # KeyPointOrTangentFace2
@@ -874,7 +807,7 @@ class SurfacesMixin:
                 "draft_angle": draft_angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_revolved_surface_full(
         self, angle: float = 360.0, want_end_caps: bool = False
@@ -907,15 +840,12 @@ class SurfacesMixin:
                     "closing the sketch."
                 }
 
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-            model = models.Item(1)
-
             angle_rad = math.radians(angle)
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
-            surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            surfaces = doc.Constructions.RevolvedSurfaces
             surfaces.Add(
                 1,
                 profile_array,
@@ -942,7 +872,7 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_bounded_surface(
         self,
@@ -965,56 +895,23 @@ class SurfacesMixin:
         Returns:
             Dict with status and surface info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "Bounded surface requires an existing base feature."}
-            model = models.Item(1)
-
-            all_profiles = self.sketch_manager.get_accumulated_profiles()
-            if len(all_profiles) < 2:
-                return {
-                    "error": f"Bounded surface requires at least 2 profiles, "
-                    f"got {len(all_profiles)}."
-                }
-
-            v_sections = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, all_profiles)
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH,
-                [None] * len(all_profiles),
-            )
-
-            blue_surfs = model.BlueSurfs
-            blue_surfs.Add(
-                len(all_profiles),  # NumSections
-                v_sections,  # CrossSections
-                v_origins,  # Origins
-                0,  # SectionStartTangentType (igNone)
-                0.0,  # SectionStartTangentMagnitude
-                0,  # SectionEndTangentType (igNone)
-                0.0,  # SectionEndTangentMagnitude
-                0,  # NumGuideCurves
-                None,  # GuideCurves
-                0,  # GuideStartTangentType
-                0.0,  # GuideStartTangentMagnitude
-                0,  # GuideEndTangentType
-                0.0,  # GuideEndTangentMagnitude
-                want_end_caps,  # WantEndCaps
-                periodic,  # Periodic
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "bounded_surface",
-                "num_profiles": len(all_profiles),
-                "want_end_caps": want_end_caps,
-                "periodic": periodic,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        # Constructions.BlueSurfs.Add answers E_INVALIDARG whatever it is
+        # given for Origins -- the SAFEARRAY(VT_DISPATCH) it declares, filled
+        # with the sections' circles, with the profiles themselves, or with
+        # None -- from two profiles that Models.AddLoftedProtrusion lofts
+        # (Solid Edge 2026). Say so rather than raise it.
+        all_profiles = self.sketch_manager.get_accumulated_profiles()
+        return {
+            "error": (
+                "BlueSurfs.Add rejects every argument form tried on Solid Edge 2026 "
+                "(E_INVALIDARG). Use create_loft for a solid, or the Solid Edge UI "
+                "for a bounded surface."
+            ),
+            "unsupported": True,
+            "num_profiles": len(all_profiles),
+            "want_end_caps": want_end_caps,
+            "periodic": periodic,
+        }
 
     def create_revolved_surface_full_sync(
         self, angle: float = 360.0, want_end_caps: bool = False
@@ -1047,15 +944,12 @@ class SurfacesMixin:
                     "closing the sketch."
                 }
 
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-            model = models.Item(1)
-
             angle_rad = math.radians(angle)
-            profile_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [profile])
+            profile_array = [profile]
 
-            surfaces = model.RevolvedSurfaces
+            # Surfaces live on doc.Constructions; Model has no
+            # RevolvedSurfaces property, so this always raised.
+            surfaces = doc.Constructions.RevolvedSurfaces
             surfaces.AddSync(
                 1,
                 profile_array,
@@ -1082,4 +976,4 @@ class SurfacesMixin:
                 "want_end_caps": want_end_caps,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

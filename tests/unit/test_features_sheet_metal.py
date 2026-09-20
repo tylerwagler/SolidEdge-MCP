@@ -4,6 +4,7 @@ Unit tests for FeatureManager backend methods.
 Uses unittest.mock to simulate COM objects so tests run without Solid Edge.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -64,86 +65,9 @@ def feature_mgr(managers):
 # ============================================================================
 
 
-class TestCreateFlange:
-    def test_basic_flange(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-        flanges = MagicMock()
-        model.Flanges = flanges
-
-        result = feature_mgr.create_flange(face_index=0, edge_index=0, flange_length=0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "flange"
-        assert result["flange_length"] == 0.01
-        assert result["side"] == "Right"
-        flanges.Add.assert_called_once()
-
-    def test_flange_with_options(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-        flanges = MagicMock()
-        model.Flanges = flanges
-
-        result = feature_mgr.create_flange(
-            face_index=0,
-            edge_index=0,
-            flange_length=0.02,
-            side="Left",
-            inside_radius=0.003,
-            bend_angle=90.0,
-        )
-        assert result["status"] == "created"
-        assert result["side"] == "Left"
-        assert result["inside_radius"] == 0.003
-        assert result["bend_angle"] == 90.0
-
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-        models.Count = 0
-
-        result = feature_mgr.create_flange(face_index=0, edge_index=0, flange_length=0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face_index(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-
-        result = feature_mgr.create_flange(face_index=99, edge_index=0, flange_length=0.01)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
-
-    def test_invalid_edge_index(self, feature_mgr, managers):
-        _, _, doc, models, model, _ = managers
-
-        result = feature_mgr.create_flange(face_index=0, edge_index=99, flange_length=0.01)
-        assert "error" in result
-        assert "Invalid edge index" in result["error"]
-
-
 # ============================================================================
 # FLANGE BY MATCH FACE
 # ============================================================================
-
-
-class TestCreateFlangeByMatchFace:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_by_match_face(0, 0, 0.02)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_by_match_face"
-        assert result["flange_length"] == 0.02
-        model.Flanges.AddByMatchFace.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_by_match_face(0, 0, 0.02)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face_index(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_flange_by_match_face(99, 0, 0.02)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
 
 
 # ============================================================================
@@ -151,53 +75,9 @@ class TestCreateFlangeByMatchFace:
 # ============================================================================
 
 
-class TestCreateFlangeSync:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_sync(0, 0, 0.03)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_sync"
-        assert result["flange_length"] == 0.03
-        model.Flanges.AddSync.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_sync(0, 0, 0.03)
-        assert "error" in result
-
-    def test_invalid_edge_index(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_flange_sync(0, 99, 0.03)
-        assert "error" in result
-        assert "Invalid edge index" in result["error"]
-
-
 # ============================================================================
 # FLANGE BY FACE
 # ============================================================================
-
-
-class TestCreateFlangeByFace:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_by_face(0, 0, 0, 0.025)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_by_face"
-        assert result["flange_length"] == 0.025
-        model.Flanges.AddFlangeByFace.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_by_face(0, 0, 0, 0.025)
-        assert "error" in result
-
-    def test_invalid_ref_face(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_flange_by_face(0, 0, 99, 0.025)
-        assert "error" in result
-        assert "Invalid ref_face_index" in result["error"]
 
 
 # ============================================================================
@@ -205,51 +85,9 @@ class TestCreateFlangeByFace:
 # ============================================================================
 
 
-class TestCreateFlangeWithBendCalc:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_with_bend_calc"
-        model.Flanges.AddByBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03)
-        assert "error" in result
-
-    def test_custom_side(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_with_bend_calc(0, 0, 0.03, side="Left")
-        assert result["status"] == "created"
-        assert result["side"] == "Left"
-
-
 # ============================================================================
 # FLANGE SYNC WITH BEND CALC
 # ============================================================================
-
-
-class TestCreateFlangeSyncWithBendCalc:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_sync_with_bend_calc"
-        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04)
-        assert "error" in result
-
-    def test_bend_deduction_returned(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.04, bend_deduction=0.002)
-        assert result["status"] == "created"
-        assert result["bend_deduction"] == 0.002
 
 
 # ============================================================================
@@ -258,14 +96,16 @@ class TestCreateFlangeSyncWithBendCalc:
 
 
 class TestCreateContourFlangeEx:
-    def test_success(self, feature_mgr, managers):
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        """ContourFlanges.AddEx/Add answered E_FAIL to 52 open-profile placements
+        on Solid Edge 2026; the call is not made."""
         _, sketch_mgr, _, _, model, _ = managers
         result = feature_mgr.create_contour_flange_ex(0.005)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_ex"
+        assert result["unsupported"] is True
+        assert "E_FAIL" in result["error"]
         assert result["thickness"] == 0.005
-        model.ContourFlanges.AddEx.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
+        model.ContourFlanges.AddEx.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -288,26 +128,15 @@ class TestCreateContourFlangeEx:
 
 
 class TestCreateContourFlangeSync:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
-        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_sync"
-        model.ContourFlanges.AddSync.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
+    """ContourFlanges.AddSync answered E_INVALIDARG in a synchronous document (SE 2026)."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005)
-        assert "error" in result
-        assert "No active sketch" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_contour_flange_sync(99, 0, 0.005)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_contour_flange_sync(0, 0, 0.005, bend_radius=0.002)
+        assert result["unsupported"] is True
+        assert "AddSync" in result["error"]
+        assert result["thickness"] == 0.005
+        model.ContourFlanges.AddSync.assert_not_called()
 
 
 # ============================================================================
@@ -316,26 +145,14 @@ class TestCreateContourFlangeSync:
 
 
 class TestCreateContourFlangeSyncWithBend:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
-        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_sync_with_bend"
-        model.ContourFlanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
+    """AddSyncByBendDeductionOrBendAllowance answered E_INVALIDARG in a sync document."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005)
-        assert "error" in result
-        assert "No active sketch" in result["error"]
-
-    def test_bend_deduction_returned(self, feature_mgr, managers):
-        _, _, _, _, _, _ = managers
-        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005, bend_deduction=0.001)
-        assert result["status"] == "created"
-        assert result["bend_deduction"] == 0.001
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_contour_flange_sync_with_bend(0, 0, 0.005, bend_radius=0.002)
+        assert result["unsupported"] is True
+        assert "AddSyncByBendDeductionOrBendAllowance" in result["error"]
+        model.ContourFlanges.AddSyncByBendDeductionOrBendAllowance.assert_not_called()
 
 
 # ============================================================================
@@ -522,95 +339,9 @@ class TestConvertPartToSheetMetal:
 # ============================================================================
 
 
-class TestCreateFlangeMatchFaceWithBend:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 3
-        face = MagicMock()
-        edge = MagicMock()
-        edges = MagicMock()
-        edges.Count = 4
-        edges.Item.return_value = edge
-        face.Edges = edges
-        faces.Item.return_value = face
-        body.Faces.return_value = faces
-
-        flange = MagicMock()
-        flange.Name = "FlangeMFB1"
-        model.Flanges.AddByMatchFaceAndBendDeductionOrBendAllowance.return_value = flange
-
-        result = feature_mgr.create_flange_match_face_with_bend(0, 0, 0.02)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_match_face_with_bend"
-        model.Flanges.AddByMatchFaceAndBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_match_face_with_bend(0, 0, 0.02)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 1
-        body.Faces.return_value = faces
-
-        result = feature_mgr.create_flange_match_face_with_bend(5, 0, 0.02)
-        assert "error" in result
-        assert "Invalid face_index" in result["error"]
-
-
 # ============================================================================
 # FLANGE BY FACE WITH BEND
 # ============================================================================
-
-
-class TestCreateFlangeByFaceWithBend:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 3
-        face = MagicMock()
-        edge = MagicMock()
-        edges = MagicMock()
-        edges.Count = 4
-        edges.Item.return_value = edge
-        face.Edges = edges
-        faces.Item.return_value = face
-        body.Faces.return_value = faces
-
-        flange = MagicMock()
-        flange.Name = "FlangeFBB1"
-        model.Flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance.return_value = flange
-
-        result = feature_mgr.create_flange_by_face_with_bend(0, 0, 1, 0.02)
-        assert result["status"] == "created"
-        assert result["type"] == "flange_by_face_with_bend"
-        model.Flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_flange_by_face_with_bend(0, 0, 1, 0.02)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 1
-        body.Faces.return_value = faces
-
-        result = feature_mgr.create_flange_by_face_with_bend(5, 0, 1, 0.02)
-        assert "error" in result
-        assert "Invalid face_index" in result["error"]
 
 
 # ============================================================================
@@ -651,46 +382,14 @@ class TestCreateContourFlangeV3:
 
 
 class TestCreateContourFlangeSyncEx:
-    def test_success(self, feature_mgr, managers):
+    """ContourFlanges.AddSyncEx answered E_INVALIDARG in a synchronous document (SE 2026)."""
+
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 3
-        face = MagicMock()
-        edge = MagicMock()
-        edges = MagicMock()
-        edges.Count = 4
-        edges.Item.return_value = edge
-        face.Edges = edges
-        faces.Item.return_value = face
-        body.Faces.return_value = faces
-
-        contour = MagicMock()
-        contour.Name = "ContourSyncEx1"
-        model.ContourFlanges.AddSyncEx.return_value = contour
-
-        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.001)
-        assert result["status"] == "created"
-        assert result["type"] == "contour_flange_sync_ex"
-        model.ContourFlanges.AddSyncEx.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.001)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 1
-        body.Faces.return_value = faces
-
-        result = feature_mgr.create_contour_flange_sync_ex(5, 0, 0.001)
-        assert "error" in result
-        assert "Invalid face_index" in result["error"]
+        result = feature_mgr.create_contour_flange_sync_ex(0, 0, 0.005, bend_radius=0.002)
+        assert result["unsupported"] is True
+        assert "AddSyncEx" in result["error"]
+        model.ContourFlanges.AddSyncEx.assert_not_called()
 
 
 # ============================================================================
@@ -723,3 +422,493 @@ class TestCreateBend:
         result = feature_mgr.create_bend()
         assert "error" in result
         assert "No base feature" in result["error"]
+
+
+# ============================================================================
+# SHEET METAL BASE FEATURES
+# ============================================================================
+
+
+class TestCreateBaseFlange:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, _, profile = managers
+
+        result = feature_mgr.create_base_flange(0.02, 0.001, 0.002)
+        assert result["status"] == "created"
+        assert result["type"] == "base_flange"
+        assert result["width"] == 0.02
+        # AddBaseContourFlange(pProfile, varThicknessSide, varExtentType,
+        # varProjectionSide, varProjectionDistance, varRadius);
+        # igRight = 2, igFinite = 13
+        models.AddBaseContourFlange.assert_called_once_with(profile, 2, 13, 2, 0.02, 0.002)
+
+    def test_default_bend_radius_is_twice_thickness(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_base_flange(0.02, 0.001)
+        assert result["bend_radius"] == 0.002
+        models.AddBaseContourFlange.assert_called_once_with(profile, 2, 13, 2, 0.02, 0.002)
+
+    def test_width_required(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_base_flange(0.0, 0.001)
+        assert "error" in result
+        assert "projection distance" in result["error"]
+        models.AddBaseContourFlange.assert_not_called()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_base_flange(0.02, 0.001)
+        assert "error" in result
+        models.AddBaseContourFlange.assert_not_called()
+
+
+class TestCreateBaseTab:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_base_tab(0.001)
+        assert result["status"] == "created"
+        assert result["type"] == "base_tab"
+        # AddBaseTab(Profile, ExtentSide); igRight = 2
+        models.AddBaseTab.assert_called_once_with(profile, 2)
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_base_tab(0.001)
+        assert "error" in result
+        models.AddBaseTab.assert_not_called()
+
+
+class TestCreateBaseTabMultiProfile:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        p1, p2 = MagicMock(), MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+
+        result = feature_mgr.create_base_tab_multi_profile(0.001)
+        assert result["status"] == "created"
+        assert result["profile_count"] == 2
+        # AddBaseTabWithMultipleProfiles(NumberOfProfiles, ProfileArray,
+        # ExtentSide); igRight = 2
+        args = models.AddBaseTabWithMultipleProfiles.call_args.args
+        assert len(args) == 3
+        assert args[0] == 2
+        assert args[2] == 2
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_no_profile(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = []
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_base_tab_multi_profile(0.001)
+        assert "error" in result
+        models.AddBaseTabWithMultipleProfiles.assert_not_called()
+
+
+class TestCreateBaseContourFlangeAdvanced:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, profile = managers
+
+        result = feature_mgr.create_base_contour_flange_advanced(0.001, 0.002, width=0.03)
+        assert result["status"] == "created"
+        assert result["width"] == 0.03
+        call = models.AddBaseContourFlangeByBendDeductionOrBendAllowance
+        call.assert_called_once_with(profile, 2, 13, 2, 0.03, 0.002)
+
+    def test_width_required(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_base_contour_flange_advanced(0.001, 0.002)
+        assert "error" in result
+        assert "projection distance" in result["error"]
+        models.AddBaseContourFlangeByBendDeductionOrBendAllowance.assert_not_called()
+
+
+class TestCreateWebNetwork:
+    def test_success(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        p1 = MagicMock()
+        sketch_mgr.get_accumulated_profiles.return_value = [p1]
+
+        result = feature_mgr.create_web_network(thickness=0.002, depth=0.01)
+        assert result["status"] == "created"
+        assert result["type"] == "web_network"
+        assert result["profile_count"] == 1
+        # AddWebNetwork(nNumProfiles, aProfiles, dThickness, WebDirection,
+        # dFiniteDepth, TreatmentType); igRight = 2, seTreatmentNone = 44
+        args = models.AddWebNetwork.call_args.args
+        assert len(args) == 6
+        assert args[0] == 1
+        assert args[2:] == (0.002, 2, 0.01, 44)
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_thickness_required(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.create_web_network()
+        assert "error" in result
+        assert "thickness" in result["error"]
+        models.AddWebNetwork.assert_not_called()
+
+    def test_no_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = []
+        sketch_mgr.get_active_sketch.return_value = None
+        result = feature_mgr.create_web_network(thickness=0.002)
+        assert "error" in result
+        models.AddWebNetwork.assert_not_called()
+
+
+class TestCreateLoftedFlange:
+    """AddLoftedFlange with Line2d origins and igStart refs (SE 2026: Models 0 -> 1)."""
+
+    @staticmethod
+    def _profiles(sketch_mgr, n=2):
+        profiles = []
+        for i in range(n):
+            p = MagicMock(name=f"profile{i}")
+            for name in ("Circles2d", "Ellipses2d", "Boundaries2d"):
+                getattr(p, name).Count = 0
+            p.Lines2d.Count = 1
+            profiles.append(p)
+        sketch_mgr.get_accumulated_profiles.return_value = profiles
+        return profiles
+
+    def test_basic_builds_between_two_open_profiles(self, feature_mgr, managers):
+        _, sketch_mgr, doc, models, _, _ = managers
+        p1, p2 = self._profiles(sketch_mgr)
+
+        result = feature_mgr.create_lofted_flange(0.002)
+
+        assert result["status"] == "created"
+        assert result["num_profiles"] == 2
+        models.AddLoftedFlange.assert_called_once_with(
+            2,
+            [p1, p2],
+            [48, 48],
+            [p1.Lines2d.Item.return_value, p2.Lines2d.Item.return_value],
+            [29, 29],
+            2,
+            0.001,
+            0.33,
+            57,
+        )
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_advanced_passes_the_bend_radius(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        self._profiles(sketch_mgr)
+        result = feature_mgr.create_lofted_flange_advanced(0.002, 0.004)
+        assert result["status"] == "created"
+        assert models.AddLoftedFlange.call_args.args[6] == 0.004
+
+    def test_fewer_than_two_or_a_closed_profile_is_refused(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        self._profiles(sketch_mgr, n=1)
+        assert "at least 2" in feature_mgr.create_lofted_flange(0.002)["error"]
+        p1, _ = self._profiles(sketch_mgr)
+        p1.Circles2d.Count = 1
+        assert "error" in feature_mgr.create_lofted_flange(0.002)
+        models.AddLoftedFlange.assert_not_called()
+
+    def test_ex_still_refuses(self, feature_mgr, managers):
+        _, sketch_mgr, _, models, _, _ = managers
+        self._profiles(sketch_mgr)
+        result = feature_mgr.create_lofted_flange_ex(0.002)
+        assert result["unsupported"] is True
+        models.AddLoftedFlangeEx.assert_not_called()
+
+
+# ============================================================================
+# OPEN PROFILE GUARD
+# ============================================================================
+
+
+class FakeCollection:
+    def __init__(self, items):
+        self._items = list(items)
+
+    @property
+    def Count(self):
+        return len(self._items)
+
+    def Item(self, index):
+        return self._items[index - 1]
+
+
+def _line(x1, y1, x2, y2):
+    line = MagicMock()
+    line.GetStartPoint.return_value = (x1, y1)
+    line.GetEndPoint.return_value = (x2, y2)
+    return line
+
+
+def _profile(lines=(), circles=(), ellipses=()):
+    profile = MagicMock()
+    profile.Lines2d = FakeCollection(list(lines))
+    profile.Circles2d = FakeCollection(list(circles))
+    profile.Ellipses2d = FakeCollection(list(ellipses))
+    profile.Boundaries2d = FakeCollection([])
+    return profile
+
+
+class TestRequireOpenProfile:
+    """A louver line and a bend line are open profiles.
+
+    Solid Edge fails a closed one with a bare E_FAIL that says nothing.
+    Verified on Solid Edge 2026: the same call succeeds with a line.
+    """
+
+    def _manager(self):
+        from solidedge_mcp.backends.features import FeatureManager
+
+        return FeatureManager(MagicMock(), MagicMock())
+
+    def test_a_single_line_is_open(self):
+        manager = self._manager()
+
+        assert manager._require_open_profile(_profile(lines=[_line(0, 0, 0.1, 0)]), "bend") is None
+
+    def test_a_circle_is_refused(self):
+        manager = self._manager()
+
+        result = manager._require_open_profile(_profile(circles=[MagicMock()]), "louver")
+
+        assert result is not None
+        assert "circle" in result["error"]
+        assert "louver" in result["error"]
+
+    def test_an_ellipse_is_refused(self):
+        manager = self._manager()
+
+        result = manager._require_open_profile(_profile(ellipses=[MagicMock()]), "bend")
+
+        assert result is not None
+        assert "ellipse" in result["error"]
+
+    def test_a_closed_chain_of_lines_is_refused(self):
+        manager = self._manager()
+        rectangle = [
+            _line(0, 0, 0.1, 0),
+            _line(0.1, 0, 0.1, 0.1),
+            _line(0.1, 0.1, 0, 0.1),
+            _line(0, 0.1, 0, 0),
+        ]
+
+        result = manager._require_open_profile(_profile(lines=rectangle), "bend")
+
+        assert result is not None
+        assert "closed chain" in result["error"]
+
+    def test_an_open_chain_of_lines_is_allowed(self):
+        manager = self._manager()
+        zigzag = [
+            _line(0, 0, 0.1, 0),
+            _line(0.1, 0, 0.1, 0.1),
+            _line(0.1, 0.1, 0, 0.1),
+        ]
+
+        assert manager._require_open_profile(_profile(lines=zigzag), "bend") is None
+
+    def test_a_mocked_profile_does_not_read_as_closed(self):
+        """A mock answers int() with 1, which would fake a circle into every test."""
+        manager = self._manager()
+
+        assert manager._require_open_profile(MagicMock(), "bend") is None
+
+
+class TestCreateThreadRefuses:
+    """Threads.Add answered E_INVALIDARG for a boss and a hole with every HoleData (SE 2026)."""
+
+    def test_refuses_before_any_com(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        result = feature_mgr.create_thread(0, thread_diameter=0.006, thread_depth=0.01)
+        assert result["unsupported"] is True
+        assert "create_hole(method='threaded')" in result["error"]
+        assert result["thread_diameter"] == 0.006
+        model.Threads.Add.assert_not_called()
+        doc.HoleDataCollection.Add.assert_not_called()
+
+
+# ============================================================================
+# FLANGES: every creator refuses with the evidence (Solid Edge 2026 never
+# solves a Flanges.Add* flange; see FeatureManager._flanges_unsupported)
+# ============================================================================
+
+
+FLANGE_CREATORS = [
+    "create_flange",
+    "create_flange_by_match_face",
+    "create_flange_by_face",
+    "create_flange_with_bend_calc",
+    "create_flange_match_face_with_bend",
+    "create_flange_by_face_with_bend",
+]
+
+
+def _dummy_arguments(fn):
+    """A value for every parameter, by annotation, so each creator can be called."""
+    import inspect
+
+    values = {}
+    for name, param in inspect.signature(fn).parameters.items():
+        if param.default is not inspect.Parameter.empty:
+            continue
+        ann = str(param.annotation)
+        if "float" in ann:
+            values[name] = 0.01
+        elif "int" in ann:
+            values[name] = 0
+        elif "str" in ann:
+            values[name] = "Right"
+        else:
+            values[name] = None
+    return values
+
+
+class TestFlangeCreatorsRefuse:
+    @pytest.mark.parametrize("method", FLANGE_CREATORS)
+    def test_refuses_without_touching_com(self, feature_mgr, managers, method):
+        _, sketch_mgr, doc, _, model, _ = managers
+        fn = getattr(feature_mgr, method)
+
+        result = fn(**_dummy_arguments(fn))
+
+        assert result["unsupported"] is True
+        assert result["method"] == method
+        assert "never" in result["error"]
+        model.Flanges.Add.assert_not_called()
+        model.Flanges.AddByMatchFace.assert_not_called()
+        model.Flanges.AddSync.assert_not_called()
+        model.Flanges.AddFlangeByFace.assert_not_called()
+        doc.Models.Item.assert_not_called()
+
+    def test_every_parameter_is_echoed(self, feature_mgr):
+        result = feature_mgr.create_flange(face_index=3, edge_index=2, flange_length=0.02)
+        assert result["face_index"] == 3
+        assert result["edge_index"] == 2
+        assert result["flange_length"] == 0.02
+
+
+# ============================================================================
+# SYNCHRONOUS FLANGES: Flanges.AddSync builds in a synchronous document
+# ============================================================================
+
+
+def _sync_tab(managers, mode=1):
+    """A sheet-metal document in the given ModelingMode with a 6-face tab."""
+    _, _, doc, _, model, _ = managers
+    doc.ModelingMode = mode
+    faces = model.Body.Faces.return_value
+    faces.Count = 6
+    face = MagicMock(name="face")
+    faces.Item.side_effect = None
+    faces.Item.return_value = face
+    face.Edges.Count = 4
+    edge = MagicMock(name="edge")
+    face.Edges.Item.side_effect = None
+    face.Edges.Item.return_value = edge
+    return doc, model, face, edge
+
+
+class TestCreateFlangeSync:
+    def test_builds_through_add_sync_with_the_optional_slots_empty(self, feature_mgr, managers):
+        import pythoncom
+
+        doc, model, face, edge = _sync_tab(managers)
+
+        result = feature_mgr.create_flange_sync(1, 0, 0.02, inside_radius=0.003)
+
+        assert result["status"] == "created"
+        args = model.Flanges.AddSync.call_args.args
+        assert args[0] is edge
+        assert args[1] == 0.02
+        assert args[3] == 0.003
+        assert len(args) == 12
+        # ThicknessSide, DimSide, ... and BendAngle left to Solid Edge's defaults
+        for slot in (2, 4, 5, 6, 7, 8, 9, 10, 11):
+            assert args[slot].varianttype == pythoncom.VT_EMPTY
+        model.Body.Faces.return_value.Item.assert_called_once_with(2)
+        face.Edges.Item.assert_called_once_with(1)
+
+    def test_bend_angle_is_passed_in_radians(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers)
+
+        feature_mgr.create_flange_sync(0, 0, 0.02, bend_angle=45.0)
+
+        assert model.Flanges.AddSync.call_args.args[11] == pytest.approx(math.radians(45.0))
+
+    def test_an_ordered_document_is_refused_before_the_call(self, feature_mgr, managers):
+        """Switching after an ordered tab answers E_FAIL, so it is not switched."""
+        doc, model, _, _ = _sync_tab(managers, mode=2)
+
+        result = feature_mgr.create_flange_sync(0, 0, 0.02)
+
+        assert result["unsupported"] is True
+        assert "synchronous" in result["error"]
+        model.Flanges.AddSync.assert_not_called()
+        assert doc.ModelingMode == 2
+
+    def test_bad_indices_are_refused(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers)
+        assert "Invalid face index" in feature_mgr.create_flange_sync(6, 0, 0.02)["error"]
+        assert "Invalid edge index" in feature_mgr.create_flange_sync(0, 4, 0.02)["error"]
+        model.Flanges.AddSync.assert_not_called()
+
+
+class TestCreateFlangeSyncWithBendCalc:
+    def test_default_calculation_builds(self, feature_mgr, managers):
+        _, model, _, edge = _sync_tab(managers)
+
+        result = feature_mgr.create_flange_sync_with_bend_calc(1, 0, 0.02)
+
+        assert result["status"] == "created"
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once_with(edge, 0.02)
+
+    def test_a_bend_deduction_goes_in_as_method_1_and_the_value(self, feature_mgr, managers):
+        import pythoncom
+
+        _, model, _, edge = _sync_tab(managers)
+
+        result = feature_mgr.create_flange_sync_with_bend_calc(1, 0, 0.02, bend_deduction=0.001)
+
+        assert result["status"] == "created"
+        args = model.Flanges.AddSyncByBendDeductionOrBendAllowance.call_args.args
+        assert args[0] is edge and args[1] == 0.02
+        assert len(args) == 16
+        assert all(a.varianttype == pythoncom.VT_EMPTY for a in args[2:14])
+        assert args[14:] == (1, 0.001)
+
+    def test_an_ordered_document_is_refused(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers, mode=2)
+        assert feature_mgr.create_flange_sync_with_bend_calc(0, 0, 0.02)["unsupported"] is True
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_not_called()
+
+
+class TestCreateFlangeBasicRoutesToSync:
+    """A caller who only knows 'make a flange' gets AddSync when the document allows."""
+
+    def test_synchronous_document_builds_through_add_sync(self, feature_mgr, managers):
+        _, model, _, edge = _sync_tab(managers)
+
+        result = feature_mgr.create_flange(1, 0, 0.02, inside_radius=0.003, bend_angle=30.0)
+
+        assert result["status"] == "created"
+        args = model.Flanges.AddSync.call_args.args
+        assert args[0] is edge and args[1] == 0.02 and args[3] == 0.003
+        assert args[11] == pytest.approx(math.radians(30.0))
+        model.Flanges.Add.assert_not_called()
+
+    def test_ordered_document_still_refuses(self, feature_mgr, managers):
+        _, model, _, _ = _sync_tab(managers, mode=2)
+        result = feature_mgr.create_flange(1, 0, 0.02)
+        assert result["unsupported"] is True
+        model.Flanges.AddSync.assert_not_called()
+        model.Flanges.Add.assert_not_called()
+
+    def test_with_bend_calc_routes_the_same_way(self, feature_mgr, managers):
+        _, model, _, edge = _sync_tab(managers)
+        result = feature_mgr.create_flange_with_bend_calc(1, 0, 0.02)
+        assert result["status"] == "created"
+        model.Flanges.AddSyncByBendDeductionOrBendAllowance.assert_called_once_with(edge, 0.02)

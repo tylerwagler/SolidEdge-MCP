@@ -1,318 +1,176 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## What This Is
+## What this is
 
-A Solid Edge MCP (Model Context Protocol) server for AI-assisted CAD design. Windows-only, built on FastMCP and pywin32 COM automation. Licensed MIT.
-
-The goal is to provide AI assistants with full access to Solid Edge CAD workflows: **connect → create → sketch → feature → query → export** with session management and undo/rollback support.
+A Solid Edge MCP server: FastMCP 2.x over pywin32 COM automation. Windows only. MIT.
+Surface: 119 tools, 53 data resources + 2 guide resources, 4 prompts.
 
 ## Commands
 
 ```bash
-# Install all dependencies (including dev)
-uv sync --all-extras
-
-# Run the MCP server (stdio transport)
-uv run solidedge-mcp
-
-# Run tests
-uv run pytest
-uv run pytest tests/unit/test_foo.py::test_bar  # single test
-
-# Lint and format
-uv run ruff check .
-uv run ruff format .
-
-# Type check
+uv sync --all-extras          # install (Python 3.11+, Windows)
+uv run solidedge-mcp          # run the server (stdio)
+uv run pytest                 # unit tests; integration tests are deselected by default
+uv run pytest -m integration  # needs a running, licensed Solid Edge
+uv run pytest tests/unit/test_features_extrude.py::TestCreateExtrude::test_success
+uv run pytest --cov           # coverage report
+uv run ruff check . && uv run ruff format .
 uv run mypy src/
+
+# COM conformance against the scraped type libraries
+uv run python scripts/audit_com_signatures.py --by-file
+uv run python scripts/audit_com_signatures.py --filter backends/features/_holes.py
+uv run python scripts/audit_com_receivers.py
+uv run python scripts/audit_com_writes.py
+uv run python scripts/audit_com_hasattr.py
+uv run python scripts/audit_reported_writes.py
+uv run python scripts/audit_com_enum_args.py
+uv run python scripts/audit_dead_params.py  # parameters declared and never read
+uv run python scripts/count_verified_creators.py  # which create_* are checked, and how
+uv run python scripts/scrape_typelibs.py    # regenerate the dump (needs Solid Edge)
 ```
 
-## Architecture
+CI (`.github/workflows/ci.yml`, windows-latest) runs ruff check, ruff format --check, mypy, pytest. Keep all four green.
 
-### COM Automation Backend
+## Releasing
 
-Unlike KiCad (which uses file parsing), Solid Edge automation requires Windows COM through pywin32. The server communicates with a running Solid Edge instance via COM interfaces:
+The version lives in `pyproject.toml`, `src/solidedge_mcp/__init__.py` and the top entry of `CHANGELOG.md`; `tests/unit/test_version.py` fails when they disagree. To cut a release: bump all three, `uv lock`, run the full gate (the four CI checks, the seven audits, `pytest -m integration` and `scripts/live_sweep.py` against a live Solid Edge), re-measure `reference/VERIFICATION_STATUS.md`, commit, then `git tag -a v<version>`. Release candidates are PEP 440 (`0.1.0rc1`); tags carry a `v`.
 
-- **Connection layer** (`backends/connection.py`): Manages GetActiveObject/Dispatch, early/late binding
-- **Document layer** (`backends/documents.py`): Create/open/save parts, assemblies, drafts
-- **Sketching layer** (`backends/sketching.py`): 2D profile creation (lines, circles, arcs, rectangles, polygons)
-- **Feature layer** (`backends/features/`): 3D operations (extrude, revolve, sweep, loft, holes, fillets) — mixin-based package
-- **Assembly layer** (`backends/assembly.py`): Component placement, constraints, patterns
-- **Query layer** (`backends/query.py`): Extract geometry, mass properties, feature trees
-- **Export layer** (`backends/export.py`): Convert to STEP, STL, IGES, PDF, DXF
-
-### Package Layout
+## Layout
 
 ```
 src/solidedge_mcp/
-├── server.py              # FastMCP server entry point
-├── backends/              # COM automation implementations
-│   ├── connection.py      # Application connection (GetActiveObject/Dispatch)
-│   ├── documents.py       # Document create/open/save/close
-│   ├── sketching.py       # 2D sketch profiles
-│   ├── features/          # 3D feature operations (mixin-based package, 12 sub-modules)
-│   ├── assembly.py        # Assembly operations
-│   ├── query.py           # Model interrogation
-│   ├── export.py          # Export to standard formats
-│   └── constants.py       # Solid Edge API constants
-├── tools/                 # MCP tool wrappers (~150 composite tools)
-├── resources/             # MCP Resources (52 read-only endpoints)
-├── prompts/               # MCP Prompt templates (pending)
-└── session/               # Session/undo management (pending)
+├── server.py          create_server(): FastMCP(instructions=...), register_tools()
+├── managers.py        global manager instances (connection, doc_manager, sketch_manager, ...)
+├── prompts/           SERVER_INSTRUCTIONS, WORKFLOWS_GUIDE, CONVENTIONS_GUIDE, register_prompts()
+├── tools/             MCP surface. One module per area; each has register(mcp)
+│   ├── _registry.py   register_tool()/register_resource(): COM-thread wrap + annotations + tags
+│   ├── features/      feature tools split by family (_extrude.py, _cutout.py, ...)
+│   ├── resources.py   53 solidedge:// resources (read-only JSON)
+│   └── guide.py       solidedge://guide/workflows, solidedge://guide/conventions
+└── backends/          COM automation
+    ├── connection.py  SolidEdgeConnection: attach/start, liveness probe, reconnect
+    ├── com_thread.py  ComThread: single STA worker; on_com_thread() decorator
+    ├── errors.py      error_result(e): decodes com_error; tracebacks only if SOLIDEDGE_MCP_DEBUG
+    ├── logging.py     stderr logger; level from SOLIDEDGE_MCP_LOG_LEVEL
+    ├── documents.py   DocumentManager: tracks doc switches, clears sketch state
+    ├── sketching.py   SketchManager: active_profile, accumulated_profiles
+    ├── features/      FeatureManager mixins (_base.py has @verifies_geometry)
+    ├── assembly/      AssemblyManager mixins
+    ├── query/         QueryManager mixins
+    ├── export/        ExportManager + ViewModel mixins
+    ├── constants.py   Solid Edge enum values (cite the source enum in a comment)
+    └── validation.py  validate_numerics(), validate_path()
+tests/unit/            mocked-COM tests (conftest-free; fixtures per file)
+tests/integration/     @pytest.mark.integration, real Solid Edge
+scripts/               scrape_typelibs.py (load-bearing); manual/ = hand-run COM experiments
+reference/             typelib_summary.md (committed), typelib_dump.json (gitignored, regenerate)
 ```
 
-### Current State
+## How a tool is built
 
-**✅ FULLY IMPLEMENTED**: ~150 composite MCP tools + 52 MCP resources = ~200 total endpoints!
+1. **Backend method** on the right manager mixin. Wrap COM in `try/except Exception as e: return error_result(e)`. Return `dict[str, Any]` with a `status` key on success. Never return a bare traceback.
+2. **Tool function** in `tools/<area>.py` (or `tools/features/_<family>.py`). Composite tools dispatch on a `Literal[...]` discriminator (`method`/`type`/`action`) with `match/case`; keep `case _:` returning `{"error": "Unknown ..."}`. Docstrings are LLM-facing schema text: terse, state units and index base, say which params apply to which method.
+3. **Register** in that module's `register(mcp)` via `register_tool(mcp, fn, tags={...}, read_only=..., destructive=...)`. Never call `mcp.tool()` directly; the registry wraps the call onto the COM thread and sets annotations.
+4. **Tests** in `tests/unit/test_tools_<area>.py` (dispatch, every case label) and `tests/unit/test_<backend>.py` (COM call arguments with `assert_called_once_with`, not just "returns status").
+5. Update `reference/TYPELIB_IMPLEMENTATION_MAP.md` if you add COM coverage.
 
-- **Backend layer**: Complete COM automation using pywin32 (connection, documents, sketching, features, assembly, query, export, diagnostics)
-- **MCP tools**: ~150 composite tools registered via `tools/*.py` modules using `mcp.tool()` — each tool dispatches via a `method`/`type`/`action` discriminator parameter
-- **MCP resources**: 52 read-only endpoints registered via `tools/resources.py` using `solidedge://` URIs
-- **Coverage**: 96% of Solid Edge COM API methods implemented (394+ methods accessible via composite tools)
-- **Test suite**: 1,380+ unit tests across 6 test files
+`reference/VERIFICATION_STATUS.md` tracks the other question — not "is this API wired up" but "does it actually do what it says". Read it before deciding what to work on, and re-measure it after landing anything that changes creator coverage or the audits. It carries the commands that regenerate every number in it.
 
-**Pending**: Prompt templates, session management/undo
+Count tools with `grep -rc "register_tool(" src/solidedge_mcp/tools | awk -F: '{s+=$2} END {print s}'`.
 
-### Three-Pillar MCP Design
+## Solid Edge / COM rules
 
-Following the MCP spec, the server exposes:
+- **Units**: meters and degrees at the tool boundary. Convert to radians (`math.radians`) before COM.
+- **Plane indices are 1-based**: 1=Top/XY, 2=Right/YZ, 3=Front/XZ (`RefPlanes.Item(n)`). Face/edge/feature/component indices are 0-based in tools and converted at the COM boundary.
+- **Sketch then feature**: `create_sketch → draw_* → close_sketch → create_<feature>`. `close_sketch` calls `Profile.End(igProfileClosed)` and queues the profile in `sketch_manager.accumulated_profiles`; the feature consumes it.
+- **Threading**: all COM runs on `com_thread`. Tool functions are plain sync `def`. Backend code may call other backend code freely (nested calls run inline).
+- **Never `hasattr()` a COM proxy to test capability.** Use `com_get(obj, "Member")` and test for `None`, or check `doc.Type` against `DocumentTypeConstants`. The probe is a separate `GetIDsOfNames` round trip that reads False both for a member that is absent and for one whose getter raised, so a real error becomes a silent "unsupported" -- that is how every layer call came to refuse drafts, whose layers live on `Sheet`. `tests/unit/test_com_hasattr.py` (`scripts/audit_com_hasattr.py`) pins this at zero and needs no type library.
+- **Never compare COM proxies with `==`**; compare `FullName`/`Name`.
+- **Collections are 1-based** in COM (`Item(1)`).
+- **An assembly's base planes are `AsmRefPlanes`, not `RefPlanes`.** An AssemblyDocument has no `RefPlanes` member at all; its three are `AsmRefPlanes`, same 1=Top/XY, 2=Right/YZ, 3=Front/XZ order, and `ProfileSets` works there exactly as in a part. `sketching.py: ref_planes_of(doc)` picks the right one. Reaching only for `RefPlanes` made every sketch in an assembly fail, which left all six assembly-level creators unreachable -- each consumes an accumulated profile and there was no way to make one.
+- **A property's name is not its interface's name.** `AssemblyFeatures.ExtrudedProtrusions` returns an `AssemblyFeaturesExtrudedProtrusions`, and the code called the property by the interface name. `tests/unit/test_com_members.py` cannot see this -- the name is real, just not as a property -- so it is the receiver audit that catches it, and only once the receiver resolves. Helpers returning a tuple of COM objects need an entry in `TUPLE_SEEDS` for that to happen.
+- **Assembly feature sides are `FeaturePropertyConstants`.** There is no `AssemblyFeaturePropertyConstants` enum in any library. Every side argument on `AssemblyFeatures*.Add` takes igLeft=1, igRight=2, igSymmetric=3; 0 is `igNullConstant`. Solid Edge accepts all of them without complaint and records the feature either way, so a wrong value shows up only as geometry that never changed -- the assembly cutout was passed 0 and never cut. `verifies_assembly_geometry` in `assembly/_base.py` counts occurrence body faces, because an AssemblyDocument has no `Models` and the part-level check is silently inert there.
+- **An assembly hole needs a `HoleData`.** `AssemblyFeaturesHoles.Add` with `None` for `pHoledata` records nothing and raises nothing -- the collection's Count stays 0. Build one from the assembly's own `HoleDataCollection.Add(HoleType=igRegularHole, HoleDiameter=...)`; with it the same call cuts the placed part.
+- **Assembly protrusions take no scope parts**, so there is no occurrence body for them to change; `occurrence_face_count` can only ever say "nothing happened". They are recorded -- `AssemblyFeatures.ExtrudedProtrusions.Count` grows -- and that collection is their verification signal. Cutouts and holes do take scope parts and are verified by occurrence faces.
+- **A construction surface needs no solid.** `Constructions.*Surfaces.Add` works on an empty part; a "requires a base feature" guard is a precondition Solid Edge does not have, and here it masked two calls that had always failed.
+- **`Application.ConvertByFilePath` returns without saying whether it did anything**, and can return before the writer finishes. The output file is what says a conversion happened; poll for it and report its size, or report an error.
+- **`DesignEdgebarFeatures` is not only features.** It holds the three base reference planes as well, and `RefPlane` has no `Suppress` member at all, so a part with one suppressed extrusion reads as four entries of which three cannot be suppressed. Anything that walks the tree asking a feature-only question must skip the entries that cannot answer it rather than treating a missing member as "no".
+- **SAFEARRAY marshalling is method-specific.** All of the following were verified against Solid Edge 2026, so change them only with new evidence:
+  - `[in,out] SAFEARRAY(VT_R8)*` output buffers (`Body.GetRange`, `Occurrence.GetMatrix`, the mass-property buffers): pass a **plain Python list** and read the filled values from the **return value**. A `VARIANT` wrapper, with or without `VT_BYREF`, raises `Objects for SAFEARRAYS must be sequences`. Helpers: `query/_base.py: r8_array/i4_array/bool_array`.
+  - Profile and edge arrays: `Rounds.Add` accepts `VARIANT(VT_ARRAY | VT_DISPATCH, [...])` and is integration-tested that way, but the helix APIs reject it and need a plain `[profile]`. When in doubt, a plain sequence is the safer default.
+  - A parameter the type library declares `[in] VT_R8*` that Solid Edge actually fills (`DraftDocument.GetSymbolFileOrigin`): the late-bound call returns `None` and the values are lost. Invoke it through `doc._oleobj_.InvokeTypes` with the parameters declared `(VT_BYREF | VT_R8, 3)` and read the returned tuple; see `export/_draft.py`.
+  - Enumerating `Variables.Item(i)` shows a dimension as a nameless entry; `Variables.Item("<display name>")` returns it, and `Variables.Query` finds it only with `NamedBy=seVariableNameByBoth` (ByUser sees user variables only, BySystem only dimensions and PhysicalProperties_*). Angular variables hold radians; `UnitsType` (not `Units`, which is a member of nothing) says which.
+  - pywin32 gives every parameter a positional slot, `[out]` ones included. When an out-parameter sits between ones you must supply, pass the later arguments **by keyword** using the type library's parameter names.
+- **Cutouts** use collection-level APIs (`model.ExtrudedCutouts.AddFiniteMulti`), not `Models.AddExtrudedCutout`.
+- **A loft or sweep pairs its cross-sections through the `Origins` array**, and each entry must be a point that lies on its own section. `comutil.profile_origin` takes a start point from lines and arcs and a centre from circles. A hardcoded `(0, 0)` makes Solid Edge build nothing at all -- no error, no geometry -- unless every profile happens to cross the sketch origin.
+- **3D sketch lines are drawable**: `Sketches3D.Add()` then `Lines3D.Add(x1, y1, z1, x2, y2, z2)`, in parts and assemblies (`SketchManager.draw_line_3d`, the `draw_3d_line` tool). `StructuralFrames.Add(part, n, [Line3D...], VT_EMPTY x3)` and `AddByOrientation(part, "", n, [Line3D...], VT_EMPTY x4)` run a frame along them. **The first frame in a session raises an informational "The Segments group of commands are replaced with the 3D Draw group..." dialog that `DisplayAlerts` does not suppress and that blocks the call until OK is clicked**; `backends/dialogs.py: dismiss_informational_dialog(text_prefix)` clicks OK on exactly that dialog while the call runs and nothing else. `Wires.Add` still answers E_FAIL along such a line.
+- **`SelectSet.AddAll` is a draft-sheet call.** It selects every 2D entity on the active sheet and answers E_FAIL in a part or assembly whatever the selection holds; `select_all` refuses those before the call.
+- **Assembly relations take References, not faces.** `Relations3d.AddPlanar`/`AddAxial` answer 0x80040225 to a face, a RefPlane or an AsmRefPlane handed over directly; `AssemblyDocument.CreateReference(occurrence, face_from_occurrence.OccurrenceDocument)` is the object they want (`assembly/_relations.py: _face_reference`), the planar constraining points must lie on the faces (range midpoints work), and NormalsAligned True is a mate, False an align.
+- **Search before probing.** Siemens hosts the API reference online (`https://support.industrysoftware.automation.siemens.com/trainings/se/106/api/SolidEdgePart~<Object>~<Member>.html`; the remarks are what the type library lacks -- `LoftedSurfaces.Add` says `Origins` is `0` for a circular section, `LoftedFlanges.Add` says `OriginRefs` is `0`), the community samples (`github.com/SolidEdgeCommunity/Samples`; `SheetMetal/CreateLoftedFlange` gave the shape that builds a lofted flange: `Origins` = each section's `Line2d`, `OriginRefs` = `igStart`, `igNFType` last), and the developer forum (`community.sw.siemens.com`, which renders only in a browser) settled `Threads.Add` as a decade-old defect. A day of live probing found fewer shapes than one afternoon of reading.
+- **Read a UI-made feature back before calling a creator dead.** The install's `Training` folder holds parts with beads, louvers, threads, contour and lofted flanges; every feature object reports its parameters (`Beads.Item(1).Side`, `.CrossSectionType`, `Thread.HoleData.*`, `Louver.ProfileDefiningFace`, `GetProfiles()` for the sketch plane and geometry). That is how the bead was found: `BeadSide` is `igNormalSideDummy`/`igReverseNormalSideDummy` (7/8), not igLeft/igRight, which answer E_FAIL.
+- **Slots.Add cuts along an open line** with `igRight` and a finite or through-all extent (6 -> 10 faces); `igLeft` and a closed profile record a slot that removes nothing. Its two `KeyPointFlags` take 0, which is in no member of `KeyPointExtentConstants`; the enum audit's `ALLOWED` carries that pair.
+- **Two calls that want faces or bodies this server *can* obtain**: `Splits.Add(1, [model.Body], 1, [RefPlane], 0, 0)` splits into two design bodies (the first model keeps its faces, so the check watches `Models.*.Splits`); `Models.AddThickenFeature(side, distance, n, faces)` takes `Constructions.Item(n).Body.Faces` -- the surface's own `Faces` property raises, and `Thickens.AddSync` lives on a Model a surface-only document does not have.
+- **`@verifies_geometry` watches face count and body volume.** A mirror of a box across its own face is a wider box with the same six faces; only the volume moves. The snapshot is `(models, faces, volume)`, and the volume decides when the faces are unchanged and it can be read on both sides.
+- **Known unsupported via COM (SE 2025/2026)**: `AssemblyFeaturesPatterns.Add`, `AssemblyFeaturesMirrors.Add` (E_ACCESSDENIED); shell/thin-wall (needs interactive face pick); multiple disjoint profiles in one cutout sketch; `AssemblyFeatures.Recompute` (E_FAIL whatever it is given -- use `AssemblyDocument.UpdateAll`);  the ordered `Flanges.Add*` (record a Flange that never solves: range, volume and face count unchanged after Recompute, `Status` raises) -- `Flanges.AddSync` **does build, in a document set to synchronous before its base tab** (`create_flange` routes there when the document is synchronous), and switching after an ordered tab answers E_FAIL; `ContourFlanges.AddSync` (E_INVALIDARG in that same document); `Threads.Add` on an existing cylinder (E_INVALIDARG for a boss and a hole with every HoleData; a thread has to come with its hole); `Louvers.Add` (same never-solves shape) and `Louvers.AddSync` (0x807B0086); `ContourFlanges.AddEx`/`Add` (E_FAIL on 52 open-profile placements); `Constructions.LoftedSurfaces.Add`/`Add2` and `BlueSurfs.Add` (E_INVALIDARG on every shape that builds a solid loft);  `Constructions.SweptSurfaces.Add` (**crashes the Solid Edge process** on 3 of 5 calls once a session has been through a few documents -- it builds on a fresh instance with `Origins=[element]`, `OriginRefs=keypoint`; a crash is worse than a refusal, so the tool refuses).
+- **`Documents.Add("SolidEdge.WeldmentDocument")` raises a modal.** The ProgID is registered and Solid Edge accepts it, then looks for its default weldment template; on an install without the weldment environment that file is absent and the answer is a modal "Path not found" that `DisplayAlerts` does not suppress, which hangs the server until someone clicks it. Only then does the call return `0x80030003`. `create_weldment` therefore never takes the ProgID route and requires an existing template path. A template a caller names that is not on disk is refused by every document creator before any COM call -- it used to fall through silently to the default document.
+- **Front plane quirk**: COM "Normal" on the Front plane points to world −Y. Cutout tools do not auto-swap; prefer `direction="Symmetric"` there.
+- **Exports** use `SaveCopyAs`, never `SaveAs` (which repoints the live document).
+- **Never hand Solid Edge a path that already exists.** It answers with a modal "This file exists. Do you want to overwrite it?" prompt that `DisplayAlerts` does not suppress. Solid Edge has one UI thread, so the COM call never returns, every later call queues behind it, and the client eventually reports `Connection closed` as if the server had crashed. Every write goes through `backends/validation.py: guard_overwrite(file_path, overwrite)` first, which refuses by default and deletes the file when `overwrite=True`. Any new call that writes a path needs the same guard and an `overwrite` parameter.
 
-- **Tools** ✅ (~150 composite): Actions that create/modify models — each composite tool uses `method`/`type`/`action` discriminator to dispatch to the correct backend method
-- **Resources** ✅ (52 implemented): Read-only model data (feature list, component tree, mass properties, document info, app info, sketch info)
-- **Prompts** ⏳ (pending): Conversation templates (design review, manufacturability check, modeling guidance)
+## Type library reference
 
-### Tool Categories (~150 tools + 52 resources)
+`reference/typelib_dump.json` is the source of truth for COM signatures and enum values but is **gitignored and absent from a fresh clone**. Regenerate it with `uv run python scripts/scrape_typelibs.py` (requires Solid Edge installed). Until then use `reference/typelib_summary.md` (truncated to the first values of each enum) and `reference/TYPELIB_IMPLEMENTATION_MAP.md`.
 
-| Category | Tools | Resources |
-|---|---|---|
-| **Connection/Application** | 12 | 0 |
-| **Documents** | 9 | 0 |
-| **Sketching** | 9 | 0 |
-| **Features (Part)** | 58 | 0 |
-| **Query/Analysis** | 19 | 52 |
-| **Export/Drawing** | 28 | 0 |
-| **Assembly** | 13 | 0 |
-| **Diagnostics** | 2 | 0 |
+Rules: never guess a constant or signature. Look it up, copy the exact value into `constants.py` with a comment naming the enum, and prefer collection-level `Add*` methods.
 
-### Tool Registration Pattern (Composite Tools)
+Six checks enforce this, and all six skip when the dump is absent:
 
-Related backend operations are consolidated into **composite tools** that use a `method`/`type`/`action` discriminator parameter with `match/case` dispatch:
+| Check | What it catches |
+|---|---|
+| `tests/unit/test_constants_typelib.py` | A constant whose value disagrees with its enum. Classes that are our own vocabulary go in `LOCAL_GROUPINGS` with a note. |
+| `tests/unit/test_com_members.py` | A COM member name that exists in no type library. A ratchet: new names fail, and fixing one fails until you delete it from `UNVERIFIED`. |
+| `tests/unit/test_com_receivers.py` (`scripts/audit_com_receivers.py`) | A member read off an interface that does not have it, which the name check cannot see because the name is real elsewhere. |
+| `scripts/audit_com_signatures.py` | A call with the wrong number of arguments. Run `--filter <path>` to see the full parameter list for each finding, `--by-file` for counts. |
+| `tests/unit/test_com_enum_args.py` (`scripts/audit_com_enum_args.py`) | A constant whose value is in no member of the enum its parameter declares -- a stray literal, or a value from the wrong constants class that falls outside the target enum. It **cannot** see the wrong *member* of the right enum, which is what most constant bugs here have been; only live geometry verification catches those. Bitmask enums accept 0 and any combination. |
+| `tests/unit/test_com_writes.py` (`scripts/audit_com_writes.py`) | An assignment to a member that is a method, or to a property the type library marks read-only. Solid Edge answers "Property 'Item.X' can not be set." and a surrounding try/except turns that into a reported success. |
+
+The signature audit resolves the receiver with the same inference the receiver audit uses, so `doc.Occurrences.Item(1)` is checked against `Occurrence` specifically rather than against every interface with that method name. That matters because its fallback is weak on purpose: an unresolved receiver only has to fit *some* interface with a method of that name, which is how `occurrence.Replace(path)` passed while `Occurrence.Replace` requires two arguments.
+
+The receiver audit checks lowercase members too, once the receiver resolves. PascalCase is the usual spelling but 857 lowercase member names exist across the libraries, and requiring PascalCase hid two bugs of one shape: `textbox.x` and `balloon.x` are members of nothing, so the position was quietly missing from every text box and balloon reported. Our own attributes stay out of it because `self.active_profile` resolves to no interface.
+
+The receiver audit goes further and infers what a receiver *is* by following declared types: `doc.Models.Item(1).Features` resolves PartDocument to Models to Model to Features. That is what catches the sharpest class of bug here, a real name on the wrong interface, such as `model.RevolvedSurfaces` when RevolvedSurfaces belongs to `Constructions`, or `line.StartPoint.X` when Line2d only has `GetStartPoint()`.
+
+Four more checks need no type library:
+
+`tests/unit/test_manager_mro.py` covers a different trap: the managers are built from a dozen mixins each, and two mixins defining the same method leaves one silently unreachable.
+
+`tests/unit/test_reported_writes.py` (`scripts/audit_reported_writes.py`) fails when a COM write sits inside a `contextlib.suppress` or a `try` that passes, and the value written is then handed back in the result. If Solid Edge refuses the write the failure is hidden and the caller is told it applied. This shape has produced a bug every time it was checked: `TextBox.TextHeight`, `Leader.Text` and `FeatureControlFrame.Text` are on no interface, `variable.DisplayName` is read-only, `DraftPrintUtility.PaperWidth` is millimetres and was given meters, and `PMI.Show` is refused on a part with no PMI. Let the write raise, report what Solid Edge holds afterwards, or add the pair to `ALLOWED` once it has been driven live.
+
+`tests/unit/test_dead_params.py` (`scripts/audit_dead_params.py`) fails when a parameter is declared and never read, at either layer. That is this server's quietest bug: the call succeeds, the result reports what the caller asked for, and the value never reached Solid Edge, so there is nothing for it to reject. `add_adjustable_part(x, y, z)` placed the part at the origin, `create_parts_list(x, y)` let Solid Edge choose the position, and `create_revolve(axis_type)` offered a choice nothing consulted. A parameter with genuinely nowhere to go says so with `del <param>`, which the audit reads as deliberate.
+
+### When a COM call cannot be formed
+
+Some methods require an object this server cannot obtain: a `KeyPoint`, a specific `Face`, a tangent face, a user selection. Do not pass `None` or guess. Return an error without touching COM, and keep the method signature so tool dispatch still works:
 
 ```python
-def create_extrude(
-    method: str = "finite",
-    distance: float = 0.0,
-    direction: str = "Normal",
-    wall_thickness: float = 0.0,
-    from_plane_index: int = 0,
-    to_plane_index: int = 0,
-) -> dict:
-    """Create an extruded protrusion.
-
-    method: 'finite' | 'infinite' | 'through_next' | 'from_to'
-        | 'thin_wall' | 'symmetric' | ...
-    """
-    match method:
-        case "finite":
-            return feature_manager.create_extrude(distance, direction)
-        case "infinite":
-            return feature_manager.create_extrude_infinite(direction)
-        # ... etc
-        case _:
-            return {"error": f"Unknown method: {method}"}
+return {
+    "error": (
+        "Normal cutout to a keypoint needs a KeyPoint or tangent face object, "
+        "which this server cannot select. Use create_normal_cutout(distance) "
+        "or the Solid Edge UI."
+    ),
+    "unsupported": True,
+}
 ```
 
-**Key patterns:**
-- Each composite tool merges 2-18 related tools into one via discriminator parameter
-- Backend calls remain **exactly the same** — only the tool layer changed
-- Parameters use union of all sub-method params; unused params are ignored
-- All tools return `dict[str, Any]` with `{"status": "..."}` or `{"error": "...", "traceback": "..."}`
-- Backend managers are initialized globally at module level in `managers.py`
+The same applies to APIs Solid Edge blocks for automation, such as `AssemblyFeaturesPatterns.Add` and `AssemblyFeaturesMirrors.Add` (both `E_ACCESSDENIED` on 2025/2026). An honest error beats a call that always fails.
 
-### Manager Pattern
+## Testing notes
 
-The codebase uses a manager pattern to organize backend operations:
-
-```python
-# Global manager instances (initialized in server.py)
-connection_manager = ConnectionManager()
-doc_manager = DocumentManager(connection_manager)
-sketch_manager = SketchManager(doc_manager)
-feature_manager = FeatureManager(doc_manager, sketch_manager)
-assembly_manager = AssemblyManager(doc_manager, sketch_manager)
-query_manager = QueryManager(doc_manager)
-export_manager = ExportManager(doc_manager)
-view_manager = ViewModel(doc_manager)
-```
-
-Each manager encapsulates related COM operations and maintains necessary state (e.g., `sketch_manager` tracks the active sketch).
-
-## Solid Edge-Specific Notes
-
-- **Windows-only**: Solid Edge COM automation requires Windows. pywin32 does not work on Linux/macOS.
-- **COM binding**: Use `gencache.EnsureDispatch()` for early binding (type hints, IntelliSense) or `Dispatch()` for late binding (more compatible but slower). We use `Dispatch()` for broader compatibility.
-- **Active document pattern**: Most operations require an active document. The DocumentManager tracks the active document via COM.
-- **Sketch-then-feature workflow**: 3D features (extrude, revolve) require a closed 2D sketch profile. The typical flow is:
-  ```
-  create_sketch() → draw_line/circle/etc() → close_sketch() → create_extrude()
-  ```
-  The `SketchManager` maintains `self.active_profile` to track the current sketch.
-- **COM exception handling**: COM operations can raise `pywintypes.com_error`. Always wrap in try/except with traceback for debugging:
-  ```python
-  try:
-      # COM operation
-  except Exception as e:
-      return {"error": str(e), "traceback": traceback.format_exc()}
-  ```
-- **Reference planes**: Solid Edge has 3 default planes (Top/XZ, Front/XY, Right/YZ). Sketches are created on these planes using `RefPlanes.Item(index)`.
-- **Units**: Solid Edge internal units are **meters**. Convert mm to meters by dividing by 1000. All tool parameters use meters.
-- **Feature tree**: Features are stored in `Document.Models` collection (1-indexed in COM). Each feature has properties like Name, Type, Status.
-- **Cutout operations**: Available via collection-level APIs (`model.ExtrudedCutouts.AddFiniteMulti`, `model.RevolvedCutouts.AddFiniteMulti`), NOT via `models.AddExtrudedCutout` (which doesn't exist).
-- **Collections are 1-indexed**: COM collections use 1-based indexing (`collection.Item(1)` is first item), but our tools use 0-based indexing for Python consistency.
-- **Profile validation**: After drawing geometry, profiles need to be validated/closed before using them for features. The `close_sketch()` tool calls `profile.End(0)`.
-- **Angle units**: Most angle parameters in the API expect **radians**, so convert degrees to radians using `math.radians(angle)`.
-
-## Type Library Reference (MANDATORY)
-
-**All MCP server development MUST use the scraped type library data as the source of truth.**
-
-We have a complete dump of every Solid Edge COM type library (41 .tlb files, 2,240 interfaces,
-21,237 methods, 14,575 enum values) in structured JSON. This eliminates guessing at constant
-values, method signatures, and parameter types.
-
-### Reference Files
-
-| File | Purpose |
-|------|---------|
-| `reference/typelib_dump.json` | **Primary reference** - Full structured dump of all type libraries. Search this for exact method signatures, parameter names/types, enum values, and interface hierarchies. |
-| `reference/typelib_summary.md` | Human-readable overview of all 40 type libraries with interface/enum counts. |
-| `reference/TYPELIB_IMPLEMENTATION_MAP.md` | Maps every COM API surface against current MCP tool coverage. Identifies gaps and prioritizes what to implement. Check this before starting any new tool work. |
-| `scripts/scrape_typelibs.py` | Scraper script to regenerate the dump (run if SE version changes). |
-
-### Rules for COM API Development
-
-1. **NEVER guess constant values.** Look up the exact enum name and value in `typelib_dump.json` under `Program/constant.tlb > enums`. Example: search for `FeaturePropertyConstants` to find `igLeft=1, igRight=2, igSymmetric=3`, etc.
-
-2. **NEVER guess method signatures.** Look up the interface in the appropriate .tlb entry (usually `Program/Part.tlb`, `Program/assembly.tlb`, `Program/draft.tlb`, or `Program/framewrk.tlb`). The dump includes exact parameter names, types (VT_I4, VT_R8, VT_DISPATCH, SAFEARRAY, etc.), flags (in/out/optional), and return types.
-
-3. **Check the implementation map first.** Before implementing a new tool, consult `reference/TYPELIB_IMPLEMENTATION_MAP.md` to see:
-   - Whether the API method is already implemented
-   - Which collection/interface the method belongs to
-   - The exact method signature from the type library
-   - Priority tier and any known issues (e.g., SAFEARRAY marshaling problems)
-
-4. **Use correct collection-level APIs.** The type library shows which methods exist on collection interfaces (e.g., `ExtrudedCutouts.AddFiniteMulti`) vs. the `Models` interface (e.g., `Models.AddFiniteExtrudedProtrusion`). Prefer collection-level methods as they are proven to work.
-
-5. **Cross-reference user-defined types.** When a parameter type shows a name like `FeaturePropertyConstants` or `RefAxis*`, look up that type in the same .tlb or in `constant.tlb` to find the actual values/interface.
-
-6. **Update constants.py from type library data.** When adding new constants to `backends/constants.py`, copy the exact values from the scraped data. Add a comment noting which enum they came from.
-
-### Quick Lookup Examples
-
-```python
-# To find a method signature:
-# Search typelib_dump.json for: "AddAngularByAngle" in Program/Part.tlb > interfaces > RefPlanes > methods
-
-# To find a constant value:
-# Search typelib_dump.json for: "FeaturePropertyConstants" in Program/constant.tlb > enums
-
-# To check what's implemented vs available:
-# Read reference/TYPELIB_IMPLEMENTATION_MAP.md
-```
-
-## Development Workflow
-
-When adding new capabilities:
-
-1. **Check the implementation map**: Read `reference/TYPELIB_IMPLEMENTATION_MAP.md` to understand what's available and what's already done
-2. **Look up the method signature**: Find the exact COM method in `reference/typelib_dump.json` - get parameter names, types, and order
-3. **Verify constants**: Look up any enum values in the constants type library data, add to `backends/constants.py` if missing
-4. **Backend first**: Implement the raw COM operation in the appropriate `backends/` module (e.g., `features.py` for new feature types)
-5. **Test manually**: Use `python -i` to import and test the backend function directly, or use the diagnostic tools
-6. **Wrap as tool**: Add `@mcp.tool()` decorator wrapper in `server.py` that calls the backend manager method
-7. **Update tracking**: Update `reference/TYPELIB_IMPLEMENTATION_MAP.md` to mark the tool as implemented
-8. **Add tests**: Write pytest tests in `tests/unit/` or `tests/integration/`
-9. **Update docs**: Add to README.md if it's a major user-facing feature
-
-### Common Development Tasks
-
-**Testing a specific COM method:**
-```python
-# Use the diagnostic tools to inspect available methods
-from src.solidedge_mcp.backends.diagnostics import diagnose_document
-doc = doc_manager.get_active_document()
-print(diagnose_document(doc))
-```
-
-**Adding a new feature type:**
-1. Look up the method signature in `reference/typelib_dump.json` (search for the method name in the relevant .tlb)
-2. Look up any required constants in `Program/constant.tlb > enums` and add to `backends/constants.py`
-3. Add backend method to `backends/features.py` in the `FeatureManager` class, using exact parameter names/types from the type library
-4. Add MCP tool wrapper in `server.py` in the appropriate section (marked with comments)
-5. Follow the existing pattern: try/except, return dict with status or error
-6. Update `reference/TYPELIB_IMPLEMENTATION_MAP.md` - check off the tool and update counts
-
-**Checking tool count:**
-```bash
-grep -c "@mcp.tool()" src/solidedge_mcp/server.py
-```
-
-## Common Workflows
-
-### Creating a Simple Extruded Part
-```
-1. connect_to_solidedge()
-2. create_part_document()
-3. create_sketch(plane="Top")
-4. draw_rectangle(x1=0, y1=0, x2=0.1, y2=0.1)  # 100mm square (units in meters)
-5. close_sketch()
-6. create_extrude(distance=0.05, operation="Add")  # 50mm tall
-7. save_document(file_path="C:/temp/box.par")
-8. export_step(file_path="C:/temp/box.step")
-```
-
-### Creating a Revolved Part
-```
-1. connect_to_solidedge()
-2. create_part_document()
-3. create_sketch(plane="Front")
-4. draw_line(x1=0, y1=0, x2=0.05, y2=0)  # Profile line
-5. draw_line(x1=0.05, y1=0, x2=0.05, y2=0.1)
-6. draw_line(x1=0.05, y1=0.1, x2=0, y2=0.1)
-7. draw_line(x1=0, y1=0.1, x2=0, y2=0)  # Close profile
-8. close_sketch()
-9. create_revolve(angle=360)  # Full revolution
-10. save_document(file_path="C:/temp/revolved.par")
-```
-
-### Assembly Workflow
-```
-1. connect_to_solidedge()
-2. create_assembly_document()
-3. place_component(component_path="C:/parts/base.par", x=0, y=0, z=0)
-4. place_component(component_path="C:/parts/top.par", x=0, y=0, z=0.1)
-5. list_assembly_components()  # Get component indices
-6. create_mate(mate_type="Planar", component1_index=0, component2_index=1)
-7. save_document(file_path="C:/assemblies/assembly.asm")
-```
-
-## Testing Notes
-
-- **Unit tests**: Mock COM objects to test logic without Solid Edge installed
-- **Integration tests**: Require Solid Edge running on Windows. Mark with `@pytest.mark.integration`
-- **CI limitations**: GitHub Actions runners do not have Solid Edge. Integration tests run locally only.
-- **Manual testing**: The easiest way to test is to run the MCP server and use it through Claude Code or another MCP client
-- **Diagnostic tools**: Use `diagnose_api()` and `diagnose_feature()` to explore the COM API interactively
-
-## Comparison to KiCad-MCP
-
-| Aspect | KiCad-MCP | Solid Edge MCP |
-|---|---|---|
-| Platform | Cross-platform (Python, file I/O) | Windows-only (COM automation) |
-| Read operations | S-expr parser, no KiCad needed | COM, requires Solid Edge running |
-| Write operations | File mutation + kicad-cli | COM API calls |
-| Session model | File-based undo/rollback | COM undo stack (pending) |
-| Tool routing | 2-tier (8 direct, 67 routed) | TBD (likely simpler, fewer tools) |
-| Primary use case | PCB design (board, schematic) | CAD modeling (parts, assemblies) |
+- Unit tests mock COM with `MagicMock`; a wrong COM member name still passes unless a test asserts it. Assert call arguments (`assert_called_once_with`) for any new COM call.
+- `@verifies_geometry` is bypassed when `doc` is a `unittest.mock` object; `tests/unit/test_features_base.py` tests it with hand-written fakes.
+- `tests/unit/test_server.py` builds the real server and checks every tool has annotations/tags and runs on the COM thread.
+- Integration tests need Solid Edge and are deselected by default (`addopts = -m 'not integration'`).

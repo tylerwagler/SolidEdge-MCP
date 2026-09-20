@@ -1,12 +1,89 @@
 """Feature tree queries, editing, and extent/treatment operations."""
 
 import contextlib
-import traceback
+import math
 from typing import Any
 
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import com_get, describe_feature_type
+from ..constants import DirectionConstants, FeatureStatusConstants, OffsetSideConstants
+from ..features._base import feature_index_of
 from ..logging import get_logger
+from ._base import all_faces, body_of, dispatch_array
 
 _logger = get_logger(__name__)
+
+#: Part.tlb takes ``KeyPointFlags`` (constant.tlb > KeyPointExtentConstants) on
+#: every ApplyDirection*Extent overload. There is no "no keypoint" member; 0 is
+#: the null value Solid Edge uses when the extent is not keypoint-driven.
+_NO_KEYPOINT_FLAGS = 0
+
+
+def _status_code(raw: Any) -> int | None:
+    """The status value out of whatever Feature.Status hands back.
+
+    pywin32 returns it as a pair, ``(code, None)``, because the property
+    carries a second out-parameter. Reading the pair as the code left every
+    status decoding as "unknown".
+    """
+    if isinstance(raw, int):
+        return raw
+    try:
+        first = raw[0]
+    except (TypeError, IndexError, KeyError):
+        return None
+    return first if isinstance(first, int) else None
+
+
+#: Feature.Status values, named. constant.tlb > FeatureStatusConstants.
+_FEATURE_STATUS: dict[int | None, str] = {
+    FeatureStatusConstants.igFeatureOK: "ok",
+    FeatureStatusConstants.igFeatureFailed: "failed",
+    FeatureStatusConstants.igFeatureWarned: "warned",
+    FeatureStatusConstants.igFeatureSuppressed: "suppressed",
+    FeatureStatusConstants.igFeatureRolledBack: "rolled_back",
+}
+
+
+def _is_revolved(feature: Any) -> bool:
+    """A revolved feature's extent is an angle; every other feature's is a length."""
+    kind = describe_feature_type(com_get(feature, "Type")).get("type", "")
+    return "revolv" in str(kind).lower()
+
+
+def _report_extent(result: dict[str, Any], extent_data: Any, feature: Any) -> None:
+    """Name the three values GetDirection{1,2}Extent hands back.
+
+    Part.tlb declares three out-params -- ExtentType, ExtentSide, then
+    FiniteDepth (or Angle on a revolved feature, FiniteDistance on a slot)
+    -- and no face reference. The code used to read slot 1 as the distance
+    and slot 2 as a face, so the side constant was reported as the distance
+    and the real value was stringified into face_ref. Verified on Solid Edge
+    2026: an extrude read distance=2 (igRight) and face_ref='0.03'.
+
+    A revolved feature's value is an angle in radians; it is reported in
+    degrees, the unit at this boundary, with the radians alongside.
+    """
+    if not (isinstance(extent_data, tuple) and len(extent_data) >= 3):
+        result["error_detail"] = (
+            f"GetDirectionExtent returned {extent_data!r}; expected (type, side, value)"
+        )
+        return
+    result["extent_type"] = extent_data[0]
+    result["extent_side"] = extent_data[1]
+    value = extent_data[2]
+    if _is_revolved(feature):
+        result["angle_radians"] = value
+        if isinstance(value, (int, float)):
+            result["angle_degrees"] = math.degrees(value)
+    else:
+        result["distance"] = value
+
+
+def _extent_value(feature: Any, distance: float) -> float:
+    """What to hand ApplyDirection{1,2}Extent: radians for a revolve, meters otherwise."""
+    return math.radians(distance) if _is_revolved(feature) else distance
 
 
 class FeatureQueryMixin:
@@ -21,37 +98,46 @@ class FeatureQueryMixin:
         Unlike list_features() which only shows Models, this shows the
         complete design tree including sketches, reference planes, etc.
 
+        ``tree_position`` is the spot in that tree; ``index`` is the one every
+        index-taking tool speaks, and is null for an entry that is not a
+        feature. The two differ by however many reference planes come first,
+        so reporting the tree position as "index" pointed callers at the wrong
+        feature.
+
         Returns:
             Dict with list of all feature tree entries
         """
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
 
-            features = doc.DesignEdgebarFeatures
             feature_list = []
 
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    entry: dict[str, Any] = {"index": i - 1}
+                    entry: dict[str, Any] = {"tree_position": i - 1}
                     try:
                         entry["name"] = feat.Name
                     except Exception:
                         entry["name"] = f"Feature_{i}"
+                    entry["index"] = feature_index_of(doc, entry["name"])
                     with contextlib.suppress(Exception):
-                        entry["type"] = feat.Type
+                        entry.update(describe_feature_type(feat.Type))
                     with contextlib.suppress(Exception):
-                        entry["suppressed"] = feat.IsSuppressed
+                        entry["suppressed"] = feat.Suppress
                     feature_list.append(entry)
                 except Exception:
-                    feature_list.append({"index": i - 1, "name": f"Feature_{i}"})
+                    feature_list.append(
+                        {"tree_position": i - 1, "index": None, "name": f"Feature_{i}"}
+                    )
 
             return {"features": feature_list, "count": len(feature_list)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def rename_feature(self, old_name: str, new_name: str) -> dict[str, Any]:
         """
@@ -67,15 +153,14 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
-
-            features = doc.DesignEdgebarFeatures
 
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == old_name:
+                    if com_get(feat, "Name") == old_name:
                         feat.Name = new_name
                         return {"status": "renamed", "old_name": old_name, "new_name": new_name}
                 except Exception:
@@ -83,7 +168,7 @@ class FeatureQueryMixin:
 
             return {"error": f"Feature '{old_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def suppress_feature(self, feature_name: str) -> dict[str, Any]:
         """
@@ -105,14 +190,14 @@ class FeatureQueryMixin:
                 feat = features.Item(i)
                 try:
                     if feat.Name == feature_name:
-                        feat.Suppress()
+                        feat.Suppress = True
                         return {"status": "suppressed", "feature": feature_name}
                 except Exception:
                     continue
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def unsuppress_feature(self, feature_name: str) -> dict[str, Any]:
         """
@@ -132,14 +217,14 @@ class FeatureQueryMixin:
                 feat = features.Item(i)
                 try:
                     if feat.Name == feature_name:
-                        feat.Unsuppress()
+                        feat.Suppress = False
                         return {"status": "unsuppressed", "feature": feature_name}
                 except Exception:
                     continue
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_feature(self, feature_name: str) -> dict[str, Any]:
         """
@@ -156,14 +241,14 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            debf = com_get(doc, "DesignEdgebarFeatures")
+            if debf is None:
                 return {"error": "Document does not support feature deletion"}
 
-            debf = doc.DesignEdgebarFeatures
             for i in range(1, debf.Count + 1):
                 try:
                     feat = debf.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
+                    if com_get(feat, "Name") == feature_name:
                         feat.Delete()
                         return {"status": "deleted", "feature_name": feature_name}
                 except Exception:
@@ -171,7 +256,7 @@ class FeatureQueryMixin:
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_status(self, feature_name: str) -> dict[str, Any]:
         """
@@ -188,33 +273,47 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
 
-            features = doc.DesignEdgebarFeatures
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
-                        result = {"feature_name": feature_name, "index": i - 1}
+                    if com_get(feat, "Name") == feature_name:
+                        # i - 1 is the position in the Pathfinder tree, which
+                        # holds the reference planes too. Reporting that as
+                        # "index" pointed callers at a different feature: the
+                        # base extrusion read as index 3, and renaming index 3
+                        # hit the third cutout instead.
+                        result: dict[str, Any] = {
+                            "feature_name": feature_name,
+                            "index": feature_index_of(doc, feature_name),
+                            "tree_position": i - 1,
+                        }
                         with contextlib.suppress(Exception):
-                            result["status"] = feat.Status
+                            code = _status_code(feat.Status)
+                            result["status_code"] = code
+                            # 1216476310 on its own says nothing; the enum
+                            # turns it into "ok", "failed", "warned",
+                            # "suppressed" or "rolled_back".
+                            result["status"] = _FEATURE_STATUS.get(code, "unknown")
                         with contextlib.suppress(Exception):
-                            result["is_suppressed"] = feat.IsSuppressed
+                            result["is_suppressed"] = feat.Suppress
                         try:
                             status_ex = feat.GetStatusEx()
                             result["status_ex"] = status_ex
                         except Exception:
                             pass
                         with contextlib.suppress(Exception):
-                            result["type"] = feat.Type
+                            result.update(describe_feature_type(feat.Type))
                         return result
                 except Exception:
                     continue
 
             return {"error": f"Feature '{feature_name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_profiles(self, feature_name: str) -> dict[str, Any]:
         """
@@ -231,15 +330,15 @@ class FeatureQueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "DesignEdgebarFeatures"):
+            features = com_get(doc, "DesignEdgebarFeatures")
+            if features is None:
                 return {"error": "DesignEdgebarFeatures not available"}
 
-            features = doc.DesignEdgebarFeatures
             target = None
             for i in range(1, features.Count + 1):
                 try:
                     feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
+                    if com_get(feat, "Name") == feature_name:
                         target = feat
                         break
                 except Exception:
@@ -275,64 +374,35 @@ class FeatureQueryMixin:
 
             return {"feature_name": feature_name, "profiles": profiles, "count": len(profiles)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_feature_parents(self, feature_name: str) -> dict[str, Any]:
-        """
-        Get the parent features of a named feature.
+        """Report that a feature's parents are not exposed through COM.
 
-        Reads the .Parents collection from DesignEdgebarFeatures to find
-        which features were used to create the named feature.
+        This read ``feature.Parents``. No Solid Edge interface has a
+        ``Parents`` member, so the read raised and the method returned an
+        empty list with a "not available" note that read like a quirk of the
+        document rather than a call that could never work. Verified against
+        every scraped type library.
 
         Args:
-            feature_name: Name of the feature to inspect
+            feature_name: The feature that was to be inspected.
 
         Returns:
-            Dict with list of parent feature names
+            Dict with an ``unsupported`` error naming what can be read instead.
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-
-            if not hasattr(doc, "DesignEdgebarFeatures"):
-                return {"error": "DesignEdgebarFeatures not available"}
-
-            features = doc.DesignEdgebarFeatures
-            target = None
-            for i in range(1, features.Count + 1):
-                try:
-                    feat = features.Item(i)
-                    if hasattr(feat, "Name") and feat.Name == feature_name:
-                        target = feat
-                        break
-                except Exception:
-                    continue
-
-            if target is None:
-                return {"error": f"Feature '{feature_name}' not found"}
-
-            parents = []
-            try:
-                parent_coll = target.Parents
-                if parent_coll and hasattr(parent_coll, "Count"):
-                    for j in range(1, parent_coll.Count + 1):
-                        try:
-                            parent = parent_coll.Item(j)
-                            p_info: dict[str, Any] = {"index": j - 1}
-                            with contextlib.suppress(Exception):
-                                p_info["name"] = parent.Name
-                            parents.append(p_info)
-                        except Exception:
-                            parents.append({"index": j - 1, "name": "unknown"})
-            except Exception as e:
-                return {
-                    "feature_name": feature_name,
-                    "parents": [],
-                    "note": f"Parents collection not available: {e}",
-                }
-
-            return {"feature_name": feature_name, "parents": parents, "count": len(parents)}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "error": (
+                "Solid Edge does not expose a feature's parent features through "
+                "COM; no interface has a Parents member. Read the sketches a "
+                "feature was built from with "
+                "solidedge://model/feature/{name}/profiles, and the whole "
+                "Pathfinder tree in order with "
+                "solidedge://model/edgebar-features."
+            ),
+            "unsupported": True,
+            "feature_name": feature_name,
+        }
 
     def get_feature_dimensions(self, feature_name: str) -> dict[str, Any]:
         """
@@ -367,8 +437,12 @@ class FeatureQueryMixin:
 
             dimensions = []
             try:
-                # GetDimensions returns (count, dim_array) as out-params
-                result = target_feature.GetDimensions()
+                # Part.tlb <feature>.GetDimensions(
+                #   NumDimensions VT_I4* [out],
+                #   Dimensions SAFEARRAY(VT_DISPATCH)* [in,out])
+                # NumDimensions precedes the buffer, so Dimensions goes in by
+                # keyword; Solid Edge resizes the array it is handed.
+                result = target_feature.GetDimensions(Dimensions=dispatch_array([]))
                 if result is not None:
                     # result may be a tuple (count, array) or just an array
                     if isinstance(result, tuple) and len(result) >= 2:
@@ -407,7 +481,7 @@ class FeatureQueryMixin:
                 "count": len(dimensions),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_vertex_count(self) -> dict[str, Any]:
         """
@@ -419,20 +493,17 @@ class FeatureQueryMixin:
             Dict with vertex count
         """
         try:
-            from ..constants import FaceQueryConstants
-
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body, model)
             total_vertices = 0
 
             for fi in range(1, faces.Count + 1):
                 try:
                     face = faces.Item(fi)
                     vertices = face.Vertices
-                    if hasattr(vertices, "Count"):
-                        total_vertices += vertices.Count
+                    total_vertices += com_get(vertices, "Count", 0)
                 except Exception:
                     pass
 
@@ -442,7 +513,7 @@ class FeatureQueryMixin:
                 "note": "Shared vertices are counted once per face",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # EXTENTS
@@ -469,33 +540,42 @@ class FeatureQueryMixin:
             result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 extent_data = feature.GetDirection1Extent()
-                if isinstance(extent_data, tuple):
-                    result["extent_type"] = extent_data[0] if len(extent_data) > 0 else None
-                    result["distance"] = extent_data[1] if len(extent_data) > 1 else None
-                    has_face = len(extent_data) > 2 and extent_data[2] is not None
-                    result["face_ref"] = str(extent_data[2]) if has_face else None
-                else:
-                    result["extent_type"] = extent_data
+                _report_extent(result, extent_data, feature)
             except Exception as e:
                 result["error_detail"] = f"GetDirection1Extent failed: {e}"
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_direction1_extent(
-        self, feature_name: str, extent_type: int, distance: float = 0.0
+        self,
+        feature_name: str,
+        extent_type: int,
+        distance: float = 0.0,
+        extent_side: int = DirectionConstants.igRight,
     ) -> dict[str, Any]:
         """
         Set Direction 1 extent on a named feature.
 
-        Calls feature.ApplyDirection1Extent(extent_type, distance, None).
-        Common extent types: igFinite=13, igThroughAll=16, igNone=44.
+        Part.tlb <feature>.ApplyDirection1Extent(
+            ExtentType FeaturePropertyConstants [in],
+            ExtentSide FeaturePropertyConstants [in],
+            FiniteDepth/Angle VT_R8 [in],
+            KeyPointOrTangentFace VT_DISPATCH [in],
+            KeyPointFlags KeyPointExtentConstants [in])
+
+        All five arguments are required. The keypoint slots are only used by
+        keypoint-driven extents; this server cannot select a KeyPoint, so it
+        passes None/0 and supports the distance-driven extents.
 
         Args:
             feature_name: Name of the feature in the design tree
             extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
-            distance: Extent distance in meters (used when extent_type is Finite)
+            distance: Extent distance in meters when extent_type is Finite. For a
+                revolved feature this is the angle in DEGREES; it is converted to
+                radians before COM.
+            extent_side: Side constant (1=Left/Reverse, 2=Right/Normal, 3=Symmetric)
 
         Returns:
             Dict with status
@@ -505,16 +585,19 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.ApplyDirection1Extent(extent_type, distance, None)
+            feature.ApplyDirection1Extent(
+                extent_type, extent_side, _extent_value(feature, distance), None, _NO_KEYPOINT_FLAGS
+            )
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "extent_type": extent_type,
+                "extent_side": extent_side,
                 "distance": distance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_direction2_extent(self, feature_name: str) -> dict[str, Any]:
         """
@@ -537,33 +620,41 @@ class FeatureQueryMixin:
             result: dict[str, Any] = {"feature_name": feature_name}
             try:
                 extent_data = feature.GetDirection2Extent()
-                if isinstance(extent_data, tuple):
-                    result["extent_type"] = extent_data[0] if len(extent_data) > 0 else None
-                    result["distance"] = extent_data[1] if len(extent_data) > 1 else None
-                    has_face = len(extent_data) > 2 and extent_data[2] is not None
-                    result["face_ref"] = str(extent_data[2]) if has_face else None
-                else:
-                    result["extent_type"] = extent_data
+                _report_extent(result, extent_data, feature)
             except Exception as e:
                 result["error_detail"] = f"GetDirection2Extent failed: {e}"
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_direction2_extent(
-        self, feature_name: str, extent_type: int, distance: float = 0.0
+        self,
+        feature_name: str,
+        extent_type: int,
+        distance: float = 0.0,
+        extent_side: int = DirectionConstants.igRight,
     ) -> dict[str, Any]:
         """
         Set Direction 2 extent on a named feature.
 
-        Calls feature.ApplyDirection2Extent(extent_type, distance, None).
-        Common extent types: igFinite=13, igThroughAll=16, igNone=44.
+        Part.tlb <feature>.ApplyDirection2Extent(
+            ExtentType FeaturePropertyConstants [in],
+            ExtentSide FeaturePropertyConstants [in],
+            FiniteDepth/Angle VT_R8 [in],
+            KeyPointOrTangentFace VT_DISPATCH [in],
+            KeyPointFlags KeyPointExtentConstants [in])
+
+        All five arguments are required; see set_direction1_extent for why the
+        keypoint slots are None/0.
 
         Args:
             feature_name: Name of the feature in the design tree
             extent_type: Extent type constant (13=Finite, 16=ThroughAll, 44=None)
-            distance: Extent distance in meters (used when extent_type is Finite)
+            distance: Extent distance in meters when extent_type is Finite. For a
+                revolved feature this is the angle in DEGREES; it is converted to
+                radians before COM.
+            extent_side: Side constant (1=Left/Reverse, 2=Right/Normal, 3=Symmetric)
 
         Returns:
             Dict with status
@@ -573,16 +664,19 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.ApplyDirection2Extent(extent_type, distance, None)
+            feature.ApplyDirection2Extent(
+                extent_type, extent_side, _extent_value(feature, distance), None, _NO_KEYPOINT_FLAGS
+            )
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "extent_type": extent_type,
+                "extent_side": extent_side,
                 "distance": distance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # THIN WALL OPTIONS
@@ -620,25 +714,36 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_thin_wall_options(
         self,
         feature_name: str,
-        wall_type: int,
-        thickness1: float,
-        thickness2: float = 0.0,
+        thickness: float,
+        thickness_side: int = DirectionConstants.igRight,
+        thin_wall: bool = True,
+        add_end_caps: bool = False,
+        remove_inside_material: bool = False,
     ) -> dict[str, Any]:
         """
         Set thin wall options on a named feature.
 
-        Calls feature.SetThinWallOptions(wall_type, thickness1, thickness2).
+        Part.tlb <feature>.SetThinWallOptions(
+            ThinWall VT_BOOL [in], AddEndCaps VT_BOOL [in],
+            RemoveInsideMaterial VT_BOOL [in], Thickness VT_R8 [in],
+            ThicknessSide FeaturePropertyConstants [in])
+
+        All five arguments are required. The older three-argument call was
+        passing (thickness_side, thickness, 0.0) into the three leading
+        booleans, which is why it never took effect.
 
         Args:
             feature_name: Name of the feature in the design tree
-            wall_type: Thin wall type constant
-            thickness1: First wall thickness in meters
-            thickness2: Second wall thickness in meters (default 0.0)
+            thickness: Wall thickness in meters
+            thickness_side: Side constant (1=Left, 2=Right, 3=Symmetric)
+            thin_wall: Enable (True) or disable (False) the thin wall
+            add_end_caps: Cap the open ends of the thin wall
+            remove_inside_material: Hollow out the interior
 
         Returns:
             Dict with status
@@ -648,17 +753,21 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.SetThinWallOptions(wall_type, thickness1, thickness2)
+            feature.SetThinWallOptions(
+                thin_wall, add_end_caps, remove_inside_material, thickness, thickness_side
+            )
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
-                "wall_type": wall_type,
-                "thickness1": thickness1,
-                "thickness2": thickness2,
+                "thin_wall": thin_wall,
+                "add_end_caps": add_end_caps,
+                "remove_inside_material": remove_inside_material,
+                "thickness": thickness,
+                "thickness_side": thickness_side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # FACE OFFSET DATA
@@ -696,17 +805,29 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def set_from_face_offset(self, feature_name: str, offset: float) -> dict[str, Any]:
+    def set_from_face_offset(
+        self, feature_name: str, offset: float, offset_side: int | None = None
+    ) -> dict[str, Any]:
         """
         Set the 'from face' offset on a named feature.
 
-        Calls feature.SetFromFaceOffsetData(offset).
+        Part.tlb <feature>.SetFromFaceOffsetData(
+            FromFaceOrPlane VT_DISPATCH [in],
+            FromFaceOffsetSide OffsetSideConstants [in],
+            FromFaceOffsetDistance VT_R8 [in])
+
+        All three arguments are required. This server cannot select a Face or
+        reference plane, so the face already attached to the feature is read
+        back with GetFromFaceOffsetData() and re-applied with the new offset.
+        A feature with no from-face cannot be edited here.
 
         Args:
             feature_name: Name of the feature in the design tree
             offset: Offset distance in meters
+            offset_side: OffsetSideConstants (1=Left, 2=Right, 44=None);
+                None keeps the side already on the feature
 
         Returns:
             Dict with status
@@ -716,15 +837,35 @@ class FeatureQueryMixin:
             if feature is None:
                 return {"error": f"Feature '{feature_name}' not found"}
 
-            feature.SetFromFaceOffsetData(offset)
+            # GetFromFaceOffsetData(FromFaceOrPlane [out], FromFaceOffsetSide
+            # [out], FromFaceOffsetDistance [out]) - no arguments to pass.
+            current = feature.GetFromFaceOffsetData()
+            from_face = current[0] if isinstance(current, tuple) and current else None
+            if from_face is None:
+                return {
+                    "error": (
+                        f"Feature '{feature_name}' has no from-face to offset. "
+                        "SetFromFaceOffsetData needs a Face or reference plane "
+                        "object, which this server cannot select. Create the "
+                        "from-to extent in the Solid Edge UI first."
+                    ),
+                    "unsupported": True,
+                }
+
+            side = offset_side
+            if side is None:
+                side = current[1] if len(current) > 1 else OffsetSideConstants.seOffsetNone
+
+            feature.SetFromFaceOffsetData(from_face, side, offset)
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "offset": offset,
+                "offset_side": side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_to_face_offset(self, feature_name: str) -> dict[str, Any]:
         """
@@ -755,7 +896,7 @@ class FeatureQueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_to_face_offset(
         self, feature_name: str, offset_side: int, distance: float
@@ -788,7 +929,7 @@ class FeatureQueryMixin:
                 "distance": distance,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # BODY ARRAY
@@ -836,18 +977,25 @@ class FeatureQueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def set_body_array(self, feature_name: str, body_indices: list[int]) -> dict[str, Any]:
+    def set_body_array(
+        self, feature_name: str, body_indices: list[int], multi_body_cut: bool = True
+    ) -> dict[str, Any]:
         """
         Set the body array on a named feature.
 
-        Resolves body objects from the model by index (0-based) and calls
-        feature.SetBodyArray(body_array).
+        Part.tlb <feature>.SetBodyArray(
+            MultiBodyCut VT_BOOL [in], NumberOfBodies VT_I4 [in],
+            BodyArray SAFEARRAY(VT_DISPATCH)* [in])
+
+        All three arguments are required; the earlier single-argument call left
+        the body list in the MultiBodyCut slot.
 
         Args:
             feature_name: Name of the feature in the design tree
             body_indices: List of 0-based body indices from the Models collection
+            multi_body_cut: Whether the feature cuts across multiple bodies
 
         Returns:
             Dict with status
@@ -867,16 +1015,17 @@ class FeatureQueryMixin:
                 model = models.Item(com_idx)
                 body_array.append(model.Body)
 
-            feature.SetBodyArray(body_array)
+            feature.SetBodyArray(multi_body_cut, len(body_array), dispatch_array(body_array))
 
             return {
                 "status": "updated",
                 "feature_name": feature_name,
                 "body_indices": body_indices,
                 "body_count": len(body_array),
+                "multi_body_cut": multi_body_cut,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # DIRECTION 1 TREATMENT (CROWN/DRAFT)
@@ -918,7 +1067,7 @@ class FeatureQueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def apply_direction1_treatment(
         self,
@@ -970,4 +1119,4 @@ class FeatureQueryMixin:
                 "treatment_type": treatment_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

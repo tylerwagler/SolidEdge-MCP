@@ -1,12 +1,13 @@
 """Unit tests for the verifies_geometry decorator (honest feature status).
 
-The decorator keys on the body's FACE COUNT (and Models.Count for the first
-solid), because a failed feature still adds a feature-tree node but leaves the
-body's faces unchanged.
+The decorator keys on the TOTAL FACE COUNT across all bodies in Models (and
+Models.Count for the first solid), because a failed feature still adds a
+feature-tree node but leaves the bodies' faces unchanged.
 """
 
 from unittest.mock import MagicMock
 
+from solidedge_mcp.backends.comutil import profile_origin
 from solidedge_mcp.backends.features._base import FeatureManagerBase, verifies_geometry
 
 
@@ -16,8 +17,10 @@ class _Counter:
 
 
 class _Body:
-    def __init__(self, face_count):
+    def __init__(self, face_count, volume=None):
         self.face_count = face_count
+        if volume is not None:
+            self.Volume = volume
 
     def Faces(self, _query):
         return _Counter(self.face_count)
@@ -29,19 +32,30 @@ class _Model:
 
 
 class _Models:
-    def __init__(self, count, body):
-        self.Count = count
-        self._body = body
+    """Fake Models collection holding one body per model, 1-indexed like COM."""
 
-    def Item(self, _i):
-        return _Model(self._body)
+    def __init__(self, count, bodies):
+        self.Count = count
+        self._bodies = list(bodies)
+        self.item_calls = []
+
+    def Item(self, i):
+        self.item_calls.append(i)
+        if i < 1 or i > len(self._bodies):
+            raise IndexError(f"Models.Item({i}) out of range (have {len(self._bodies)})")
+        return _Model(self._bodies[i - 1])
 
 
 class _FakeDoc:
-    def __init__(self, models_count, face_count, faces_int=True):
+    """Document with ``models_count`` bodies; ``face_count`` is body 1's faces,
+    ``extra_face_counts`` gives the faces of bodies 2..N."""
+
+    def __init__(self, models_count, face_count, faces_int=True, extra_face_counts=()):
         body = _Body(face_count if faces_int else MagicMock())
-        self.Models = _Models(models_count, body)
+        bodies = [body] + [_Body(fc) for fc in extra_face_counts]
+        self.Models = _Models(models_count, bodies)
         self.body = body
+        self.bodies = bodies
 
 
 class _Mgr(FeatureManagerBase):
@@ -105,7 +119,230 @@ def test_conservative_when_faces_not_readable():
 
 def test_no_geometry_created_logic():
     f = FeatureManagerBase._no_geometry_created
-    assert f((1, 6), (1, 6)) is True      # body unchanged
-    assert f((1, 6), (1, 8)) is False     # faces changed
-    assert f((0, 0), (1, 6)) is False     # base solid appeared
-    assert f((None, None), (None, None)) is False  # unknown -> no claim
+    assert f((1, 6, None), (1, 6, None)) is True  # body unchanged
+    assert f((1, 6, None), (1, 8, None)) is False  # faces changed
+    assert f((0, 0, None), (1, 6, None)) is False  # base solid appeared
+    assert f((None, None, None), (None, None, None)) is False  # unknown -> no claim
+    assert f((1, 6, 1.0), (1, 6, 2.0)) is False  # same faces, volume changed
+    assert f((1, 6, 1.0), (1, 6, 1.0)) is True  # same faces, same volume
+
+
+# ---------------------------------------------------------------------------
+# Multi-body: the snapshot must SUM face counts over Models.Item(1..Count)
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_sums_faces_across_all_bodies():
+    doc = _FakeDoc(models_count=3, face_count=6, extra_face_counts=(10, 4))
+    mgr = _Mgr(doc)
+    assert mgr._geometry_snapshot() == (3, 20, None)
+    # Every body was visited, 1-indexed, for its faces (the volume pass stops
+    # at the first body without a Volume).
+    assert doc.Models.item_calls[:3] == [1, 2, 3]
+
+
+def test_single_body_snapshot_unchanged():
+    mgr = _Mgr(_FakeDoc(models_count=1, face_count=6))
+    assert mgr._geometry_snapshot() == (1, 6, None)
+
+
+def test_change_on_second_body_counts_as_geometry_created():
+    # A multi-body cutout that only touches body 2 (body 1 untouched) must NOT
+    # be rewritten as "no geometry was created".
+    doc = _FakeDoc(models_count=2, face_count=6, extra_face_counts=(6,))
+    mgr = _Mgr(doc)
+
+    @verifies_geometry
+    def cut_second_body(self):
+        doc.bodies[1].face_count = 9  # body 1 stays at 6 faces
+        return {"status": "created", "type": "extruded_cutout_multi_body"}
+
+    result = cut_second_body(mgr)
+    assert result["status"] == "created"
+    assert "error" not in result
+
+
+def test_change_on_last_of_many_bodies_counts_as_geometry_created():
+    doc = _FakeDoc(models_count=4, face_count=6, extra_face_counts=(6, 6, 6))
+    mgr = _Mgr(doc)
+
+    @verifies_geometry
+    def cut_last_body(self):
+        doc.bodies[3].face_count = 7
+        return {"status": "created", "type": "hole_multi_body"}
+
+    assert cut_last_body(mgr)["status"] == "created"
+
+
+def test_multi_body_no_op_is_still_downgraded():
+    # No body changed -> the honest-status downgrade still fires, reporting
+    # the summed totals.
+    doc = _FakeDoc(models_count=2, face_count=6, extra_face_counts=(10,))
+    mgr = _Mgr(doc)
+    result = mgr.make(new_faces=6)
+    assert "error" in result
+    assert result["faces_before"] == 16
+    assert result["faces_after"] == 16
+    assert result["models_before"] == 2
+
+
+def test_multi_body_offsetting_changes_are_not_masked_into_error_by_mistake():
+    # Sanity: a change to body 1 alone is still recognised in a multi-body doc.
+    doc = _FakeDoc(models_count=2, face_count=6, extra_face_counts=(10,))
+    mgr = _Mgr(doc)
+    assert mgr.make(new_faces=8)["status"] == "created"
+
+
+def test_conservative_when_any_body_unreadable():
+    # Body 2's face count is a MagicMock (not an int): the whole total must be
+    # None, never a partial sum from body 1 alone.
+    doc = _FakeDoc(models_count=2, face_count=6, extra_face_counts=(MagicMock(),))
+    mgr = _Mgr(doc)
+    assert mgr._geometry_snapshot() == (2, None, None)
+    assert mgr.make(new_faces=6)["status"] == "created"  # cannot prove -> pass through
+
+
+def test_conservative_when_a_body_raises():
+    # Models.Count claims 3 bodies but Item(3) raises: total is None, not 16.
+    doc = _FakeDoc(models_count=3, face_count=6, extra_face_counts=(10,))
+    mgr = _Mgr(doc)
+    assert mgr._geometry_snapshot() == (3, None, None)
+    assert mgr.make(new_faces=6)["status"] == "created"
+
+
+def test_unittest_mock_document_bails_out():
+    # A MagicMock document is never measured, regardless of what it reports.
+    doc = MagicMock()
+    doc.Models.Count = 1
+    doc.Models.Item.return_value.Body.Faces.return_value.Count = 6
+    mgr = _Mgr(doc)
+    assert mgr._geometry_snapshot() == (None, None, None)
+    doc.Models.Item.assert_not_called()
+
+
+class TestNoGeometryReason:
+    """The reason offered must match what the feature works from.
+
+    Blaming an open sketch profile for a round that found no edges to apply
+    to sent the reader looking in the wrong place. Seen on a sheet metal tab,
+    where create_round(all_edges) is accepted and changes nothing.
+    """
+
+    def test_a_sketch_feature_is_told_about_the_profile(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        reason = _why_nothing("create_extrude")
+
+        assert "sketch profile" in reason
+
+    def test_an_edge_feature_is_not(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        reason = _why_nothing("create_round")
+
+        # It may mention that there is no sketch, but must not blame one.
+        assert "sketch profile" not in reason
+        assert "edges or faces" in reason
+
+    def test_cutouts_and_lofts_count_as_sketch_features(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        for name in ("create_extruded_cutout", "create_lofted_protrusion", "create_swept_surface"):
+            assert "sketch profile" in _why_nothing(name), name
+
+    def test_chamfers_and_drafts_do_not(self):
+        from solidedge_mcp.backends.features._base import _why_nothing
+
+        for name in ("create_chamfer", "create_draft_angle", "create_thin_wall"):
+            assert "edges or faces" in _why_nothing(name), name
+
+
+class TestProfileOrigin:
+    """A loft pairs its cross-sections by the Origins array.
+
+    Each entry has to be a point that lies on its own section. These were
+    hardcoded to (0, 0), which only lines up when every profile happens to
+    pass through the sketch origin. Verified on Solid Edge 2026: two
+    rectangles lofted with their real corner points build a 6-faced solid,
+    and the same call with (0, 0) builds nothing at all -- no error, no
+    geometry, just a silent no-op that create_loft and create_lofted_cutout
+    both reported as "created no geometry".
+    """
+
+    def _profile(self, **collections):
+        profile = MagicMock()
+        for name in ("Lines2d", "Arcs2d", "Circles2d", "Ellipses2d"):
+            empty = MagicMock()
+            empty.Count = 0
+            setattr(profile, name, empty)
+        for name, (count, getter, point) in collections.items():
+            col = MagicMock()
+            col.Count = count
+            item = MagicMock()
+            getattr(item, getter).return_value = point
+            col.Item.return_value = item
+            setattr(profile, name, col)
+        return profile
+
+    def test_a_line_gives_its_start_point(self):
+        profile = self._profile(Lines2d=(4, "GetStartPoint", (0.01, 0.02, 0.0)))
+        assert profile_origin(profile) == (0.01, 0.02)
+
+    def test_a_circle_gives_its_centre(self):
+        profile = self._profile(Circles2d=(1, "GetCenterPoint", (0.025, 0.02, 0.0)))
+        assert profile_origin(profile) == (0.025, 0.02)
+
+    def test_an_arc_gives_its_start_point(self):
+        profile = self._profile(Arcs2d=(1, "GetStartPoint", (0.03, 0.04, 0.0)))
+        assert profile_origin(profile) == (0.03, 0.04)
+
+    def test_lines_win_over_circles(self):
+        profile = self._profile(
+            Lines2d=(4, "GetStartPoint", (0.01, 0.02, 0.0)),
+            Circles2d=(1, "GetCenterPoint", (0.9, 0.9, 0.0)),
+        )
+        assert profile_origin(profile) == (0.01, 0.02)
+
+    def test_an_empty_profile_falls_back_to_the_origin(self):
+        assert profile_origin(self._profile()) == (0.0, 0.0)
+
+    def test_geometry_that_raises_is_skipped(self):
+        profile = self._profile(Circles2d=(1, "GetCenterPoint", (0.02, 0.03, 0.0)))
+        profile.Lines2d.Count = 2
+        profile.Lines2d.Item.side_effect = Exception("no such element")
+        assert profile_origin(profile) == (0.02, 0.03)
+
+
+class TestVolumeDecidesWhenFacesDoNot:
+    """A mirror of a box across its own face keeps 6 faces and doubles the volume."""
+
+    @staticmethod
+    def _doc(models_count, face_count, volume):
+        doc = _FakeDoc(models_count, face_count)
+        for i in range(models_count):
+            doc.bodies[i].Volume = volume
+        return doc
+
+    def test_a_volume_change_with_the_same_faces_passes_through(self):
+        doc = self._doc(1, 6, 1.0)
+        mgr = _Mgr(doc)
+        assert mgr._geometry_snapshot() == (1, 6, 1.0)
+
+        def build(self_):
+            doc.bodies[0].Volume = 2.0
+            return {"status": "created"}
+
+        assert verifies_geometry(build)(mgr) == {"status": "created"}
+
+    def test_the_same_faces_and_volume_is_still_a_no_op(self):
+        doc = self._doc(1, 6, 1.0)
+        mgr = _Mgr(doc)
+        result = verifies_geometry(lambda self_: {"status": "created"})(mgr)
+        assert "error" in result
+        assert "volume" in result["error"]
+
+    def test_an_unreadable_volume_leaves_the_face_verdict(self):
+        doc = _FakeDoc(1, 6)  # no Volume on the body
+        mgr = _Mgr(doc)
+        assert mgr._geometry_snapshot() == (1, 6, None)
+        assert "error" in verifies_geometry(lambda self_: {"status": "created"})(mgr)

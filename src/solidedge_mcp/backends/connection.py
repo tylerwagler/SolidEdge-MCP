@@ -5,14 +5,30 @@ Handles connecting to and managing Solid Edge application instances.
 """
 
 import contextlib
-import traceback
+from collections.abc import Callable
 from typing import Any
 
 import win32com.client
 
+from solidedge_mcp.backends.errors import error_result, is_disconnected_error
+
+from .comutil import com_get
 from .logging import get_logger
 
 _logger = get_logger(__name__)
+
+_DEAD_MARKERS = (
+    "RPC server is unavailable",
+    "object invoked has disconnected",
+    "-2147023174",
+    "-2147417848",
+)
+
+
+def _looks_dead(exc: BaseException) -> bool:
+    """Heuristic for dead-proxy errors that are not typed com_error."""
+    text = str(exc)
+    return any(m in text for m in _DEAD_MARKERS)
 
 
 class SolidEdgeConnection:
@@ -21,6 +37,26 @@ class SolidEdgeConnection:
     def __init__(self) -> None:
         self.application: Any | None = None
         self._is_connected: bool = False
+        # Called when a dead connection is detected so managers can drop
+        # cached document/profile pointers. Set by DocumentManager.
+        self.on_disconnect: Callable[[], None] | None = None
+
+    def _is_alive(self) -> bool:
+        """Cheap liveness probe of the cached Application proxy."""
+        if self.application is None:
+            return False
+        try:
+            _ = self.application.Version
+            return True
+        except Exception as exc:
+            return not is_disconnected_error(exc) and not _looks_dead(exc)
+
+    def _notify_disconnect(self) -> None:
+        if self.on_disconnect is not None:
+            try:
+                self.on_disconnect()
+            except Exception as exc:  # never let cleanup mask the real error
+                _logger.debug(f"on_disconnect callback failed: {exc}")
 
     def connect(self, start_if_needed: bool = True) -> dict[str, Any]:
         """
@@ -33,6 +69,13 @@ class SolidEdgeConnection:
             Dict with connection status and info
         """
         try:
+            # Drop a cached proxy whose server has gone away (SE closed/crashed)
+            if self.application is not None and not self._is_alive():
+                _logger.warning("Cached Solid Edge proxy is dead; reconnecting")
+                self.application = None
+                self._is_connected = False
+                self._notify_disconnect()
+
             if self.application is None:
                 try:
                     # Try to connect to existing instance
@@ -40,15 +83,9 @@ class SolidEdgeConnection:
                     _logger.info("Connected to existing Solid Edge instance")
                 except Exception:
                     if start_if_needed:
-                        # Start new instance with early binding if possible
-                        try:
-                            self.application = win32com.client.gencache.EnsureDispatch(
-                                "SolidEdge.Application"
-                            )
-                        except Exception:
-                            # Fall back to late binding
-                            self.application = win32com.client.Dispatch("SolidEdge.Application")
-
+                        # Late binding everywhere so object semantics never differ
+                        # between "attached to running" and "started by us".
+                        self.application = win32com.client.Dispatch("SolidEdge.Application")
                         self.application.Visible = True
                         _logger.info("Started new Solid Edge instance")
                     else:
@@ -57,6 +94,19 @@ class SolidEdgeConnection:
                         ) from None
 
             self._is_connected = True
+
+            # Solid Edge raises modal dialogs for things an automation client
+            # cannot answer: a failed STEP translation, an overwrite prompt, a
+            # rebuild warning. The dialog blocks the COM call that triggered it
+            # for as long as it is on screen, which hangs this server with no
+            # error and no timeout. Suppressing alerts turns those into ordinary
+            # COM failures we can report. Observed with export_file on a part
+            # with no solid body: "could not be saved because of a file
+            # translation error" sat there until dismissed by hand.
+            try:
+                self.application.DisplayAlerts = False
+            except Exception as exc:  # not fatal; older builds may not expose it
+                _logger.debug(f"Could not disable DisplayAlerts: {exc}")
 
             # Get version info
             version = self.application.Version
@@ -70,7 +120,7 @@ class SolidEdgeConnection:
         except Exception as e:
             self._is_connected = False
             _logger.error(f"Connection failed: {e}")
-            return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
+            return {"status": "error", **error_result(e)}
 
     def disconnect(self) -> dict[str, Any]:
         """Disconnect from Solid Edge (does not close the application)"""
@@ -92,28 +142,47 @@ class SolidEdgeConnection:
                 "documents_count": self.application.Documents.Count,
             }
 
-            # Path property may not exist in all Solid Edge versions
-            try:
-                info["path"] = self.application.Path
-            except Exception:
-                info["path"] = "N/A"
+            # Application has no Path property on Solid Edge 2026, so this
+            # always fell through to "N/A". AppDataFolder and RegistryPath are
+            # what it does report about where it lives.
+            for key, member in (
+                ("app_data_folder", "AppDataFolder"),
+                ("registry_path", "RegistryPath"),
+            ):
+                value = com_get(self.application, member)
+                if value is not None:
+                    info[key] = value
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_application_info(self) -> dict[str, Any]:
         """Alias for get_info() for consistency with MCP tool name"""
         return self.get_info()
 
     def is_connected(self) -> bool:
-        """Check if connected to Solid Edge"""
+        """Check if connected to Solid Edge (flag only; no COM round trip)."""
         return self._is_connected and self.application is not None
+
+    def check_connection(self) -> bool:
+        """Probe the live connection; drops a dead proxy and returns False if gone."""
+        if not self.is_connected():
+            return False
+        if self._is_alive():
+            return True
+        _logger.warning("Solid Edge connection lost")
+        self.application = None
+        self._is_connected = False
+        self._notify_disconnect()
+        return False
 
     def ensure_connected(self) -> None:
         """Ensure connection exists, raise exception if not"""
         if not self.is_connected():
-            raise Exception("Not connected to Solid Edge. Call connect() first.")
+            raise Exception(
+                "Not connected to Solid Edge. Call manage_connection(action='connect') first."
+            )
 
     def get_application(self) -> Any:
         """Get the application object"""
@@ -150,7 +219,7 @@ class SolidEdgeConnection:
             self.application = None
             self._is_connected = False
             _logger.error(f"Failed to quit Solid Edge: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_process_info(self) -> dict[str, Any]:
         """
@@ -175,7 +244,7 @@ class SolidEdgeConnection:
 
             return {"status": "success", **info}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_install_info(self) -> dict[str, Any]:
         """
@@ -189,19 +258,21 @@ class SolidEdgeConnection:
         try:
             info = {}
 
-            try:
-                install_data = win32com.client.Dispatch("SEInstallDataLib.SEInstallData")
-                with contextlib.suppress(Exception):
-                    info["install_path"] = install_data.GetInstalledPath()
-                with contextlib.suppress(Exception):
-                    info["language"] = install_data.GetInstalledLanguage()
-                with contextlib.suppress(Exception):
-                    info["version"] = install_data.GetInstalledVersion()
-            except Exception:
-                # SEInstallData may not be registered; fall back to Application.Path
-                if self._is_connected and self.application is not None:
-                    with contextlib.suppress(Exception):
-                        info["install_path"] = self.application.Path
+            # SEInstallDataLib.SEInstallData is not registered on Solid Edge
+            # 2026 -- Dispatch raises "Invalid class string" -- and neither
+            # GetInstalledLanguage nor GetInstalledVersion is in any scraped
+            # type library. Application.Path does not exist either, so the
+            # fallback was dead too. These four do work.
+            if self._is_connected and self.application is not None:
+                for key, member in (
+                    ("version", "Version"),
+                    ("name", "Name"),
+                    ("app_data_folder", "AppDataFolder"),
+                    ("registry_path", "RegistryPath"),
+                ):
+                    value = com_get(self.application, member)
+                    if value is not None:
+                        info[key] = value
 
             if not info:
                 return {
@@ -212,7 +283,7 @@ class SolidEdgeConnection:
 
             return {"status": "success", **info}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_performance_mode(
         self,
@@ -271,7 +342,7 @@ class SolidEdgeConnection:
 
             return {"status": "updated", "settings": settings}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def start_command(self, command_id: int) -> dict[str, Any]:
         """
@@ -292,7 +363,7 @@ class SolidEdgeConnection:
             app.StartCommand(command_id)
             return {"status": "success", "command_id": command_id}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def do_idle(self) -> dict[str, Any]:
         """
@@ -310,7 +381,7 @@ class SolidEdgeConnection:
             app.DoIdle()
             return {"status": "success"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def activate_application(self) -> dict[str, Any]:
         """
@@ -326,7 +397,7 @@ class SolidEdgeConnection:
             app.Activate()
             return {"status": "activated"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def abort_command(self, abort_all: bool = True) -> dict[str, Any]:
         """
@@ -346,7 +417,7 @@ class SolidEdgeConnection:
             app.AbortCommand(abort_all)
             return {"status": "aborted", "abort_all": abort_all}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_active_environment(self) -> dict[str, Any]:
         """
@@ -372,7 +443,7 @@ class SolidEdgeConnection:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_status_bar(self) -> dict[str, Any]:
         """
@@ -386,7 +457,7 @@ class SolidEdgeConnection:
             text = app.StatusBar
             return {"status": "success", "text": text}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_status_bar(self, text: str) -> dict[str, Any]:
         """
@@ -403,7 +474,7 @@ class SolidEdgeConnection:
             app.StatusBar = text
             return {"status": "set", "text": text}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_visible(self) -> dict[str, Any]:
         """
@@ -417,7 +488,7 @@ class SolidEdgeConnection:
             visible = app.Visible
             return {"status": "success", "visible": visible}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_visible(self, visible: bool) -> dict[str, Any]:
         """
@@ -434,7 +505,7 @@ class SolidEdgeConnection:
             app.Visible = visible
             return {"status": "set", "visible": visible}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_global_parameter(self, parameter: int) -> dict[str, Any]:
         """
@@ -454,7 +525,7 @@ class SolidEdgeConnection:
             value = app.GetGlobalParameter(parameter)
             return {"status": "success", "parameter": parameter, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_global_parameter(self, parameter: int, value: Any) -> dict[str, Any]:
         """
@@ -475,34 +546,35 @@ class SolidEdgeConnection:
             app.SetGlobalParameter(parameter, value)
             return {"status": "set", "parameter": parameter, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def convert_by_file_path(
-        self, input_path: str, output_path: str
-    ) -> dict[str, Any]:
+    def convert_by_file_path(self, input_path: str, output_path: str) -> dict[str, Any]:
         """
-        Batch-convert CAD files between formats.
+        Batch-convert CAD files between formats -- refused, with the evidence.
 
-        Uses Application.ConvertByFilePath to convert individual files or
-        entire folders. The format is determined by file extensions.
+        Application.ConvertByFilePath returns in about a second reporting
+        nothing wrong and writes nothing. Verified on Solid Edge 2026 with a
+        saved part and nine output extensions (stp, step, x_t, igs, jt, pdf,
+        dxf, stl, par): no file appeared for any of them, while SaveCopyAs on
+        the opened document wrote the STEP at once. export_file is that route.
 
         Args:
             input_path: Input file or folder path
             output_path: Output file or folder path
 
         Returns:
-            Dict with status
+            Dict with the refusal
         """
-        try:
-            app = self._get_app()
-            app.ConvertByFilePath(input_path, output_path)
-            return {
-                "status": "converted",
-                "input": input_path,
-                "output": output_path,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        return {
+            "error": (
+                "Application.ConvertByFilePath writes nothing on Solid Edge 2026 "
+                "(nine output formats tried; SaveCopyAs writes them). Open the file "
+                "and use export_file instead."
+            ),
+            "unsupported": True,
+            "input": input_path,
+            "output": output_path,
+        }
 
     def get_default_template_path(self, doc_type: int) -> dict[str, Any]:
         """
@@ -519,7 +591,7 @@ class SolidEdgeConnection:
             path = app.GetDefaultTemplatePath(doc_type)
             return {"status": "success", "doc_type": doc_type, "template_path": path}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_default_template_path(self, doc_type: int, template_path: str) -> dict[str, Any]:
         """
@@ -541,7 +613,7 @@ class SolidEdgeConnection:
                 "template_path": template_path,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def arrange_windows(self, style: int = 1) -> dict[str, Any]:
         """
@@ -564,7 +636,7 @@ class SolidEdgeConnection:
                 "style_name": style_names.get(style, f"Unknown({style})"),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_active_command(self) -> dict[str, Any]:
         """
@@ -575,7 +647,9 @@ class SolidEdgeConnection:
         """
         try:
             app = self._get_app()
-            cmd = app.ActiveCommand
+            # framewrk.tlb exposes GetActiveCommand() as a method; there is
+            # no ActiveCommand property, so this always raised.
+            cmd = app.GetActiveCommand()
             result: dict[str, Any | None] = {"status": "success"}
             if cmd is not None:
                 result["has_active_command"] = True
@@ -587,7 +661,7 @@ class SolidEdgeConnection:
                 result["has_active_command"] = False
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def run_macro(self, filename: str) -> dict[str, Any]:
         """
@@ -604,4 +678,4 @@ class SolidEdgeConnection:
             app.RunMacro(filename)
             return {"status": "executed", "filename": filename}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

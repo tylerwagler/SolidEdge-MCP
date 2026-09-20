@@ -1,10 +1,19 @@
 """Draft-specific operations (smart frames, symbols, PMI, printing, etc.)."""
 
 import contextlib
-import traceback
+import math
 from typing import Any
 
+import pythoncom
+
+from solidedge_mcp.backends.errors import com_hresult, error_result
+
+from ..comutil import owned_style_for
+from ..constants import DraftPrintOrientationConstants
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
+from ..query._base import BodyNotReachableError, all_faces, body_of
+from ._base import NOT_A_DRAFT, com_get
 
 _logger = get_logger(__name__)
 
@@ -15,6 +24,25 @@ class DraftMixin:
     # =================================================================
     # SMART FRAMES
     # =================================================================
+
+    def _print_utility(self) -> Any:
+        """The draft print utility, or None.
+
+        ``Document.DraftPrintUtility`` does not exist on any Solid Edge
+        document, so reading it there returned None every time and each of
+        these four tools took its "not available" branch.
+        ``Application.GetDraftPrintUtility()`` is the real route, verified on
+        Solid Edge 2026: the object it returns answers Copies, Printer,
+        PaperWidth, RemoveAllDocuments and AddSheet.
+        """
+        try:
+            app = self.doc_manager.connection.get_application()
+        except Exception:
+            return None
+        try:
+            return app.GetDraftPrintUtility()
+        except Exception:
+            return None
 
     def add_smart_frame(
         self, style_name: str, x1: float, y1: float, x2: float, y2: float
@@ -37,8 +65,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             smart_frames = sheet.SmartFrames2d
@@ -52,7 +81,7 @@ class DraftMixin:
                 "corner2": [x2, y2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_smart_frame_by_origin(
         self,
@@ -84,8 +113,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             smart_frames = sheet.SmartFrames2d
@@ -104,7 +134,7 @@ class DraftMixin:
                 },
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SYMBOLS
@@ -130,8 +160,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             symbols = sheet.Symbols
@@ -145,7 +176,7 @@ class DraftMixin:
                 "insertion_type": insertion_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_symbols(self) -> dict[str, Any]:
         """
@@ -159,8 +190,9 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "ActiveSheet"):
-                return {"error": "Active document is not a draft"}
+            err = self._require_draft(doc, NOT_A_DRAFT)
+            if err:
+                return err
             sheet = doc.ActiveSheet
 
             symbols = sheet.Symbols
@@ -170,14 +202,22 @@ class DraftMixin:
                 info: dict[str, Any] = {"index": i - 1}
                 with contextlib.suppress(Exception):
                     info["name"] = sym.Name
+                # Symbol2d has no OriginX/OriginY, so both keys were always
+                # missing. Its position comes from its first keypoint.
                 with contextlib.suppress(Exception):
-                    info["x"] = sym.OriginX
+                    keypoint = sym.GetKeyPoint(0)
+                    info["x"] = float(keypoint[0])
+                    info["y"] = float(keypoint[1])
                 with contextlib.suppress(Exception):
-                    info["y"] = sym.OriginY
+                    info["scale"] = sym.ScaleFactor
+                # Symbol2d.Angle is radians, like every other Solid Edge
+                # Angle property; degrees is the unit at this boundary.
+                with contextlib.suppress(Exception):
+                    info["angle_degrees"] = math.degrees(sym.Angle)
                 items.append(info)
             return {"count": len(items), "symbols": items}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # PMI (Product Manufacturing Information)
@@ -196,13 +236,12 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "PMI"):
+            pmi = com_get(doc, "PMI")
+            if pmi is None:
                 return {
                     "has_pmi": False,
                     "error": "PMI not available on this document",
                 }
-
-            pmi = doc.PMI
 
             result: dict[str, Any] = {"has_pmi": True}
 
@@ -229,7 +268,7 @@ class DraftMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_pmi_visibility(
         self,
@@ -243,6 +282,13 @@ class DraftMixin:
         Controls the overall visibility of PMI data as well as sub-categories
         for dimensions and annotations.
 
+        PMI belongs to a part, sheet metal or assembly document, not to a
+        draft. Solid Edge does not always accept ``Show``: on a part with no
+        PMI content it stays False however it is written, so the result
+        reports what the document holds afterwards rather than what was asked
+        for. The three writes used to sit inside suppresses, which hid both
+        that and any real failure.
+
         Args:
             show: Master PMI visibility toggle
             show_dimensions: Show/hide dimension PMI annotations
@@ -254,26 +300,27 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "PMI"):
+            pmi = com_get(doc, "PMI")
+            if pmi is None:
                 return {"error": "PMI not available on this document"}
 
-            pmi = doc.PMI
-
-            with contextlib.suppress(Exception):
-                pmi.Show = show
-            with contextlib.suppress(Exception):
-                pmi.ShowDimensions = show_dimensions
-            with contextlib.suppress(Exception):
-                pmi.ShowAnnotations = show_annotations
+            pmi.Show = show
+            pmi.ShowDimensions = show_dimensions
+            pmi.ShowAnnotations = show_annotations
 
             return {
                 "status": "updated",
-                "show": show,
-                "show_dimensions": show_dimensions,
-                "show_annotations": show_annotations,
+                "requested": {
+                    "show": show,
+                    "show_dimensions": show_dimensions,
+                    "show_annotations": show_annotations,
+                },
+                "show": com_get(pmi, "Show"),
+                "show_dimensions": com_get(pmi, "ShowDimensions"),
+                "show_annotations": com_get(pmi, "ShowAnnotations"),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # DRAFT GLOBAL PARAMETERS
@@ -293,13 +340,14 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             value = doc.GetGlobalParameter(parameter)
             return {"status": "success", "parameter": parameter, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_draft_global_parameter(self, parameter: int, value: Any) -> dict[str, Any]:
         """
@@ -316,13 +364,14 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             doc.SetGlobalParameter(parameter, value)
             return {"status": "set", "parameter": parameter, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # SYMBOL FILE ORIGIN
@@ -339,17 +388,45 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
-            result = doc.GetSymbolFileOrigin()
+            # GetSymbolFileOrigin(pxOrigin as VT_R8*, pyOrigin as VT_R8*). The
+            # type library declares both [in], so the ordinary late-bound call
+            # returns None and the values are lost. Invoking with the parameters
+            # declared [in, out] by reference hands them back (verified on
+            # Solid Edge 2026: (0.1, 0.2) after SetSymbolFileOrigin(0.1, 0.2)).
+            ole = doc._oleobj_
+            dispid = ole.GetIDsOfNames(0, "GetSymbolFileOrigin")
+            byref_r8 = pythoncom.VT_BYREF | pythoncom.VT_R8
+            try:
+                x, y = ole.InvokeTypes(
+                    dispid,
+                    0,
+                    pythoncom.DISPATCH_METHOD,
+                    (pythoncom.VT_VOID, 0),
+                    ((byref_r8, 3), (byref_r8, 3)),
+                    0.0,
+                    0.0,
+                )
+            except pythoncom.com_error as e:
+                # DISP_E_BADINDEX is what a draft with no origin answers; it
+                # arrives inside excepinfo under DISP_E_EXCEPTION.
+                if com_hresult(e) == 0x8002000B:
+                    return {
+                        "error": (
+                            "This draft has no symbol file origin. Set one with set_origin first."
+                        )
+                    }
+                raise
             return {
                 "status": "success",
-                "x": result[0],
-                "y": result[1],
+                "x": x,
+                "y": y,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_symbol_file_origin(self, x: float, y: float) -> dict[str, Any]:
         """
@@ -366,76 +443,74 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            if not hasattr(doc, "Sheets"):
-                return {"error": "Active document is not a draft document"}
+            err = self._require_draft(doc)
+            if err:
+                return err
 
             doc.SetSymbolFileOrigin(x, y)
             return {"status": "set", "x": x, "y": y}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # FACE TEXTURE
     # =================================================================
 
     def set_face_texture(self, face_index: int, texture_name: str) -> dict[str, Any]:
-        """
-        Apply a texture to a face by index.
+        """Apply a texture to one face.
 
-        Uses face style properties to set the texture name.
+        ``Face.TextureFileName`` is on no Solid Edge interface, so the first
+        attempt always raised and only the fallback ever ran. ``TextureFileName``
+        belongs to ``FaceStyle``, which is what ``Face.Style`` holds, and that
+        style may be a stock one shared across the document -- writing the
+        texture onto it would texture every face using it. The face gets a
+        style of its own instead, the same way its colour does.
 
         Args:
-            face_index: 0-based face index
-            texture_name: Name of the texture to apply
+            face_index: 0-based face index.
+            texture_name: Texture file name to apply.
 
         Returns:
-            Dict with status
+            Dict with status and the texture Solid Edge reports afterwards.
         """
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Models"):
+            models = com_get(doc, "Models")
+            if models is None:
                 return {"error": "Active document does not have a Models collection"}
-
-            models = doc.Models
             if models.Count == 0:
                 return {"error": "No models in document"}
 
             model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(1)  # igQueryAll = 1
+            body = body_of(model)
+            faces = all_faces(body, model)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face_index: {face_index}. Count: {faces.Count}"}
 
             face = faces.Item(face_index + 1)
-
-            # Try to set texture via face style
-            try:
-                face.TextureName = texture_name
-            except Exception:
-                # Alternative: use Style object
-                try:
-                    style = face.Style
-                    style.TextureName = texture_name
-                except Exception as inner_e:
-                    return {
-                        "error": f"Cannot set texture: {inner_e}",
-                        "traceback": traceback.format_exc(),
-                    }
+            style, err = owned_style_for(doc, face, f"Face {face_index}")
+            if err:
+                return err
+            style.TextureFileName = texture_name
 
             return {
                 "status": "set",
                 "face_index": face_index,
                 "texture_name": texture_name,
+                "reads_back": com_get(com_get(face, "Style"), "TextureFileName"),
             }
+        except BodyNotReachableError as e:
+            return {"error": str(e)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # BEND TABLE
     # =================================================================
 
+    @verifies_collection_growth("DraftBendTables")
     def create_bend_table(
         self,
         view_index: int = 0,
@@ -455,14 +530,14 @@ class DraftMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            sheet = doc.ActiveSheet
             dvs = self._get_drawing_views()
             if dvs is None:
                 return {"error": "No drawing views available"}
 
             dv = dvs.Item(view_index + 1)
 
-            bend_tables = sheet.DraftBendTables
+            # DraftBendTables is on DraftDocument, not on Sheet.
+            bend_tables = doc.DraftBendTables
             bend_tables.Add(
                 dv,
                 saved_settings,
@@ -476,7 +551,7 @@ class DraftMixin:
                 "count": bend_tables.Count,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # PRINTING
@@ -486,7 +561,8 @@ class DraftMixin:
         """
         Print the active draft document.
 
-        Tries doc.PrintOut first, then falls back to DraftPrintUtility.
+        Prefers DraftPrintUtility, which gives more control, and falls back to
+        Document.PrintOut(Printer, NumCopies, ...).
 
         Args:
             copies: Number of copies to print
@@ -498,27 +574,35 @@ class DraftMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            # Try DraftPrintUtility first (more control)
-            if hasattr(doc, "DraftPrintUtility"):
-                dpu = doc.DraftPrintUtility
+            # DraftPrintUtility gives more control than Document.PrintOut.
+            dpu = self._print_utility()
+            if dpu is not None:
+                # Verified on Solid Edge 2026: Copies is get/put and takes.
+                dpu.Copies = copies
+                # There is no PrintAllSheets property; setting it did nothing
+                # and every print silently used whatever was already queued.
+                # AddDocument queues the whole document, AddSheet just one.
                 with contextlib.suppress(Exception):
-                    dpu.Copies = copies
-                with contextlib.suppress(Exception):
-                    dpu.PrintAllSheets = all_sheets
+                    dpu.RemoveAllDocuments()
+                if all_sheets:
+                    dpu.AddDocument(doc)
+                else:
+                    dpu.AddSheet(doc.ActiveSheet)
                 dpu.PrintOut()
-                return {"status": "printed", "copies": copies, "all_sheets": all_sheets}
+                return {
+                    "status": "printed",
+                    "copies": com_get(dpu, "Copies", copies),
+                    "all_sheets": all_sheets,
+                }
 
-            # Fall back to simple PrintOut
-            if hasattr(doc, "PrintOut"):
-                try:
-                    doc.PrintOut(Copies=copies)
-                except Exception:
-                    doc.PrintOut()
-                return {"status": "printed", "copies": copies}
-
-            return {"error": "Active document does not support printing"}
+            # Fall back to Document.PrintOut(Printer, NumCopies, ...). The
+            # keyword was Copies, which is not a parameter of anything, so the
+            # call raised and the bare retry below printed a single copy while
+            # the result still claimed the number asked for.
+            doc.PrintOut(NumCopies=copies)
+            return {"status": "printed", "copies": copies}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_printer(self, printer_name: str) -> dict[str, Any]:
         """
@@ -533,17 +617,21 @@ class DraftMixin:
             Dict with status and printer name
         """
         try:
-            doc = self.doc_manager.get_active_document()
+            self.doc_manager.get_active_document()  # refuse with no document
 
-            if not hasattr(doc, "DraftPrintUtility"):
-                return {"error": "Active document does not have DraftPrintUtility"}
-
-            dpu = doc.DraftPrintUtility
+            dpu = self._print_utility()
+            if dpu is None:
+                return {
+                    "error": (
+                        "Solid Edge did not hand out a print utility. It comes "
+                        "from Application.GetDraftPrintUtility()."
+                    )
+                }
             dpu.Printer = printer_name
 
             return {"status": "set", "printer": printer_name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_printer(self) -> dict[str, Any]:
         """
@@ -555,63 +643,93 @@ class DraftMixin:
             Dict with printer name
         """
         try:
-            doc = self.doc_manager.get_active_document()
+            self.doc_manager.get_active_document()  # refuse with no document
 
-            if not hasattr(doc, "DraftPrintUtility"):
-                return {"error": "Active document does not have DraftPrintUtility"}
-
-            dpu = doc.DraftPrintUtility
+            dpu = self._print_utility()
+            if dpu is None:
+                return {
+                    "error": (
+                        "Solid Edge did not hand out a print utility. It comes "
+                        "from Application.GetDraftPrintUtility()."
+                    )
+                }
             printer_name = dpu.Printer
 
             return {"printer": printer_name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_paper_size(
         self, width: float, height: float, orientation: str = "Landscape"
     ) -> dict[str, Any]:
-        """
-        Set the paper size and orientation for printing.
+        """Set the paper size and orientation for printing.
 
-        Uses DraftPrintUtility paper width/height and orientation.
+        ``DraftPrintUtility.PaperWidth`` and ``PaperHeight`` are in
+        **millimetres**, and this passed meters: 0.42 was read back as the
+        untouched default, so the size never changed while the result reported
+        the requested one. The tool boundary stays meters and the conversion
+        happens here.
+
+        Orientation was passed as 1 for Portrait and 2 for Landscape, called
+        "typical COM constants" in a comment.
+        ``DraftPrintOrientationConstants`` has Portrait at 0 and Landscape at
+        1, so "Portrait" selected landscape and 2 is not a member -- Solid Edge
+        2026 rejects it and leaves the orientation alone.
+
+        The printer driver constrains what it will accept: asking for A3 on a
+        letter-size printer comes back as something else entirely. The result
+        therefore reports what Solid Edge holds afterwards, in meters, not what
+        was asked for.
 
         Args:
-            width: Paper width in meters
-            height: Paper height in meters
-            orientation: 'Landscape' or 'Portrait'
+            width: Paper width in meters.
+            height: Paper height in meters.
+            orientation: 'Landscape' or 'Portrait'.
 
         Returns:
-            Dict with status and paper settings
+            Dict with status and the paper settings Solid Edge kept.
         """
         try:
-            doc = self.doc_manager.get_active_document()
+            self.doc_manager.get_active_document()  # refuse with no document
 
-            if not hasattr(doc, "DraftPrintUtility"):
-                return {"error": "Active document does not have DraftPrintUtility"}
+            dpu = self._print_utility()
+            if dpu is None:
+                return {
+                    "error": (
+                        "Solid Edge did not hand out a print utility. It comes "
+                        "from Application.GetDraftPrintUtility()."
+                    )
+                }
 
-            dpu = doc.DraftPrintUtility
-
-            with contextlib.suppress(Exception):
-                dpu.PaperWidth = width
-            with contextlib.suppress(Exception):
-                dpu.PaperHeight = height
-
-            # Set orientation: 1=Portrait, 2=Landscape (typical COM constants)
             if orientation.lower() == "portrait":
-                with contextlib.suppress(Exception):
-                    dpu.Orientation = 1
+                orient = DraftPrintOrientationConstants.igDraftPrintPortrait
             else:
-                with contextlib.suppress(Exception):
-                    dpu.Orientation = 2
+                orient = DraftPrintOrientationConstants.igDraftPrintLandscape
+            dpu.Orientation = orient
 
-            return {
+            dpu.PaperWidth = width * 1000.0
+            dpu.PaperHeight = height * 1000.0
+
+            kept_width = com_get(dpu, "PaperWidth")
+            kept_height = com_get(dpu, "PaperHeight")
+            kept_orient = com_get(dpu, "Orientation")
+
+            result: dict[str, Any] = {
                 "status": "set",
-                "width": width,
-                "height": height,
-                "orientation": orientation,
+                "requested": {"width": width, "height": height, "orientation": orientation},
+                "orientation": (
+                    "Portrait"
+                    if kept_orient == DraftPrintOrientationConstants.igDraftPrintPortrait
+                    else "Landscape"
+                ),
             }
+            if kept_width is not None:
+                result["width"] = kept_width / 1000.0
+            if kept_height is not None:
+                result["height"] = kept_height / 1000.0
+            return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def print_document(
         self,
@@ -685,4 +803,4 @@ class DraftMixin:
                 "copies": num_copies,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

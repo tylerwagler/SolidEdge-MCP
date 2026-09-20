@@ -214,24 +214,19 @@ class TestSetGlobalParameter:
 
 
 class TestConvertByFilePath:
-    def test_success(self, conn):
-        result = conn.convert_by_file_path("C:/input/part.par", "C:/output/part.step")
-        assert result["status"] == "converted"
-        assert result["input"] == "C:/input/part.par"
-        assert result["output"] == "C:/output/part.step"
-        conn.application.ConvertByFilePath.assert_called_once_with(
-            "C:/input/part.par", "C:/output/part.step"
-        )
+    """Application.ConvertByFilePath writes nothing on Solid Edge 2026 (nine
+    formats tried); the tool refuses and points at export_file."""
 
-    def test_not_connected(self):
-        c = SolidEdgeConnection()
-        result = c.convert_by_file_path("C:/in.par", "C:/out.step")
-        assert "error" in result
+    def test_refuses_without_the_call(self, conn, tmp_path):
+        src = tmp_path / "part.par"
+        src.write_bytes(b"x")
 
-    def test_com_error(self, conn):
-        conn.application.ConvertByFilePath.side_effect = Exception("Conversion failed")
-        result = conn.convert_by_file_path("C:/in.par", "C:/out.step")
-        assert "error" in result
+        result = conn.convert_by_file_path(str(src), str(tmp_path / "part.step"))
+
+        assert result["unsupported"] is True
+        assert "export_file" in result["error"]
+        assert result["input"] == str(src)
+        conn.application.ConvertByFilePath.assert_not_called()
 
 
 # ============================================================================
@@ -327,7 +322,9 @@ class TestGetActiveCommand:
         cmd = MagicMock()
         cmd.Name = "ExtrudeProtrusion"
         cmd.ID = 42
-        conn.application.ActiveCommand = cmd
+        # framewrk.tlb has GetActiveCommand() as a method; there is no
+        # ActiveCommand property, so the old read always raised.
+        conn.application.GetActiveCommand.return_value = cmd
 
         result = conn.get_active_command()
         assert result["status"] == "success"
@@ -336,7 +333,7 @@ class TestGetActiveCommand:
         assert result["id"] == 42
 
     def test_no_command(self, conn):
-        conn.application.ActiveCommand = None
+        conn.application.GetActiveCommand.return_value = None
 
         result = conn.get_active_command()
         assert result["status"] == "success"

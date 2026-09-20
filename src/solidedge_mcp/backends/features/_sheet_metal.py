@@ -2,41 +2,143 @@
 
 import contextlib
 import math
-import traceback
 from typing import Any
 
 import pythoncom
 from win32com.client import VARIANT
 
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import com_get
 from ..constants import (
+    BendCalculationMethodConstants,
     DirectionConstants,
     ExtentTypeConstants,
     FaceQueryConstants,
+    FeaturePropertyConstants,
     KeyPointExtentConstants,
+    LoftSweepConstants,
+    ModelingModeConstants,
     OffsetSideConstants,
+    SETargetConstructionBodyOption,
+    SETargetDesignBodyOption,
+    TreatmentTypeConstants,
 )
 from ..logging import get_logger
+from ._base import verifies_collection_growth, verifies_geometry
 
 _logger = get_logger(__name__)
+
+# constant.tlb > FeaturePropertyConstants. Local because backends/constants.py
+# does not carry these members yet.
+_IG_EXTEND = 9  # igExtend - extend the rib profile to the body
+_IG_THK_NORMAL_TO_PROFILE_PLANE = 12  # igThkNormalToProfilePlane
+
+# constant.tlb > DrawnCutoutFeatureConstants
+_SE_DRAWN_CUTOUT_DEPTH_LEFT = 1
+_SE_DRAWN_CUTOUT_DEPTH_RIGHT = 2
+_SE_DRAWN_CUTOUT_MATERIAL_INSIDE = 3
+_SE_DRAWN_CUTOUT_PROFILE_RIGHT = 6
+
+# constant.tlb > LouverFeatureConstants
+_SE_LOUVER_DEPTH_DIRECTION_LEFT = 1
+_SE_LOUVER_DEPTH_DIRECTION_RIGHT = 2
+_SE_LOUVER_HEIGHT_NORMAL = 7
+
+
+def _count(collection: Any) -> int:
+    """A collection's Count, or zero when it is not a real number.
+
+    The isinstance check matters: a unittest.mock stand-in answers ``int()``
+    with 1, so converting blindly would make every mocked profile look as
+    though it held a circle.
+    """
+    value = com_get(collection, "Count", 0)
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return 0
+    return int(value)
+
+
+def _lines_form_a_loop(profile: Any) -> bool:
+    """True when every line endpoint is shared, which makes a closed chain."""
+    lines = com_get(profile, "Lines2d")
+    count = _count(lines)
+    if count < 3:
+        return False
+    tally: dict[tuple[float, float], int] = {}
+    for i in range(1, count + 1):
+        element = lines.Item(i)
+        for member in ("GetStartPoint", "GetEndPoint"):
+            try:
+                point = getattr(element, member)()
+            except Exception:
+                return False
+            key = (round(float(point[0]), 9), round(float(point[1]), 9))
+            tally[key] = tally.get(key, 0) + 1
+    return all(shared == 2 for shared in tally.values())
 
 
 class SheetMetalMixin:
     """Mixin providing sheet metal and miscellaneous part feature methods."""
 
+    def _require_open_profile(self, profile: Any, feature: str) -> dict[str, Any] | None:
+        """Refuse a closed profile for a feature that needs a line.
+
+        A louver line and a bend line are open profiles. Handing either a
+        closed shape fails with a bare E_FAIL from Solid Edge, which tells the
+        caller nothing. Verified on Solid Edge 2026: the same call succeeds
+        with a line and fails with a circle.
+        """
+        closed_kinds = []
+        for name, label in (
+            ("Circles2d", "circle"),
+            ("Ellipses2d", "ellipse"),
+            ("Boundaries2d", "closed boundary"),
+        ):
+            if _count(com_get(profile, name)):
+                closed_kinds.append(label)
+
+        if not closed_kinds and _lines_form_a_loop(profile):
+            closed_kinds.append("closed chain of lines")
+
+        if not closed_kinds:
+            return None
+        return {
+            "error": (
+                f"A {feature} is formed along an open line, and this sketch "
+                f"contains a {closed_kinds[0]}. Draw a single line where the "
+                f"{feature} should run, close the sketch, and try again."
+            ),
+            "profile": closed_kinds,
+        }
+
+    @verifies_geometry
     def create_base_flange(
         self, width: float, thickness: float, bend_radius: float | None = None
     ) -> dict[str, Any]:
         """
         Create a base contour flange (sheet metal).
 
+        Uses Models.AddBaseContourFlange(pProfile, varThicknessSide,
+        varExtentType, varProjectionSide, varProjectionDistance, varRadius, ...).
+        The call has no thickness argument - the material thickness comes from
+        the sheet metal document itself - so thickness is only echoed back.
+
         Args:
-            width: Flange width (meters)
-            thickness: Material thickness (meters)
+            width: Flange projection distance (meters)
+            thickness: Material thickness (meters, not passed to COM)
             bend_radius: Bend radius (meters, optional)
 
         Returns:
             Dict with status and flange info
         """
+        if width <= 0:
+            return {
+                "error": (
+                    "Models.AddBaseContourFlange needs a projection distance; "
+                    "pass width (in meters)."
+                )
+            }
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
@@ -49,30 +151,37 @@ class SheetMetalMixin:
             if bend_radius is None:
                 bend_radius = thickness * 2
 
-            # AddBaseContourFlange
             models.AddBaseContourFlange(
-                NumberOfProfiles=1,
-                ProfileArray=(profile,),
-                Thickness=thickness,
-                BendRadius=bend_radius,
+                profile,
+                DirectionConstants.igRight,  # varThicknessSide
+                ExtentTypeConstants.igFinite,  # varExtentType
+                DirectionConstants.igRight,  # varProjectionSide
+                width,  # varProjectionDistance
+                bend_radius,  # varRadius
             )
 
             return {
                 "status": "created",
                 "type": "base_flange",
+                "width": width,
                 "thickness": thickness,
                 "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_base_tab(self, thickness: float, width: float | None = None) -> dict[str, Any]:
         """
         Create a base tab (sheet metal).
 
+        Uses Models.AddBaseTab(Profile, ExtentSide) - the only two arguments the
+        call takes. Material thickness comes from the sheet metal document, so
+        thickness is only echoed back.
+
         Args:
-            thickness: Material thickness (meters)
-            width: Tab width (meters, optional)
+            thickness: Material thickness (meters, not passed to COM)
+            width: Tab width (meters, not passed to COM)
 
         Returns:
             Dict with status and tab info
@@ -86,41 +195,188 @@ class SheetMetalMixin:
 
             models = doc.Models
 
-            # AddBaseTab
-            models.AddBaseTab(NumberOfProfiles=1, ProfileArray=(profile,), Thickness=thickness)
+            models.AddBaseTab(profile, DirectionConstants.igRight)
 
-            return {"status": "created", "type": "base_tab", "thickness": thickness}
+            return {
+                "status": "created",
+                "type": "base_tab",
+                "thickness": thickness,
+                "width": width,
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    def _lofted_flange(self, bend_radius: float, label: str, **echo: Any) -> dict[str, Any]:
+        """Models.AddLoftedFlange over the accumulated open profiles.
+
+        The argument shape is the community sample's, verified on Solid Edge
+        2026 with this server's ProfileSets profiles as well: Origins holds
+        each section's first Line2d/Arc2d OBJECT (a coordinate array answers
+        DISP_E_TYPEMISMATCH), OriginRefs holds igStart per section (a
+        KeyPointType value answers E_FAIL), and BnParamType is igNFType.
+        Two open lines on parallel planes give a 6-face sheet (Models 0 -> 1).
+        """
+        try:
+            doc = self.doc_manager.get_active_document()
+            profiles = self.sketch_manager.get_accumulated_profiles()
+            if len(profiles) < 2:
+                return {
+                    "error": (
+                        f"A lofted flange needs at least 2 open profiles on different planes, "
+                        f"got {len(profiles)}."
+                    )
+                }
+            origins = []
+            for index, profile in enumerate(profiles):
+                err = self._require_open_profile(profile, "lofted flange")
+                if err:
+                    return err
+                element = None
+                for collection in ("Lines2d", "Arcs2d"):
+                    items = com_get(profile, collection)
+                    if items is not None and com_get(items, "Count", 0):
+                        element = items.Item(1)
+                        break
+                if element is None:
+                    return {"error": f"Profile {index} has no line or arc to take its origin from."}
+                origins.append(element)
+            n = len(profiles)
+            doc.Models.AddLoftedFlange(
+                n,
+                list(profiles),
+                [LoftSweepConstants.igProfileBasedCrossSection] * n,
+                origins,
+                [FeaturePropertyConstants.igStart] * n,
+                DirectionConstants.igRight,
+                bend_radius,
+                0.33,
+                FeaturePropertyConstants.igNFType,
+            )
+            self.sketch_manager.clear_accumulated_profiles()
+            return {
+                "status": "created",
+                "type": label,
+                "num_profiles": n,
+                "bend_radius": bend_radius,
+                **echo,
+            }
+        except Exception as e:
+            return error_result(e)
+
+    @verifies_geometry
     def create_lofted_flange(self, thickness: float) -> dict[str, Any]:
-        """Create lofted flange (sheet metal)"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        """
+        Create a lofted flange (sheet metal).
 
-            models.AddLoftedFlange(thickness)  # Positional arg
+        NOT AVAILABLE via COM automation. Models.AddLoftedFlange takes
+        (NumSections, CrossSections, CrossSectionTypes, Origins, OriginRefs,
+        ThicknessSide, varRadius, varNeutralFactor, varBnParamType): it needs the
+        cross-section profiles plus an origin and origin reference for each one,
+        none of which this server can supply. The call is never made.
+        """
+        # The sheet's thickness comes from the document; it is echoed only.
+        return self._lofted_flange(0.001, "lofted_flange", thickness=thickness)
 
-            return {"status": "created", "type": "lofted_flange", "thickness": thickness}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
-    def create_web_network(self) -> dict[str, Any]:
-        """Create web network (sheet metal)"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            models.AddWebNetwork()
-
-            return {"status": "created", "type": "web_network"}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
-    def create_base_contour_flange_advanced(
-        self, thickness: float, bend_radius: float, relief_type: str = "Default"
+    @verifies_geometry
+    def create_web_network(
+        self,
+        thickness: float = 0.0,
+        depth: float = 0.0,
+        direction: str = "Normal",
     ) -> dict[str, Any]:
-        """Create base contour flange with bend deduction or bend allowance"""
+        """
+        Create a web network from the accumulated sketch profiles.
+
+        Uses Models.AddWebNetwork(nNumProfiles, aProfiles, dThickness,
+        WebDirection, dFiniteDepth, TreatmentType).
+
+        Args:
+            thickness: Web thickness in meters
+            depth: Finite depth of the web in meters
+            direction: 'Normal', 'Reverse' or 'Symmetric'
+
+        Returns:
+            Dict with status and web network info
+        """
+        if thickness <= 0:
+            return {"error": "Models.AddWebNetwork needs a positive web thickness; pass thickness."}
+        try:
+            doc = self.doc_manager.get_active_document()
+            models = doc.Models
+
+            profiles = self.sketch_manager.get_accumulated_profiles()
+            if not profiles:
+                active = self.sketch_manager.get_active_sketch()
+                profiles = [active] if active else []
+            if not profiles:
+                return {"error": "No sketch profiles. Create and close at least one sketch first."}
+
+            dir_map = {
+                "Normal": DirectionConstants.igRight,
+                "Reverse": DirectionConstants.igLeft,
+                "Symmetric": DirectionConstants.igSymmetric,
+            }
+            web_direction = dir_map.get(direction, DirectionConstants.igRight)
+
+            profile_arr = list(profiles)
+
+            models.AddWebNetwork(
+                len(profiles),
+                profile_arr,
+                thickness,
+                web_direction,
+                depth,
+                TreatmentTypeConstants.seTreatmentNone,
+            )
+
+            self.sketch_manager.clear_accumulated_profiles()
+
+            return {
+                "status": "created",
+                "type": "web_network",
+                "profile_count": len(profiles),
+                "thickness": thickness,
+                "depth": depth,
+                "direction": direction,
+            }
+        except Exception as e:
+            return error_result(e)
+
+    @verifies_geometry
+    def create_base_contour_flange_advanced(
+        self,
+        thickness: float,
+        bend_radius: float,
+        relief_type: str = "Default",
+        width: float = 0.0,
+    ) -> dict[str, Any]:
+        """
+        Create a base contour flange with bend deduction or bend allowance.
+
+        Uses Models.AddBaseContourFlangeByBendDeductionOrBendAllowance(pProfile,
+        varThicknessSide, varExtentType, varProjectionSide,
+        varProjectionDistance, varRadius, ...). The bend calculation method is
+        the 19th/20th optional argument, so it cannot be set without also
+        supplying the twelve mitre arguments in between; only the six required
+        arguments are passed. There is no thickness argument - the material
+        thickness comes from the sheet metal document.
+
+        Args:
+            thickness: Material thickness (meters, not passed to COM)
+            bend_radius: Bend radius in meters
+            relief_type: Accepted for compatibility; not passed to COM
+            width: Flange projection distance in meters (required)
+
+        Returns:
+            Dict with status and flange info
+        """
+        if width <= 0:
+            return {
+                "error": (
+                    "Models.AddBaseContourFlangeByBendDeductionOrBendAllowance "
+                    "needs a projection distance; pass width (in meters)."
+                )
+            }
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
@@ -130,73 +386,108 @@ class SheetMetalMixin:
 
             models = doc.Models
 
-            # AddBaseContourFlangeByBendDeductionOrBendAllowance
             models.AddBaseContourFlangeByBendDeductionOrBendAllowance(
-                Profile=profile, NormalSide=1, Thickness=thickness, BendRadius=bend_radius
+                profile,
+                DirectionConstants.igRight,  # varThicknessSide
+                ExtentTypeConstants.igFinite,  # varExtentType
+                DirectionConstants.igRight,  # varProjectionSide
+                width,  # varProjectionDistance
+                bend_radius,  # varRadius
             )
 
             return {
                 "status": "created",
                 "type": "base_contour_flange_advanced",
+                "width": width,
                 "thickness": thickness,
                 "bend_radius": bend_radius,
+                "relief_type": relief_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_base_tab_multi_profile(self, thickness: float) -> dict[str, Any]:
-        """Create base tab with multiple profiles"""
+        """
+        Create a base tab from the accumulated sketch profiles.
+
+        Uses Models.AddBaseTabWithMultipleProfiles(NumberOfProfiles,
+        ProfileArray, ExtentSide). There is no thickness argument - the material
+        thickness comes from the sheet metal document.
+
+        Args:
+            thickness: Material thickness (meters, not passed to COM)
+
+        Returns:
+            Dict with status and tab info
+        """
         try:
             doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
+            models = doc.Models
 
-            if not profile:
+            profiles = self.sketch_manager.get_accumulated_profiles()
+            if not profiles:
+                active = self.sketch_manager.get_active_sketch()
+                profiles = [active] if active else []
+            if not profiles:
                 return {"error": "No active sketch profile"}
 
-            models = doc.Models
+            profile_arr = list(profiles)
 
-            # AddBaseTabWithMultipleProfiles
             models.AddBaseTabWithMultipleProfiles(
-                NumberOfProfiles=1, ProfileArray=(profile,), Thickness=thickness
+                len(profiles),
+                profile_arr,
+                DirectionConstants.igRight,
             )
 
-            return {"status": "created", "type": "base_tab_multi_profile", "thickness": thickness}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
-    def create_lofted_flange_advanced(self, thickness: float, bend_radius: float) -> dict[str, Any]:
-        """Create lofted flange with bend deduction or bend allowance"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-
-            # AddLoftedFlangeByBendDeductionOrBendAllowance
-            models.AddLoftedFlangeByBendDeductionOrBendAllowance(
-                Thickness=thickness, BendRadius=bend_radius
-            )
+            self.sketch_manager.clear_accumulated_profiles()
 
             return {
                 "status": "created",
-                "type": "lofted_flange_advanced",
+                "type": "base_tab_multi_profile",
+                "profile_count": len(profiles),
                 "thickness": thickness,
-                "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
+    def create_lofted_flange_advanced(self, thickness: float, bend_radius: float) -> dict[str, Any]:
+        """
+        Create a lofted flange with bend deduction or bend allowance.
+
+        NOT AVAILABLE via COM automation.
+        Models.AddLoftedFlangeByBendDeductionOrBendAllowance takes 25 required
+        arguments - cross-section profiles, per-section origins and origin
+        references, vertex maps, bend-divide and auto-relief settings - which
+        this server cannot supply. The call is never made.
+        """
+        if bend_radius <= 0:
+            return {"error": "bend_radius must be positive (meters)."}
+        return self._lofted_flange(bend_radius, "lofted_flange_advanced", thickness=thickness)
+
+    @verifies_geometry
     def create_lofted_flange_ex(self, thickness: float) -> dict[str, Any]:
-        """Create extended lofted flange"""
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        """
+        Create an extended lofted flange.
 
-            # AddLoftedFlangeEx
-            models.AddLoftedFlangeEx(thickness)  # Positional arg
+        NOT AVAILABLE via COM automation. Models.AddLoftedFlangeEx takes 25
+        required arguments - cross-section profiles, per-section origins and
+        origin references, vertex maps, bend-divide and auto-relief settings -
+        which this server cannot supply. The call is never made.
+        """
+        return {
+            "error": (
+                "Lofted flanges build through method='basic' or 'advanced' "
+                "(Models.AddLoftedFlange); AddLoftedFlangeEx answers E_FAIL to the same "
+                "shape on Solid Edge 2026. Use one of those."
+            ),
+            "unsupported": True,
+            "type": "lofted_flange_ex",
+            "thickness": thickness,
+        }
 
-            return {"status": "created", "type": "lofted_flange_ex", "thickness": thickness}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_emboss(
         self,
         face_indices: list[int],
@@ -242,7 +533,7 @@ class SheetMetalMixin:
                     return {"error": f"Invalid face index: {fi}. Body has {faces.Count} faces."}
                 face_list.append(faces.Item(fi + 1))
 
-            tools_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, face_list)
+            tools_arr = face_list
 
             emboss_features = model.EmbossFeatures
             emboss_features.Add(
@@ -258,8 +549,38 @@ class SheetMetalMixin:
                 "thicken": thicken,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @staticmethod
+    def _flanges_unsupported(method: str, **echo: Any) -> dict[str, Any]:
+        """The refusal every flange creator returns, with the evidence.
+
+        Verified on Solid Edge 2026 against a base tab, on every horizontal
+        edge, each on a fresh document: Flanges.Add, AddByMatchFace and
+        AddByBendDeductionOrBendAllowance record a Flange feature (a name, a
+        90-degree bend angle, a bend radius) that never solves -- the body's
+        range, volume and face count are unchanged after Recompute,
+        Flange.Status raises, and the UI draws only its outline. The optional
+        parameters (ThicknessSide, InsideRadius, DimSide, BendAngle, and every
+        FeaturePropertyConstants *Side* value) change the recorded feature and
+        nothing else. AddSync and AddSyncByBendDeductionOrBendAllowance raise
+        0x80004021 in an ordered document, and AddFlangeByFace raises
+        E_POINTER. Refusing here leaves no dead feature behind.
+        """
+        return {
+            "error": (
+                f"{method}: the ordered Flanges.Add* calls record a flange that Solid "
+                "Edge 2026 never solves (no geometry after Recompute), or raise. "
+                "Flanges do build in a synchronous document: run "
+                "manage_feature_tree(action='set_mode', mode='synchronous') before "
+                "the base tab, then create_flange(method='sync')."
+            ),
+            "unsupported": True,
+            "method": method,
+            **echo,
+        }
+
+    @verifies_geometry
     def create_flange(
         self,
         face_index: int,
@@ -286,106 +607,29 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
+        # The ordered Flanges.Add never solves (see _flanges_unsupported), but
+        # Flanges.AddSync does in a synchronous document, so a caller who only
+        # knows "make a flange" gets the working call when the document allows.
+        doc = self.doc_manager.get_active_document()
+        if self._require_synchronous_sheet(doc) is None:
+            return self.create_flange_sync(
+                face_index,
+                edge_index,
+                flange_length,
+                inside_radius=inside_radius if inside_radius is not None else 0.001,
+                bend_angle=bend_angle,
+            )
+        return self._flanges_unsupported(
+            "create_flange",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            inside_radius=inside_radius,
+            bend_angle=bend_angle,
+        )
 
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a sheet metal base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
-
-            face = faces.Item(face_index + 1)
-            face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
-                return {"error": f"Face {face_index} has no edges."}
-
-            if edge_index < 0 or edge_index >= face_edges.Count:
-                return {
-                    "error": f"Invalid edge index: {edge_index}. Face has {face_edges.Count} edges."
-                }
-
-            edge = face_edges.Item(edge_index + 1)
-
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
-
-            flanges = model.Flanges
-
-            # Build optional args
-
-            # Optional params: ThicknessSide, InsideRadius, DimSide, BRType, BRWidth,
-            # BRLength, CRType, NeutralFactor, BnParamType, BendAngle
-            if inside_radius is not None or bend_angle is not None:
-                # ThicknessSide (skip) -> InsideRadius
-                # We need to pass positional VT_VARIANT optional params
-                # In late binding, pass them positionally
-                if inside_radius is not None and bend_angle is not None:
-                    bend_angle_rad = math.radians(bend_angle)
-                    flanges.Add(
-                        edge,
-                        side_const,
-                        flange_length,
-                        None,
-                        inside_radius,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        bend_angle_rad,
-                    )
-                elif inside_radius is not None:
-                    flanges.Add(edge, side_const, flange_length, None, inside_radius)
-                else:
-                    assert bend_angle is not None
-                    bend_angle_rad = math.radians(bend_angle)
-                    flanges.Add(
-                        edge,
-                        side_const,
-                        flange_length,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        bend_angle_rad,
-                    )
-            else:
-                flanges.Add(edge, side_const, flange_length)
-
-            result = {
-                "status": "created",
-                "type": "flange",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-                "side": side,
-            }
-            if inside_radius is not None:
-                result["inside_radius"] = inside_radius
-            if bend_angle is not None:
-                result["bend_angle"] = bend_angle
-
-            return result
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_dimple(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a dimple feature (sheet metal).
@@ -422,8 +666,9 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "dimple", "depth": depth, "direction": direction}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_collection_growth("Models.*.Etches")
     def create_etch(self) -> dict[str, Any]:
         """
         Create an etch feature (sheet metal).
@@ -452,14 +697,18 @@ class SheetMetalMixin:
 
             return {"status": "created", "type": "etch"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_rib(self, thickness: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a rib feature from the active sketch profile.
 
         Ribs are structural reinforcements that extend from a profile to
         existing geometry. Requires an active sketch profile.
+
+        Uses Ribs.Add(RibProfile, ProfileExtensionType, ThicknessType,
+        MaterialSide, ThicknessSide, Thickness, [FiniteDepth]).
 
         Args:
             thickness: Rib thickness in meters
@@ -489,7 +738,14 @@ class SheetMetalMixin:
             side = dir_map.get(direction, DirectionConstants.igRight)
 
             ribs = model.Ribs
-            ribs.Add(profile, 1, 0, side, thickness)
+            ribs.Add(
+                profile,
+                _IG_EXTEND,  # ProfileExtensionType
+                _IG_THK_NORMAL_TO_PROFILE_PLANE,  # ThicknessType
+                side,  # MaterialSide
+                DirectionConstants.igSymmetric,  # ThicknessSide
+                thickness,
+            )
 
             return {
                 "status": "created",
@@ -498,46 +754,39 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_lip(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a lip feature from the active sketch profile.
 
-        Lips are raised edges or ridges on plastic or sheet metal parts.
-        Requires an active sketch profile and an existing base feature.
+        NOT AVAILABLE via COM automation. Lips.Add takes (NumberOfEdges, Edges,
+        SideFace, CapFace, Width, Height, [Type]) - it is driven by body edges
+        plus a side face and a cap face, not by a sketch profile, and those
+        selections cannot be made here. The call is never made.
 
         Args:
             depth: Lip depth/height in meters
             direction: 'Normal' or 'Reverse'
 
         Returns:
-            Dict with status and lip info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
+        return {
+            "error": (
+                "Lip features are not available through this server: Lips.Add "
+                "needs the body edges to run the lip along plus a side face and "
+                "a cap face, which cannot be selected here. Create the lip in "
+                "the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "lip",
+            "depth": depth,
+            "direction": direction,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            lips = model.Lips
-            lips.Add(profile, side, depth)
-
-            return {"status": "created", "type": "lip", "depth": depth, "direction": direction}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_drawn_cutout(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a drawn cutout feature (sheet metal).
@@ -545,6 +794,10 @@ class SheetMetalMixin:
         Creates a formed cutout from the active sketch profile. Unlike extruded
         cutouts, drawn cutouts follow the material's bend characteristics.
         Requires an active sketch profile and existing base feature.
+
+        Uses DrawnCutouts.Add(Profile, Depth, ProfileSide, DepthSide,
+        MaterialSide, [DieRadius], [TaperAngle], [ProfileCornerRadius],
+        [RoundEdges], [RoundCorners]).
 
         Args:
             depth: Cutout depth in meters
@@ -566,11 +819,20 @@ class SheetMetalMixin:
 
             model = models.Item(1)
 
-            # igLeft=1, igRight=2
-            side = 2 if direction == "Normal" else 1
+            depth_side = (
+                _SE_DRAWN_CUTOUT_DEPTH_RIGHT
+                if direction == "Normal"
+                else _SE_DRAWN_CUTOUT_DEPTH_LEFT
+            )
 
             drawn_cutouts = model.DrawnCutouts
-            drawn_cutouts.Add(profile, side, depth)
+            drawn_cutouts.Add(
+                profile,
+                depth,
+                _SE_DRAWN_CUTOUT_PROFILE_RIGHT,  # ProfileSide
+                depth_side,  # DepthSide
+                _SE_DRAWN_CUTOUT_MATERIAL_INSIDE,  # MaterialSide
+            )
 
             return {
                 "status": "created",
@@ -579,82 +841,129 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def create_bead(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
+    @verifies_geometry
+    def create_bead(
+        self, depth: float, direction: str = "Normal", width: float | None = None
+    ) -> dict[str, Any]:
         """
         Create a bead feature (sheet metal stiffener).
 
-        Beads are raised ridges used to stiffen sheet metal parts.
-        Requires an active sketch profile and an existing sheet metal base feature.
+        NOT AVAILABLE via COM automation. Beads.Add takes thirteen arguments -
+        nNumPathProfiles, ProfileArray, BeadType, BeadHeight, BeadWidth,
+        BeadTaperAngle, BeadFormRadius, BeadPunchRadius, BeadDieRadius,
+        BeadRoundOption, BeadSide, EndConditionType, EndPunchWidth. The bead
+        cross-section is defined by eight of those values, none of which this
+        tool receives, and inventing them would silently build the wrong shape.
+        The call is never made.
 
         Args:
             depth: Bead depth in meters
             direction: 'Normal' or 'Reverse'
 
         Returns:
-            Dict with status and bead info
+            Dict with an unsupported error
         """
+        sides = {
+            "Normal": FeaturePropertyConstants.igNormalSideDummy,
+            "Reverse": FeaturePropertyConstants.igReverseNormalSideDummy,
+        }
+        side = sides.get(direction)
+        if side is None:
+            return {"error": f"Invalid direction: {direction}. Use 'Normal' or 'Reverse'."}
+        if depth <= 0:
+            return {"error": "A bead needs a positive depth (its height above the sheet, meters)."}
+        bead_width = width if width else 1.5 * depth
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
-
             if not profile:
                 return {"error": "No active sketch profile. Create and close a sketch first."}
-
+            err = self._require_open_profile(profile, "bead")
+            if err:
+                return err
             models = doc.Models
             if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
+                return {"error": "No base feature exists. Create a sheet metal base feature first."}
             model = models.Item(1)
-
-            # igLeft=1, igRight=2
-            side = 2 if direction == "Normal" else 1
-
-            beads = model.Beads
-            beads.Add(profile, side, depth)
-
-            return {"status": "created", "type": "bead", "depth": depth, "direction": direction}
+            # Beads.Add(nNumPathProfiles, ProfileArray, BeadType, BeadHeight, BeadWidth,
+            #   BeadTaperAngle, BeadFormRadius, BeadPunchRadius, BeadDieRadius,
+            #   BeadRoundOption, BeadSide, EndConditionType, EndPunchWidth). The
+            # values are the shape a UI-made bead reports (Training/JigSaw/JS-0005):
+            # circular section, rounded, punched ends, and a *SideDummy side --
+            # igLeft/igRight answer E_FAIL. Verified on Solid Edge 2026 on the base
+            # plane and on a plane through the top face alike: 6 -> 20 faces for an
+            # interior line, 6 -> 14 for one spanning the sheet.
+            model.Beads.Add(
+                1,
+                [profile],
+                FeaturePropertyConstants.igCircular,
+                depth,
+                bead_width,
+                math.radians(15.0),
+                depth,  # form radius
+                0.0,  # punch radius
+                depth / 2.0,  # die radius
+                FeaturePropertyConstants.igAddRound,
+                side,
+                FeaturePropertyConstants.igPunchedEnd,
+                bead_width,  # end punch width
+            )
+            self.sketch_manager.clear_accumulated_profiles()
+            return {
+                "status": "created",
+                "type": "bead",
+                "depth": depth,
+                "width": bead_width,
+                "direction": direction,
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def create_louver(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
+    @verifies_geometry
+    def create_louver(
+        self, depth: float, direction: str = "Normal", height: float = 0.0
+    ) -> dict[str, Any]:
         """
         Create a louver feature (sheet metal vent).
 
         Louvers are formed openings used for ventilation in sheet metal parts.
         Requires an active sketch profile and an existing sheet metal base feature.
 
+        Uses Louvers.Add(Profile, Depth, DepthDirection, Height,
+        HeightDirection, [Type], [RoundType], [DieRadius], [DimensionType]).
+
         Args:
             depth: Louver depth in meters
             direction: 'Normal' or 'Reverse'
+            height: Louver height in meters (required by the COM call)
 
         Returns:
             Dict with status and louver info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
+        # Louvers.Add records a Louver (Louver_1, in the Louvers collection)
+        # that never solves: the body's range, volume and face count are
+        # unchanged, with the line on the base plane or on a plane through
+        # the top face, both depth directions, depths of 1 and 3 mm, and with
+        # every Type / RoundType / DieRadius / DimensionType combination the
+        # optional parameters take (Solid Edge 2026, nine placements). Say so
+        # rather than leave a dead feature behind.
+        return {
+            "error": (
+                "Louvers.Add records a louver that Solid Edge 2026 never solves -- "
+                "no geometry with the values a UI-made louver holds, on a plane through "
+                "the sheet face with a ProfileDefiningFace recorded -- and Louvers.AddSync "
+                "answers 0x807B0086. Use the Solid Edge UI for louvers; create_dimple, "
+                "create_drawn_cutout and create_stamped(bead) work."
+            ),
+            "unsupported": True,
+            "depth": depth,
+            "direction": direction,
+            "height": height,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            # igLeft=1, igRight=2
-            side = 2 if direction == "Normal" else 1
-
-            louvers = model.Louvers
-            louvers.Add(profile, side, depth)
-
-            return {"status": "created", "type": "louver", "depth": depth, "direction": direction}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_gusset(self, thickness: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a gusset feature (sheet metal reinforcement).
@@ -685,8 +994,25 @@ class SheetMetalMixin:
             # igLeft=1, igRight=2
             side = 2 if direction == "Normal" else 1
 
+            # Gussets has no Add. Part.tlb gives AddByProfile(pGussetProfile,
+            # fpcMaterialSide, fpcThicknessSide, dGussetWidth, dTaperAngle,
+            # gcGussetShape, dFormedRadius, gcRounding, dPunchRadius,
+            # dDieRadius) and AddByBend; the profile form is the one a drawn
+            # sketch fits. igUserDrawnProfile = 2, igRoundShape = 3,
+            # igGussetNone = 0, from constant.tlb > GussetConstants.
             gussets = model.Gussets
-            gussets.Add(profile, side, thickness)
+            gussets.AddByProfile(
+                profile,  # pGussetProfile
+                side,  # fpcMaterialSide
+                side,  # fpcThicknessSide
+                thickness,  # dGussetWidth
+                0.0,  # dTaperAngle
+                2,  # gcGussetShape: igUserDrawnProfile
+                0.0,  # dFormedRadius
+                0,  # gcRounding: igGussetNone
+                0.0,  # dPunchRadius
+                0.0,  # dDieRadius
+            )
 
             return {
                 "status": "created",
@@ -695,7 +1021,7 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _find_cylinder_end_face(self, body: Any, cyl_face: Any) -> Any | None:
         """Find a face adjacent to a cylindrical face by shared edge topology.
@@ -711,7 +1037,7 @@ class SheetMetalMixin:
             The adjacent face COM object, or None if not found
         """
         cyl_edges = cyl_face.Edges
-        if not hasattr(cyl_edges, "Count") or cyl_edges.Count == 0:
+        if com_get(cyl_edges, "Count", 0) == 0:
             return None
 
         all_faces = body.Faces(FaceQueryConstants.igQueryAll)
@@ -726,7 +1052,7 @@ class SheetMetalMixin:
 
             try:
                 cand_edges = candidate.Edges
-                if not hasattr(cand_edges, "Count") or cand_edges.Count == 0:
+                if com_get(cand_edges, "Count", 0) == 0:
                     continue
                 for ej in range(1, cand_edges.Count + 1):
                     cand_edge = cand_edges.Item(ej)
@@ -742,6 +1068,7 @@ class SheetMetalMixin:
 
         return None
 
+    @verifies_collection_growth("Models.*.Threads")
     def create_thread(
         self,
         face_index: int,
@@ -765,150 +1092,177 @@ class SheetMetalMixin:
         Returns:
             Dict with status and thread info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
+        # Threads.Add(HoleData, 1, [cylinder], [end face]) answers E_INVALIDARG
+        # on Solid Edge 2026 for an extruded boss and for a cut hole alike, with
+        # every HoleData this server can build: igTappedHole bare, with
+        # ThreadMinorDiameter and ThreadDepth, igRegularThread with
+        # ThreadExternalDiameter; a ThreadDescription ("M8") is refused by
+        # HoleDataCollection.Add itself. A thread that comes with its hole
+        # (create_hole(method='threaded')) is the route that works.
+        return {
+            "error": (
+                "Threads.Add will not thread an existing cylindrical face on Solid "
+                "Edge 2026: E_INVALIDARG for a boss and a hole with every HoleData "
+                "tried, including one filled in through Standard/Size/"
+                "ThreadDataByDescription with a depth, and every end-face choice. The "
+                "Solid Edge developer community reports the same for a decade "
+                "(community.sw.siemens.com, 'Parameters for Threads.Add Method'): a "
+                "thread has to come with its hole. Use create_hole(method='threaded')."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "thread_diameter": thread_diameter,
+            "thread_depth": thread_depth,
+            "physical": physical,
+        }
 
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face index: {face_index}. Count: {faces.Count}"}
-
-            cyl_face = faces.Item(face_index + 1)
-
-            # Auto-detect diameter from cylindrical face geometry
-            if thread_diameter is None:
-                try:
-                    geom = cyl_face.Geometry
-                    thread_diameter = geom.Radius * 2
-                except Exception:
-                    return {
-                        "error": "Could not determine diameter from face geometry. "
-                        "Provide thread_diameter explicitly, or ensure face_index "
-                        "points to a cylindrical face."
-                    }
-
-            # Find the end face adjacent to the cylinder
-            end_face = self._find_cylinder_end_face(body, cyl_face)
-            if end_face is None:
-                return {
-                    "error": "Could not find an end face adjacent to the "
-                    "cylindrical face. The Threads API requires both a "
-                    "cylinder face and its end cap face."
-                }
-
-            # Create HoleData for a tapped hole (igTappedHole = 37)
-            if not hasattr(doc, "HoleDataCollection"):
-                return {"error": "HoleDataCollection not available on this document type."}
-
-            hole_data = doc.HoleDataCollection.Add(
-                HoleType=37,
-                HoleDiameter=thread_diameter,
-            )
-
-            if thread_depth is not None:
-                hole_data.ThreadDepth = thread_depth
-
-            # Build VARIANT arrays for the COM call
-            cyl_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [cyl_face])
-            end_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [end_face])
-
-            threads = model.Threads
-            if physical:
-                threads.AddEx(hole_data, 1, cyl_arr, end_arr, True)
-            else:
-                threads.Add(hole_data, 1, cyl_arr, end_arr)
-
-            result = {
-                "status": "created",
-                "type": "physical_thread" if physical else "cosmetic_thread",
-                "face_index": face_index,
-                "diameter": thread_diameter,
-                "diameter_mm": thread_diameter * 1000,
-            }
-            if thread_depth is not None:
-                result["thread_depth"] = thread_depth
-
-            return result
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
-    def create_slot(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
+    @verifies_geometry
+    @verifies_geometry
+    def create_slot(self, width: float, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create a slot feature from the active sketch profile.
 
-        Slots are elongated cutouts typically used for fastener clearance.
-        Requires an active sketch profile and an existing base feature.
+        NOT AVAILABLE via COM automation. Slots.Add takes 22 arguments, two of
+        which are KeyPointOrTangentFace objects and two more of which are the
+        From/To faces or planes of the extent. Those are user selections this
+        server cannot make, so the call is never made.
 
         Args:
             depth: Slot depth in meters
             direction: 'Normal' or 'Reverse'
 
         Returns:
-            Dict with status and slot info
+            Dict with an unsupported error
         """
+        if direction != "Normal":
+            # Verified on Solid Edge 2026: with igLeft the slot is recorded and
+            # cuts nothing (faces 6 -> 6), with igRight it cuts (6 -> 10).
+            return {
+                "error": (
+                    "A slot cuts only with direction='Normal' on Solid Edge 2026; "
+                    "'Reverse' records a slot that removes nothing. Draw the path on "
+                    "the other face instead."
+                ),
+                "unsupported": True,
+                "width": width,
+                "depth": depth,
+                "direction": direction,
+            }
         try:
             doc = self.doc_manager.get_active_document()
             profile = self.sketch_manager.get_active_sketch()
-
             if not profile:
                 return {"error": "No active sketch profile. Create and close a sketch first."}
-
+            err = self._require_open_profile(profile, "slot")
+            if err:
+                return err
             models = doc.Models
             if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
+                return {"error": "No base feature exists. Create a sheet metal base feature first."}
             model = models.Item(1)
-
-            # igLeft=1, igRight=2
-            side = 2 if direction == "Normal" else 1
-
-            slots = model.Slots
-            slots.Add(profile, side, depth)
-
-            return {"status": "created", "type": "slot", "depth": depth, "direction": direction}
+            # Slots.Add(Profile, SlotType, SlotEndCondition, SlotWidth, SlotOffsetWidth,
+            #   SlotOffsetDepth, ExtentType, ExtentSide, FiniteDistance, KeyPointFlags,
+            #   KeyPointOrTangentFace, ExtentType2, ExtentSide2, FiniteDistance2,
+            #   KeyPointFlags2, KeyPointOrTangentFace2, FromFaceOrPlane, FromOffsetSide,
+            #   FromOffsetDistance, ToFaceOrPlane, ToOffsetSide, ToOffsetDistance).
+            # The keypoint and face slots take None for a finite extent; verified on
+            # Solid Edge 2026 with a line path: 6 -> 10 faces.
+            extent = (
+                ExtentTypeConstants.igThroughAll if depth <= 0 else ExtentTypeConstants.igFinite
+            )
+            model.Slots.Add(
+                profile,
+                FeaturePropertyConstants.igRegularSlot,
+                FeaturePropertyConstants.igNullConstant,
+                width,
+                0.0,
+                0.0,
+                extent,
+                DirectionConstants.igRight,
+                depth,
+                0,
+                None,
+                ExtentTypeConstants.igNone,
+                DirectionConstants.igRight,
+                0.0,
+                0,
+                None,
+                None,
+                OffsetSideConstants.seOffsetNone,
+                0.0,
+                None,
+                OffsetSideConstants.seOffsetNone,
+                0.0,
+            )
+            self.sketch_manager.clear_accumulated_profiles()
+            return {
+                "status": "created",
+                "type": "slot",
+                "width": width,
+                "depth": depth,
+                "direction": direction,
+                "extent": "through_all" if depth <= 0 else "finite",
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def create_split(self, direction: str = "Normal") -> dict[str, Any]:
+    @verifies_collection_growth("Models.*.Splits")
+    def create_split(self, plane_index: int = 1) -> dict[str, Any]:
         """
-        Create a split feature to divide a body along the active sketch profile.
+        Create a split feature to divide a body.
 
-        Requires an active sketch profile and an existing base feature.
+        NOT AVAILABLE via COM automation. Splits.Add takes (nNumTargets,
+        TargetArray, nNumTools, ToolsArray, TargetDesignBodyOption,
+        TargetConstructionBodyOption): the tools are the surfaces or planes that
+        cut the target bodies, not the active sketch profile, and this server
+        cannot select them. The call is never made.
 
         Args:
             direction: 'Normal' or 'Reverse' - which side to keep
 
         Returns:
-            Dict with status and split info
+            Dict with an unsupported error
         """
         try:
             doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
-
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
             models = doc.Models
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
-
             model = models.Item(1)
-
-            # igLeft=1, igRight=2
-            side = 2 if direction == "Normal" else 1
-
-            splits = model.Splits
-            splits.Add(profile, side)
-
-            return {"status": "created", "type": "split", "direction": direction}
+            planes = doc.RefPlanes
+            if plane_index < 1 or plane_index > planes.Count:
+                return {
+                    "error": (
+                        f"Invalid plane index: {plane_index}. Document has {planes.Count} "
+                        "reference planes (1-based)."
+                    )
+                }
+            plane = planes.Item(plane_index)
+            # Splits.Add(nNumTargets, TargetArray, nNumTools, ToolsArray,
+            #   TargetDesignBodyOption, TargetConstructionBodyOption). Verified on
+            # Solid Edge 2026: the model's own Body as the target and a reference
+            # plane as the tool splits a box into two design bodies (Models 1 -> 2,
+            # Splits 0 -> 1); the first model keeps its face count, so the
+            # verification watches Splits.
+            model.Splits.Add(
+                1,
+                [model.Body],
+                1,
+                [plane],
+                SETargetDesignBodyOption.igCreateMultipleDesignBodiesOnNonManifoldOption,
+                SETargetConstructionBodyOption.igCreateMultipleConstructionBodiesOnNonManifoldOption,
+            )
+            return {
+                "status": "created",
+                "type": "split",
+                "plane_index": plane_index,
+                "splits": com_get(model.Splits, "Count"),
+                "models": com_get(doc.Models, "Count"),
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_flange_by_match_face(
         self,
         face_index: int,
@@ -933,38 +1287,65 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
+        return self._flanges_unsupported(
+            "create_flange_by_match_face",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            inside_radius=inside_radius,
+        )
 
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
+    @staticmethod
+    def _require_synchronous_sheet(doc: Any) -> dict[str, Any] | None:
+        """Flanges.AddSync builds only in a synchronous sheet-metal document.
 
-            flanges = model.Flanges
-            flanges.AddByMatchFace(edge, side_const, flange_length, None, inside_radius)
+        Verified on Solid Edge 2026: in a document set to synchronous before
+        its base tab, AddSync on any horizontal tab edge builds (6 -> 14
+        faces, the range grows by the flange length, InsideRadius and
+        BendAngle are honoured). In an ordered document it raises 0x80004021,
+        and switching the mode after an ordered tab answers E_FAIL -- the
+        tab itself has to be synchronous, so this does not switch for you.
+        """
+        mode = com_get(doc, "ModelingMode")
+        if mode is None or mode == ModelingModeConstants.seModelingModeSynchronous:
+            return None
+        return {
+            "error": (
+                "A synchronous flange needs a synchronous sheet-metal document whose "
+                "base tab was made in that mode; switching an ordered tab afterwards "
+                "answers E_FAIL on Solid Edge 2026. Create the document, run "
+                "manage_feature_tree(action='set_mode', mode='synchronous') before "
+                "create_sheet_metal_base, then create_flange(method='sync')."
+            ),
+            "modeling_mode": "ordered",
+            "unsupported": True,
+        }
 
-            return {
-                "status": "created",
-                "type": "flange_by_match_face",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-                "side": side,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+    def _flange_edge(
+        self, doc: Any, face_index: int, edge_index: int
+    ) -> tuple[Any, Any] | dict[str, Any]:
+        """The (model, edge) a flange is located on, or the error dict."""
+        models = doc.Models
+        if models.Count == 0:
+            return {"error": "No base feature exists. Create a sheet metal base tab first."}
+        model = models.Item(1)
+        faces = model.Body.Faces(FaceQueryConstants.igQueryAll)
+        if face_index < 0 or face_index >= faces.Count:
+            return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
+        edges = faces.Item(face_index + 1).Edges
+        if edge_index < 0 or edge_index >= edges.Count:
+            return {"error": f"Invalid edge index: {edge_index}. Face has {edges.Count} edges."}
+        return model, edges.Item(edge_index + 1)
 
+    @verifies_geometry
     def create_flange_sync(
         self,
         face_index: int,
         edge_index: int,
         flange_length: float,
         inside_radius: float = 0.001,
+        bend_angle: float | None = None,
     ) -> dict[str, Any]:
         """
         Create a synchronous flange feature.
@@ -981,23 +1362,48 @@ class SheetMetalMixin:
             Dict with status and flange info
         """
         try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
+            doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous_sheet(doc)
             if err:
                 return err
-
-            flanges = model.Flanges
-            flanges.AddSync(edge, flange_length, None, inside_radius)
-
+            located = self._flange_edge(doc, face_index, edge_index)
+            if isinstance(located, dict):
+                return located
+            model, edge = located
+            # Flanges.AddSync(pLocatedEdge, FlangeLength, ThicknessSide, InsideRadius,
+            #   DimSide, BRType, BRWidth, BRLength, CRType, NeutralFactor, BnParamType,
+            #   BendAngle, FlangeType, PartialFlangeStartPoint). The VARIANT slots
+            #   left empty take Solid Edge's defaults; verified with InsideRadius
+            #   0.003 and BendAngle 45 degrees read back from the feature.
+            empty = VARIANT(pythoncom.VT_EMPTY, None)
+            angle = math.radians(bend_angle) if bend_angle is not None else empty
+            model.Flanges.AddSync(
+                edge,
+                flange_length,
+                empty,
+                inside_radius,
+                empty,
+                empty,
+                empty,
+                empty,
+                empty,
+                empty,
+                empty,
+                angle,
+            )
             return {
                 "status": "created",
                 "type": "flange_sync",
                 "face_index": face_index,
                 "edge_index": edge_index,
                 "flange_length": flange_length,
+                "inside_radius": inside_radius,
+                "bend_angle": bend_angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_flange_by_face(
         self,
         face_index: int,
@@ -1024,43 +1430,17 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
+        return self._flanges_unsupported(
+            "create_flange_by_face",
+            face_index=face_index,
+            edge_index=edge_index,
+            ref_face_index=ref_face_index,
+            flange_length=flange_length,
+            side=side,
+            bend_radius=bend_radius,
+        )
 
-            # Get the reference face
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-            if ref_face_index < 0 or ref_face_index >= faces.Count:
-                return {
-                    "error": f"Invalid ref_face_index: {ref_face_index}. "
-                    f"Body has {faces.Count} faces."
-                }
-            ref_face = faces.Item(ref_face_index + 1)
-
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
-
-            flanges = model.Flanges
-            flanges.AddFlangeByFace(edge, ref_face, side_const, flange_length, None, bend_radius)
-
-            return {
-                "status": "created",
-                "type": "flange_by_face",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "ref_face_index": ref_face_index,
-                "flange_length": flange_length,
-                "side": side,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_flange_with_bend_calc(
         self,
         face_index: int,
@@ -1085,35 +1465,21 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
+        doc = self.doc_manager.get_active_document()
+        if self._require_synchronous_sheet(doc) is None:
+            return self.create_flange_sync_with_bend_calc(
+                face_index, edge_index, flange_length, bend_deduction=bend_deduction
+            )
+        return self._flanges_unsupported(
+            "create_flange_with_bend_calc",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            bend_deduction=bend_deduction,
+        )
 
-            side_map = {
-                "Left": DirectionConstants.igLeft,
-                "Right": DirectionConstants.igRight,
-                "Both": DirectionConstants.igBoth,
-            }
-            side_const = side_map.get(side, DirectionConstants.igRight)
-
-            flanges = model.Flanges
-            # AddByBendDeductionOrBendAllowance(pLocatedEdge, FlangeSide, FlangeLength,
-            #   vtKeyPointOrTangentFace, vtKeyPointFlags, ...)
-            flanges.AddByBendDeductionOrBendAllowance(edge, side_const, flange_length, None, 0)
-
-            return {
-                "status": "created",
-                "type": "flange_with_bend_calc",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-                "side": side,
-                "bend_deduction": bend_deduction,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_flange_sync_with_bend_calc(
         self,
         face_index: int,
@@ -1137,14 +1503,33 @@ class SheetMetalMixin:
             Dict with status and flange info
         """
         try:
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
+            doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous_sheet(doc)
             if err:
                 return err
-
-            flanges = model.Flanges
-            # AddSyncByBendDeductionOrBendAllowance(pLocatedEdge, FlangeLength, ...)
-            flanges.AddSyncByBendDeductionOrBendAllowance(edge, flange_length)
-
+            located = self._flange_edge(doc, face_index, edge_index)
+            if isinstance(located, dict):
+                return located
+            model, edge = located
+            # AddSyncByBendDeductionOrBendAllowance(pLocatedEdge, FlangeLength,
+            #   ThicknessSide, InsideRadius, DimSide, BRType, BRWidth, BRLength, CRType,
+            #   NeutralFactor, BnParamType, BendAngle, FlangeType,
+            #   PartialFlangeStartPoint, BendCalculationMethod,
+            #   BendCalculationMethodValue). Verified on Solid Edge 2026: the
+            # two-argument form builds the same flange AddSync does (6 -> 14
+            # faces), and with method BendDeduction and a value the flange reads
+            # back GetBendCalculationMethodAndValue == (1, value).
+            if bend_deduction:
+                empty = VARIANT(pythoncom.VT_EMPTY, None)
+                model.Flanges.AddSyncByBendDeductionOrBendAllowance(
+                    edge,
+                    flange_length,
+                    *([empty] * 12),
+                    BendCalculationMethodConstants.BendCalculationMethodBendDeduction,
+                    bend_deduction,
+                )
+            else:
+                model.Flanges.AddSyncByBendDeductionOrBendAllowance(edge, flange_length)
             return {
                 "status": "created",
                 "type": "flange_sync_with_bend_calc",
@@ -1154,8 +1539,9 @@ class SheetMetalMixin:
                 "bend_deduction": bend_deduction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_ex(
         self,
         thickness: float,
@@ -1187,42 +1573,33 @@ class SheetMetalMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a sheet metal base feature first."}
 
-            model = models.Item(1)
+            del models
 
-            dir_side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            # AddEx(pProfile, varExtentType, varProjectionSide, varProjectionDistance,
-            #   varKeyPointOrTangentFace, varKeyPointFlags, varBendRadius,
-            #   vtBRType, vtBRWidth, vtBRLength, vtCRType, ...)
-            contour_flanges.AddEx(
-                profile,
-                ExtentTypeConstants.igFinite,
-                dir_side,
-                thickness,
-                None,  # varKeyPointOrTangentFace
-                0,  # varKeyPointFlags
-                bend_radius,
-                0,  # vtBRType (no bend relief)
-                0.0,  # vtBRWidth
-                0.0,  # vtBRLength
-                0,  # vtCRType (no corner relief)
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
+            # ContourFlanges.AddEx and Add answer E_FAIL to every open profile
+            # this server can draw against a tab (Solid Edge 2026: lines from
+            # the tab's corner and from the interior of an edge, on the base
+            # planes and on planes perpendicular to the edge, both projection
+            # sides, both APIs -- 52 combinations). The profile a contour
+            # flange wants is attached to a thickness edge in the UI; nothing
+            # drawn through ProfileSets satisfies it. Say so, without the call.
             return {
-                "status": "created",
-                "type": "contour_flange_ex",
+                "error": (
+                    "ContourFlanges.AddEx and Add reject every open profile this server "
+                    "can draw (E_FAIL on Solid Edge 2026): 52 placements on the base and "
+                    "perpendicular planes, plus the shape a UI-made contour flange holds "
+                    "(igToEndOfEdge, a line starting a thickness off the edge on a plane "
+                    "through it). Use create_flange in a synchronous document, or the "
+                    "Solid Edge UI."
+                ),
+                "unsupported": True,
                 "thickness": thickness,
                 "bend_radius": bend_radius,
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_sync(
         self,
         face_index: int,
@@ -1247,51 +1624,25 @@ class SheetMetalMixin:
         Returns:
             Dict with status and contour flange info
         """
-        try:
-            profile = self.sketch_manager.get_active_sketch()
+        # ContourFlanges.AddSync(profile, edge, igFinite, side, distance, radius,
+        # ...) answers E_INVALIDARG in a synchronous document with the open line
+        # drawn from the tab edge on the perpendicular base plane, both
+        # projection sides (Solid Edge 2026), as AddEx does in an ordered one.
+        return {
+            "error": (
+                "ContourFlanges.AddSync rejects the open profile this server can draw "
+                "(E_INVALIDARG on Solid Edge 2026, both sides). Use create_flange in a "
+                "synchronous document, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "edge_index": edge_index,
+            "thickness": thickness,
+            "bend_radius": bend_radius,
+            "direction": direction,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            dir_side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            # AddSync(pProfile, pRefEdge, varExtentType, varProjectionSide,
-            #   varProjectionDistance, varBendRadius, vtBRType, vtBRWidth,
-            #   vtBRLength, vtCRType, ...)
-            contour_flanges.AddSync(
-                profile,
-                edge,
-                ExtentTypeConstants.igFinite,
-                dir_side,
-                thickness,
-                bend_radius,
-                0,  # vtBRType
-                0.0,  # vtBRWidth
-                0.0,  # vtBRLength
-                0,  # vtCRType
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "contour_flange_sync",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "thickness": thickness,
-                "bend_radius": bend_radius,
-                "direction": direction,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_contour_flange_sync_with_bend(
         self,
         face_index: int,
@@ -1318,52 +1669,27 @@ class SheetMetalMixin:
         Returns:
             Dict with status and contour flange info
         """
-        try:
-            profile = self.sketch_manager.get_active_sketch()
+        # ContourFlanges.AddSyncByBendDeductionOrBendAllowance answers
+        # E_INVALIDARG in a synchronous document
+        # with the open line from the tab edge on the perpendicular base plane
+        # (Solid Edge 2026), as AddSync does and as AddEx/Add do in an ordered one.
+        return {
+            "error": (
+                "ContourFlanges.AddSyncByBendDeductionOrBendAllowance rejects the open "
+                "profile this server can "
+                "draw (E_INVALIDARG on Solid Edge 2026). Use create_flange in a "
+                "synchronous document, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "edge_index": edge_index,
+            "thickness": thickness,
+            "bend_radius": bend_radius,
+            "direction": direction,
+            "bend_deduction": bend_deduction,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            model, face, edge, err = self._get_edge_from_face(face_index, edge_index)
-            if err:
-                return err
-
-            dir_side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            # AddSyncByBendDeductionOrBendAllowance(pProfile, pRefEdge,
-            #   varExtentType, varProjectionSide, varProjectionDistance,
-            #   varBendRadius, vtBRType, vtBRWidth, vtBRLength, vtCRType, ...)
-            contour_flanges.AddSyncByBendDeductionOrBendAllowance(
-                profile,
-                edge,
-                ExtentTypeConstants.igFinite,
-                dir_side,
-                thickness,
-                bend_radius,
-                0,  # vtBRType
-                0.0,  # vtBRWidth
-                0.0,  # vtBRLength
-                0,  # vtCRType
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "contour_flange_sync_with_bend",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "thickness": thickness,
-                "bend_radius": bend_radius,
-                "direction": direction,
-                "bend_deduction": bend_deduction,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_hem(
         self,
         face_index: int,
@@ -1419,8 +1745,9 @@ class SheetMetalMixin:
                 "hem_type": hem_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_jog(
         self,
         jog_offset: float = 0.005,
@@ -1481,8 +1808,9 @@ class SheetMetalMixin:
                 "moving_side": moving_side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_close_corner(
         self,
         face_index: int,
@@ -1528,8 +1856,9 @@ class SheetMetalMixin:
                 "closure_type": closure_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_multi_edge_flange(
         self,
         face_index: int,
@@ -1568,7 +1897,7 @@ class SheetMetalMixin:
 
             face = faces.Item(face_index + 1)
             face_edges = face.Edges
-            if not hasattr(face_edges, "Count") or face_edges.Count == 0:
+            if com_get(face_edges, "Count", 0) == 0:
                 return {"error": f"Face {face_index} has no edges."}
 
             # Collect the requested edges
@@ -1587,7 +1916,7 @@ class SheetMetalMixin:
             }
             side_const = side_map.get(side, DirectionConstants.igRight)
 
-            edge_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, edge_list)
+            edge_arr = edge_list
 
             multi_edge_flanges = model.MultiEdgeFlanges
             # Add(NumberOfEdges, Edges, FlangeSide, dFlangeLength, ...)
@@ -1602,8 +1931,9 @@ class SheetMetalMixin:
                 "side": side,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_bend_with_calc(
         self,
         bend_angle: float = 90.0,
@@ -1637,6 +1967,10 @@ class SheetMetalMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a sheet metal base feature first."}
 
+            err = self._require_open_profile(profile, "bend")
+            if err:
+                return err
+
             model = models.Item(1)
 
             bend_angle_rad = math.radians(bend_angle)
@@ -1669,7 +2003,7 @@ class SheetMetalMixin:
                 "bend_deduction": bend_deduction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def convert_part_to_sheet_metal(
         self,
@@ -1713,8 +2047,9 @@ class SheetMetalMixin:
                 "or save the part as .psm format.",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_dimple_ex(
         self,
         depth: float,
@@ -1770,8 +2105,9 @@ class SheetMetalMixin:
                 "punch_tool_diameter": punch_tool_diameter,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_collection_growth("Models.*.Threads")
     def create_thread_ex(
         self,
         face_index: int,
@@ -1799,13 +2135,17 @@ class SheetMetalMixin:
             physical=True,
         )
 
+    @verifies_geometry
     def create_slot_ex(
         self, width: float, depth: float, direction: str = "Normal"
     ) -> dict[str, Any]:
         """
         Create an extended slot feature with width and depth control.
 
-        Uses Slots.AddEx with multi-profile support and additional parameters.
+        NOT AVAILABLE via COM automation. Slots.AddEx takes 18 arguments,
+        including a KeyPointOrTangentFace object and the From/To faces or planes
+        of the extent, which are user selections this server cannot make. The
+        call is never made.
 
         Args:
             width: Slot width in meters
@@ -1813,85 +2153,63 @@ class SheetMetalMixin:
             direction: 'Normal' or 'Reverse'
 
         Returns:
-            Dict with status and slot info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
+        return {
+            "error": (
+                "Slot features are not available through this server: "
+                "Slots.AddEx requires 18 arguments including a "
+                "KeyPointOrTangentFace object and From/To extent faces that "
+                "cannot be selected here. Use an extruded cutout, or create the "
+                "slot in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "slot_ex",
+            "width": width,
+            "depth": depth,
+            "direction": direction,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            slots = model.Slots
-            slots.AddEx(profile, width, depth, side)
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "slot_ex",
-                "width": width,
-                "depth": depth,
-                "direction": direction,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_slot_sync(self, width: float, depth: float) -> dict[str, Any]:
         """
         Create a synchronous slot feature.
 
-        Uses Slots.AddSync for synchronous modeling mode.
+        NOT AVAILABLE via COM automation. Slots.AddSync takes the same 18
+        arguments as Slots.AddEx, including a KeyPointOrTangentFace object and
+        the From/To extent faces, which cannot be selected here. The call is
+        never made.
 
         Args:
             width: Slot width in meters
             depth: Slot depth in meters
 
         Returns:
-            Dict with status and slot info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
+        return {
+            "error": (
+                "Slot features are not available through this server: "
+                "Slots.AddSync requires 18 arguments including a "
+                "KeyPointOrTangentFace object and From/To extent faces that "
+                "cannot be selected here. Use an extruded cutout, or create the "
+                "slot in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "slot_sync",
+            "width": width,
+            "depth": depth,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            slots = model.Slots
-            slots.AddSync(profile, width, depth)
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "slot_sync",
-                "width": width,
-                "depth": depth,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_drawn_cutout_ex(self, depth: float, direction: str = "Normal") -> dict[str, Any]:
         """
         Create an extended drawn cutout feature (sheet metal).
 
-        Uses DrawnCutouts.AddEx with multi-profile support.
+        Uses DrawnCutouts.AddEx(NumberOfProfiles, ProfileArray, Depth,
+        ProfileSide, DepthSide, MaterialSide, [DieRadius], [TaperAngle],
+        [ProfileCornerRadius], [RoundEdges], [RoundCorners]) with multi-profile
+        support.
 
         Args:
             depth: Cutout depth in meters
@@ -1902,9 +2220,12 @@ class SheetMetalMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
 
-            if not profile:
+            profiles = self.sketch_manager.get_accumulated_profiles()
+            if not profiles:
+                active = self.sketch_manager.get_active_sketch()
+                profiles = [active] if active else []
+            if not profiles:
                 return {"error": "No active sketch profile. Create and close a sketch first."}
 
             models = doc.Models
@@ -1913,62 +2234,66 @@ class SheetMetalMixin:
 
             model = models.Item(1)
 
-            side = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
+            depth_side = (
+                _SE_DRAWN_CUTOUT_DEPTH_RIGHT
+                if direction == "Normal"
+                else _SE_DRAWN_CUTOUT_DEPTH_LEFT
             )
+            profile_arr = list(profiles)
 
             drawn_cutouts = model.DrawnCutouts
-            drawn_cutouts.AddEx(profile, depth, side)
+            drawn_cutouts.AddEx(
+                len(profiles),
+                profile_arr,
+                depth,
+                _SE_DRAWN_CUTOUT_PROFILE_RIGHT,  # ProfileSide
+                depth_side,  # DepthSide
+                _SE_DRAWN_CUTOUT_MATERIAL_INSIDE,  # MaterialSide
+            )
 
             self.sketch_manager.clear_accumulated_profiles()
 
             return {
                 "status": "created",
                 "type": "drawn_cutout_ex",
+                "profile_count": len(profiles),
                 "depth": depth,
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_louver_sync(self, depth: float) -> dict[str, Any]:
         """
         Create a synchronous louver feature (sheet metal).
 
-        Uses Louvers.AddSync for synchronous modeling mode.
+        NOT AVAILABLE via COM automation. Louvers.AddSync takes (Face, Origin,
+        Orientation, Length, Depth, Height, ...): it is placed on a picked face
+        with explicit origin and orientation coordinate arrays rather than from
+        a sketch profile, and this server cannot supply them. The call is never
+        made.
 
         Args:
             depth: Louver depth in meters
 
         Returns:
-            Dict with status and louver info
+            Dict with an unsupported error
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
+        return {
+            "error": (
+                "Synchronous louvers are not available through this server: "
+                "Louvers.AddSync needs a target face plus origin and orientation "
+                "coordinate arrays, which cannot be supplied here. Use "
+                "create_louver(method='basic') with a sketch profile, or create "
+                "the louver in the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "type": "louver_sync",
+            "depth": depth,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-
-            louvers = model.Louvers
-            louvers.AddSync(profile, depth)
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "louver_sync",
-                "depth": depth,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_flange_match_face_with_bend(
         self,
         face_index: int,
@@ -1990,50 +2315,16 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
+        return self._flanges_unsupported(
+            "create_flange_match_face_with_bend",
+            face_index=face_index,
+            edge_index=edge_index,
+            flange_length=flange_length,
+            side=side,
+            inside_radius=inside_radius,
+        )
 
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face_index: {face_index}. Body has {faces.Count} faces."}
-
-            face = faces.Item(face_index + 1)
-            edges = face.Edges
-            if edge_index < 0 or edge_index >= edges.Count:
-                return {"error": f"Invalid edge_index: {edge_index}. Face has {edges.Count} edges."}
-
-            edge = edges.Item(edge_index + 1)
-            side_const = (
-                DirectionConstants.igRight if side == "Right" else DirectionConstants.igLeft
-            )
-
-            flanges = model.Flanges
-            flanges.AddByMatchFaceAndBendDeductionOrBendAllowance(
-                edge,
-                side_const,
-                flange_length,
-                None,
-                0,
-                side_const,
-                inside_radius,
-            )
-
-            return {
-                "status": "created",
-                "type": "flange_match_face_with_bend",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "flange_length": flange_length,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_flange_by_face_with_bend(
         self,
         face_index: int,
@@ -2057,58 +2348,17 @@ class SheetMetalMixin:
         Returns:
             Dict with status and flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
+        return self._flanges_unsupported(
+            "create_flange_by_face_with_bend",
+            face_index=face_index,
+            edge_index=edge_index,
+            ref_face_index=ref_face_index,
+            flange_length=flange_length,
+            side=side,
+            bend_radius=bend_radius,
+        )
 
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face_index: {face_index}. Body has {faces.Count} faces."}
-            if ref_face_index < 0 or ref_face_index >= faces.Count:
-                return {
-                    "error": f"Invalid ref_face_index: {ref_face_index}. "
-                    f"Body has {faces.Count} faces."
-                }
-
-            face = faces.Item(face_index + 1)
-            ref_face = faces.Item(ref_face_index + 1)
-            edges = face.Edges
-            if edge_index < 0 or edge_index >= edges.Count:
-                return {"error": f"Invalid edge_index: {edge_index}. Face has {edges.Count} edges."}
-
-            edge = edges.Item(edge_index + 1)
-            side_const = (
-                DirectionConstants.igRight if side == "Right" else DirectionConstants.igLeft
-            )
-
-            flanges = model.Flanges
-            flanges.AddFlangeByFaceAndBendDeductionOrBendAllowance(
-                edge,
-                ref_face,
-                side_const,
-                flange_length,
-                None,
-                0,
-                side_const,
-                bend_radius,
-            )
-
-            return {
-                "status": "created",
-                "type": "flange_by_face_with_bend",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "ref_face_index": ref_face_index,
-                "flange_length": flange_length,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_contour_flange_v3(
         self,
         thickness: float,
@@ -2169,8 +2419,9 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_contour_flange_sync_ex(
         self,
         face_index: int,
@@ -2194,61 +2445,24 @@ class SheetMetalMixin:
         Returns:
             Dict with status and contour flange info
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            profile = self.sketch_manager.get_active_sketch()
+        # ContourFlanges.AddSyncEx answers E_INVALIDARG in a synchronous document
+        # with the open line from the tab edge on the perpendicular base plane
+        # (Solid Edge 2026), as AddSync does and as AddEx/Add do in an ordered one.
+        return {
+            "error": (
+                "ContourFlanges.AddSyncEx rejects the open profile this server can "
+                "draw (E_INVALIDARG on Solid Edge 2026). Use create_flange in a "
+                "synchronous document, or the Solid Edge UI."
+            ),
+            "unsupported": True,
+            "face_index": face_index,
+            "edge_index": edge_index,
+            "thickness": thickness,
+            "bend_radius": bend_radius,
+            "direction": direction,
+        }
 
-            if not profile:
-                return {"error": "No active sketch profile. Create and close a sketch first."}
-
-            models = doc.Models
-            if models.Count == 0:
-                return {"error": "No base feature exists. Create a base feature first."}
-
-            model = models.Item(1)
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
-
-            if face_index < 0 or face_index >= faces.Count:
-                return {"error": f"Invalid face_index: {face_index}. Body has {faces.Count} faces."}
-
-            face = faces.Item(face_index + 1)
-            edges = face.Edges
-            if edge_index < 0 or edge_index >= edges.Count:
-                return {"error": f"Invalid edge_index: {edge_index}. Face has {edges.Count} edges."}
-
-            edge = edges.Item(edge_index + 1)
-            dir_const = (
-                DirectionConstants.igRight if direction == "Normal" else DirectionConstants.igLeft
-            )
-
-            contour_flanges = model.ContourFlanges
-            contour_flanges.AddSyncEx(
-                profile,
-                edge,
-                ExtentTypeConstants.igFinite,
-                dir_const,
-                thickness,
-                bend_radius,
-                0,
-                0.001,
-                0.001,
-                0,
-            )
-
-            self.sketch_manager.clear_accumulated_profiles()
-
-            return {
-                "status": "created",
-                "type": "contour_flange_sync_ex",
-                "face_index": face_index,
-                "edge_index": edge_index,
-                "thickness": thickness,
-                "bend_radius": bend_radius,
-            }
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_geometry
     def create_bend(
         self,
         bend_angle: float = 90.0,
@@ -2282,6 +2496,10 @@ class SheetMetalMixin:
             if models.Count == 0:
                 return {"error": "No base feature exists. Create a base feature first."}
 
+            err = self._require_open_profile(profile, "bend")
+            if err:
+                return err
+
             model = models.Item(1)
             angle_rad = math.radians(bend_angle)
 
@@ -2304,8 +2522,9 @@ class SheetMetalMixin:
                 "bend_radius": bend_radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_slot_multi_body(
         self, width: float, depth: float, direction: str = "Normal"
     ) -> dict[str, Any]:
@@ -2339,7 +2558,7 @@ class SheetMetalMixin:
             )
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             slots = model.Slots
             slots.AddMultiBody(
@@ -2375,8 +2594,9 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_geometry
     def create_slot_sync_multi_body(
         self, width: float, depth: float, direction: str = "Normal"
     ) -> dict[str, Any]:
@@ -2410,7 +2630,7 @@ class SheetMetalMixin:
             )
 
             body = model.Body
-            body_arr = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, [body])
+            body_arr = [body]
 
             slots = model.Slots
             slots.AddSyncMultiBody(
@@ -2446,4 +2666,4 @@ class SheetMetalMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

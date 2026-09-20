@@ -1,11 +1,15 @@
 """Query operations for assembly components."""
 
 import contextlib
+import math
 import os
-import traceback
 from typing import Any
 
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import describe_document_type
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -13,12 +17,30 @@ _logger = get_logger(__name__)
 class QueryMixin:
     """Mixin providing assembly query/interrogation methods."""
 
+    @staticmethod
+    def _transform_degrees(transform: Any) -> tuple[list[float], list[float]]:
+        """Split an Occurrence.GetTransform() result into position + degrees.
+
+        GetTransform reports its angles in radians, but meters and degrees are
+        the unit at this server's boundary: a caller who read ``rotation`` back
+        and passed it to set_component_orientation was rotating by 1/57th of
+        what they read.
+        """
+        position = [transform[0], transform[1], transform[2]]
+        rotation = [
+            math.degrees(transform[3]),
+            math.degrees(transform[4]),
+            math.degrees(transform[5]),
+        ]
+        return position, rotation
+
     def list_components(self) -> dict[str, Any]:
         """
         List all components in the active assembly.
 
         Uses Occurrence.GetTransform() for position/rotation and
-        OccurrenceFileName for file path.
+        OccurrenceFileName for file path. Positions are meters and
+        rotations degrees, matching what the setters take.
 
         Returns:
             Dict with list of components and their properties
@@ -26,8 +48,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             components = []
@@ -36,7 +59,7 @@ class QueryMixin:
                 occurrence = occurrences.Item(i)
                 comp = {
                     "index": i - 1,
-                    "name": occurrence.Name if hasattr(occurrence, "Name") else f"Component {i}",
+                    "name": com_get(occurrence, "Name", f"Component {i}"),
                 }
 
                 # Get file path
@@ -48,11 +71,10 @@ class QueryMixin:
                 # Get transform (originX, originY, originZ, angleX, angleY, angleZ)
                 try:
                     transform = occurrence.GetTransform()
-                    comp["position"] = [transform[0], transform[1], transform[2]]
-                    comp["rotation"] = [transform[3], transform[4], transform[5]]
+                    comp["position"], comp["rotation_degrees"] = self._transform_degrees(transform)
                 except Exception:
-                    comp["position"] = [0, 0, 0]
-                    comp["rotation"] = [0, 0, 0]
+                    comp["position"] = [0.0, 0.0, 0.0]
+                    comp["rotation_degrees"] = [0.0, 0.0, 0.0]
 
                 # Visibility/suppression
                 try:
@@ -64,13 +86,14 @@ class QueryMixin:
 
             return {"components": components, "count": len(components)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_component_info(self, component_index: int) -> dict[str, Any]:
         """
         Get detailed information about a specific component.
 
-        Uses GetTransform for position/rotation and GetMatrix for the full 4x4 matrix.
+        Uses GetTransform for position/rotation and GetMatrix for the full 4x4
+        matrix. Rotations are degrees, matching what the setters take.
 
         Args:
             component_index: 0-based index of the component
@@ -93,7 +116,7 @@ class QueryMixin:
 
             info = {
                 "index": component_index,
-                "name": occurrence.Name if hasattr(occurrence, "Name") else "Unknown",
+                "name": com_get(occurrence, "Name", "Unknown"),
             }
 
             # File path
@@ -105,17 +128,13 @@ class QueryMixin:
             # Transform (position + rotation)
             try:
                 transform = occurrence.GetTransform()
-                info["position"] = [transform[0], transform[1], transform[2]]
-                info["rotation_rad"] = [transform[3], transform[4], transform[5]]
+                info["position"], info["rotation_degrees"] = self._transform_degrees(transform)
             except Exception:
                 pass
 
             # Full 4x4 matrix
-            try:
-                matrix = occurrence.GetMatrix()
-                info["matrix"] = list(matrix)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                info["matrix"] = self._get_occurrence_matrix(occurrence)
 
             # Visibility
             with contextlib.suppress(Exception):
@@ -130,14 +149,14 @@ class QueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_component_transform(self, component_index: int) -> dict[str, Any]:
         """
         Get the full transformation matrix of a component.
 
-        Returns the 4x4 homogeneous transformation matrix and
-        decomposed origin + rotation.
+        Returns the 4x4 homogeneous transformation matrix and decomposed
+        origin (meters) + rotation (degrees).
 
         Args:
             component_index: 0-based index of the component
@@ -148,8 +167,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -170,21 +190,17 @@ class QueryMixin:
             # Try GetTransform (origin + angles)
             try:
                 transform = occurrence.GetTransform()
-                result["origin"] = [transform[0], transform[1], transform[2]]
-                result["rotation_angles"] = [transform[3], transform[4], transform[5]]
+                result["origin"], result["rotation_degrees"] = self._transform_degrees(transform)
             except Exception:
                 pass
 
             # Try GetMatrix (full 4x4)
-            try:
-                matrix = occurrence.GetMatrix()
-                result["matrix"] = list(matrix)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                result["matrix"] = self._get_occurrence_matrix(occurrence)
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_bounding_box(self, component_index: int) -> dict[str, Any]:
         """
@@ -201,8 +217,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -215,13 +232,11 @@ class QueryMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            # GetRangeBox returns two arrays via out params
-            import array
-
-            min_point = array.array("d", [0.0, 0.0, 0.0])
-            max_point = array.array("d", [0.0, 0.0, 0.0])
-
-            occurrence.GetRangeBox(min_point, max_point)
+            # GetRangeBox(MinRangePoint, MaxRangePoint), both [in,out]
+            # SAFEARRAY(VT_R8). pywin32 fills a copy and hands the points back
+            # in the return value; the buffers we pass are never written to.
+            # Reading them back gave every component a zero-sized box.
+            min_point, max_point = occurrence.GetRangeBox([0.0] * 3, [0.0] * 3)
 
             return {
                 "component_index": component_index,
@@ -234,7 +249,7 @@ class QueryMixin:
                 ],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def is_subassembly(self, component_index: int) -> dict[str, Any]:
         """
@@ -249,8 +264,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -270,9 +286,7 @@ class QueryMixin:
                 # Fallback: check if it has SubOccurrences
                 try:
                     sub_occs = occurrence.SubOccurrences
-                    result["is_subassembly"] = (
-                        sub_occs.Count > 0 if hasattr(sub_occs, "Count") else False
-                    )
+                    result["is_subassembly"] = com_get(sub_occs, "Count", 0) > 0
                 except Exception:
                     result["is_subassembly"] = False
 
@@ -281,7 +295,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_component_display_name(self, component_index: int) -> dict[str, Any]:
         """
@@ -299,8 +313,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -314,10 +329,10 @@ class QueryMixin:
 
             result: dict[str, Any] = {"component_index": component_index}
 
-            try:
-                result["display_name"] = occurrence.DisplayName
-            except Exception:
-                result["display_name"] = None
+            # Occurrence has no DisplayName. Name already reads as
+            # "part.par:1", which is the display name Solid Edge shows.
+            with contextlib.suppress(Exception):
+                result["display_name"] = occurrence.Name
 
             with contextlib.suppress(Exception):
                 result["name"] = occurrence.Name
@@ -327,7 +342,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_document(self, component_index: int) -> dict[str, Any]:
         """
@@ -342,8 +357,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -364,7 +380,7 @@ class QueryMixin:
                 with contextlib.suppress(Exception):
                     result["full_name"] = occ_doc.FullName
                 with contextlib.suppress(Exception):
-                    result["type"] = occ_doc.Type
+                    result.update(describe_document_type(occ_doc.Type))
                 with contextlib.suppress(Exception):
                     result["read_only"] = occ_doc.ReadOnly
             except Exception:
@@ -375,7 +391,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_sub_occurrences(self, component_index: int) -> dict[str, Any]:
         """
@@ -393,8 +409,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             if component_index < 0 or component_index >= occurrences.Count:
@@ -409,7 +426,7 @@ class QueryMixin:
             children = []
             try:
                 sub_occs = occurrence.SubOccurrences
-                if sub_occs and hasattr(sub_occs, "Count"):
+                if sub_occs and com_get(sub_occs, "Count", 0):
                     for j in range(1, sub_occs.Count + 1):
                         try:
                             child = sub_occs.Item(j)
@@ -418,8 +435,11 @@ class QueryMixin:
                                 child_info["name"] = child.Name
                             except Exception:
                                 child_info["name"] = f"SubOcc_{j}"
+                            # A SubOccurrence names its file
+                            # SubOccurrenceFileName; OccurrenceFileName is on
+                            # Occurrence, so this key was always missing.
                             with contextlib.suppress(Exception):
-                                child_info["file"] = child.OccurrenceFileName
+                                child_info["file"] = child.SubOccurrenceFileName
                             children.append(child_info)
                         except Exception:
                             children.append({"index": j - 1, "name": f"SubOcc_{j}"})
@@ -432,7 +452,7 @@ class QueryMixin:
                 "count": len(children),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_structured_bom(self) -> dict[str, Any]:
         """
@@ -447,8 +467,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -476,7 +497,7 @@ class QueryMixin:
                 children = []
                 try:
                     sub_occs = occ.SubOccurrences
-                    if sub_occs and hasattr(sub_occs, "Count") and sub_occs.Count > 0:
+                    if sub_occs and com_get(sub_occs, "Count", 0) > 0:
                         item["type"] = "assembly"
                         for j in range(1, sub_occs.Count + 1):
                             try:
@@ -504,10 +525,10 @@ class QueryMixin:
             return {
                 "bom": bom,
                 "top_level_count": len(bom),
-                "document": doc.Name if hasattr(doc, "Name") else "Unknown",
+                "document": com_get(doc, "Name", "Unknown"),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_bodies(self, component_index: int) -> dict[str, Any]:
         """
@@ -527,24 +548,28 @@ class QueryMixin:
             if err:
                 return err
 
+            # Occurrence.Bodies does not exist, so this listed nothing for
+            # every component. Body is a single get-only property, and
+            # GetSimplifiedBodies reports the rest.
             bodies_info = []
-            try:
-                bodies = occurrence.Bodies
-                body_count = bodies.Count if hasattr(bodies, "Count") else 0
+            candidates = []
+            single = com_get(occurrence, "Body")
+            if single is not None:
+                candidates.append(single)
+            with contextlib.suppress(Exception):
+                count, simplified = occurrence.GetSimplifiedBodies()
+                if simplified:
+                    candidates.extend(list(simplified)[: int(count)])
 
-                for i in range(1, body_count + 1):
-                    body = bodies.Item(i)
-                    body_info: dict[str, Any] = {"index": i - 1}
-
-                    with contextlib.suppress(Exception):
-                        body_info["name"] = body.Name
-
-                    with contextlib.suppress(Exception):
-                        body_info["volume"] = body.Volume
-
-                    bodies_info.append(body_info)
-            except Exception:
-                body_count = 0
+            for index, body in enumerate(candidates):
+                body_info: dict[str, Any] = {"index": index}
+                with contextlib.suppress(Exception):
+                    body_info["name"] = body.Name
+                with contextlib.suppress(Exception):
+                    body_info["volume"] = body.Volume
+                with contextlib.suppress(Exception):
+                    body_info["is_solid"] = bool(body.IsSolid)
+                bodies_info.append(body_info)
 
             return {
                 "component_index": component_index,
@@ -552,7 +577,7 @@ class QueryMixin:
                 "bodies": bodies_info,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_style(self, component_index: int) -> dict[str, Any]:
         """
@@ -583,7 +608,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_style(self, component_index: int) -> dict[str, Any]:
         """
@@ -606,7 +631,8 @@ class QueryMixin:
             result: dict[str, Any] = {"component_index": component_index}
 
             try:
-                face_style = occurrence.GetFaceStyle2()
+                # GetFaceStyle2(vbHonourPrefs as VT_BOOL)
+                face_style = occurrence.GetFaceStyle2(True)
                 result["face_style"] = str(face_style) if face_style is not None else None
             except Exception:
                 result["face_style"] = None
@@ -614,7 +640,7 @@ class QueryMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence(self, internal_id: int) -> dict[str, Any]:
         """
@@ -633,8 +659,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             occurrence = occurrences.GetOccurrence(internal_id)
@@ -659,17 +686,13 @@ class QueryMixin:
             # Transform (position + rotation)
             try:
                 transform = occurrence.GetTransform()
-                info["position"] = [transform[0], transform[1], transform[2]]
-                info["rotation_rad"] = [transform[3], transform[4], transform[5]]
+                info["position"], info["rotation_degrees"] = self._transform_degrees(transform)
             except Exception:
                 pass
 
             # Full 4x4 matrix
-            try:
-                mat = occurrence.GetMatrix()
-                info["matrix"] = list(mat)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                info["matrix"] = self._get_occurrence_matrix(occurrence)
 
             # Visibility
             with contextlib.suppress(Exception):
@@ -684,7 +707,7 @@ class QueryMixin:
 
             return info
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def check_interference(self, component_index: int | None = None) -> dict[str, Any]:
         """
@@ -702,8 +725,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -713,53 +737,33 @@ class QueryMixin:
                     "message": "Need at least 2 components for interference check",
                 }
 
-            import ctypes
+            if component_index is not None and (
+                component_index < 0 or component_index >= occurrences.Count
+            ):
+                return {"error": f"Invalid component index: {component_index}"}
 
-            # Build set1 - single component or all
-            if component_index is not None:
-                if component_index < 0 or component_index >= occurrences.Count:
-                    return {"error": f"Invalid component index: {component_index}"}
-                set1 = [occurrences.Item(component_index + 1)]
-            else:
-                set1 = [occurrences.Item(i) for i in range(1, occurrences.Count + 1)]
-
-            # Call CheckInterference
-            # seInterferenceComparisonSet1vsAllOther = 1
-            comparison_method = 1
-
-            # Prepare out parameters
-            interference_status = ctypes.c_int(0)
-            num_interferences = ctypes.c_int(0)
-
-            try:
-                doc.CheckInterference(
-                    NumElementsSet1=len(set1),
-                    Set1=set1,
-                    Status=interference_status,
-                    ComparisonMethod=comparison_method,
-                    NumElementsSet2=0,
-                    AddInterferenceAsOccurrence=False,
-                    NumInterferences=num_interferences,
-                )
-
-                return {
-                    "status": "checked",
-                    "interference_found": interference_status.value != 0,
-                    "num_interferences": num_interferences.value,
-                    "component_checked": component_index,
-                }
-            except Exception as e:
-                # CheckInterference has complex COM signature; report what we can
-                return {
-                    "error": f"Interference check failed: {e}",
-                    "note": "CheckInterference COM signature "
-                    "is complex. Use Solid Edge UI for "
-                    "reliable results.",
-                    "traceback": traceback.format_exc(),
-                }
+            # AssemblyDocument.CheckInterference declares Status as an [out]
+            # InterferenceStatusConstants* and NumInterferences as an
+            # [out, optional] VT_VARIANT*, with six more [in,out] optionals
+            # after them. pywin32 gives every parameter a positional slot and
+            # cannot synthesise the enum out-pointer, so every argument shape
+            # tried against Solid Edge 2026 fails: passing the buffers gives a
+            # buffer-parse error, omitting them gives DISP_E_TYPEMISMATCH.
+            return {
+                "error": (
+                    "Interference checking is not reachable through COM automation. "
+                    "AssemblyDocument.CheckInterference returns its result through an "
+                    "out-parameter that pywin32 cannot supply, and every argument form "
+                    "fails with a type mismatch. Use Inspect > Check Interference in "
+                    "Solid Edge, or compare component bounding boxes with "
+                    "query_component(property='bounding_box') for a rough overlap test."
+                ),
+                "unsupported": True,
+                "component_checked": component_index,
+            }
 
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_bom(self) -> dict[str, Any]:
         """
@@ -774,8 +778,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
             bom_counts: dict[str, dict[str, Any]] = {}
@@ -785,14 +790,14 @@ class QueryMixin:
 
                 # Skip items excluded from BOM
                 try:
-                    if hasattr(occurrence, "IncludeInBom") and not occurrence.IncludeInBom:
+                    if not com_get(occurrence, "IncludeInBom", True):
                         continue
                 except Exception:
                     pass
 
                 # Skip pattern items (counted as part of pattern source)
                 try:
-                    if hasattr(occurrence, "IsPatternItem") and occurrence.IsPatternItem:
+                    if com_get(occurrence, "IsPatternItem", False):
                         continue
                 except Exception:
                     pass
@@ -803,9 +808,7 @@ class QueryMixin:
                 except Exception:
                     file_path = f"Unknown_{i}"
 
-                name = (
-                    occurrence.Name if hasattr(occurrence, "Name") else os.path.basename(file_path)
-                )
+                name = com_get(occurrence, "Name", os.path.basename(file_path))
 
                 if file_path in bom_counts:
                     bom_counts[file_path]["quantity"] += 1
@@ -820,7 +823,7 @@ class QueryMixin:
                 "bom": bom_items,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_assembly_relations(self) -> dict[str, Any]:
         """
@@ -835,8 +838,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Relations3d"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             relations = doc.Relations3d
             relation_list = []
@@ -881,7 +885,7 @@ class QueryMixin:
 
             return {"relations": relation_list, "count": len(relation_list)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_document_tree(self) -> dict[str, Any]:
         """
@@ -896,8 +900,9 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             def traverse_occurrence(occ: Any, depth: int = 0) -> dict[str, Any]:
                 """Recursively build tree from an occurrence."""
@@ -917,13 +922,13 @@ class QueryMixin:
                     node["visible"] = occ.Visible
 
                 with contextlib.suppress(Exception):
-                    node["suppressed"] = occ.IsSuppressed if hasattr(occ, "IsSuppressed") else False
+                    node["suppressed"] = com_get(occ, "IsSuppressed", False)
 
                 # Recurse into sub-occurrences
                 children = []
                 try:
                     sub_occs = occ.SubOccurrences
-                    if sub_occs and hasattr(sub_occs, "Count"):
+                    if sub_occs and com_get(sub_occs, "Count", 0):
                         for j in range(1, sub_occs.Count + 1):
                             try:
                                 child = sub_occs.Item(j)
@@ -951,10 +956,10 @@ class QueryMixin:
             return {
                 "tree": tree,
                 "top_level_count": len(tree),
-                "document": doc.Name if hasattr(doc, "Name") else "Unknown",
+                "document": com_get(doc, "Name", "Unknown"),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_occurrence_count(self) -> dict[str, Any]:
         """
@@ -966,9 +971,10 @@ class QueryMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             return {"count": doc.Occurrences.Count}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

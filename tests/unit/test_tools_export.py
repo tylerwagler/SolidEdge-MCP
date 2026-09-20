@@ -1,9 +1,12 @@
 """Dispatch tests for tools/export.py composite tools."""
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
 
+import solidedge_mcp.tools.export as export_tools
+from solidedge_mcp.backends.export import ExportManager, ViewModel
 from solidedge_mcp.tools.export import (
     add_2d_dimension,
     add_annotation,
@@ -23,6 +26,8 @@ from solidedge_mcp.tools.export import (
     query_sheet,
     set_camera,
 )
+from tests.unit.test_tools_features import backend_call_violations
+from tests.unit.test_tools_query import assert_literal_discriminators
 
 
 @pytest.fixture
@@ -41,20 +46,24 @@ def mock_view(monkeypatch):
 
 # === export_file ===
 
+
 class TestExportFile:
-    @pytest.mark.parametrize("disc, method", [
-        ("step", "export_step"),
-        ("stl", "export_stl"),
-        ("iges", "export_iges"),
-        ("pdf", "export_pdf"),
-        ("dxf", "export_dxf"),
-        ("parasolid", "export_parasolid"),
-        ("jt", "export_jt"),
-        ("flat_dxf", "export_flat_dxf"),
-        ("prc", "export_to_prc"),
-        ("plmxml", "export_to_plmxml"),
-        ("image", "capture_screenshot"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("step", "export_step"),
+            ("stl", "export_stl"),
+            ("iges", "export_iges"),
+            ("pdf", "export_pdf"),
+            ("dxf", "export_dxf"),
+            ("parasolid", "export_parasolid"),
+            ("jt", "export_jt"),
+            ("flat_dxf", "export_flat_dxf"),
+            ("prc", "export_to_prc"),
+            ("plmxml", "export_to_plmxml"),
+            ("image", "capture_screenshot"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = export_file(format=disc, file_path="out.file")
@@ -64,12 +73,16 @@ class TestExportFile:
     def test_plmxml_passes_ini(self, mock_export, mock_view):
         mock_export.export_to_plmxml.return_value = {"status": "ok"}
         export_file(format="plmxml", file_path="out.xml", ini_file_path="cfg.ini")
-        mock_export.export_to_plmxml.assert_called_once_with("out.xml", "cfg.ini")
+        mock_export.export_to_plmxml.assert_called_once_with(
+            file_path="out.xml", ini_file_path="cfg.ini", overwrite=False
+        )
 
     def test_image_passes_dimensions(self, mock_export, mock_view):
         mock_export.capture_screenshot.return_value = {"status": "ok"}
         export_file(format="image", file_path="out.png", width=1920, height=1080)
-        mock_export.capture_screenshot.assert_called_once_with("out.png", 1920, 1080)
+        mock_export.capture_screenshot.assert_called_once_with(
+            file_path="out.png", width=1920, height=1080, overwrite=False
+        )
 
     def test_unknown(self, mock_export, mock_view):
         result = export_file(format="bogus")
@@ -78,18 +91,22 @@ class TestExportFile:
 
 # === add_drawing_view ===
 
+
 class TestAddDrawingView:
-    @pytest.mark.parametrize("disc, method", [
-        ("assembly", "add_assembly_drawing_view"),
-        ("assembly_ex", "add_assembly_drawing_view_ex"),
-        ("with_config", "add_drawing_view_with_config"),
-        ("projected", "add_projected_view"),
-        ("detail", "add_detail_view"),
-        ("auxiliary", "add_auxiliary_view"),
-        ("draft", "add_draft_view"),
-        ("by_draft_view", "add_by_draft_view"),
-        ("section", "add_section_cut"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("assembly", "add_assembly_drawing_view"),
+            ("assembly_ex", "add_assembly_drawing_view_ex"),
+            ("with_config", "add_drawing_view_with_config"),
+            ("projected", "add_projected_view"),
+            ("detail", "add_detail_view"),
+            ("auxiliary", "add_auxiliary_view"),
+            ("draft", "add_draft_view"),
+            ("by_draft_view", "add_by_draft_view"),
+            ("section", "add_section_cut"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = add_drawing_view(type=disc)
@@ -103,23 +120,27 @@ class TestAddDrawingView:
 
 # === manage_drawing_view ===
 
+
 class TestManageDrawingView:
-    @pytest.mark.parametrize("disc, method", [
-        ("get_model_link", "get_drawing_view_model_link"),
-        ("show_tangent_edges", "show_tangent_edges"),
-        ("set_scale", "set_drawing_view_scale"),
-        ("delete", "delete_drawing_view"),
-        ("update", "update_drawing_view"),
-        ("move", "move_drawing_view"),
-        ("show_hidden_edges", "show_hidden_edges"),
-        ("set_display_mode", "set_drawing_view_display_mode"),
-        ("set_orientation", "set_drawing_view_orientation"),
-        ("activate", "activate_drawing_view"),
-        ("deactivate", "deactivate_drawing_view"),
-        ("get_dimensions", "get_drawing_view_dimensions"),
-        ("align", "align_drawing_views"),
-        ("update_all", "update_all_views"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("get_model_link", "get_drawing_view_model_link"),
+            ("show_tangent_edges", "show_tangent_edges"),
+            ("set_scale", "set_drawing_view_scale"),
+            ("delete", "delete_drawing_view"),
+            ("update", "update_drawing_view"),
+            ("move", "move_drawing_view"),
+            ("show_hidden_edges", "show_hidden_edges"),
+            ("set_display_mode", "set_drawing_view_display_mode"),
+            ("set_orientation", "set_drawing_view_orientation"),
+            ("activate", "activate_drawing_view"),
+            ("deactivate", "deactivate_drawing_view"),
+            ("get_dimensions", "get_drawing_view_dimensions"),
+            ("align", "align_drawing_views"),
+            ("update_all", "update_all_views"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = manage_drawing_view(action=disc)
@@ -133,13 +154,17 @@ class TestManageDrawingView:
 
 # === add_annotation (text annotations only) ===
 
+
 class TestAddAnnotation:
-    @pytest.mark.parametrize("disc, method", [
-        ("text_box", "add_text_box"),
-        ("leader", "add_leader"),
-        ("balloon", "add_balloon"),
-        ("note", "add_note"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("text_box", "add_text_box"),
+            ("leader", "add_leader"),
+            ("balloon", "add_balloon"),
+            ("note", "add_note"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = add_annotation(type=disc)
@@ -153,14 +178,18 @@ class TestAddAnnotation:
 
 # === add_dimension_annotation ===
 
+
 class TestAddDimensionAnnotation:
-    @pytest.mark.parametrize("disc, method", [
-        ("dimension", "add_dimension"),
-        ("angular_dimension", "add_angular_dimension"),
-        ("radial_dimension", "add_radial_dimension"),
-        ("diameter_dimension", "add_diameter_dimension"),
-        ("ordinate_dimension", "add_ordinate_dimension"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("dimension", "add_dimension"),
+            ("angular_dimension", "add_angular_dimension"),
+            ("radial_dimension", "add_radial_dimension"),
+            ("diameter_dimension", "add_diameter_dimension"),
+            ("ordinate_dimension", "add_ordinate_dimension"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = add_dimension_annotation(type=disc)
@@ -174,14 +203,18 @@ class TestAddDimensionAnnotation:
 
 # === add_symbol_annotation ===
 
+
 class TestAddSymbolAnnotation:
-    @pytest.mark.parametrize("disc, method", [
-        ("center_mark", "add_center_mark"),
-        ("centerline", "add_centerline"),
-        ("surface_finish", "add_surface_finish_symbol"),
-        ("weld_symbol", "add_weld_symbol"),
-        ("geometric_tolerance", "add_geometric_tolerance"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("center_mark", "add_center_mark"),
+            ("centerline", "add_centerline"),
+            ("surface_finish", "add_surface_finish_symbol"),
+            ("weld_symbol", "add_weld_symbol"),
+            ("geometric_tolerance", "add_geometric_tolerance"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = add_symbol_annotation(type=disc)
@@ -195,13 +228,17 @@ class TestAddSymbolAnnotation:
 
 # === add_2d_dimension ===
 
+
 class TestAdd2dDimension:
-    @pytest.mark.parametrize("disc, method", [
-        ("distance", "add_distance_dimension"),
-        ("length", "add_length_dimension"),
-        ("radius", "add_radius_dimension_2d"),
-        ("angle", "add_angle_dimension_2d"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("distance", "add_distance_dimension"),
+            ("length", "add_length_dimension"),
+            ("radius", "add_radius_dimension_2d"),
+            ("angle", "add_angle_dimension_2d"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = add_2d_dimension(type=disc)
@@ -215,18 +252,22 @@ class TestAdd2dDimension:
 
 # === camera_control (simple view actions) ===
 
+
 class TestCameraControl:
-    @pytest.mark.parametrize("disc, method", [
-        ("set_orientation", "set_view"),
-        ("zoom_fit", "zoom_fit"),
-        ("zoom_to_selection", "zoom_to_selection"),
-        ("rotate", "rotate_camera"),
-        ("pan", "pan_camera"),
-        ("zoom", "zoom_camera"),
-        ("refresh", "refresh_view"),
-        ("begin_dynamics", "begin_camera_dynamics"),
-        ("end_dynamics", "end_camera_dynamics"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("set_orientation", "set_view"),
+            ("zoom_fit", "zoom_fit"),
+            ("zoom_to_selection", "zoom_to_selection"),
+            ("rotate", "rotate_camera"),
+            ("pan", "pan_camera"),
+            ("zoom", "zoom_camera"),
+            ("refresh", "refresh_view"),
+            ("begin_dynamics", "begin_camera_dynamics"),
+            ("end_dynamics", "end_camera_dynamics"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_view, method).return_value = {"status": "ok"}
         result = camera_control(action=disc)
@@ -236,12 +277,31 @@ class TestCameraControl:
     def test_set_orientation_passes_view(self, mock_export, mock_view):
         mock_view.set_view.return_value = {"status": "ok"}
         camera_control(action="set_orientation", view="Top")
-        mock_view.set_view.assert_called_once_with("Top")
+        mock_view.set_view.assert_called_once_with(view="Top")
+
+    def test_rotate_converts_degrees_to_radians(self, mock_export, mock_view):
+        """The tool takes degrees; View.RotateCamera underneath takes radians."""
+        mock_view.rotate_camera.return_value = {"status": "ok"}
+        camera_control(action="rotate", angle=90.0, axis_x=0.0, axis_y=0.0, axis_z=1.0)
+        mock_view.rotate_camera.assert_called_once_with(
+            angle=math.pi / 2,
+            center_x=0.0,
+            center_y=0.0,
+            center_z=0.0,
+            axis_x=0.0,
+            axis_y=0.0,
+            axis_z=1.0,
+        )
+
+    def test_rotate_zero_degrees_stays_zero(self, mock_export, mock_view):
+        mock_view.rotate_camera.return_value = {"status": "ok"}
+        camera_control(action="rotate", angle=0.0)
+        assert mock_view.rotate_camera.call_args.kwargs["angle"] == 0.0
 
     def test_zoom_passes_factor(self, mock_export, mock_view):
         mock_view.zoom_camera.return_value = {"status": "ok"}
         camera_control(action="zoom", factor=2.0)
-        mock_view.zoom_camera.assert_called_once_with(2.0)
+        mock_view.zoom_camera.assert_called_once_with(factor=2.0)
 
     def test_unknown(self, mock_export, mock_view):
         result = camera_control(action="bogus")
@@ -250,12 +310,23 @@ class TestCameraControl:
 
 # === set_camera ===
 
+
 class TestSetCamera:
     def test_dispatch(self, mock_export, mock_view):
         mock_view.set_camera.return_value = {"status": "ok"}
         result = set_camera(eye_x=1.0, eye_z=5.0)
         mock_view.set_camera.assert_called_once_with(
-            1.0, 0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, False, 1.0
+            eye_x=1.0,
+            eye_y=0.0,
+            eye_z=5.0,
+            target_x=0.0,
+            target_y=0.0,
+            target_z=0.0,
+            up_x=0.0,
+            up_y=1.0,
+            up_z=0.0,
+            perspective=False,
+            scale_or_angle=1.0,
         )
         assert result == {"status": "ok"}
 
@@ -263,22 +334,26 @@ class TestSetCamera:
         mock_view.set_camera.return_value = {"status": "ok"}
         result = set_camera(perspective=True, scale_or_angle=45.0)
         mock_view.set_camera.assert_called_once()
-        call_args = mock_view.set_camera.call_args[0]
-        assert call_args[9] is True
-        assert call_args[10] == 45.0
+        kwargs = mock_view.set_camera.call_args.kwargs
+        assert kwargs["perspective"] is True
+        assert kwargs["scale_or_angle"] == 45.0
         assert result == {"status": "ok"}
 
 
 # === display_control (mixed: view_manager + export_manager) ===
 
+
 class TestDisplayControl:
-    @pytest.mark.parametrize("disc, mgr_attr, method", [
-        ("set_mode", "mock_view", "set_display_mode"),
-        ("set_background", "mock_view", "set_view_background"),
-        ("model_to_screen", "mock_view", "transform_model_to_screen"),
-        ("screen_to_model", "mock_view", "transform_screen_to_model"),
-        ("set_texture", "mock_export", "set_face_texture"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, mgr_attr, method",
+        [
+            ("set_mode", "mock_view", "set_display_mode"),
+            ("set_background", "mock_view", "set_view_background"),
+            ("model_to_screen", "mock_view", "transform_model_to_screen"),
+            ("screen_to_model", "mock_view", "transform_screen_to_model"),
+            ("set_texture", "mock_export", "set_face_texture"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, mgr_attr, method, request):
         mgr = mock_view if mgr_attr == "mock_view" else mock_export
         getattr(mgr, method).return_value = {"status": "ok"}
@@ -289,7 +364,7 @@ class TestDisplayControl:
     def test_set_texture_passes_args(self, mock_export, mock_view):
         mock_export.set_face_texture.return_value = {"status": "ok"}
         display_control(action="set_texture", face_index=2, texture_name="wood")
-        mock_export.set_face_texture.assert_called_once_with(2, "wood")
+        mock_export.set_face_texture.assert_called_once_with(face_index=2, texture_name="wood")
 
     def test_unknown(self, mock_export, mock_view):
         result = display_control(action="bogus")
@@ -298,14 +373,18 @@ class TestDisplayControl:
 
 # === manage_sheet ===
 
+
 class TestManageSheet:
-    @pytest.mark.parametrize("disc, method", [
-        ("activate", "activate_sheet"),
-        ("rename", "rename_sheet"),
-        ("delete", "delete_sheet"),
-        ("create_drawing", "create_drawing"),
-        ("add", "add_draft_sheet"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("activate", "activate_sheet"),
+            ("rename", "rename_sheet"),
+            ("delete", "delete_sheet"),
+            ("create_drawing", "create_drawing"),
+            ("add", "add_draft_sheet"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = manage_sheet(action=disc)
@@ -319,14 +398,18 @@ class TestManageSheet:
 
 # === print_control ===
 
+
 class TestPrintControl:
-    @pytest.mark.parametrize("disc, method", [
-        ("print", "print_drawing"),
-        ("set_printer", "set_printer"),
-        ("get_printer", "get_printer"),
-        ("set_paper_size", "set_paper_size"),
-        ("print_full", "print_document"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("print", "print_drawing"),
+            ("set_printer", "set_printer"),
+            ("get_printer", "get_printer"),
+            ("set_paper_size", "set_paper_size"),
+            ("print_full", "print_document"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = print_control(action=disc)
@@ -352,18 +435,22 @@ class TestPrintControl:
 
 # === query_sheet ===
 
+
 class TestQuerySheet:
-    @pytest.mark.parametrize("disc, method", [
-        ("dimensions", "get_sheet_dimensions"),
-        ("balloons", "get_sheet_balloons"),
-        ("text_boxes", "get_sheet_text_boxes"),
-        ("drawing_objects", "get_sheet_drawing_objects"),
-        ("sections", "get_sheet_sections"),
-        ("lines2d", "get_lines2d"),
-        ("circles2d", "get_circles2d"),
-        ("arcs2d", "get_arcs2d"),
-        ("section_cuts", "get_section_cuts"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("dimensions", "get_sheet_dimensions"),
+            ("balloons", "get_sheet_balloons"),
+            ("text_boxes", "get_sheet_text_boxes"),
+            ("drawing_objects", "get_sheet_drawing_objects"),
+            ("sections", "get_sheet_sections"),
+            ("lines2d", "get_lines2d"),
+            ("circles2d", "get_circles2d"),
+            ("arcs2d", "get_arcs2d"),
+            ("section_cuts", "get_section_cuts"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = query_sheet(type=disc)
@@ -377,13 +464,17 @@ class TestQuerySheet:
 
 # === manage_annotation_data ===
 
+
 class TestManageAnnotationData:
-    @pytest.mark.parametrize("disc, method", [
-        ("add_symbol", "add_symbol"),
-        ("get_symbols", "get_symbols"),
-        ("get_pmi", "get_pmi_info"),
-        ("set_pmi_visibility", "set_pmi_visibility"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("add_symbol", "add_symbol"),
+            ("get_symbols", "get_symbols"),
+            ("get_pmi", "get_pmi_info"),
+            ("set_pmi_visibility", "set_pmi_visibility"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = manage_annotation_data(action=disc)
@@ -397,11 +488,15 @@ class TestManageAnnotationData:
 
 # === add_smart_frame ===
 
+
 class TestAddSmartFrame:
-    @pytest.mark.parametrize("disc, method", [
-        ("two_point", "add_smart_frame"),
-        ("by_origin", "add_smart_frame_by_origin"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("two_point", "add_smart_frame"),
+            ("by_origin", "add_smart_frame_by_origin"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = add_smart_frame(method=disc)
@@ -415,13 +510,17 @@ class TestAddSmartFrame:
 
 # === draft_config ===
 
+
 class TestDraftConfig:
-    @pytest.mark.parametrize("disc, method", [
-        ("get_global", "get_draft_global_parameter"),
-        ("set_global", "set_draft_global_parameter"),
-        ("get_origin", "get_symbol_file_origin"),
-        ("set_origin", "set_symbol_file_origin"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("get_global", "get_draft_global_parameter"),
+            ("set_global", "set_draft_global_parameter"),
+            ("get_origin", "get_symbol_file_origin"),
+            ("set_origin", "set_symbol_file_origin"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = draft_config(action=disc)
@@ -435,11 +534,15 @@ class TestDraftConfig:
 
 # === create_table ===
 
+
 class TestCreateTable:
-    @pytest.mark.parametrize("disc, method", [
-        ("parts_list", "create_parts_list"),
-        ("bend", "create_bend_table"),
-    ])
+    @pytest.mark.parametrize(
+        "disc, method",
+        [
+            ("parts_list", "create_parts_list"),
+            ("bend", "create_bend_table"),
+        ],
+    )
     def test_dispatch(self, mock_export, mock_view, disc, method):
         getattr(mock_export, method).return_value = {"status": "ok"}
         result = create_table(type=disc)
@@ -449,3 +552,71 @@ class TestCreateTable:
     def test_unknown(self, mock_export, mock_view):
         result = create_table(type="bogus")
         assert "error" in result
+
+
+# === Literal discriminator drift ===
+
+
+def test_export_discriminators_match_their_cases():
+    assert assert_literal_discriminators(export_tools) == 16
+
+
+# === Tool/backend signature agreement ===
+
+
+class TestBackendSignatureAgreement:
+    """Every export tool must be able to supply its backend's required params."""
+
+    def test_no_backend_call_violations(self):
+        violations = backend_call_violations(
+            "solidedge_mcp.tools.export",
+            {"export_manager": ExportManager, "view_manager": ViewModel},
+        )
+        assert violations == []
+
+
+class TestExportOverwrite:
+    """An export over an existing file must be refused, not left to Solid Edge.
+
+    Solid Edge answers one with a modal "This file exists. Do you want to
+    overwrite it?" prompt that DisplayAlerts does not suppress. Its single UI
+    thread means the COM call never returns and the whole server stops
+    answering. Reproduced and photographed on Solid Edge 2026.
+    """
+
+    def test_overwrite_defaults_to_refusing(self, mock_export, mock_view):
+        mock_export.export_step.return_value = {"status": "ok"}
+
+        export_file(format="step", file_path="out.step")
+
+        assert mock_export.export_step.call_args.kwargs["overwrite"] is False
+
+    def test_overwrite_is_passed_through(self, mock_export, mock_view):
+        mock_export.export_step.return_value = {"status": "ok"}
+
+        export_file(format="step", file_path="out.step", overwrite=True)
+
+        assert mock_export.export_step.call_args.kwargs["overwrite"] is True
+
+    def test_every_format_takes_it(self, mock_export, mock_view):
+        formats = {
+            "step": "export_step",
+            "stl": "export_stl",
+            "iges": "export_iges",
+            "pdf": "export_pdf",
+            "dxf": "export_dxf",
+            "parasolid": "export_parasolid",
+            "jt": "export_jt",
+            "flat_dxf": "export_flat_dxf",
+            "prc": "export_to_prc",
+            "plmxml": "export_to_plmxml",
+            "image": "capture_screenshot",
+        }
+        for fmt, method in formats.items():
+            getattr(mock_export, method).reset_mock()
+            getattr(mock_export, method).return_value = {"status": "ok"}
+
+            export_file(format=fmt, file_path=f"out.{fmt}", overwrite=True)
+
+            kwargs = getattr(mock_export, method).call_args.kwargs
+            assert kwargs["overwrite"] is True, f"{fmt} dropped overwrite"

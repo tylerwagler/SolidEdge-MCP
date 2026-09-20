@@ -1,10 +1,12 @@
 """Property operations for assembly components."""
 
 import contextlib
-import traceback
 from typing import Any
 
+from solidedge_mcp.backends.errors import error_result
+
 from ..logging import get_logger
+from ._base import com_get
 
 _logger = get_logger(__name__)
 
@@ -23,16 +25,26 @@ class PropertiesMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            if hasattr(occurrence, "Suppress") and suppress:
-                occurrence.Suppress()
-            elif hasattr(occurrence, "Unsuppress") and not suppress:
-                occurrence.Unsuppress()
-            else:
-                return {"error": "Suppress/Unsuppress not available on this occurrence"}
+            # Occurrence exposes no Suppress member (verified against
+            # assembly.tlb). Suppression goes through the document, which hands
+            # back a SuppressComponent object; that object owns UnSuppress.
+            if suppress:
+                doc.SetSuppressComponent(occurrence)
+                return {"status": "updated", "component": component_index, "suppressed": True}
 
-            return {"status": "updated", "component": component_index, "suppressed": suppress}
+            return {
+                "error": (
+                    "Unsuppressing a component is not reachable through COM automation. "
+                    "AssemblyDocument.SetSuppressComponent returns the SuppressComponent "
+                    "object that owns UnSuppress, and Solid Edge offers no way to look that "
+                    "object up again for an already-suppressed occurrence. Unsuppress the "
+                    "component in the Solid Edge UI."
+                ),
+                "unsupported": True,
+                "component": component_index,
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_component_visibility(self, component_index: int, visible: bool) -> dict[str, Any]:
         """
@@ -48,8 +60,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -65,7 +78,7 @@ class PropertiesMixin:
 
             return {"status": "updated", "component_index": component_index, "visible": visible}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_component(self, component_index: int) -> dict[str, Any]:
         """
@@ -80,8 +93,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -93,14 +107,12 @@ class PropertiesMixin:
                 }
 
             occurrence = occurrences.Item(component_index + 1)
-            name = (
-                occurrence.Name if hasattr(occurrence, "Name") else f"Component_{component_index}"
-            )
+            name = com_get(occurrence, "Name", f"Component_{component_index}")
             occurrence.Delete()
 
             return {"status": "deleted", "component_index": component_index, "name": name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def ground_component(self, component_index: int, ground: bool = True) -> dict[str, Any]:
         """
@@ -116,8 +128,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -142,7 +155,7 @@ class PropertiesMixin:
                     try:
                         rel = relations.Item(i)
                         # Ground relations have Type = 0
-                        if hasattr(rel, "Type") and rel.Type == 0:
+                        if com_get(rel, "Type") == 0:
                             rel.Delete()
                             return {"status": "ungrounded", "component_index": component_index}
                     except Exception:
@@ -150,7 +163,7 @@ class PropertiesMixin:
 
                 return {"error": "No ground relation found for this component"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_component_color(
         self, component_index: int, red: int, green: int, blue: int
@@ -170,8 +183,9 @@ class PropertiesMixin:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             occurrences = doc.Occurrences
 
@@ -184,36 +198,60 @@ class PropertiesMixin:
 
             occurrence = occurrences.Item(component_index + 1)
 
-            # OLE color: BGR format packed into integer
-            ole_color = red | (green << 8) | (blue << 16)
+            red = max(0, min(255, red))
+            green = max(0, min(255, green))
+            blue = max(0, min(255, blue))
 
-            try:
-                occurrence.SetColor(red, green, blue)
-            except Exception:
-                try:
-                    occurrence.Color = ole_color
-                except Exception:
-                    # Try style-based approach
-                    occurrence.UseOccurrenceColor = True
-                    occurrence.OccurrenceColor = ole_color
+            # Occurrence has no SetColor, no Color, and no
+            # UseOccurrenceColor/OccurrenceColor pair, so all three attempts
+            # raised. FaceStyle is a get/put property, and a component is
+            # coloured by handing it a style whose diffuse colour is wanted,
+            # the same way a part body is.
+            styles = com_get(doc, "FaceStyles")
+            if styles is None:
+                return {
+                    "error": (
+                        "This assembly has no FaceStyles collection, so a component "
+                        "colour cannot be set."
+                    )
+                }
+
+            name = f"MCP {red:02X}{green:02X}{blue:02X}"
+            style = None
+            with contextlib.suppress(Exception):
+                style = styles.Item(name)
+            if style is None:
+                style = styles.Add(name, "")
+            style.SetDiffuse(red / 255.0, green / 255.0, blue / 255.0)
+            occurrence.FaceStyle = style
 
             return {
                 "status": "updated",
                 "component_index": component_index,
                 "color": [red, green, blue],
+                "hex": f"#{red:02x}{green:02x}{blue:02x}",
+                "style": name,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def replace_component(self, component_index: int, new_file_path: str) -> dict[str, Any]:
-        """
-        Replace a component in the assembly with a different part/assembly file.
+    def replace_component(
+        self, component_index: int, new_file_path: str, replace_all: bool = False
+    ) -> dict[str, Any]:
+        """Replace one component with a different part or assembly file.
 
-        Preserves position and attempts to maintain assembly relations.
+        ``Occurrence.Replace(NewOccurrenceFileName, ReplaceAll,
+        [NewFamilyMemberName])`` takes two required arguments. This passed one,
+        so the call raised; the fallback then assigned to
+        ``Occurrence.OccurrenceFileName``, which the type library marks
+        read-only, so that raised too and the caller got an error naming the
+        wrong thing. Neither path could ever have replaced anything.
 
         Args:
-            component_index: 0-based index of the component to replace
-            new_file_path: Path to the replacement file (.par or .asm)
+            component_index: 0-based index of the component to replace.
+            new_file_path: Path to the replacement file (.par or .asm).
+            replace_all: Replace every occurrence of the same file, not just
+                this one.
 
         Returns:
             Dict with replacement status
@@ -223,8 +261,9 @@ class PropertiesMixin:
 
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Occurrences"):
-                return {"error": "Active document is not an assembly"}
+            err = self._require_assembly(doc)
+            if err:
+                return err
 
             if not os.path.exists(new_file_path):
                 return {"error": f"File not found: {new_file_path}"}
@@ -241,20 +280,17 @@ class PropertiesMixin:
             occurrence = occurrences.Item(component_index + 1)
             old_name = occurrence.Name
 
-            try:
-                occurrence.Replace(new_file_path)
-            except Exception:
-                # Try alternative method
-                occurrence.OccurrenceFileName = new_file_path
+            occurrence.Replace(new_file_path, replace_all)
 
             return {
                 "status": "replaced",
                 "component_index": component_index,
                 "old_name": old_name,
                 "new_file": new_file_path,
+                "replace_all": replace_all,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def is_tube(self, component_index: int) -> dict[str, Any]:
         """
@@ -284,7 +320,7 @@ class PropertiesMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_adjustable_part(self, component_index: int) -> dict[str, Any]:
         """
@@ -319,7 +355,7 @@ class PropertiesMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def make_writable(self, component_index: int) -> dict[str, Any]:
         """
@@ -346,7 +382,7 @@ class PropertiesMixin:
                 "component_index": component_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def swap_family_member(
         self,
@@ -371,7 +407,9 @@ class PropertiesMixin:
             if err:
                 return err
 
-            occurrence.SwapFamilyMember(new_member_name)
+            # SwapFamilyMember(MemberName as VT_BSTR,
+            #     SwapAllOccurrences as VT_BOOL)
+            occurrence.SwapFamilyMember(new_member_name, False)
 
             return {
                 "status": "swapped",
@@ -379,4 +417,4 @@ class PropertiesMixin:
                 "new_member_name": new_member_name,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

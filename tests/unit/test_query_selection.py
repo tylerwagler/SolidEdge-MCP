@@ -8,6 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
 
 @pytest.fixture
 def doc_mgr():
@@ -229,16 +231,26 @@ class TestSelectRemove:
 
 
 class TestSelectAll:
-    def test_success(self, query_mgr):
+    """SelectSet.AddAll is a draft-sheet call; a part is refused before it (SE 2026)."""
+
+    def test_a_draft_selects_everything_on_the_sheet(self, query_mgr):
         qm, doc = query_mgr
-        select_set = MagicMock()
-        select_set.Count = 10
-        doc.SelectSet = select_set
+        doc.Type = DocumentTypeConstants.igDraftDocument
+        doc.SelectSet.Count = 2
 
         result = qm.select_all()
-        assert result["status"] == "selected_all"
-        assert result["selection_count"] == 10
-        select_set.AddAll.assert_called_once()
+
+        assert result == {"status": "selected", "count": 2}
+        doc.SelectSet.AddAll.assert_called_once_with()
+
+    def test_a_part_is_refused_without_the_call(self, query_mgr):
+        qm, doc = query_mgr
+        doc.Type = DocumentTypeConstants.igPartDocument
+
+        result = qm.select_all()
+
+        assert result["unsupported"] is True
+        doc.SelectSet.AddAll.assert_not_called()
 
 
 # ============================================================================

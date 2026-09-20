@@ -6,9 +6,16 @@ smart frames, symbols, PMI, draft global parameters, and symbol file origins.
 Uses unittest.mock to simulate COM objects.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
+import pythoncom
+
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
 
 
 @pytest.fixture
@@ -18,7 +25,11 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
+    # No document has a DraftPrintUtility property; the print utility comes
+    # from Application.GetDraftPrintUtility().
+    del doc.DraftPrintUtility
     return ExportManager(dm), doc
 
 
@@ -31,7 +42,9 @@ class TestPrintDrawing:
     def test_with_draft_print_utility(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.print_drawing(copies=2, all_sheets=False)
         assert result["status"] == "printed"
@@ -40,15 +53,25 @@ class TestPrintDrawing:
 
     def test_fallback_printout(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
-        result = em.print_drawing()
+        result = em.print_drawing(copies=3)
+
+        # Document.PrintOut's parameter is NumCopies. This passed Copies,
+        # which is a parameter of nothing, so the call raised and a bare retry
+        # printed one copy while the result still claimed three.
+        doc.PrintOut.assert_called_once_with(NumCopies=3)
         assert result["status"] == "printed"
+        assert result["copies"] == 3
 
     def test_no_print_support(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
-        del doc.PrintOut
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
+        doc.PrintOut.side_effect = Exception("not supported")
 
         result = em.print_drawing()
         assert "error" in result
@@ -58,7 +81,9 @@ class TestSetPrinter:
     def test_success(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.set_printer("HP LaserJet")
         assert result["status"] == "set"
@@ -67,7 +92,9 @@ class TestSetPrinter:
 
     def test_no_dpu(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
         result = em.set_printer("HP LaserJet")
         assert "error" in result
@@ -75,7 +102,9 @@ class TestSetPrinter:
     def test_different_printer(self, export_mgr):
         em, doc = export_mgr
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.set_printer("PDF Printer")
         assert result["printer"] == "PDF Printer"
@@ -86,14 +115,18 @@ class TestGetPrinter:
         em, doc = export_mgr
         dpu = MagicMock()
         dpu.Printer = "HP LaserJet"
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.get_printer()
         assert result["printer"] == "HP LaserJet"
 
     def test_no_dpu(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
         result = em.get_printer()
         assert "error" in result
@@ -102,35 +135,83 @@ class TestGetPrinter:
         em, doc = export_mgr
         dpu = MagicMock()
         dpu.Printer = "PDF Printer"
-        doc.DraftPrintUtility = dpu
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
 
         result = em.get_printer()
         assert result["printer"] == "PDF Printer"
 
 
 class TestSetPaperSize:
-    def test_landscape(self, export_mgr):
-        em, doc = export_mgr
+    """PaperWidth/PaperHeight are millimetres, and this passed meters.
+
+    0.42 read back as the untouched default, so the size never changed while
+    the result reported what was asked for. Orientation was passed as 1 for
+    Portrait and 2 for Landscape; the enum is Portrait=0, Landscape=1, so
+    "Portrait" selected landscape and 2 is rejected outright.
+    """
+
+    def _dpu(self, em, width_mm=297.0, height_mm=210.0, orientation=1):
         dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        dpu.PaperWidth = width_mm
+        dpu.PaperHeight = height_mm
+        dpu.Orientation = orientation
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.return_value = (
+            dpu
+        )
+        return dpu
+
+    def test_meters_are_sent_as_millimetres(self, export_mgr):
+        em, doc = export_mgr
+        dpu = self._dpu(em)
 
         result = em.set_paper_size(0.297, 0.210, "Landscape")
+
+        assert dpu.PaperWidth == 297.0
+        assert dpu.PaperHeight == 210.0
         assert result["status"] == "set"
-        assert result["orientation"] == "Landscape"
         assert result["width"] == 0.297
 
-    def test_portrait(self, export_mgr):
+    def test_landscape_uses_the_real_constant(self, export_mgr):
         em, doc = export_mgr
-        dpu = MagicMock()
-        doc.DraftPrintUtility = dpu
+        dpu = self._dpu(em)
+
+        result = em.set_paper_size(0.297, 0.210, "Landscape")
+
+        assert dpu.Orientation == 1  # igDraftPrintLandscape, never 2
+        assert result["orientation"] == "Landscape"
+
+    def test_portrait_uses_the_real_constant(self, export_mgr):
+        em, doc = export_mgr
+        dpu = self._dpu(em, orientation=0)
 
         result = em.set_paper_size(0.210, 0.297, "Portrait")
-        assert result["status"] == "set"
+
+        assert dpu.Orientation == 0  # igDraftPrintPortrait, never 1
         assert result["orientation"] == "Portrait"
+
+    def test_the_size_the_printer_kept_is_reported(self, export_mgr):
+        """The driver clamps to what it can print, so echoing the request lies.
+
+        Verified on Solid Edge 2026: asking for 420 mm on this printer reads
+        back as 297.01.
+        """
+        em, doc = export_mgr
+        dpu = self._dpu(em)
+        # A driver that accepts the write and keeps its own value.
+        type(dpu).PaperWidth = PropertyMock(return_value=279.4)
+
+        result = em.set_paper_size(0.42, 0.297, "Landscape")
+
+        assert result["width"] == 0.2794
+        assert result["requested"]["width"] == 0.42
 
     def test_no_dpu(self, export_mgr):
         em, doc = export_mgr
-        del doc.DraftPrintUtility
+        em.doc_manager.connection.get_application.return_value.GetDraftPrintUtility.side_effect = (
+            Exception("no print utility")
+        )
 
         result = em.set_paper_size(0.297, 0.210)
         assert "error" in result
@@ -163,9 +244,7 @@ class TestPrintDocument:
 
         result = em.print_document(print_to_file=True, output_file_name="C:/temp/out.pdf")
         assert result["status"] == "printed"
-        doc.PrintOut.assert_called_once_with(
-            PrintToFile=True, OutputFileName="C:/temp/out.pdf"
-        )
+        doc.PrintOut.assert_called_once_with(PrintToFile=True, OutputFileName="C:/temp/out.pdf")
 
     def test_color_as_black(self, export_mgr):
         em, doc = export_mgr
@@ -207,9 +286,24 @@ class TestSetFaceTexture:
         models.Item.return_value = model
         doc.Models = models
 
+        face.Style = None
+        style = MagicMock()
+        style.StyleName = "MCP Face 1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+
         result = em.set_face_texture(1, "Wood")
+
         assert result["status"] == "set"
         assert result["texture_name"] == "Wood"
+        # TextureFileName belongs to FaceStyle. Face has no such member, so
+        # the attempt this used to make first could never have worked, and
+        # writing to a style the face shares would texture other faces too.
+        assert style.TextureFileName == "Wood"
+        assert face.Style is style
+        styles.Add.assert_called_once_with("MCP Face 1", "")
 
     def test_invalid_index(self, export_mgr):
         em, doc = export_mgr
@@ -249,7 +343,9 @@ class TestCreateBendTable:
         sheet = MagicMock()
         bend_tables = MagicMock()
         bend_tables.Count = 1
-        sheet.DraftBendTables = bend_tables
+        # DraftBendTables is on DraftDocument, not on Sheet.
+        del sheet.DraftBendTables
+        doc.DraftBendTables = bend_tables
         doc.ActiveSheet = sheet
 
         result = em.create_bend_table(view_index=0)
@@ -297,7 +393,7 @@ class TestAddSmartFrame:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_smart_frame("A4", 0.0, 0.0, 0.297, 0.21)
         assert "error" in result
@@ -330,7 +426,7 @@ class TestAddSmartFrameByOrigin:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_smart_frame_by_origin("A3", 0.01, 0.01, 0.28, 0.01, 0.01, 0.40)
         assert "error" in result
@@ -368,7 +464,7 @@ class TestAddSymbol:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_symbol("C:/symbols/arrow.sym", 0.1, 0.1)
         assert "error" in result
@@ -386,18 +482,20 @@ class TestAddSymbol:
 
 
 class TestGetSymbols:
+    """Symbol2d has no OriginX/OriginY; its position is its first keypoint."""
+
     def test_success(self, export_mgr):
         em, doc = export_mgr
         sheet = MagicMock()
         sym1 = MagicMock()
         sym1.Name = "Arrow"
-        sym1.OriginX = 0.1
-        sym1.OriginY = 0.1
+        sym1.GetKeyPoint.return_value = (0.1, 0.1, 0.0, 0, 0)
+        sym1.ScaleFactor = 1.0
+        sym1.Angle = 0.0
 
         sym2 = MagicMock()
         sym2.Name = "Star"
-        sym2.OriginX = 0.2
-        sym2.OriginY = 0.2
+        sym2.GetKeyPoint.return_value = (0.2, 0.2, 0.0, 0, 0)
 
         symbols = MagicMock()
         symbols.Count = 2
@@ -409,8 +507,26 @@ class TestGetSymbols:
         assert result["count"] == 2
         assert result["symbols"][0]["name"] == "Arrow"
         assert result["symbols"][0]["x"] == 0.1
+        assert result["symbols"][0]["y"] == 0.1
+        assert result["symbols"][0]["scale"] == 1.0
         assert result["symbols"][1]["name"] == "Star"
         assert result["symbols"][1]["index"] == 1
+
+    def test_a_symbol_without_a_keypoint_still_lists(self, export_mgr):
+        em, doc = export_mgr
+        sheet = MagicMock()
+        sym = MagicMock()
+        sym.Name = "Odd"
+        sym.GetKeyPoint.side_effect = Exception("no keypoints")
+        symbols = MagicMock()
+        symbols.Count = 1
+        symbols.Item.return_value = sym
+        sheet.Symbols = symbols
+        doc.ActiveSheet = sheet
+
+        result = em.get_symbols()
+        assert result["symbols"][0]["name"] == "Odd"
+        assert "x" not in result["symbols"][0]
 
     def test_empty(self, export_mgr):
         em, doc = export_mgr
@@ -426,7 +542,7 @@ class TestGetSymbols:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_symbols()
         assert "error" in result
@@ -510,6 +626,13 @@ class TestGetPmiInfo:
 
 
 class TestSetPmiVisibility:
+    """Solid Edge does not always accept Show.
+
+    Verified on a part with no PMI content: writing Show=True leaves it False.
+    The three writes sat inside suppresses and the result echoed the request,
+    so the caller was told the master toggle was on when it was not.
+    """
+
     def test_success(self, export_mgr):
         em, doc = export_mgr
         pmi = MagicMock()
@@ -517,9 +640,21 @@ class TestSetPmiVisibility:
 
         result = em.set_pmi_visibility(True, False, True)
         assert result["status"] == "updated"
-        assert result["show"] is True
-        assert result["show_dimensions"] is False
-        assert result["show_annotations"] is True
+        assert pmi.Show is True
+        assert pmi.ShowDimensions is False
+        assert pmi.ShowAnnotations is True
+
+    def test_what_solid_edge_kept_is_reported(self, export_mgr):
+        em, doc = export_mgr
+        pmi = MagicMock()
+        # A document that refuses the master toggle.
+        type(pmi).Show = PropertyMock(return_value=False)
+        doc.PMI = pmi
+
+        result = em.set_pmi_visibility(True, True, True)
+
+        assert result["requested"]["show"] is True
+        assert result["show"] is False
 
     def test_no_pmi(self, export_mgr):
         em, doc = export_mgr
@@ -535,9 +670,9 @@ class TestSetPmiVisibility:
 
         result = em.set_pmi_visibility()
         assert result["status"] == "updated"
-        assert result["show"] is True
-        assert result["show_dimensions"] is True
-        assert result["show_annotations"] is True
+        assert pmi.Show is True
+        assert pmi.ShowDimensions is True
+        assert pmi.ShowAnnotations is True
 
 
 # ============================================================================
@@ -559,7 +694,7 @@ class TestGetDraftGlobalParameter:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_draft_global_parameter(5)
         assert "error" in result
@@ -591,7 +726,7 @@ class TestSetDraftGlobalParameter:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.set_draft_global_parameter(5, 0.005)
         assert "error" in result
@@ -611,31 +746,82 @@ class TestSetDraftGlobalParameter:
 
 
 class TestGetSymbolFileOrigin:
-    def test_success(self, export_mgr):
+    """GetSymbolFileOrigin's parameters are declared [in] VT_R8*, so a plain
+    late-bound call returns None; the values come back only through InvokeTypes
+    with the parameters declared [in, out] by reference (verified on SE 2026)."""
+
+    @staticmethod
+    def _ole(doc):
+        ole = doc._oleobj_
+        ole.GetIDsOfNames.return_value = 7
+        return ole
+
+    def test_values_come_back_by_reference(self, export_mgr):
         em, doc = export_mgr
         doc.Sheets = MagicMock()
-        doc.GetSymbolFileOrigin.return_value = (0.05, 0.10)
+        ole = self._ole(doc)
+        ole.InvokeTypes.return_value = (0.05, 0.10)
 
         result = em.get_symbol_file_origin()
-        assert result["status"] == "success"
-        assert result["x"] == 0.05
-        assert result["y"] == 0.10
-        doc.GetSymbolFileOrigin.assert_called_once()
+
+        assert result == {"status": "success", "x": 0.05, "y": 0.10}
+        byref_r8 = pythoncom.VT_BYREF | pythoncom.VT_R8
+        ole.InvokeTypes.assert_called_once_with(
+            7,
+            0,
+            pythoncom.DISPATCH_METHOD,
+            (pythoncom.VT_VOID, 0),
+            ((byref_r8, 3), (byref_r8, 3)),
+            0.0,
+            0.0,
+        )
+        doc.GetSymbolFileOrigin.assert_not_called()
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_symbol_file_origin()
         assert "error" in result
 
-    def test_com_error(self, export_mgr):
+    def test_no_origin_set_is_said_plainly(self, export_mgr):
         em, doc = export_mgr
         doc.Sheets = MagicMock()
-        doc.GetSymbolFileOrigin.side_effect = Exception("No origin set")
+        ole = self._ole(doc)
+        ole.InvokeTypes.side_effect = pythoncom.com_error(
+            -2147352565, "Exception occurred.", None, None
+        )
 
         result = em.get_symbol_file_origin()
+
+        assert "no symbol file origin" in result["error"].lower()
+        assert "set_origin" in result["error"]
+
+    def test_no_origin_inside_excepinfo_is_said_plainly(self, export_mgr):
+        """Solid Edge raises DISP_E_EXCEPTION with BADINDEX as the inner scode."""
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+        ole = self._ole(doc)
+        ole.InvokeTypes.side_effect = pythoncom.com_error(
+            -2147352567, "Exception occurred.", (0, None, None, None, 0, -2147352565), None
+        )
+
+        result = em.get_symbol_file_origin()
+
+        assert "no symbol file origin" in result["error"].lower()
+
+    def test_another_com_error_is_reported_as_itself(self, export_mgr):
+        em, doc = export_mgr
+        doc.Sheets = MagicMock()
+        ole = self._ole(doc)
+        ole.InvokeTypes.side_effect = pythoncom.com_error(
+            -2147467259, "Exception occurred.", None, None
+        )
+
+        result = em.get_symbol_file_origin()
+
         assert "error" in result
+        assert "no symbol file origin" not in result["error"].lower()
 
 
 # ============================================================================
@@ -656,7 +842,7 @@ class TestSetSymbolFileOrigin:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.set_symbol_file_origin(0.05, 0.10)
         assert "error" in result

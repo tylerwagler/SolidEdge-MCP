@@ -9,6 +9,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -17,6 +23,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -105,6 +112,7 @@ class TestUndo:
         dm, app = doc_mgr
         doc = MagicMock()
         dm.active_document = doc
+        app.ActiveDocument = doc
 
         result = dm.undo()
         assert result["status"] == "undone"
@@ -116,6 +124,7 @@ class TestRedo:
         dm, app = doc_mgr
         doc = MagicMock()
         dm.active_document = doc
+        app.ActiveDocument = doc
 
         result = dm.redo()
         assert result["status"] == "redone"
@@ -134,6 +143,7 @@ class TestSetComponentVisibility:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -163,7 +173,7 @@ class TestSetComponentVisibility:
 
     def test_not_assembly(self, asm_mgr):
         am, doc, occ = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.set_component_visibility(0, True)
         assert "error" in result
 
@@ -180,6 +190,7 @@ class TestDeleteComponent:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -216,6 +227,7 @@ class TestGroundComponent:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -253,6 +265,7 @@ class TestReplaceComponent:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -264,9 +277,48 @@ class TestReplaceComponent:
 
         return AssemblyManager(dm), doc, occurrence
 
+    def test_passes_both_required_arguments(self, asm_mgr):
+        """Occurrence.Replace(NewOccurrenceFileName, ReplaceAll) takes two.
+
+        This passed one, so the call raised; the fallback then assigned to
+        Occurrence.OccurrenceFileName, which the type library marks read-only,
+        so that raised too and the caller got an error naming the wrong thing.
+        Neither path could ever have replaced anything.
+        """
+        am, _doc, occ = asm_mgr
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.replace_component(0, "C:/parts/new.par")
+
+        occ.Replace.assert_called_once_with("C:/parts/new.par", False)
+        assert result["status"] == "replaced"
+        assert result["replace_all"] is False
+
+    def test_replace_all_is_passed_through(self, asm_mgr):
+        am, _doc, occ = asm_mgr
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            am.replace_component(0, "C:/parts/new.par", replace_all=True)
+
+        occ.Replace.assert_called_once_with("C:/parts/new.par", True)
+
+    def test_no_fallback_to_the_read_only_property(self, asm_mgr):
+        """A failing Replace must surface, not be retried on a read-only member."""
+        am, _doc, occ = asm_mgr
+        occ.Replace.side_effect = Exception("E_FAIL")
+        import unittest.mock
+
+        with unittest.mock.patch("os.path.exists", return_value=True):
+            result = am.replace_component(0, "C:/parts/new.par")
+
+        assert "error" in result
+        assert "E_FAIL" in result["error"]
+
     def test_not_assembly(self, asm_mgr):
         am, doc, occ = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.replace_component(0, "C:/parts/new.par")
         assert "error" in result
 
@@ -288,6 +340,7 @@ class TestGetComponentTransform:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -327,6 +380,7 @@ class TestGetStructuredBom:
         dm = MagicMock()
         doc = MagicMock()
         doc.Name = "Asm1.asm"
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occ1 = MagicMock()
@@ -354,7 +408,7 @@ class TestGetStructuredBom:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_structured_bom()
         assert "error" in result
 
@@ -371,6 +425,7 @@ class TestSetComponentColor:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrence = MagicMock()
@@ -436,16 +491,84 @@ class TestIsConnected:
 
 
 class TestCreateWeldment:
-    def test_success(self, doc_mgr):
+    """The ProgID route raises a modal that hangs the server; it is never taken.
+
+    Documents.Add("SolidEdge.WeldmentDocument") is accepted by Solid Edge 2026,
+    which then looks for a default weldment template. On an install without the
+    weldment environment that file is absent, and the answer is a modal "Path
+    not found" that DisplayAlerts does not suppress. Verified live: the call
+    blocked until dismissed by hand, then returned 0x80030003.
+    """
+
+    def test_without_a_template_it_refuses_before_any_com_call(self, doc_mgr):
         dm, app = doc_mgr
-        doc = MagicMock()
-        doc.Name = "Weld1.pwd"
-        doc.FullName = "C:/weld.pwd"
-        app.Documents.Add.return_value = doc
 
         result = dm.create_weldment()
+
+        assert "error" in result
+        assert result["unsupported"] is True
+        assert "template" in result["error"]
+        app.Documents.Add.assert_not_called()
+
+    def test_with_an_existing_template_it_opens_that_file(self, doc_mgr, tmp_path):
+        dm, app = doc_mgr
+        template = tmp_path / "weld.pwd"
+        template.write_bytes(b"")
+        doc = MagicMock()
+        doc.Name = "Weld1.pwd"
+        doc.FullName = str(template)
+        app.Documents.Add.return_value = doc
+
+        result = dm.create_weldment(template=str(template))
+
         assert result["status"] == "created"
         assert result["type"] == "Weldment"
+        app.Documents.Add.assert_called_once_with(str(template))
+
+    def test_a_missing_template_is_refused_not_ignored(self, doc_mgr):
+        dm, app = doc_mgr
+
+        result = dm.create_weldment(template=r"C:\nowhere\weld.pwd")
+
+        assert "error" in result
+        assert "Template not found" in result["error"]
+        app.Documents.Add.assert_not_called()
+
+
+class TestAMissingTemplateIsNeverSilentlyIgnored:
+    """Every document creator used to fall through to the default document
+    when the caller's template was not on disk, so a caller who asked for a
+    template got a plain part and no word that their path was ignored."""
+
+    @pytest.mark.parametrize(
+        "creator", ["create_part", "create_assembly", "create_sheet_metal", "create_draft"]
+    )
+    def test_refuses_before_any_com_call(self, doc_mgr, creator):
+        dm, app = doc_mgr
+
+        result = getattr(dm, creator)(template=r"C:\nowhere\template.xxx")
+
+        assert "error" in result, creator
+        assert "Template not found" in result["error"], creator
+        app.Documents.Add.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("creator", "progid"),
+        [
+            ("create_part", "SolidEdge.PartDocument"),
+            ("create_assembly", "SolidEdge.AssemblyDocument"),
+            ("create_sheet_metal", "SolidEdge.SheetMetalDocument"),
+            ("create_draft", "SolidEdge.DraftDocument"),
+        ],
+    )
+    def test_no_template_still_takes_the_progid_route(self, doc_mgr, creator, progid):
+        dm, app = doc_mgr
+        app.Documents.Add.return_value = MagicMock(Name="New", FullName="")
+
+        result = getattr(dm, creator)()
+
+        assert result["status"] == "created", (creator, result)
+        app.Documents.Add.assert_called_once_with(progid)
 
 
 # ============================================================================
@@ -540,7 +663,10 @@ class TestGetSketchInfo:
         profile.Arcs2d.Count = 0
         profile.Ellipses2d.Count = 0
         profile.BSplineCurves2d.Count = 0
-        profile.Holes2d.Count = 2
+        # Points2d holds sketch points; Holes2d holds hole positions. This
+        # used to count Holes2d as points.
+        profile.Points2d.Count = 2
+        profile.Holes2d.Count = 3
         sm.active_profile = profile
 
         result = sm.get_sketch_info()
@@ -548,7 +674,8 @@ class TestGetSketchInfo:
         assert result["lines"] == 4
         assert result["circles"] == 1
         assert result["points"] == 2
-        assert result["total_elements"] == 7
+        assert result["hole_positions"] == 3
+        assert result["total_elements"] == 10
 
     def test_no_active_sketch(self):
         from solidedge_mcp.backends.sketching import SketchManager
@@ -573,6 +700,7 @@ class TestGetActiveDocumentType:
         doc.FullName = "C:/Part1.par"
         doc.Type = 1  # igPartDocument
         dm.active_document = doc
+        app.ActiveDocument = doc
 
         result = dm.get_active_document_type()
         assert result["type"] is not None
@@ -638,10 +766,17 @@ class TestDrawArcBy3Points:
         return sm
 
     def test_success(self, sketch_mgr):
+        """A 3-point arc passes through its middle point; it is not a centre.
+
+        Arcs2d has AddByStartAlongEnd and AddByCenterStartEnd. There is no
+        AddByStartCenterEnd, which this used to call, so every 3-point arc
+        raised. Verified against Solid Edge 2026.
+        """
         result = sketch_mgr.draw_arc_by_3_points(0.0, 0.0, 0.05, 0.05, 0.1, 0.0)
         assert result["status"] == "created"
-        assert result["method"] == "start_center_end"
-        sketch_mgr.active_profile.Arcs2d.AddByStartCenterEnd.assert_called_once_with(
+        assert result["method"] == "start_along_end"
+        assert result["along"] == [0.05, 0.05]
+        sketch_mgr.active_profile.Arcs2d.AddByStartAlongEnd.assert_called_once_with(
             0.0, 0.0, 0.05, 0.05, 0.1, 0.0
         )
 
@@ -674,7 +809,12 @@ class TestDrawCircleBy2Points:
         assert result["method"] == "2_points"
         assert result["center"] == [0.05, 0.0]
         assert result["radius"] == 0.05
-        sketch_mgr.active_profile.Circles2d.AddBy2Points.assert_called_once_with(0.0, 0.0, 0.1, 0.0)
+        # Circles2d has only AddByCenterRadius and AddBy3Points; AddBy2Points
+        # does not exist, so the centre and radius are derived here.
+        sketch_mgr.active_profile.Circles2d.AddByCenterRadius.assert_called_once_with(
+            0.05, 0.0, 0.05
+        )
+        sketch_mgr.active_profile.Circles2d.AddBy2Points.assert_not_called()
 
     def test_no_sketch(self):
         from solidedge_mcp.backends.sketching import SketchManager
@@ -976,6 +1116,7 @@ class TestGetOccurrenceCount:
 
         dm = MagicMock()
         doc = MagicMock()
+        doc.Type = IG_ASSEMBLY_DOCUMENT
         dm.get_active_document.return_value = doc
 
         occurrences = MagicMock()
@@ -991,7 +1132,7 @@ class TestGetOccurrenceCount:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         result = am.get_occurrence_count()
         assert "error" in result
 
@@ -1197,27 +1338,50 @@ class TestGetProcessInfo:
 
 
 class TestGetInstallInfo:
-    def test_fallback_to_app_path(self):
+    """SEInstallData is not registered and Application.Path does not exist.
+
+    Verified on Solid Edge 2026: Dispatch("SEInstallDataLib.SEInstallData")
+    raises "Invalid class string", and neither GetInstalledLanguage nor
+    GetInstalledVersion is in any type library. Version, Name, AppDataFolder
+    and RegistryPath on the Application do work.
+    """
+
+    def _connection(self):
         from solidedge_mcp.backends.connection import SolidEdgeConnection
 
         conn = SolidEdgeConnection()
         conn._is_connected = True
         conn.application = MagicMock()
-        conn.application.Path = "C:\\Program Files\\Solid Edge"
+        conn.application.Version = "226.00.01.04"
+        conn.application.Name = "Solid Edge 2026"
+        conn.application.AppDataFolder = "C:\\Users\\me\\AppData\\Roaming\\Siemens"
+        conn.application.RegistryPath = "Software\\Siemens\\Solid Edge\\Version 226"
+        return conn
 
-        # SEInstallData will fail (not registered in test env),
-        # so it should fall back to Application.Path
+    def test_reads_the_application_properties_that_exist(self):
+        conn = self._connection()
+
         result = conn.get_install_info()
-        assert result["status"] == "success"
-        assert "install_path" in result
 
-    def test_no_connection_no_installdata(self):
+        assert result["status"] == "success"
+        assert result["version"] == "226.00.01.04"
+        assert result["name"] == "Solid Edge 2026"
+        assert "app_data_folder" in result
+        assert "registry_path" in result
+
+    def test_does_not_read_application_path(self):
+        """Application.Path is in no type library and raises."""
+        conn = self._connection()
+        type(conn.application).Path = property(
+            lambda self: (_ for _ in ()).throw(AttributeError("Path"))
+        )
+
+        assert conn.get_install_info()["status"] == "success"
+
+    def test_no_connection(self):
         from solidedge_mcp.backends.connection import SolidEdgeConnection
 
-        conn = SolidEdgeConnection()
-        # Not connected and SEInstallData won't work
-        result = conn.get_install_info()
-        assert "error" in result
+        assert "error" in SolidEdgeConnection().get_install_info()
 
 
 # ============================================================================
@@ -1278,6 +1442,9 @@ class TestCloseAllDocuments:
         doc1.Name = "doc1.par"
         doc2 = MagicMock()
         doc2.Name = "doc2.par"
+        # Saved documents: closing all of them needs no discard flag.
+        doc1.Dirty = False
+        doc2.Dirty = False
         app.Documents.Count = 2
         app.Documents.Item.side_effect = lambda i: {2: doc2, 1: doc1}[i]
 
@@ -1374,9 +1541,7 @@ class TestOpenWithTemplate:
         assert result["status"] == "opened_with_template"
         assert result["name"] == "imported.par"
         assert result["template"] == "C:/templates/metric.par"
-        app.Documents.OpenWithTemplate.assert_called_once_with(
-            str(f), "C:/templates/metric.par"
-        )
+        app.Documents.OpenWithTemplate.assert_called_once_with(str(f), "C:/templates/metric.par")
 
     def test_file_not_found(self, doc_mgr):
         dm, _ = doc_mgr
@@ -1429,9 +1594,7 @@ class TestOpenWithFileOpenDialog:
         doc.Type = 1
         app.Documents.OpenWithFileOpenDialog.return_value = doc
 
-        result = dm.open_with_file_open_dialog(
-            filename="*.par", dialog_title="Select Part"
-        )
+        result = dm.open_with_file_open_dialog(filename="*.par", dialog_title="Select Part")
         assert result["status"] == "opened"
         assert result["name"] == "myfile.par"
         app.Documents.OpenWithFileOpenDialog.assert_called_once_with(

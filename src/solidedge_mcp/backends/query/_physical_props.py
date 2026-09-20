@@ -1,13 +1,66 @@
 """Physical properties, measurements, and body appearance operations."""
 
 import math
-import traceback
 from typing import Any
 
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import com_get, owned_style_for
 from ..logging import get_logger
-from ._base import QueryManagerBase
+from ._base import QueryManagerBase, all_faces, body_of, r8_array
 
 _logger = get_logger(__name__)
+
+
+#: Units for everything ComputePhysicalPropertiesWithSpecifiedDensity returns.
+_PHYSICAL_UNITS: dict[str, str] = {
+    "volume": "m³",
+    "surface_area": "m²",
+    "mass": "kg",
+    "density": "kg/m³",
+    "moments_of_inertia": "kg·m²",
+    "radii_of_gyration": "meters",
+    "coordinates": "meters",
+}
+
+#: GlobalMomentsOfInteria, in the order Solid Edge fills the buffer.
+_MOI_NAMES = ("Ixx", "Iyy", "Izz", "Ixy", "Ixz", "Iyz")
+
+#: The eleven values the call hands back, in order. Anything shorter is not a
+#: computation that happened; it used to be padded with zeros and reported as
+#: "computed", so a caller was told the part had no volume and no mass.
+_PHYSICAL_TUPLE_LENGTH = 11
+
+
+def _unpack_physical_properties(result: Any) -> dict[str, Any]:
+    """Name every field of the COM result, or say why it cannot be trusted.
+
+    Two of the eleven -- RelativeAccuracyAchieved and Status -- are what say
+    whether the computation converged, and they were discarded. They are
+    reported now, under names that do not collide with the "status" string.
+    """
+    if not isinstance(result, tuple) or len(result) != _PHYSICAL_TUPLE_LENGTH:
+        got = len(result) if isinstance(result, tuple) else type(result).__name__
+        return {
+            "error": (
+                f"Solid Edge returned {got} value(s) from the physical-property "
+                f"computation instead of {_PHYSICAL_TUPLE_LENGTH}; nothing was computed."
+            )
+        }
+    volume, area, mass, cog, cov, moi, principal, axes, gyration, accuracy, status = result
+    return {
+        "volume": volume,
+        "surface_area": area,
+        "mass": mass,
+        "center_of_gravity": [float(c) for c in cog][:3],
+        "center_of_volume": [float(c) for c in cov][:3],
+        "moments_of_inertia": dict(zip(_MOI_NAMES, moi, strict=True)),
+        "principal_moments": [float(v) for v in principal][:3],
+        "principal_axes": [float(v) for v in axes][:9],
+        "radii_of_gyration": [float(v) for v in gyration][:3],
+        "relative_accuracy_achieved": accuracy,
+        "compute_status": status,
+    }
 
 
 class PhysicalPropsMixin(QueryManagerBase):
@@ -15,12 +68,49 @@ class PhysicalPropsMixin(QueryManagerBase):
 
     doc_manager: Any
 
+    @staticmethod
+    def _compute_physical_properties(model: Any, density: float, accuracy: float) -> Any:
+        """Call Model.ComputePhysicalPropertiesWithSpecifiedDensity correctly.
+
+        Part.tlb Model.ComputePhysicalPropertiesWithSpecifiedDensity(
+            Density VT_R8 [in], Accuracy VT_R8 [in],
+            Volume VT_R8* [out], Area VT_R8* [out], Mass VT_R8* [out],
+            CenterOfGravity SAFEARRAY(VT_R8)* [in,out],
+            CenterOfVolume SAFEARRAY(VT_R8)* [in,out],
+            GlobalMomentsOfInteria SAFEARRAY(VT_R8)* [in,out],
+            PrincipalMomentsOfInteria SAFEARRAY(VT_R8)* [in,out],
+            PrincipalAxes SAFEARRAY(VT_R8)* [in,out],
+            RadiiOfGyration SAFEARRAY(VT_R8)* [in,out],
+            RelativeAccuracyAchieved VT_R8* [out], Status VT_INT* [out])
+
+        The six SAFEARRAY parameters are [in,out]: pywin32 marshals them by
+        reference and the caller must supply correctly sized buffers, so
+        calling with just (density, accuracy) fails inside COM with
+        "Parameter not optional" (0x8002000F). Volume/Area/Mass sit between
+        Accuracy and the buffers, hence the keyword arguments — the parameter
+        names are spelled exactly as the type library spells them, typo
+        included. Returns the [out]/[in,out] values as a tuple:
+        (volume, area, mass, cog, cov, global_moi, principal_moi,
+        principal_axes, radii_of_gyration, relative_accuracy, status).
+        """
+        return model.ComputePhysicalPropertiesWithSpecifiedDensity(
+            Density=density,
+            Accuracy=accuracy,
+            CenterOfGravity=r8_array(3),
+            CenterOfVolume=r8_array(3),
+            GlobalMomentsOfInteria=r8_array(6),
+            PrincipalMomentsOfInteria=r8_array(3),
+            PrincipalAxes=r8_array(9),
+            RadiiOfGyration=r8_array(3),
+        )
+
     def get_mass_properties(self, density: float = 7850) -> dict[str, Any]:
         """
         Get mass properties of the part.
 
-        Uses Model.ComputePhysicalProperties(status, density, accuracy) which
-        returns a tuple: (volume, area, mass, cog_tuple, cov_tuple, moi_tuple, ...)
+        Uses Model.ComputePhysicalPropertiesWithSpecifiedDensity, which returns
+        (volume, area, mass, cog, cov, global_moi, principal_moi,
+        principal_axes, radii_of_gyration, relative_accuracy, status).
 
         Args:
             density: Material density in kg/m³ (default: 7850 for steel)
@@ -32,54 +122,32 @@ class PhysicalPropsMixin(QueryManagerBase):
             _logger.info(f"Computing mass properties with density={density} kg/m^3")
             doc, model = self._get_first_model()
 
-            # ComputePhysicalPropertiesWithSpecifiedDensity(Density, Accuracy)
-            # Returns tuple: (volume, area, mass, cog, cov, moi, principal_moi,
-            #                  principal_axes, radii_of_gyration, ?, ?)
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(density, 0.99)
-
-            volume = result[0] if len(result) > 0 else 0
-            surface_area = result[1] if len(result) > 1 else 0
-            mass_val = result[2] if len(result) > 2 else 0
-            cog = result[3] if len(result) > 3 else (0, 0, 0)
-            cov = result[4] if len(result) > 4 else (0, 0, 0)
-            moi = result[5] if len(result) > 5 else (0, 0, 0, 0, 0, 0)
-            principal_moi = result[6] if len(result) > 6 else (0, 0, 0)
+            result = self._compute_physical_properties(model, density, 0.99)
+            props = _unpack_physical_properties(result)
+            if "error" in props:
+                return props
 
             return {
                 "status": "computed",
                 "density": density,
-                "volume": volume,
-                "surface_area": surface_area,
-                "mass": mass_val,
-                "center_of_gravity": list(cog) if cog else [0, 0, 0],
-                "center_of_volume": list(cov) if cov else [0, 0, 0],
-                "moments_of_inertia": {
-                    "Ixx": moi[0] if len(moi) > 0 else 0,
-                    "Iyy": moi[1] if len(moi) > 1 else 0,
-                    "Izz": moi[2] if len(moi) > 2 else 0,
-                    "Ixy": moi[3] if len(moi) > 3 else 0,
-                    "Ixz": moi[4] if len(moi) > 4 else 0,
-                    "Iyz": moi[5] if len(moi) > 5 else 0,
-                },
-                "principal_moments": list(principal_moi) if principal_moi else [0, 0, 0],
-                "units": {
-                    "volume": "m³",
-                    "surface_area": "m²",
-                    "mass": "kg",
-                    "density": "kg/m³",
-                    "moments_of_inertia": "kg·m²",
-                    "coordinates": "meters",
-                },
+                **props,
+                "units": _PHYSICAL_UNITS,
             }
         except Exception as e:
             _logger.error(f"Mass properties computation failed: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_bounding_box(self) -> dict[str, Any]:
         """
         Get the bounding box of the model.
 
-        Uses Body.GetRange() which returns ((min_x, min_y, min_z), (max_x, max_y, max_z)).
+        geometry.tlb Body.GetRange(
+            MinRangePoint SAFEARRAY(VT_R8)* [in,out],
+            MaxRangePoint SAFEARRAY(VT_R8)* [in,out])
+
+        Both parameters are [in,out], so the caller supplies the buffers and
+        reads the filled points back out of the returned tuple
+        ((min_x, min_y, min_z), (max_x, max_y, max_z)).
 
         Returns:
             Dict with min/max coordinates and dimensions
@@ -87,8 +155,8 @@ class PhysicalPropsMixin(QueryManagerBase):
         try:
             doc, model = self._get_first_model()
 
-            body = model.Body
-            range_data = body.GetRange()
+            body = body_of(model)
+            range_data = body.GetRange(r8_array(3), r8_array(3))
 
             min_pt = range_data[0]
             max_pt = range_data[1]
@@ -105,7 +173,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "units": "meters",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_surface_area(self) -> dict[str, Any]:
         """
@@ -116,26 +184,37 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            # Try body.SurfaceArea first
-            try:
-                area = body.SurfaceArea
-                return {"surface_area": area, "surface_area_mm2": area * 1e6}
-            except Exception:
-                pass
+            # Body has no SurfaceArea property, so that attempt always
+            # raised and the sum below was the only path that ever ran.
+            # Face.Area is real, and summing it gives the true area.
 
-            # Fallback: sum face areas
-            from ..constants import FaceQueryConstants
-
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            faces = all_faces(body, model)
             total_area = 0.0
+            unreadable = 0
             for i in range(1, faces.Count + 1):
                 try:
                     face = faces.Item(i)
                     total_area += face.Area
                 except Exception:
-                    pass
+                    unreadable += 1
+
+            if not faces.Count:
+                return {
+                    "error": ("This body reports no faces, so its surface area cannot be measured.")
+                }
+            if unreadable:
+                # A sum with faces missing is not the surface area; it is a
+                # smaller number that looks like one.
+                return {
+                    "error": (
+                        f"{unreadable} of {faces.Count} faces could not be read, so the "
+                        f"surface area cannot be totalled."
+                    ),
+                    "faces_unreadable": unreadable,
+                    "face_count": faces.Count,
+                }
 
             return {
                 "surface_area": total_area,
@@ -144,7 +223,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "method": "sum_of_faces",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_volume(self) -> dict[str, Any]:
         """
@@ -155,7 +234,7 @@ class PhysicalPropsMixin(QueryManagerBase):
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
             volume = body.Volume
 
             return {
@@ -164,7 +243,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "volume_cm3": volume * 1e6,  # m³ to cm³
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_face_area(self, face_index: int) -> dict[str, Any]:
         """
@@ -177,11 +256,9 @@ class PhysicalPropsMixin(QueryManagerBase):
             Dict with face area in square meters
         """
         try:
-            from ..constants import FaceQueryConstants
-
             doc, model = self._get_first_model()
-            body = model.Body
-            faces = body.Faces(FaceQueryConstants.igQueryAll)
+            body = body_of(model)
+            faces = all_faces(body, model)
 
             if face_index < 0 or face_index >= faces.Count:
                 return {"error": f"Invalid face index: {face_index}. Body has {faces.Count} faces."}
@@ -196,7 +273,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "area_mm2": area * 1e6,  # Convert m² to mm²
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_center_of_gravity(self) -> dict[str, Any]:
         """
@@ -235,37 +312,55 @@ class PhysicalPropsMixin(QueryManagerBase):
 
             # Fallback: compute physical properties
             doc, model = self._get_first_model()
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(7850.0, 0.001)
+            result = self._compute_physical_properties(model, 7850.0, 0.001)
             # result[3] is the center of gravity tuple
             cog = result[3]
             return {"center_of_gravity": list(cog), "center_of_gravity_mm": [c * 1000 for c in cog]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
-    def get_moments_of_inertia(self) -> dict[str, Any]:
-        """
-        Get the moments of inertia of the part.
+    def get_moments_of_inertia(self, density: float = 7850.0) -> dict[str, Any]:
+        """Moments of inertia, at a stated density.
 
-        Returns:
-            Dict with moments of inertia values
+        These are mass moments, so they scale with the density used. The
+        default is steel, and it used to be silent: the numbers assumed
+        7850 kg/m³ whatever material the part carried, with no unit and no
+        way for a caller to tell. The density is now a parameter and is
+        reported back with the result, in the same labelled shape as
+        get_mass_properties rather than a bare list.
+
+        Frame and sign are pinned live against a box whose moments can be
+        computed by hand: ``moments_of_inertia`` are about the MODEL ORIGIN,
+        not the centroid, and the products Ixy/Ixz/Iyz are reported positive
+        (the integral of xy dm, not its negative). ``principal_moments`` are
+        the centroidal principal values, and ``radii_of_gyration`` are their
+        square roots over the mass.
         """
         try:
             doc, model = self._get_first_model()
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(7850.0, 0.001)
-            # result: (volume, area, mass, cog, cov, moi,
-            # principal_moi, principal_axes,
-            # radii_of_gyration, ?, ?)
-            moi = result[5]
-            principal_moi = result[6]
-
+            result = self._compute_physical_properties(model, density, 0.001)
+            props = _unpack_physical_properties(result)
+            if "error" in props:
+                return props
             return {
-                "moments_of_inertia": list(moi) if hasattr(moi, "__iter__") else moi,
-                "principal_moments": (
-                    list(principal_moi) if hasattr(principal_moi, "__iter__") else principal_moi
-                ),
+                "density": density,
+                "mass": props["mass"],
+                "moments_of_inertia": props["moments_of_inertia"],
+                "frame": "global (about the model origin); products reported positive",
+                "principal_moments": props["principal_moments"],
+                "principal_axes": props["principal_axes"],
+                "radii_of_gyration": props["radii_of_gyration"],
+                "relative_accuracy_achieved": props["relative_accuracy_achieved"],
+                "compute_status": props["compute_status"],
+                "units": {
+                    "moments_of_inertia": "kg·m²",
+                    "radii_of_gyration": "meters",
+                    "mass": "kg",
+                    "density": "kg/m³",
+                },
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_user_physical_properties(self, density: float = 7850.0) -> dict[str, Any]:
         """
@@ -320,7 +415,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 )
             return computed
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def measure_distance(
         self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float
@@ -350,7 +445,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "units": "meters",
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def measure_angle(
         self,
@@ -400,116 +495,151 @@ class PhysicalPropsMixin(QueryManagerBase):
 
             return {"angle_degrees": angle_deg, "angle_radians": angle_rad, "vertex": [x2, y2, z2]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_body_color(self, red: int, green: int, blue: int) -> dict[str, Any]:
-        """
-        Set the body color of the active part.
+        """Set the body colour of the active part.
 
-        Sets the foreground color of the body's style to the specified RGB values.
-        Color values are 0-255 for each component.
+        ``Style.SetForegroundColor`` is in no Solid Edge type library, and
+        ``Body.Style`` is None until a style is assigned, so this raised twice
+        over. A body is coloured by assigning it a FaceStyle whose diffuse
+        colour is what you want. Verified on Solid Edge 2026: creating a style
+        with ``doc.FaceStyles.Add(name, "")``, calling ``SetDiffuse``, then
+        assigning ``body.Style`` reads back the colour that was set.
 
         Args:
-            red: Red component (0-255)
-            green: Green component (0-255)
-            blue: Blue component (0-255)
+            red: Red channel, 0-255.
+            green: Green channel, 0-255.
+            blue: Blue channel, 0-255.
 
         Returns:
-            Dict with status and color info
+            Dict with status, the colour, and the style that carries it.
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
-            # Clamp values to 0-255
             red = max(0, min(255, red))
             green = max(0, min(255, green))
             blue = max(0, min(255, blue))
 
-            style = body.Style
-            style.SetForegroundColor(red, green, blue)
+            style, err = owned_style_for(doc, body, com_get(body, "DisplayName", "Body") or "Body")
+            if err:
+                return err
+
+            # SetDiffuse takes 0.0-1.0 per channel, not 0-255.
+            style.SetDiffuse(red / 255.0, green / 255.0, blue / 255.0)
 
             return {
                 "status": "set",
                 "color": {"red": red, "green": green, "blue": blue},
                 "hex": f"#{red:02x}{green:02x}{blue:02x}",
+                "style": com_get(style, "StyleName", ""),
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_body_color(self) -> dict[str, Any]:
-        """
-        Get the current body color.
+        """Read the body colour of the active part.
+
+        ``Style.ForegroundColor`` and ``Body.GetColor`` are in no Solid Edge
+        type library, so both branches raised and this only ever returned
+        "Could not determine body color". ``FaceStyle.GetDiffuse`` is the real
+        accessor and reports each channel as 0.0-1.0.
 
         Returns:
-            Dict with RGB color values
+            Dict with the colour as 0-255 channels and as hex, plus the
+            opacity and reflectivity carried on the same style, or an error
+            when the body has no style of its own.
         """
         try:
-            doc, model = self._get_first_model()
-            body = model.Body
+            _doc, model = self._get_first_model()
+            body = body_of(model)
 
-            try:
-                color = body.Style.ForegroundColor
-                # Decompose OLE color
-                red = color & 0xFF
-                green = (color >> 8) & 0xFF
-                blue = (color >> 16) & 0xFF
-                return {"red": red, "green": green, "blue": blue, "ole_color": color}
-            except Exception:
-                # Try alternative
-                try:
-                    r, g, b = body.GetColor()
-                    return {"red": r, "green": g, "blue": b}
-                except Exception:
-                    return {"error": "Could not determine body color"}
+            style = com_get(body, "Style")
+            if style is None:
+                return {
+                    "error": (
+                        "This body has no style of its own, so it is drawn in the "
+                        "document default colour. Set one with "
+                        "set_appearance(target='body_color', ...)."
+                    )
+                }
+
+            diffuse = style.GetDiffuse()
+            red, green, blue = (int(round(float(channel) * 255)) for channel in diffuse[:3])
+
+            return {
+                "red": red,
+                "green": green,
+                "blue": blue,
+                "hex": f"#{red:02x}{green:02x}{blue:02x}",
+                "diffuse": [float(channel) for channel in diffuse[:3]],
+                "opacity": com_get(style, "Opacity"),
+                "reflectivity": com_get(style, "Reflectivity"),
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_body_opacity(self, opacity: float) -> dict[str, Any]:
-        """
-        Set the body opacity (transparency).
+        """Set the body opacity.
 
-        Uses model.Body.FaceStyle.Opacity.
+        Opacity lives on the body's FaceStyle, alongside its colour and
+        reflectivity; see ``comutil.owned_style_for``.
 
         Args:
-            opacity: Opacity value from 0.0 (fully transparent) to 1.0 (fully opaque)
+            opacity: 0.0 (fully transparent) to 1.0 (fully opaque).
 
         Returns:
-            Dict with status
+            Dict with status and the opacity Solid Edge reports afterwards.
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
             opacity = max(0.0, min(1.0, opacity))
-            body.FaceStyle.Opacity = opacity
+            style, err = owned_style_for(doc, body, com_get(body, "DisplayName", "Body") or "Body")
+            if err:
+                return err
+            style.Opacity = opacity
 
-            return {"status": "set", "opacity": opacity}
+            return {
+                "status": "set",
+                "opacity": opacity,
+                "reads_back": com_get(com_get(body, "Style"), "Opacity"),
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_body_reflectivity(self, reflectivity: float) -> dict[str, Any]:
-        """
-        Set the body reflectivity.
+        """Set the body reflectivity.
 
-        Uses model.Body.FaceStyle.Reflectivity.
+        Reflectivity lives on the body's FaceStyle, alongside its colour and
+        opacity; see ``comutil.owned_style_for``.
 
         Args:
-            reflectivity: Reflectivity value from 0.0 to 1.0
+            reflectivity: 0.0 to 1.0.
 
         Returns:
-            Dict with status
+            Dict with status and the value Solid Edge reports afterwards.
         """
         try:
             doc, model = self._get_first_model()
-            body = model.Body
+            body = body_of(model)
 
             reflectivity = max(0.0, min(1.0, reflectivity))
-            body.FaceStyle.Reflectivity = reflectivity
+            style, err = owned_style_for(doc, body, com_get(body, "DisplayName", "Body") or "Body")
+            if err:
+                return err
+            style.Reflectivity = reflectivity
 
-            return {"status": "set", "reflectivity": reflectivity}
+            return {
+                "status": "set",
+                "reflectivity": reflectivity,
+                "reads_back": com_get(com_get(body, "Style"), "Reflectivity"),
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_material_density(self, density: float) -> dict[str, Any]:
         """
@@ -531,7 +661,7 @@ class PhysicalPropsMixin(QueryManagerBase):
                 return {"error": f"Density must be positive, got {density}"}
 
             # Recompute with new density
-            result = model.ComputePhysicalPropertiesWithSpecifiedDensity(density, 0.99)
+            result = self._compute_physical_properties(model, density, 0.99)
 
             mass = result[2] if len(result) > 2 else 0
             volume = result[0] if len(result) > 0 else 0
@@ -544,4 +674,4 @@ class PhysicalPropsMixin(QueryManagerBase):
                 "units": {"density": "kg/m³", "mass": "kg", "volume": "m³"},
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

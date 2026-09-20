@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import os
+from pathlib import Path
 from typing import Any
 
 
@@ -32,20 +33,13 @@ def validate_numerics(**values: Any) -> dict[str, Any] | None:
         if value is None:
             continue
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return {
-                "error": (
-                    f"Parameter '{name}' must be a number, "
-                    f"got {type(value).__name__}"
-                )
-            }
+            return {"error": (f"Parameter '{name}' must be a number, got {type(value).__name__}")}
         if not math.isfinite(float(value)):
             return {"error": f"Parameter '{name}' must be finite, got {value!r}"}
     return None
 
 
-def validate_path(
-    path: str, must_exist: bool = False
-) -> tuple[str, dict[str, Any] | None]:
+def validate_path(path: str, must_exist: bool = False) -> tuple[str, dict[str, Any] | None]:
     """Normalize a filesystem path and optionally verify it exists.
 
     Returns a ``(normalized_path, error)`` tuple. ``error`` is ``None`` on
@@ -61,3 +55,41 @@ def validate_path(
         return normalized, {"error": f"Path does not exist: {normalized}"}
 
     return normalized, None
+
+
+def guard_overwrite(file_path: str, overwrite: bool) -> dict[str, Any] | None:
+    """Refuse to write over an existing file, or clear the way for it.
+
+    Every Solid Edge call that writes a path answers an existing one with a
+    modal "This file exists. Do you want to overwrite it?" prompt.
+    Application.DisplayAlerts does not suppress it, and Solid Edge has a
+    single UI thread, so the COM call never returns and every later call
+    queues behind it. An automation client sees the whole server stop
+    answering. Reproduced and photographed on Solid Edge 2026.
+
+    Returns None when the write may go ahead, or the error to return.
+    """
+    target = Path(file_path)
+    if not target.exists():
+        return None
+    if not overwrite:
+        return {
+            "error": (
+                f"{target} already exists. Solid Edge would raise a modal overwrite "
+                f"prompt, which blocks the server until somebody clicks it. Pass "
+                f"overwrite=true to replace the file, or choose another path."
+            ),
+            "path": str(target),
+            "exists": True,
+        }
+    try:
+        target.unlink()
+    except OSError as exc:
+        return {
+            "error": (
+                f"{target} exists and could not be removed, so the write would stop "
+                f"on an overwrite prompt: {exc}"
+            ),
+            "path": str(target),
+        }
+    return None

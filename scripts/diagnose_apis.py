@@ -6,7 +6,7 @@ Quick diagnostic script to discover correct COM API signatures.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from solidedge_mcp.backends.connection import SolidEdgeConnection
 from solidedge_mcp.backends.documents import DocumentManager

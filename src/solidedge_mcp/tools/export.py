@@ -1,9 +1,20 @@
 """Export, drawing, and view tools for Solid Edge MCP."""
 
-from typing import Any
+import math
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import export_manager, view_manager
+from solidedge_mcp.tools._registry import register_tool
+
+# Orientation names accepted by the draft view backends (shared by every
+# add_*_view / set_drawing_view_orientation path).
+DrawingViewOrientation = Literal[
+    "Front", "Back", "Top", "Bottom", "Right", "Left", "Isometric", "Iso"
+]
+# Render modes accepted by ViewModel.set_display_mode and
+# DrawingViews.set_drawing_view_display_mode.
+RenderMode = Literal["Wireframe", "HiddenEdgesVisible", "Shaded", "ShadedWithEdges"]
 
 # ================================================================
 # Group 47: export_file (8 → 1)
@@ -11,17 +22,31 @@ from solidedge_mcp.managers import export_manager, view_manager
 
 
 def export_file(
-    format: str = "step",
+    format: Literal[
+        "step",
+        "stl",
+        "iges",
+        "pdf",
+        "dxf",
+        "parasolid",
+        "jt",
+        "flat_dxf",
+        "prc",
+        "plmxml",
+        "image",
+    ] = "step",
     file_path: str = "",
     ini_file_path: str = "",
     width: int = 800,
     height: int = 600,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
-    """Export the active document to a file.
+    """Export the active document to file_path.
 
-    format: 'step' | 'stl' | 'iges' | 'pdf' | 'dxf'
-            | 'parasolid' | 'jt' | 'flat_dxf'
-            | 'prc' | 'plmxml' | 'image'
+    Writing over an existing file is refused unless overwrite=true: Solid Edge
+    answers one with a modal prompt that blocks every later call.
+    plmxml: also ini_file_path. image: screenshot at width x height pixels.
+    flat_dxf needs a sheet metal part; pdf/dxf work best on drafts.
     """
     if file_path:
         file_path, err = validate_path(file_path, must_exist=False)
@@ -29,27 +54,31 @@ def export_file(
             return err
     match format:
         case "step":
-            return export_manager.export_step(file_path)
+            return export_manager.export_step(file_path=file_path, overwrite=overwrite)
         case "stl":
-            return export_manager.export_stl(file_path)
+            return export_manager.export_stl(file_path=file_path, overwrite=overwrite)
         case "iges":
-            return export_manager.export_iges(file_path)
+            return export_manager.export_iges(file_path=file_path, overwrite=overwrite)
         case "pdf":
-            return export_manager.export_pdf(file_path)
+            return export_manager.export_pdf(file_path=file_path, overwrite=overwrite)
         case "dxf":
-            return export_manager.export_dxf(file_path)
+            return export_manager.export_dxf(file_path=file_path, overwrite=overwrite)
         case "parasolid":
-            return export_manager.export_parasolid(file_path)
+            return export_manager.export_parasolid(file_path=file_path, overwrite=overwrite)
         case "jt":
-            return export_manager.export_jt(file_path)
+            return export_manager.export_jt(file_path=file_path, overwrite=overwrite)
         case "flat_dxf":
-            return export_manager.export_flat_dxf(file_path)
+            return export_manager.export_flat_dxf(file_path=file_path, overwrite=overwrite)
         case "prc":
-            return export_manager.export_to_prc(file_path)
+            return export_manager.export_to_prc(file_path=file_path, overwrite=overwrite)
         case "plmxml":
-            return export_manager.export_to_plmxml(file_path, ini_file_path)
+            return export_manager.export_to_plmxml(
+                file_path=file_path, ini_file_path=ini_file_path, overwrite=overwrite
+            )
         case "image":
-            return export_manager.capture_screenshot(file_path, width, height)
+            return export_manager.capture_screenshot(
+                file_path=file_path, width=width, height=height, overwrite=overwrite
+            )
         case _:
             return {"error": f"Unknown format: {format}"}
 
@@ -60,58 +89,89 @@ def export_file(
 
 
 def add_drawing_view(
-    type: str = "assembly",
+    type: Literal[
+        "part",
+        "sheet_metal",
+        "weldment",
+        "assembly",
+        "assembly_ex",
+        "with_config",
+        "projected",
+        "detail",
+        "auxiliary",
+        "draft",
+        "by_draft_view",
+        "section",
+    ] = "part",
     x: float = 0.15,
     y: float = 0.15,
-    orientation: str = "Isometric",
+    orientation: DrawingViewOrientation = "Isometric",
     scale: float = 1.0,
     config: str | None = None,
     configuration: str = "Default",
     parent_view_index: int = 0,
-    fold_direction: str = "Up",
+    fold_direction: Literal["Up", "Down", "Left", "Right"] = "Up",
     center_x: float = 0.0,
     center_y: float = 0.0,
     radius: float = 0.01,
     source_view_index: int = 0,
     section_type: int = 0,
 ) -> dict[str, Any]:
-    """Add a drawing view to the active draft.
+    """Add a drawing view to the active draft. Positions/radii in meters.
 
-    type: 'assembly' | 'assembly_ex' | 'with_config'
-          | 'projected' | 'detail' | 'auxiliary'
-          | 'draft' | 'by_draft_view' | 'section'
-
-    Positions/radii in meters. View indices are 0-based.
+    x,y place the view on the sheet. part/sheet_metal/weldment and
+    assembly/assembly_ex/with_config:
+    orientation + scale (assembly_ex adds config; with_config adds
+    configuration). projected/auxiliary: 0-based parent_view_index +
+    fold_direction. detail: parent_view_index + circle center_x/center_y/radius.
+    by_draft_view: 0-based source_view_index. section: parent_view_index +
+    section_type (raw SectionTypeConstants int).
     """
     match type:
+        case "part" | "sheet_metal" | "weldment":
+            return export_manager.add_model_drawing_view(
+                x=x, y=y, orientation=orientation, scale=scale, model=type
+            )
         case "assembly":
-            return export_manager.add_assembly_drawing_view(x, y, orientation, scale)
+            return export_manager.add_assembly_drawing_view(
+                x=x, y=y, orientation=orientation, scale=scale
+            )
         case "assembly_ex":
-            return export_manager.add_assembly_drawing_view_ex(x, y, orientation, scale, config)
+            return export_manager.add_assembly_drawing_view_ex(
+                x=x, y=y, orientation=orientation, scale=scale, config=config
+            )
         case "with_config":
             return export_manager.add_drawing_view_with_config(
-                x, y, orientation, scale, configuration
+                x=x, y=y, orientation=orientation, scale=scale, configuration=configuration
             )
         case "projected":
-            return export_manager.add_projected_view(parent_view_index, fold_direction, x, y)
+            return export_manager.add_projected_view(
+                parent_view_index=parent_view_index, fold_direction=fold_direction, x=x, y=y
+            )
         case "detail":
             return export_manager.add_detail_view(
-                parent_view_index,
-                center_x,
-                center_y,
-                radius,
-                x,
-                y,
-                scale,
+                parent_view_index=parent_view_index,
+                center_x=center_x,
+                center_y=center_y,
+                radius=radius,
+                x=x,
+                y=y,
+                scale=scale,
             )
         case "auxiliary":
-            return export_manager.add_auxiliary_view(parent_view_index, x, y, fold_direction)
+            return export_manager.add_auxiliary_view(
+                parent_view_index=parent_view_index, x=x, y=y, fold_direction=fold_direction
+            )
         case "draft":
-            return export_manager.add_draft_view(x, y)
+            return export_manager.add_draft_view(x=x, y=y)
         case "by_draft_view":
-            return export_manager.add_by_draft_view(source_view_index, x, y, scale)
+            return export_manager.add_by_draft_view(
+                source_view_index=source_view_index, x=x, y=y, scale=scale
+            )
         case "section":
-            return export_manager.add_section_cut(parent_view_index, x, y, section_type)
+            return export_manager.add_section_cut(
+                view_index=parent_view_index, x=x, y=y, section_type=section_type
+            )
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -122,58 +182,73 @@ def add_drawing_view(
 
 
 def manage_drawing_view(
-    action: str,
+    action: Literal[
+        "get_model_link",
+        "show_tangent_edges",
+        "set_scale",
+        "delete",
+        "update",
+        "move",
+        "show_hidden_edges",
+        "set_display_mode",
+        "set_orientation",
+        "activate",
+        "deactivate",
+        "get_dimensions",
+        "align",
+        "update_all",
+    ],
     view_index: int = 0,
     view_index2: int = 0,
     scale: float = 1.0,
     x: float = 0.0,
     y: float = 0.0,
     show: bool = True,
-    mode: str = "Wireframe",
-    orientation: str = "Front",
+    mode: RenderMode = "Wireframe",
+    orientation: DrawingViewOrientation = "Front",
     align: bool = True,
     force_update: bool = True,
 ) -> dict[str, Any]:
-    """Manage an existing drawing view.
+    """Manage an existing drawing view (0-based view_index). Meters.
 
-    action: 'get_model_link' | 'show_tangent_edges'
-            | 'set_scale' | 'delete' | 'update' | 'move'
-            | 'show_hidden_edges' | 'set_display_mode'
-            | 'set_orientation' | 'activate' | 'deactivate'
-            | 'get_dimensions' | 'align' | 'update_all'
-
-    View indices are 0-based. Positions in meters.
-    mode: 'Wireframe' | 'HiddenEdgesVisible' | 'Shaded' | 'ShadedWithEdges'.
+    show_tangent_edges/show_hidden_edges: show. set_scale: scale.
+    move: x,y. set_display_mode: mode. set_orientation: orientation.
+    align: second view via 0-based view_index2 + align flag.
+    update_all: force_update (ignores view_index). delete removes the view.
     """
     match action:
         case "get_model_link":
-            return export_manager.get_drawing_view_model_link(view_index)
+            return export_manager.get_drawing_view_model_link(view_index=view_index)
         case "show_tangent_edges":
-            return export_manager.show_tangent_edges(view_index, show)
+            return export_manager.show_tangent_edges(view_index=view_index, show=show)
         case "set_scale":
-            return export_manager.set_drawing_view_scale(view_index, scale)
+            return export_manager.set_drawing_view_scale(view_index=view_index, scale=scale)
         case "delete":
-            return export_manager.delete_drawing_view(view_index)
+            return export_manager.delete_drawing_view(view_index=view_index)
         case "update":
-            return export_manager.update_drawing_view(view_index)
+            return export_manager.update_drawing_view(view_index=view_index)
         case "move":
-            return export_manager.move_drawing_view(view_index, x, y)
+            return export_manager.move_drawing_view(view_index=view_index, x=x, y=y)
         case "show_hidden_edges":
-            return export_manager.show_hidden_edges(view_index, show)
+            return export_manager.show_hidden_edges(view_index=view_index, show=show)
         case "set_display_mode":
-            return export_manager.set_drawing_view_display_mode(view_index, mode)
+            return export_manager.set_drawing_view_display_mode(view_index=view_index, mode=mode)
         case "set_orientation":
-            return export_manager.set_drawing_view_orientation(view_index, orientation)
+            return export_manager.set_drawing_view_orientation(
+                view_index=view_index, orientation=orientation
+            )
         case "activate":
-            return export_manager.activate_drawing_view(view_index)
+            return export_manager.activate_drawing_view(view_index=view_index)
         case "deactivate":
-            return export_manager.deactivate_drawing_view(view_index)
+            return export_manager.deactivate_drawing_view(view_index=view_index)
         case "get_dimensions":
-            return export_manager.get_drawing_view_dimensions(view_index)
+            return export_manager.get_drawing_view_dimensions(view_index=view_index)
         case "align":
-            return export_manager.align_drawing_views(view_index, view_index2, align)
+            return export_manager.align_drawing_views(
+                view_index1=view_index, view_index2=view_index2, align=align
+            )
         case "update_all":
-            return export_manager.update_all_views(force_update)
+            return export_manager.update_all_views(force_update=force_update)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -184,7 +259,7 @@ def manage_drawing_view(
 
 
 def add_annotation(
-    type: str,
+    type: Literal["text_box", "leader", "balloon", "note"],
     x: float = 0.0,
     y: float = 0.0,
     x1: float = 0.0,
@@ -196,21 +271,25 @@ def add_annotation(
     leader_x: float | None = None,
     leader_y: float | None = None,
 ) -> dict[str, Any]:
-    """Add a text annotation to the active draft.
+    """Add a text annotation to the active draft. Meters.
 
-    type: 'text_box' | 'leader' | 'balloon' | 'note'
-
-    Positions in meters. height is text height in meters.
+    text_box/note: x,y + text + height, the box height in meters, which
+    Solid Edge clamps upward to fit the text (the result reports what it
+    actually holds, not what you asked for).
+    leader: line (x1,y1)-(x2,y2) + text.
+    balloon: x,y + text, optional leader tip at leader_x/leader_y.
     """
     match type:
         case "text_box":
-            return export_manager.add_text_box(x, y, text, height)
+            return export_manager.add_text_box(x=x, y=y, text=text, height=height)
         case "leader":
-            return export_manager.add_leader(x1, y1, x2, y2, text)
+            return export_manager.add_leader(x1=x1, y1=y1, x2=x2, y2=y2, text=text)
         case "balloon":
-            return export_manager.add_balloon(x, y, text, leader_x, leader_y)
+            return export_manager.add_balloon(
+                x=x, y=y, text=text, leader_x=leader_x, leader_y=leader_y
+            )
         case "note":
-            return export_manager.add_note(x, y, text, height)
+            return export_manager.add_note(x=x, y=y, text=text, height=height)
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -221,7 +300,13 @@ def add_annotation(
 
 
 def add_dimension_annotation(
-    type: str,
+    type: Literal[
+        "dimension",
+        "angular_dimension",
+        "radial_dimension",
+        "diameter_dimension",
+        "ordinate_dimension",
+    ],
     x1: float = 0.0,
     y1: float = 0.0,
     x2: float = 0.0,
@@ -237,44 +322,55 @@ def add_dimension_annotation(
     origin_x: float = 0.0,
     origin_y: float = 0.0,
 ) -> dict[str, Any]:
-    """Add a dimension annotation to the active draft.
+    """Add a dimension annotation to the active draft. All coordinates in meters.
 
-    type: 'dimension' | 'angular_dimension' | 'radial_dimension'
-          | 'diameter_dimension' | 'ordinate_dimension'
+    Solid Edge dimensions attach to a drawing element, so each coordinate is
+    resolved to the nearest element on the sheet, the way a mouse pick would.
+    The sheet needs geometry near the point: draft 2D geometry, or a drawing
+    view of a model. The result reports what each end attached to.
 
-    All coordinates in meters.
+    dimension: (x1,y1)-(x2,y2), a point-to-point distance.
+    angular_dimension: a point on each of two lines, (x1,y1) and (x3,y3);
+        (x2,y2) is the vertex, recorded but derived by Solid Edge.
+    radial_dimension/diameter_dimension: center_x/y + point_x/y on the curve.
+    ordinate_dimension: origin_x/y + point_x/y.
+    dim_x/dim_y are ignored; Solid Edge places the dimension text itself.
     """
     match type:
         case "dimension":
-            return export_manager.add_dimension(x1, y1, x2, y2, dim_x, dim_y)
+            return export_manager.add_dimension(
+                x1=x1, y1=y1, x2=x2, y2=y2, dim_x=dim_x, dim_y=dim_y
+            )
         case "angular_dimension":
-            return export_manager.add_angular_dimension(x1, y1, x2, y2, x3, y3, dim_x, dim_y)
+            return export_manager.add_angular_dimension(
+                x1=x1, y1=y1, x2=x2, y2=y2, x3=x3, y3=y3, dim_x=dim_x, dim_y=dim_y
+            )
         case "radial_dimension":
             return export_manager.add_radial_dimension(
-                center_x,
-                center_y,
-                point_x,
-                point_y,
-                dim_x,
-                dim_y,
+                center_x=center_x,
+                center_y=center_y,
+                point_x=point_x,
+                point_y=point_y,
+                dim_x=dim_x,
+                dim_y=dim_y,
             )
         case "diameter_dimension":
             return export_manager.add_diameter_dimension(
-                center_x,
-                center_y,
-                point_x,
-                point_y,
-                dim_x,
-                dim_y,
+                center_x=center_x,
+                center_y=center_y,
+                point_x=point_x,
+                point_y=point_y,
+                dim_x=dim_x,
+                dim_y=dim_y,
             )
         case "ordinate_dimension":
             return export_manager.add_ordinate_dimension(
-                origin_x,
-                origin_y,
-                point_x,
-                point_y,
-                dim_x,
-                dim_y,
+                origin_x=origin_x,
+                origin_y=origin_y,
+                point_x=point_x,
+                point_y=point_y,
+                dim_x=dim_x,
+                dim_y=dim_y,
             )
         case _:
             return {"error": f"Unknown type: {type}"}
@@ -286,37 +382,40 @@ def add_dimension_annotation(
 
 
 def add_symbol_annotation(
-    type: str,
+    type: Literal[
+        "center_mark",
+        "centerline",
+        "surface_finish",
+        "weld_symbol",
+        "geometric_tolerance",
+    ],
     x: float = 0.0,
     y: float = 0.0,
     x1: float = 0.0,
     y1: float = 0.0,
     x2: float = 0.0,
     y2: float = 0.0,
-    symbol_type: str = "machined",
-    weld_type: str = "fillet",
+    symbol_type: Literal["machined", "any", "prohibited"] = "machined",
+    weld_type: Literal["fillet", "groove", "plug", "spot", "seam"] = "fillet",
     tolerance_text: str = "",
 ) -> dict[str, Any]:
-    """Add a symbol annotation to the active draft.
+    """Add a symbol annotation to the active draft. Positions in meters.
 
-    type: 'center_mark' | 'centerline' | 'surface_finish'
-          | 'weld_symbol' | 'geometric_tolerance'
-
-    Positions in meters.
-    symbol_type: 'machined' | 'any' | 'prohibited'.
-    weld_type: 'fillet' | 'groove' | 'plug' | 'spot' | 'seam'.
+    center_mark: x,y. centerline: (x1,y1)-(x2,y2).
+    surface_finish: x,y + symbol_type. weld_symbol: x,y + weld_type.
+    geometric_tolerance: x,y + tolerance_text (feature control frame text).
     """
     match type:
         case "center_mark":
-            return export_manager.add_center_mark(x, y)
+            return export_manager.add_center_mark(x=x, y=y)
         case "centerline":
-            return export_manager.add_centerline(x1, y1, x2, y2)
+            return export_manager.add_centerline(x1=x1, y1=y1, x2=x2, y2=y2)
         case "surface_finish":
-            return export_manager.add_surface_finish_symbol(x, y, symbol_type)
+            return export_manager.add_surface_finish_symbol(x=x, y=y, symbol_type=symbol_type)
         case "weld_symbol":
-            return export_manager.add_weld_symbol(x, y, weld_type)
+            return export_manager.add_weld_symbol(x=x, y=y, weld_type=weld_type)
         case "geometric_tolerance":
-            return export_manager.add_geometric_tolerance(x, y, tolerance_text)
+            return export_manager.add_geometric_tolerance(x=x, y=y, tolerance_text=tolerance_text)
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -327,7 +426,7 @@ def add_symbol_annotation(
 
 
 def add_2d_dimension(
-    type: str = "distance",
+    type: Literal["distance", "length", "radius", "angle"] = "distance",
     x1: float = 0.0,
     y1: float = 0.0,
     x2: float = 0.0,
@@ -335,23 +434,27 @@ def add_2d_dimension(
     x3: float = 0.0,
     y3: float = 0.0,
     object_index: int = 0,
-    object_type: str = "circle",
+    object_type: Literal["circle", "arc"] = "circle",
 ) -> dict[str, Any]:
-    """Add a 2D dimension on the active draft sheet.
+    """Add a 2D dimension on the active draft sheet. Meters, in sheet space.
 
-    type: 'distance' | 'length' | 'radius' | 'angle'
-
-    Coordinates in meters (sheet space). object_index is 0-based.
+    distance: (x1,y1)-(x2,y2). Each end attaches to the nearest element.
+    angle: a point on each of two lines, (x1,y1) and (x3,y3); (x2,y2) is the
+        vertex, recorded but derived by Solid Edge.
+    length: 0-based object_index into the sheet Lines2d collection.
+    radius: 0-based object_index into Circles2d or Arcs2d, per object_type.
     """
     match type:
         case "distance":
-            return export_manager.add_distance_dimension(x1, y1, x2, y2)
+            return export_manager.add_distance_dimension(x1=x1, y1=y1, x2=x2, y2=y2)
         case "length":
-            return export_manager.add_length_dimension(object_index)
+            return export_manager.add_length_dimension(object_index=object_index)
         case "radius":
-            return export_manager.add_radius_dimension_2d(object_index, object_type)
+            return export_manager.add_radius_dimension_2d(
+                object_index=object_index, object_type=object_type
+            )
         case "angle":
-            return export_manager.add_angle_dimension_2d(x1, y1, x2, y2, x3, y3)
+            return export_manager.add_angle_dimension_2d(x1=x1, y1=y1, x2=x2, y2=y2, x3=x3, y3=y3)
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -362,8 +465,18 @@ def add_2d_dimension(
 
 
 def camera_control(
-    action: str,
-    view: str = "Iso",
+    action: Literal[
+        "set_orientation",
+        "zoom_fit",
+        "zoom_to_selection",
+        "rotate",
+        "pan",
+        "zoom",
+        "refresh",
+        "begin_dynamics",
+        "end_dynamics",
+    ],
+    view: Literal["Iso", "Top", "Front", "Right", "Bottom", "Back", "Left"] = "Iso",
     angle: float = 0.0,
     center_x: float = 0.0,
     center_y: float = 0.0,
@@ -375,35 +488,37 @@ def camera_control(
     dy: int = 0,
     factor: float = 1.0,
 ) -> dict[str, Any]:
-    """Control the 3D camera/view.
+    """Control the 3D camera/view of the active window.
 
-    action: 'set_orientation' | 'zoom_fit' | 'zoom_to_selection'
-            | 'rotate' | 'pan' | 'zoom' | 'refresh'
-            | 'begin_dynamics' | 'end_dynamics'
-
-    angle in radians. factor >1 zooms in, <1 zooms out. dx/dy in pixels.
+    set_orientation: view. Solid Edge only has named views for Iso, Top,
+    Front and Right; Bottom, Back and Left report unsupported, so reach them
+    by applying the opposite view and rotating 180 degrees.
+    rotate: angle in DEGREES about the axis (axis_x,axis_y,axis_z) through
+    center_x/y/z (meters). pan: dx,dy pixels. zoom: factor >1 zooms in,
+    <1 zooms out. begin_dynamics/end_dynamics bracket a burst of calls.
     """
     match action:
         case "set_orientation":
-            return view_manager.set_view(view)
+            return view_manager.set_view(view=view)
         case "zoom_fit":
             return view_manager.zoom_fit()
         case "zoom_to_selection":
             return view_manager.zoom_to_selection()
         case "rotate":
+            # The backend (View.RotateCamera) takes radians.
             return view_manager.rotate_camera(
-                angle,
-                center_x,
-                center_y,
-                center_z,
-                axis_x,
-                axis_y,
-                axis_z,
+                angle=math.radians(angle),
+                center_x=center_x,
+                center_y=center_y,
+                center_z=center_z,
+                axis_x=axis_x,
+                axis_y=axis_y,
+                axis_z=axis_z,
             )
         case "pan":
-            return view_manager.pan_camera(dx, dy)
+            return view_manager.pan_camera(dx=dx, dy=dy)
         case "zoom":
-            return view_manager.zoom_camera(factor)
+            return view_manager.zoom_camera(factor=factor)
         case "refresh":
             return view_manager.refresh_view()
         case "begin_dynamics":
@@ -432,22 +547,23 @@ def set_camera(
     perspective: bool = False,
     scale_or_angle: float = 1.0,
 ) -> dict[str, Any]:
-    """Set the 3D camera position, target, and projection.
+    """Set the 3D camera eye, target, up vector, and projection. Meters.
 
-    Coordinates in meters. scale_or_angle is ortho scale or perspective FOV angle.
+    scale_or_angle is the orthographic view scale when perspective=False, or
+    the perspective field-of-view angle in RADIANS when perspective=True.
     """
     return view_manager.set_camera(
-        eye_x,
-        eye_y,
-        eye_z,
-        target_x,
-        target_y,
-        target_z,
-        up_x,
-        up_y,
-        up_z,
-        perspective,
-        scale_or_angle,
+        eye_x=eye_x,
+        eye_y=eye_y,
+        eye_z=eye_z,
+        target_x=target_x,
+        target_y=target_y,
+        target_z=target_z,
+        up_x=up_x,
+        up_y=up_y,
+        up_z=up_z,
+        perspective=perspective,
+        scale_or_angle=scale_or_angle,
     )
 
 
@@ -457,8 +573,14 @@ def set_camera(
 
 
 def display_control(
-    action: str,
-    mode: str = "Shaded",
+    action: Literal[
+        "set_mode",
+        "set_background",
+        "model_to_screen",
+        "screen_to_model",
+        "set_texture",
+    ],
+    mode: RenderMode = "Shaded",
     red: int = 0,
     green: int = 0,
     blue: int = 0,
@@ -472,24 +594,22 @@ def display_control(
 ) -> dict[str, Any]:
     """Control display settings and coordinate transforms.
 
-    action: 'set_mode' | 'set_background'
-            | 'model_to_screen' | 'screen_to_model'
-            | 'set_texture'
-
-    mode: 'Shaded' | 'ShadedWithEdges' | 'Wireframe' | 'HiddenEdgesVisible'.
-    RGB values 0-255. face_index is 0-based.
+    set_mode: mode. set_background: RGB 0-255.
+    model_to_screen: model x,y,z (meters) -> pixels.
+    screen_to_model: screen_x/screen_y pixels -> model meters.
+    set_texture: 0-based face_index + texture_name.
     """
     match action:
         case "set_mode":
-            return view_manager.set_display_mode(mode)
+            return view_manager.set_display_mode(mode=mode)
         case "set_background":
-            return view_manager.set_view_background(red, green, blue)
+            return view_manager.set_view_background(red=red, green=green, blue=blue)
         case "model_to_screen":
-            return view_manager.transform_model_to_screen(x, y, z)
+            return view_manager.transform_model_to_screen(x=x, y=y, z=z)
         case "screen_to_model":
-            return view_manager.transform_screen_to_model(screen_x, screen_y)
+            return view_manager.transform_screen_to_model(screen_x=screen_x, screen_y=screen_y)
         case "set_texture":
-            return export_manager.set_face_texture(face_index, texture_name)
+            return export_manager.set_face_texture(face_index=face_index, texture_name=texture_name)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -500,28 +620,28 @@ def display_control(
 
 
 def manage_sheet(
-    action: str,
+    action: Literal["activate", "rename", "delete", "create_drawing", "add"],
     sheet_index: int = 0,
     new_name: str = "",
     template: str | None = None,
     views: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Manage draft sheets.
+    """Manage draft sheets (0-based sheet_index).
 
-    action: 'activate' | 'rename' | 'delete'
-            | 'create_drawing' | 'add'
-
-    sheet_index is 0-based.
+    rename: new_name. delete removes the sheet and its views.
+    create_drawing: optional template path + views, a list of orientation names
+    from Front/Back/Top/Bottom/Right/Left/Isometric (default all four standard).
+    add appends an empty sheet and ignores sheet_index.
     """
     match action:
         case "activate":
-            return export_manager.activate_sheet(sheet_index)
+            return export_manager.activate_sheet(sheet_index=sheet_index)
         case "rename":
-            return export_manager.rename_sheet(sheet_index, new_name)
+            return export_manager.rename_sheet(sheet_index=sheet_index, new_name=new_name)
         case "delete":
-            return export_manager.delete_sheet(sheet_index)
+            return export_manager.delete_sheet(sheet_index=sheet_index)
         case "create_drawing":
-            return export_manager.create_drawing(template, views)
+            return export_manager.create_drawing(template=template, views=views)
         case "add":
             return export_manager.add_draft_sheet()
         case _:
@@ -534,13 +654,13 @@ def manage_sheet(
 
 
 def print_control(
-    action: str,
+    action: Literal["print", "set_printer", "get_printer", "set_paper_size", "print_full"],
     copies: int = 1,
     all_sheets: bool = True,
     printer_name: str = "",
     width: float = 0.0,
     height: float = 0.0,
-    orientation: str = "Landscape",
+    orientation: Literal["Landscape", "Portrait"] = "Landscape",
     num_copies: int = 1,
     print_orientation: int | None = None,
     paper_size: int | None = None,
@@ -554,20 +674,24 @@ def print_control(
 ) -> dict[str, Any]:
     """Control printing for the active draft.
 
-    action: 'print' | 'set_printer' | 'get_printer'
-            | 'set_paper_size' | 'print_full'
-
-    Paper dimensions in meters. orientation: 'Landscape' | 'Portrait'.
+    print: copies + all_sheets. set_printer: printer_name.
+    set_paper_size: width/height in meters + orientation.
+    print_full: full DraftPrintUtility control - printer_name, num_copies,
+    print_orientation/paper_size/print_range (raw COM ints), scale,
+    print_to_file + output_file_name, sheets (e.g. '1-3'), color_as_black,
+    collate. None leaves a print_full setting at the document default.
     """
     match action:
         case "print":
-            return export_manager.print_drawing(copies, all_sheets)
+            return export_manager.print_drawing(copies=copies, all_sheets=all_sheets)
         case "set_printer":
-            return export_manager.set_printer(printer_name)
+            return export_manager.set_printer(printer_name=printer_name)
         case "get_printer":
             return export_manager.get_printer()
         case "set_paper_size":
-            return export_manager.set_paper_size(width, height, orientation)
+            return export_manager.set_paper_size(
+                width=width, height=height, orientation=orientation
+            )
         case "print_full":
             return export_manager.print_document(
                 printer=printer_name or None,
@@ -592,17 +716,23 @@ def print_control(
 
 
 def query_sheet(
-    type: str,
+    type: Literal[
+        "dimensions",
+        "balloons",
+        "text_boxes",
+        "drawing_objects",
+        "sections",
+        "lines2d",
+        "circles2d",
+        "arcs2d",
+        "section_cuts",
+    ],
     view_index: int = 0,
 ) -> dict[str, Any]:
-    """Query sheet collections on the active draft.
+    """List a collection on the active draft sheet (read-only).
 
-    type: 'dimensions' | 'balloons' | 'text_boxes'
-          | 'drawing_objects' | 'sections'
-          | 'lines2d' | 'circles2d' | 'arcs2d'
-          | 'section_cuts'
-
-    view_index (0-based) only used for 'section_cuts'.
+    Every type ignores view_index except section_cuts, which reads the cuts on
+    the drawing view at 0-based view_index.
     """
     match type:
         case "dimensions":
@@ -622,9 +752,50 @@ def query_sheet(
         case "arcs2d":
             return export_manager.get_arcs2d()
         case "section_cuts":
-            return export_manager.get_section_cuts(view_index)
+            return export_manager.get_section_cuts(view_index=view_index)
         case _:
             return {"error": f"Unknown type: {type}"}
+
+
+# ================================================================
+# Group 56b: draw_sheet_geometry - 2D geometry on the draft sheet
+# ================================================================
+
+
+def draw_sheet_geometry(
+    shape: Literal["line", "rectangle", "circle", "circle_3point", "arc"],
+    x1: float = 0.0,
+    y1: float = 0.0,
+    x2: float = 0.0,
+    y2: float = 0.0,
+    x3: float = 0.0,
+    y3: float = 0.0,
+    center_x: float = 0.0,
+    center_y: float = 0.0,
+    radius: float = 0.0,
+) -> dict[str, Any]:
+    """Draw 2D geometry on the active draft sheet. Meters, in sheet space.
+
+    Draft annotation geometry, not a part sketch: use manage_sketch and draw
+    for those. Read it back with query_sheet(type='lines2d'|'circles2d'|
+    'arcs2d') and dimension it with add_2d_dimension.
+
+    line: (x1,y1)-(x2,y2). rectangle: (x1,y1) and the opposite corner (x2,y2).
+    circle: center_x/y + radius. circle_3point: (x1,y1), (x2,y2), (x3,y3).
+    arc: center_x/y, start (x1,y1), end (x2,y2), swept counterclockwise.
+    """
+    return export_manager.draw_sheet_geometry(
+        shape=shape,
+        x1=x1,
+        y1=y1,
+        x2=x2,
+        y2=y2,
+        x3=x3,
+        y3=y3,
+        center_x=center_x,
+        center_y=center_y,
+        radius=radius,
+    )
 
 
 # ================================================================
@@ -633,7 +804,7 @@ def query_sheet(
 
 
 def manage_annotation_data(
-    action: str,
+    action: Literal["add_symbol", "get_symbols", "get_pmi", "set_pmi_visibility"],
     file_path: str = "",
     x: float = 0.0,
     y: float = 0.0,
@@ -642,12 +813,11 @@ def manage_annotation_data(
     show_dimensions: bool = True,
     show_annotations: bool = True,
 ) -> dict[str, Any]:
-    """Manage symbols and PMI annotation data.
+    """Manage sheet symbols and PMI annotation data.
 
-    action: 'add_symbol' | 'get_symbols'
-            | 'get_pmi' | 'set_pmi_visibility'
-
-    Positions in meters.
+    add_symbol: symbol file_path placed at x,y (meters) with insertion_type
+    (raw SymbolInsertTypeConstants int).
+    set_pmi_visibility: show (all PMI) + show_dimensions + show_annotations.
     """
     if action == "add_symbol" and file_path:
         file_path, err = validate_path(file_path, must_exist=True)
@@ -655,13 +825,17 @@ def manage_annotation_data(
             return err
     match action:
         case "add_symbol":
-            return export_manager.add_symbol(file_path, x, y, insertion_type)
+            return export_manager.add_symbol(
+                file_path=file_path, x=x, y=y, insertion_type=insertion_type
+            )
         case "get_symbols":
             return export_manager.get_symbols()
         case "get_pmi":
             return export_manager.get_pmi_info()
         case "set_pmi_visibility":
-            return export_manager.set_pmi_visibility(show, show_dimensions, show_annotations)
+            return export_manager.set_pmi_visibility(
+                show=show, show_dimensions=show_dimensions, show_annotations=show_annotations
+            )
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -672,7 +846,7 @@ def manage_annotation_data(
 
 
 def add_smart_frame(
-    method: str = "two_point",
+    method: Literal["two_point", "by_origin"] = "two_point",
     style_name: str = "",
     x1: float = 0.0,
     y1: float = 0.0,
@@ -685,18 +859,17 @@ def add_smart_frame(
     left: float = 0.0,
     right: float = 0.0,
 ) -> dict[str, Any]:
-    """Add a smart frame (title block/border) to the sheet.
+    """Add a smart frame (title block/border) to the sheet. Meters.
 
-    method: 'two_point' | 'by_origin'
-
-    Positions and margins in meters.
+    two_point: corners (x1,y1)-(x2,y2). by_origin: origin x,y + the
+    top/bottom/left/right margins. style_name selects the frame style.
     """
     match method:
         case "two_point":
-            return export_manager.add_smart_frame(style_name, x1, y1, x2, y2)
+            return export_manager.add_smart_frame(style_name=style_name, x1=x1, y1=y1, x2=x2, y2=y2)
         case "by_origin":
             return export_manager.add_smart_frame_by_origin(
-                style_name, x, y, top, bottom, left, right
+                style_name=style_name, x=x, y=y, top=top, bottom=bottom, left=left, right=right
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -708,7 +881,7 @@ def add_smart_frame(
 
 
 def draft_config(
-    action: str,
+    action: Literal["get_global", "set_global", "get_origin", "set_origin"],
     parameter: int = 0,
     value: float = 0.0,
     x: float = 0.0,
@@ -716,20 +889,18 @@ def draft_config(
 ) -> dict[str, Any]:
     """Manage draft document configuration.
 
-    action: 'get_global' | 'set_global'
-            | 'get_origin' | 'set_origin'
-
-    Positions in meters.
+    get_global/set_global: parameter is a raw DraftGlobalConstants int;
+    set_global also takes value. set_origin: symbol file origin x,y in meters.
     """
     match action:
         case "get_global":
-            return export_manager.get_draft_global_parameter(parameter)
+            return export_manager.get_draft_global_parameter(parameter=parameter)
         case "set_global":
-            return export_manager.set_draft_global_parameter(parameter, value)
+            return export_manager.set_draft_global_parameter(parameter=parameter, value=value)
         case "get_origin":
             return export_manager.get_symbol_file_origin()
         case "set_origin":
-            return export_manager.set_symbol_file_origin(x, y)
+            return export_manager.set_symbol_file_origin(x=x, y=y)
         case _:
             return {"error": f"Unknown action: {action}"}
 
@@ -740,7 +911,7 @@ def draft_config(
 
 
 def create_table(
-    type: str = "parts_list",
+    type: Literal["parts_list", "bend"] = "parts_list",
     auto_balloon: bool = True,
     x: float = 0.15,
     y: float = 0.25,
@@ -749,15 +920,17 @@ def create_table(
 ) -> dict[str, Any]:
     """Create a table on the active draft sheet.
 
-    type: 'parts_list' | 'bend'
-
-    view_index is 0-based (bend only).
+    parts_list: placed at x,y (meters); auto_balloon also balloons the views.
+    bend: 0-based view_index of a flat-pattern view + optional saved_settings
+    name (needs a sheet metal model).
     """
     match type:
         case "parts_list":
-            return export_manager.create_parts_list(auto_balloon, x, y)
+            return export_manager.create_parts_list(auto_balloon=auto_balloon, x=x, y=y)
         case "bend":
-            return export_manager.create_bend_table(view_index, saved_settings, auto_balloon)
+            return export_manager.create_bend_table(
+                view_index=view_index, saved_settings=saved_settings, auto_balloon=auto_balloon
+            )
         case _:
             return {"error": f"Unknown type: {type}"}
 
@@ -769,20 +942,23 @@ def create_table(
 
 def register(mcp: Any) -> None:
     """Register export, drawing, and view tools."""
-    mcp.tool()(export_file)
-    mcp.tool()(add_drawing_view)
-    mcp.tool()(manage_drawing_view)
-    mcp.tool()(add_annotation)
-    mcp.tool()(add_dimension_annotation)
-    mcp.tool()(add_symbol_annotation)
-    mcp.tool()(add_2d_dimension)
-    mcp.tool()(camera_control)
-    mcp.tool()(set_camera)
-    mcp.tool()(display_control)
-    mcp.tool()(manage_sheet)
-    mcp.tool()(print_control)
-    mcp.tool()(query_sheet)
-    mcp.tool()(manage_annotation_data)
-    mcp.tool()(add_smart_frame)
-    mcp.tool()(draft_config)
-    mcp.tool()(create_table)
+    export_tags = {"export"}
+    draft_tags = {"export", "draft"}
+    register_tool(mcp, export_file, tags=export_tags, idempotent=True)
+    register_tool(mcp, add_drawing_view, tags=draft_tags)
+    register_tool(mcp, manage_drawing_view, tags=draft_tags, destructive=True)
+    register_tool(mcp, add_annotation, tags=draft_tags)
+    register_tool(mcp, add_dimension_annotation, tags=draft_tags)
+    register_tool(mcp, add_symbol_annotation, tags=draft_tags)
+    register_tool(mcp, add_2d_dimension, tags=draft_tags)
+    register_tool(mcp, camera_control, tags=export_tags)
+    register_tool(mcp, set_camera, tags=export_tags, idempotent=True)
+    register_tool(mcp, display_control, tags=export_tags, idempotent=True)
+    register_tool(mcp, manage_sheet, tags=draft_tags, destructive=True)
+    register_tool(mcp, print_control, tags=draft_tags)
+    register_tool(mcp, query_sheet, tags=draft_tags, read_only=True)
+    register_tool(mcp, draw_sheet_geometry, tags=draft_tags)
+    register_tool(mcp, manage_annotation_data, tags=draft_tags)
+    register_tool(mcp, add_smart_frame, tags=draft_tags)
+    register_tool(mcp, draft_config, tags=draft_tags)
+    register_tool(mcp, create_table, tags=draft_tags)

@@ -12,6 +12,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -20,6 +26,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -32,6 +39,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -69,7 +77,7 @@ class TestAddVirtualComponent:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_virtual_component("test")
         assert "error" in result
@@ -110,7 +118,7 @@ class TestAddVirtualComponentPredefined:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
         import unittest.mock
 
         with unittest.mock.patch("os.path.exists", return_value=True):
@@ -135,7 +143,7 @@ class TestAddVirtualComponentBIDM:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_virtual_component_bidm("DOC001", "REV_A")
         assert "error" in result
@@ -203,7 +211,7 @@ class TestGetTube:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.get_tube(0)
         assert "error" in result
@@ -259,7 +267,7 @@ class TestAddTube:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         import unittest.mock
 
@@ -273,115 +281,70 @@ class TestAddTube:
 # ============================================================================
 
 
-class TestAddStructuralFrame:
-    def test_success(self, asm_mgr):
+class TestStructuralFrames:
+    """A frame runs along Line3D objects from draw_3d_line (verified on SE 2026)."""
+
+    @staticmethod
+    def _ready(am, doc, tmp_path, monkeypatch, n_lines=2):
+        part = tmp_path / "beam.par"
+        part.write_bytes(b"x")
+        lines = [MagicMock(name=f"line{i}") for i in range(n_lines)]
+        am.sketch_manager = MagicMock(lines_3d=lines)
+        doc.StructuralFrames.Count = 1
+        seen = {"prefix": None}
+
+        class _Dismisser:
+            dismissed = 0
+
+            def __init__(self, prefix, **_):
+                seen["prefix"] = prefix
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return None
+
+        monkeypatch.setattr(
+            "solidedge_mcp.backends.assembly._specialized.dismiss_informational_dialog", _Dismisser
+        )
+        return part, lines, seen
+
+    def test_adds_along_the_named_lines_with_the_dialog_watched(
+        self, asm_mgr, tmp_path, monkeypatch
+    ):
+        import pythoncom
+
         am, doc = asm_mgr
-        path1, path2 = MagicMock(), MagicMock()
-        frame = MagicMock()
-        frame.Name = "Frame_1"
-        frames = MagicMock()
-        frames.Add.return_value = frame
-        doc.StructuralFrames = frames
+        part, lines, seen = self._ready(am, doc, tmp_path, monkeypatch)
 
-        occurrences = MagicMock()
-        occurrences.Count = 3
-        occurrences.Item.side_effect = lambda i: {1: path1, 2: path2, 3: MagicMock()}[i]
-        doc.Occurrences = occurrences
+        result = am.add_structural_frame(str(part), [0, 1])
 
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame("C:\\frames\\beam.par", [0, 1])
         assert result["status"] == "created"
-        assert result["type"] == "structural_frame"
-        assert result["num_paths"] == 2
-        frames.Add.assert_called_once()
+        assert result["frames"] == 1
+        args = doc.StructuralFrames.Add.call_args.args
+        assert args[:3] == (str(part), 2, lines)
+        assert all(a.varianttype == pythoncom.VT_EMPTY for a in args[3:])
+        assert seen["prefix"] == "The Segments group of commands"
 
-    def test_file_not_found(self, asm_mgr):
+    def test_a_bad_index_or_no_lines_is_refused(self, asm_mgr, tmp_path, monkeypatch):
         am, doc = asm_mgr
-        import unittest.mock
+        part, _, _ = self._ready(am, doc, tmp_path, monkeypatch)
+        assert "Invalid path index" in am.add_structural_frame(str(part), [5])["error"]
+        assert "none were given" in am.add_structural_frame(str(part), [])["error"]
+        doc.StructuralFrames.Add.assert_not_called()
 
-        with unittest.mock.patch("os.path.exists", return_value=False):
-            result = am.add_structural_frame("C:\\missing.par", [0])
-        assert "error" in result
-        assert "File not found" in result["error"]
-
-    def test_invalid_path_index(self, asm_mgr):
+    def test_by_orientation_builds_the_same_way(self, asm_mgr, tmp_path, monkeypatch):
         am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
+        part, lines, seen = self._ready(am, doc, tmp_path, monkeypatch, n_lines=1)
 
-        import unittest.mock
+        result = am.add_structural_frame_by_orientation(str(part), "Base", [0])
 
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame("C:\\frames\\beam.par", [0, 5])
-        assert "error" in result
-        assert "Invalid path index" in result["error"]
-
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        del doc.Occurrences
-
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame("C:\\frames\\beam.par", [0])
-        assert "error" in result
-
-
-class TestAddStructuralFrameByOrientation:
-    def test_success(self, asm_mgr):
-        am, doc = asm_mgr
-        path1 = MagicMock()
-        frame = MagicMock()
-        frame.Name = "OrientedFrame_1"
-        frames = MagicMock()
-        frames.AddByOrientation.return_value = frame
-        doc.StructuralFrames = frames
-
-        occurrences = MagicMock()
-        occurrences.Count = 2
-        occurrences.Item.return_value = path1
-        doc.Occurrences = occurrences
-
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame_by_orientation(
-                "C:\\frames\\beam.par", "CoordSys1", [0]
-            )
         assert result["status"] == "created"
-        assert result["type"] == "structural_frame_oriented"
-        assert result["coord_system"] == "CoordSys1"
-        frames.AddByOrientation.assert_called_once()
-
-    def test_file_not_found(self, asm_mgr):
-        am, doc = asm_mgr
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=False):
-            result = am.add_structural_frame_by_orientation(
-                "C:\\missing.par", "CS1", [0]
-            )
-        assert "error" in result
-
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        del doc.Occurrences
-
-        import unittest.mock
-
-        with unittest.mock.patch("os.path.exists", return_value=True):
-            result = am.add_structural_frame_by_orientation(
-                "C:\\frames\\beam.par", "CS1", [0]
-            )
-        assert "error" in result
-
-
-# ============================================================================
-# SPLICES
-# ============================================================================
+        args = doc.StructuralFrames.AddByOrientation.call_args.args
+        assert args[:4] == (str(part), "Base", 1, lines)
+        assert len(args) == 8
+        assert seen["prefix"] == "The Segments group of commands"
 
 
 class TestAddSplice:
@@ -392,7 +355,14 @@ class TestAddSplice:
         splice.Name = "Splice_1"
         splices = MagicMock()
         splices.Add.return_value = splice
-        doc.Splices = splices
+        # Splices belongs to a Harness, reached through doc.Harnesses.
+        del doc.Splices
+        harness = MagicMock()
+        harness.Splices = splices
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         occurrences = MagicMock()
         occurrences.Count = 3
@@ -419,7 +389,7 @@ class TestAddSplice:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_splice(0, 0, 0, [0], "")
         assert "error" in result
@@ -431,51 +401,26 @@ class TestAddSplice:
 
 
 class TestAddWire:
-    def test_success(self, asm_mgr):
-        am, doc = asm_mgr
-        p1, p2 = MagicMock(), MagicMock()
-        wire = MagicMock()
-        wire.Name = "Wire_1"
-        wires = MagicMock()
-        wires.Add.return_value = wire
-        doc.Wires = wires
+    """Wires.Add wants wire-path curves this server cannot draw; no call is made."""
 
-        occurrences = MagicMock()
-        occurrences.Count = 3
-        occurrences.Item.side_effect = lambda i: {1: p1, 2: p2, 3: MagicMock()}[i]
-        doc.Occurrences = occurrences
+    def test_refuses_with_the_evidence(self, asm_mgr):
+        am, doc = asm_mgr
+        wires = MagicMock()
+        harness = MagicMock()
+        harness.Wires = wires
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         result = am.add_wire([0, 1], [True, False], "Test wire")
-        assert result["status"] == "created"
-        assert result["type"] == "wire"
-        assert result["num_paths"] == 2
+
+        assert result["unsupported"] is True
+        assert "draw_3d_line" in result["error"]
+        assert result["path_indices"] == [0, 1]
         assert result["description"] == "Test wire"
-        wires.Add.assert_called_once()
-
-    def test_mismatched_lengths(self, asm_mgr):
-        am, doc = asm_mgr
-        doc.Occurrences = MagicMock()
-
-        result = am.add_wire([0, 1], [True], "")
-        assert "error" in result
-        assert "same length" in result["error"]
-
-    def test_invalid_path_index(self, asm_mgr):
-        am, doc = asm_mgr
-        occurrences = MagicMock()
-        occurrences.Count = 1
-        doc.Occurrences = occurrences
-
-        result = am.add_wire([0, 5], [True, True], "")
-        assert "error" in result
-        assert "Invalid path index" in result["error"]
-
-    def test_not_assembly(self, asm_mgr):
-        am, doc = asm_mgr
-        del doc.Occurrences
-
-        result = am.add_wire([0], [True], "")
-        assert "error" in result
+        wires.Add.assert_not_called()
+        doc.Occurrences.Item.assert_not_called()
 
 
 # ============================================================================
@@ -491,7 +436,14 @@ class TestAddCable:
         cable.Name = "Cable_1"
         cables = MagicMock()
         cables.Add.return_value = cable
-        doc.Cables = cables
+        # Cables belongs to a Harness, reached through doc.Harnesses.
+        del doc.Cables
+        harness = MagicMock()
+        harness.Cables = cables
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         occurrences = MagicMock()
         occurrences.Count = 3
@@ -526,7 +478,7 @@ class TestAddCable:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_cable([0], [True], [0])
         assert "error" in result
@@ -545,7 +497,14 @@ class TestAddBundle:
         bundle.Name = "Bundle_1"
         bundles = MagicMock()
         bundles.Add.return_value = bundle
-        doc.Bundles = bundles
+        # Bundles belongs to a Harness, reached through doc.Harnesses.
+        del doc.Bundles
+        harness = MagicMock()
+        harness.Bundles = bundles
+        harnesses = MagicMock()
+        harnesses.Count = 1
+        harnesses.Item.return_value = harness
+        doc.Harnesses = harnesses
 
         occurrences = MagicMock()
         occurrences.Count = 3
@@ -580,7 +539,7 @@ class TestAddBundle:
 
     def test_not_assembly(self, asm_mgr):
         am, doc = asm_mgr
-        del doc.Occurrences
+        doc.Type = IG_PART_DOCUMENT
 
         result = am.add_bundle([0], [True], [0])
         assert "error" in result

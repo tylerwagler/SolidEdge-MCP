@@ -1,10 +1,16 @@
 """ViewModel class for view manipulation (orientation, zoom, display, camera)."""
 
-import traceback
+import math
 from typing import Any
 
-from ..constants import RenderModeConstants
+from solidedge_mcp.backends.errors import error_result
+
+from ..constants import (
+    RenderModeConstants,
+    SeGradientType,
+)
 from ..logging import get_logger
+from ._base import com_get, resolve_view
 
 _logger = get_logger(__name__)
 
@@ -28,80 +34,76 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            # Get the window
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
+            # View.ApplyNamedView(Name) is the only named-view API framewrk.tlb
+            # exposes. Solid Edge 2026 accepts only these four names; the other
+            # three raise, verified by applying each one and comparing the
+            # rendered window.
+            working_views = ["Iso", "Top", "Front", "Right"]
+            rejected_views = ["Bottom", "Back", "Left"]
 
-            if not view_obj:
-                return {"error": "Cannot access view object"}
-
-            # Valid view names (discovered via introspection)
-            # Note: Bottom, Back, Left may not work in all contexts
-            valid_views = ["Iso", "Top", "Front", "Right", "Bottom", "Back", "Left"]
-
-            if view not in valid_views:
-                return {"error": f"Invalid view: {view}. Valid: {', '.join(valid_views)}"}
-
-            # Use ApplyNamedView with string name (discovered method!)
-            if hasattr(view_obj, "ApplyNamedView"):
-                view_obj.ApplyNamedView(view)
-                return {"status": "view_set", "view": view}
-            else:
+            if view not in working_views + rejected_views:
                 return {
-                    "error": "ApplyNamedView not available",
-                    "note": "Use View menu in Solid Edge UI",
+                    "error": f"Invalid view: {view}. Valid: {', '.join(working_views)}",
                 }
+
+            try:
+                view_obj.ApplyNamedView(view)
+            except Exception as exc:
+                if view in rejected_views:
+                    return {
+                        "error": (
+                            f"Solid Edge has no named view '{view}'. ApplyNamedView "
+                            f"accepts only {', '.join(working_views)}. To look from "
+                            "the other side, apply the opposite view and rotate with "
+                            "camera_control(action='rotate'), or use set_camera."
+                        ),
+                        "unsupported": True,
+                        "working_views": working_views,
+                    }
+                return error_result(exc, context=f"ApplyNamedView({view!r}) failed")
+            return {"status": "view_set", "view": view}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def zoom_fit(self) -> dict[str, Any]:
         """Zoom to fit all geometry in view"""
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             # Zoom to fit
-            if hasattr(view_obj, "Fit"):
+            try:
                 view_obj.Fit()
-                return {"status": "zoomed_fit"}
-            else:
+            except Exception:
                 return {
                     "error": "Fit method not available",
                     "note": "Use View > Fit in Solid Edge UI",
                 }
+            return {"status": "zoomed_fit"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def zoom_to_selection(self) -> dict[str, Any]:
         """Zoom to fit all geometry (equivalent to View > Fit)."""
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.Fit()
 
             return {"status": "zoomed_to_selection"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_display_mode(self, mode: str) -> dict[str, Any]:
         """
@@ -116,14 +118,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             mode_map = {
                 "Wireframe": RenderModeConstants.seRenderModeWireframe,
@@ -144,11 +141,20 @@ class ViewModel:
             view_obj.SetRenderMode(mode_value)
             return {"status": "display_mode_set", "mode": mode}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_view_background(self, red: int, green: int, blue: int) -> dict[str, Any]:
         """
         Set the view background color.
+
+        The background lives on the view's ``ViewStyle``, not on ``View``
+        itself: none of the Solid Edge type libraries define
+        ``View.SetBackgroundColor``, ``View.BackgroundColor`` or
+        ``View.SetBackgroundGradientColor``, so the previous three-way
+        fallback chain could only ever raise. This uses
+        ``ViewStyle.SetGradientBackground(eType, crColor1, crColor2,
+        [SpotCenterX], [SpotCenterY])`` with both stops set to the requested
+        colour, which paints a flat background.
 
         Args:
             red: Red component (0-255)
@@ -161,28 +167,23 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             ole_color = red | (green << 8) | (blue << 16)
 
-            try:
-                view_obj.SetBackgroundColor(ole_color)
-            except Exception:
-                try:
-                    view_obj.BackgroundColor = ole_color
-                except Exception:
-                    view_obj.SetBackgroundGradientColor(ole_color, ole_color)
+            view_style = com_get(view_obj, "ViewStyle")
+            if view_style is None:
+                return {"error": "View does not expose a ViewStyle"}
+
+            view_style.SetGradientBackground(
+                SeGradientType.seGradientTypeVertical, ole_color, ole_color
+            )
 
             return {"status": "updated", "color": [red, green, blue]}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_camera(self) -> dict[str, Any]:
         """
@@ -197,29 +198,35 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             # GetCamera returns 11 out-params by reference
             result = view_obj.GetCamera()
 
             # result is a tuple: (EyeX, EyeY, EyeZ, TargetX, TargetY, TargetZ,
             #                     UpX, UpY, UpZ, Perspective, ScaleOrAngle)
-            return {
+            perspective = bool(result[9])
+            camera: dict[str, Any] = {
                 "eye": [result[0], result[1], result[2]],
                 "target": [result[3], result[4], result[5]],
                 "up": [result[6], result[7], result[8]],
-                "perspective": bool(result[9]),
+                "perspective": perspective,
                 "scale_or_angle": result[10],
             }
+            # ScaleOrAngle means two different things: a view scale in
+            # orthographic, and a field-of-view angle in RADIANS in
+            # perspective. Verified live: set 0.5 in perspective, read 0.5.
+            # It is named for what it is, in the unit of this boundary.
+            if perspective:
+                camera["field_of_view_degrees"] = math.degrees(result[10])
+                camera["field_of_view_radians"] = result[10]
+            else:
+                camera["scale"] = result[10]
+            return camera
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def rotate_camera(
         self,
@@ -235,7 +242,8 @@ class ViewModel:
         Rotate the camera around a specified axis through a center point.
 
         Args:
-            angle: Rotation angle in radians
+            angle: Rotation angle in radians (the tool layer converts from
+                the degrees it takes)
             center_x, center_y, center_z: Center of rotation (meters)
             axis_x, axis_y, axis_z: Rotation axis vector (default: Y-up)
 
@@ -245,25 +253,23 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.RotateCamera(angle, center_x, center_y, center_z, axis_x, axis_y, axis_z)
 
             return {
                 "status": "camera_rotated",
-                "angle_rad": angle,
+                # Report back in the unit the caller used, not the radians COM
+                # wanted: manage_view(action="rotate", angle=90) answering
+                # "angle_rad": 1.57 reads like it did something else.
+                "angle_degrees": math.degrees(angle),
                 "center": [center_x, center_y, center_z],
                 "axis": [axis_x, axis_y, axis_z],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def pan_camera(self, dx: int, dy: int) -> dict[str, Any]:
         """
@@ -279,20 +285,15 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.PanCamera(dx, dy)
 
             return {"status": "camera_panned", "dx": dx, "dy": dy}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def zoom_camera(self, factor: float) -> dict[str, Any]:
         """
@@ -307,20 +308,15 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.ZoomCamera(factor)
 
             return {"status": "camera_zoomed", "factor": factor}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def refresh_view(self) -> dict[str, Any]:
         """
@@ -332,30 +328,22 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.Update()
 
             return {"status": "view_refreshed"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _get_view_object(self) -> Any:
         """Get the active view object from the first window."""
         doc = self.doc_manager.get_active_document()
-        if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-            raise Exception("No window available")
-        window = doc.Windows.Item(1)
-        view_obj = window.View if hasattr(window, "View") else None
-        if not view_obj:
-            raise Exception("Cannot access view object")
+        view_obj, err = resolve_view(doc)
+        if err:
+            raise Exception(err["error"])
         return view_obj
 
     def transform_model_to_screen(self, x: float, y: float, z: float) -> dict[str, Any]:
@@ -382,7 +370,7 @@ class ViewModel:
                 "screen_y": result[1],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def transform_screen_to_model(self, screen_x: int, screen_y: int) -> dict[str, Any]:
         """
@@ -408,7 +396,7 @@ class ViewModel:
                 "z": result[2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def begin_camera_dynamics(self) -> dict[str, Any]:
         """
@@ -426,7 +414,7 @@ class ViewModel:
             view_obj.BeginCameraDynamics()
             return {"status": "camera_dynamics_started"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def end_camera_dynamics(self) -> dict[str, Any]:
         """
@@ -443,7 +431,7 @@ class ViewModel:
             view_obj.EndCameraDynamics()
             return {"status": "camera_dynamics_ended"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_camera(
         self,
@@ -467,7 +455,8 @@ class ViewModel:
             target_x, target_y, target_z: Camera target (look-at) coordinates
             up_x, up_y, up_z: Camera up vector (default: Y-up)
             perspective: True for perspective, False for orthographic
-            scale_or_angle: View scale (ortho) or FOV angle in radians (perspective)
+            scale_or_angle: View scale (ortho) or field-of-view angle in DEGREES
+                (perspective); converted to radians before COM
 
         Returns:
             Dict with status and camera settings
@@ -475,14 +464,9 @@ class ViewModel:
         try:
             doc = self.doc_manager.get_active_document()
 
-            if not hasattr(doc, "Windows") or doc.Windows.Count == 0:
-                return {"error": "No window available"}
-
-            window = doc.Windows.Item(1)
-            view_obj = window.View if hasattr(window, "View") else None
-
-            if not view_obj:
-                return {"error": "Cannot access view object"}
+            view_obj, err = resolve_view(doc)
+            if err:
+                return err
 
             view_obj.SetCamera(
                 eye_x,
@@ -495,7 +479,8 @@ class ViewModel:
                 up_y,
                 up_z,
                 perspective,
-                scale_or_angle,
+                # In perspective the caller gives degrees; COM wants radians.
+                math.radians(scale_or_angle) if perspective else scale_or_angle,
             )
 
             return {
@@ -507,4 +492,4 @@ class ViewModel:
                 "scale_or_angle": scale_or_angle,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

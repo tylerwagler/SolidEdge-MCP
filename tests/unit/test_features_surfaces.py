@@ -124,14 +124,17 @@ class TestCreateExtrudedSurface:
 
 class TestRevolvedSurface:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+        _, sketch_mgr, doc, _, model, _ = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         result = feature_mgr.create_revolved_surface(360)
         assert result["status"] == "created"
         assert result["type"] == "revolved_surface"
         assert result["angle_degrees"] == 360
-        model.RevolvedSurfaces.AddFinite.assert_called_once()
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces.AddFinite.assert_called_once()
+        assert "RevolvedSurfaces" not in str(model.mock_calls)
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -163,15 +166,16 @@ class TestRevolvedSurface:
 
 
 class TestLoftedSurface:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, model, _ = managers
         p1, p2 = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
         result = feature_mgr.create_lofted_surface()
-        assert result["status"] == "created"
-        assert result["type"] == "lofted_surface"
+        # LoftedSurfaces.Add answered E_INVALIDARG to 13 argument shapes on SE 2026.
+        assert result["unsupported"] is True
+        assert "E_INVALIDARG" in result["error"]
         assert result["num_profiles"] == 2
-        model.LoftedSurfaces.Add.assert_called_once()
+        doc.Constructions.LoftedSurfaces.Add.assert_not_called()
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -180,14 +184,19 @@ class TestLoftedSurface:
         assert "error" in result
         assert "at least 2" in result["error"]
 
-    def test_no_base_feature(self, feature_mgr, managers):
+    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
+        """A construction surface needs no solid. This used to refuse with
+        "requires an existing base feature" -- a precondition Solid Edge does
+        not have, which masked the call behind it."""
         _, sketch_mgr, _, models, _, _ = managers
         models.Count = 0
         p1, p2 = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
+
         result = feature_mgr.create_lofted_surface()
-        assert "error" in result
-        assert "base feature" in result["error"].lower()
+
+        assert "base feature" not in str(result.get("error", "")).lower()
+        assert result.get("unsupported") is True, result
 
 
 # ============================================================================
@@ -196,37 +205,30 @@ class TestLoftedSurface:
 
 
 class TestSweptSurface:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
-        path, cs = MagicMock(), MagicMock()
-        sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
-        result = feature_mgr.create_swept_surface()
-        assert result["status"] == "created"
-        assert result["type"] == "swept_surface"
-        assert result["num_cross_sections"] == 1
-        model.SweptSurfaces.Add.assert_called_once()
+    """SweptSurfaces.Add crashed Solid Edge 2026 on 3 of 5 calls; no call is made."""
 
-    def test_too_few_profiles(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
-        result = feature_mgr.create_swept_surface()
-        assert "error" in result
-        assert "at least 2" in result["error"]
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
 
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, sketch_mgr, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_swept_surface()
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_with_end_caps(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
-        path, cs = MagicMock(), MagicMock()
-        sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
         result = feature_mgr.create_swept_surface(want_end_caps=True)
-        assert result["status"] == "created"
+
+        assert result["unsupported"] is True
+        assert "crashes" in result["error"]
+        assert result["num_profiles"] == 2
         assert result["want_end_caps"] is True
+        doc.Constructions.SweptSurfaces.Add.assert_not_called()
+        sketch_mgr.clear_accumulated_profiles.assert_not_called()
+
+    def test_refuses_with_no_profiles_as_well(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = []
+
+        result = feature_mgr.create_swept_surface()
+
+        assert result["unsupported"] is True
+        assert result["num_profiles"] == 0
+        doc.Constructions.SweptSurfaces.Add.assert_not_called()
 
 
 # ============================================================================
@@ -364,7 +366,9 @@ class TestCreateRevolvedSurfaceSync:
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         rev_surfaces = MagicMock()
-        model.RevolvedSurfaces = rev_surfaces
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces = rev_surfaces
 
         result = feature_mgr.create_revolved_surface_sync(360.0)
         assert result["status"] == "created"
@@ -401,7 +405,9 @@ class TestCreateRevolvedSurfaceByKeypoint:
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         rev_surfaces = MagicMock()
-        model.RevolvedSurfaces = rev_surfaces
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces = rev_surfaces
 
         result = feature_mgr.create_revolved_surface_by_keypoint("End")
         assert result["status"] == "created"
@@ -433,36 +439,23 @@ class TestCreateRevolvedSurfaceByKeypoint:
 
 
 class TestCreateLoftedSurfaceV2:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, doc, models, model, _ = managers
-        p1, p2 = MagicMock(), MagicMock()
-        sketch_mgr.get_accumulated_profiles.return_value = [p1, p2]
-        loft_surfaces = MagicMock()
-        model.LoftedSurfaces = loft_surfaces
+    """LoftedSurfaces.Add2 answered E_INVALIDARG like Add; no call is made."""
 
-        result = feature_mgr.create_lofted_surface_v2()
-        assert result["status"] == "created"
-        assert result["type"] == "lofted_surface_v2"
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, sketch_mgr, doc, _, _, _ = managers
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
+
+        result = feature_mgr.create_lofted_surface_v2(want_end_caps=True)
+
+        assert result["unsupported"] is True
+        assert "Add2" in result["error"]
         assert result["num_profiles"] == 2
-        loft_surfaces.Add2.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+        doc.Constructions.LoftedSurfaces.Add2.assert_not_called()
 
     def test_too_few_profiles(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
         sketch_mgr.get_accumulated_profiles.return_value = [MagicMock()]
-
-        result = feature_mgr.create_lofted_surface_v2()
-        assert "error" in result
-        assert "at least 2 profiles" in result["error"]
-
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, sketch_mgr, _, models, _, _ = managers
-        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
-        models.Count = 0
-
-        result = feature_mgr.create_lofted_surface_v2()
-        assert "error" in result
-        assert "base feature" in result["error"]
+        assert "at least 2" in feature_mgr.create_lofted_surface_v2()["error"]
 
 
 # ============================================================================
@@ -476,7 +469,7 @@ class TestCreateSweptSurfaceEx:
         path, cs = MagicMock(), MagicMock()
         sketch_mgr.get_accumulated_profiles.return_value = [path, cs]
         swept_surfaces = MagicMock()
-        model.SweptSurfaces = swept_surfaces
+        doc.Constructions.SweptSurfaces = swept_surfaces
 
         result = feature_mgr.create_swept_surface_ex()
         assert result["status"] == "created"
@@ -493,13 +486,15 @@ class TestCreateSweptSurfaceEx:
         assert "error" in result
         assert "at least 2 profiles" in result["error"]
 
-    def test_no_base_feature(self, feature_mgr, managers):
+    def test_no_base_feature_is_not_a_reason_to_refuse(self, feature_mgr, managers):
         _, sketch_mgr, _, models, _, _ = managers
         models.Count = 0
+        sketch_mgr.get_accumulated_profiles.return_value = [MagicMock(), MagicMock()]
 
         result = feature_mgr.create_swept_surface_ex()
-        assert "error" in result
-        assert "base feature" in result["error"]
+
+        assert "base feature" not in str(result.get("error", "")).lower()
+        assert result.get("status") == "created", result
 
 
 # ============================================================================
@@ -553,17 +548,19 @@ class TestCreateExtrudedSurfaceFull:
 
 class TestCreateRevolvedSurfaceFull:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, profile = managers
+        _, sketch_mgr, doc, _, model, profile = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         surface = MagicMock()
         surface.Name = "RevSurfFull1"
-        model.RevolvedSurfaces.Add.return_value = surface
+        doc.Constructions.RevolvedSurfaces.Add.return_value = surface
 
         result = feature_mgr.create_revolved_surface_full(180.0)
         assert result["status"] == "created"
         assert result["type"] == "revolved_surface_full"
-        model.RevolvedSurfaces.Add.assert_called_once()
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces.Add.assert_called_once()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -582,17 +579,19 @@ class TestCreateRevolvedSurfaceFull:
 
 class TestCreateRevolvedSurfaceFullSync:
     def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, profile = managers
+        _, sketch_mgr, doc, _, model, profile = managers
         refaxis = MagicMock()
         sketch_mgr.get_active_refaxis.return_value = refaxis
         surface = MagicMock()
         surface.Name = "RevSurfFullSync1"
-        model.RevolvedSurfaces.AddSync.return_value = surface
+        doc.Constructions.RevolvedSurfaces.AddSync.return_value = surface
 
         result = feature_mgr.create_revolved_surface_full_sync(180.0)
         assert result["status"] == "created"
         assert result["type"] == "revolved_surface_full_sync"
-        model.RevolvedSurfaces.AddSync.assert_called_once()
+        # Surfaces are created on doc.Constructions. Model has no
+        # RevolvedSurfaces property, so reading it there always raised.
+        doc.Constructions.RevolvedSurfaces.AddSync.assert_called_once()
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers

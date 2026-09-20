@@ -1,12 +1,53 @@
 """Variable management and custom properties."""
 
 import contextlib
-import traceback
+import math
 from typing import Any
 
+from solidedge_mcp.backends.errors import describe_exception, error_result
+
+from ..comutil import com_get
+from ..constants import UnitTypeConstants, VariableNameBy, seVariableTypeConstants
 from ..logging import get_logger
 
 _logger = get_logger(__name__)
+
+# framewrk.tlb > UnitTypeConstants, the values Variable.UnitsType reports.
+_UNIT_TYPE_NAMES: dict[int, str] = {
+    UnitTypeConstants.igUnitDistance: "distance",
+    UnitTypeConstants.igUnitAngle: "angle",
+    UnitTypeConstants.igUnitMass: "mass",
+    UnitTypeConstants.igUnitArea: "area",
+    UnitTypeConstants.igUnitDensity: "density",
+    UnitTypeConstants.igUnitVolume: "volume",
+    UnitTypeConstants.igUnitScalar: "scalar",
+}
+
+
+def _is_angle(var: Any) -> bool:
+    return com_get(var, "UnitsType") == UnitTypeConstants.igUnitAngle
+
+
+def _units_of(var: Any) -> dict[str, Any]:
+    """The units fields of a variable: ``units`` and, for an angle, ``value_degrees``.
+
+    ``Variable.Units`` is a member of nothing, so the read of it that this
+    replaces was suppressed on every variable and no units were ever
+    reported. ``UnitsType`` is the real property. Verified on Solid Edge
+    2026: a revolve's angle reports igUnitAngle and holds radians, so the
+    degrees are added beside the raw value.
+    """
+    out: dict[str, Any] = {}
+    units_type = com_get(var, "UnitsType")
+    if type(units_type) is not int:
+        return out
+    out["units_type"] = units_type
+    out["units"] = _UNIT_TYPE_NAMES.get(units_type, f"unit_type_{units_type}")
+    if units_type == UnitTypeConstants.igUnitAngle:
+        value = com_get(var, "Value")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            out["value_degrees"] = math.degrees(value)
+    return out
 
 
 class VariablesMixin:
@@ -18,37 +59,49 @@ class VariablesMixin:
         """
         Get all variables from the active document.
 
-        Queries the Variables collection using Query() to list all
-        variable names, values, and formulas.
+        Lists through ``Variables.Query`` in both name spaces (see
+        query_variables). Enumerating ``Variables.Item(i)`` instead, as this
+        did, shows a dimension as a nameless entry and misses it (Solid Edge
+        2026), so the listing had no dimensions and two ``Var_n`` placeholders.
 
         Returns:
             Dict with list of variables
         """
-        try:
-            doc = self.doc_manager.get_active_document()
-            variables = doc.Variables
+        result = self.query_variables("*")
+        if "error" in result:
+            return result
+        var_list = [{"index": i, **entry} for i, entry in enumerate(result["matches"])]
+        return {"variables": var_list, "count": len(var_list)}
 
-            var_list = []
-            for i in range(1, variables.Count + 1):
-                try:
-                    var = variables.Item(i)
-                    var_info = {
-                        "index": i - 1,
-                        "name": var.DisplayName if hasattr(var, "DisplayName") else f"Var_{i}",
-                    }
-                    with contextlib.suppress(Exception):
-                        var_info["value"] = var.Value
-                    with contextlib.suppress(Exception):
-                        var_info["formula"] = var.Formula
-                    with contextlib.suppress(Exception):
-                        var_info["units"] = var.Units
-                    var_list.append(var_info)
-                except Exception:
-                    var_list.append({"index": i - 1, "name": f"Var_{i}"})
+    @staticmethod
+    def _find_variable(variables: Any, name: str) -> Any:
+        """The variable whose display name is ``name``, or None.
 
-            return {"variables": var_list, "count": len(var_list)}
-        except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        Only the lookup is guarded. Every method here used to search and act
+        inside one ``try ... except Exception: continue``, so a failure while
+        acting on the variable it had just found skipped past it and fell
+        through to "not found" -- which is exactly what rename_variable
+        reported for as long as it assigned to DisplayName, a property the
+        type library marks read-only. The caller now acts outside the loop,
+        where a failure surfaces as itself.
+        """
+        # Variables.Item(name) resolves a display name directly, and it is
+        # the only route to a dimension: enumerated by index, a dimension is
+        # a nameless entry (Solid Edge 2026, where Item(i) shows
+        # RevolvedProtrusion_1_FiniteAngle as Name '' / DisplayName None and
+        # Item("RevolvedProtrusion_1_FiniteAngle") returns it). The answer is
+        # checked against both names because a mock, or a lenient lookup,
+        # can hand back something else.
+        with contextlib.suppress(Exception):
+            var = variables.Item(name)
+            if name in (com_get(var, "DisplayName"), com_get(var, "Name")):
+                return var
+        for i in range(1, com_get(variables, "Count", 0) + 1):
+            with contextlib.suppress(Exception):
+                var = variables.Item(i)
+                if name in (com_get(var, "DisplayName", ""), com_get(var, "Name", "")):
+                    return var
+        return None
 
     def get_variable(self, name: str) -> dict[str, Any]:
         """
@@ -64,26 +117,19 @@ class VariablesMixin:
             doc = self.doc_manager.get_active_document()
             variables = doc.Variables
 
-            # Search for the variable by display name
-            for i in range(1, variables.Count + 1):
-                try:
-                    var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
-                    if display_name == name:
-                        result = {"name": name, "index": i - 1}
-                        with contextlib.suppress(Exception):
-                            result["value"] = var.Value
-                        with contextlib.suppress(Exception):
-                            result["formula"] = var.Formula
-                        with contextlib.suppress(Exception):
-                            result["units"] = var.Units
-                        return result
-                except Exception:
-                    continue
+            var = self._find_variable(variables, name)
+            if var is None:
+                return {"error": f"Variable '{name}' not found"}
 
-            return {"error": f"Variable '{name}' not found"}
+            result: dict[str, Any] = {"name": name}
+            with contextlib.suppress(Exception):
+                result["value"] = var.Value
+            with contextlib.suppress(Exception):
+                result["formula"] = var.Formula
+            result.update(_units_of(var))
+            return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_variable(self, name: str, value: float) -> dict[str, Any]:
         """
@@ -100,25 +146,22 @@ class VariablesMixin:
             doc = self.doc_manager.get_active_document()
             variables = doc.Variables
 
-            for i in range(1, variables.Count + 1):
-                try:
-                    var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
-                    if display_name == name:
-                        old_value = var.Value
-                        var.Value = value
-                        return {
-                            "status": "updated",
-                            "name": name,
-                            "old_value": old_value,
-                            "new_value": value,
-                        }
-                except Exception:
-                    continue
+            var = self._find_variable(variables, name)
+            if var is None:
+                return {"error": f"Variable '{name}' not found"}
 
-            return {"error": f"Variable '{name}' not found"}
+            old_value = var.Value
+            # An angular variable holds radians; the tool boundary is degrees.
+            var.Value = math.radians(value) if _is_angle(var) else value
+            return {
+                "status": "updated",
+                "name": name,
+                "old_value": old_value,
+                "new_value": com_get(var, "Value", value),
+                **_units_of(var),
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_variable(
         self, name: str, formula: str, units_type: str | None = None
@@ -129,9 +172,20 @@ class VariablesMixin:
         Uses Variables.Add(pName, pFormula, [UnitsType]).
         Type library: Add(pName: VT_BSTR, pFormula: VT_BSTR, [UnitsType: VT_VARIANT]) -> variable*.
 
+        A bare number in a formula is read in the *document's* units, not in
+        meters: on an inch template "0.025" is 0.025 inch, and the variable
+        ends up holding 0.000635. ``Value`` is always meters, so
+        ``set_variable`` and a formula disagree unless the formula names its
+        unit. Write "25 mm" to mean 25 mm. Verified on Solid Edge 2026.
+
+        Solid Edge keeps a constant formula as a value and reports ``Formula``
+        as empty; only an expression such as "AAA * 2" reads back. The
+        ``value`` in the result is what Solid Edge actually computed.
+
         Args:
             name: Variable name (e.g., 'MyWidth', 'BoltDiameter')
-            formula: Variable formula/value as string (e.g., '0.025', 'V1 * 2')
+            formula: Formula or value as a string. Give the unit -- "25 mm",
+                not "0.025" -- unless you mean document units.
             units_type: Optional units type string
 
         Returns:
@@ -154,123 +208,134 @@ class VariablesMixin:
 
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_variable_formula(self, name: str, formula: str) -> dict[str, Any]:
         """
         Set the formula of an existing variable by display name.
 
+        A bare number in a formula is read in the *document's* units, not in
+        meters: on an inch template "0.025" is 0.025 inch, and the variable
+        ends up holding 0.000635. ``Value`` is always meters, so
+        ``set_variable`` and a formula disagree unless the formula names its
+        unit. Write "25 mm" to mean 25 mm. Verified on Solid Edge 2026.
+
+        Solid Edge keeps a constant formula as a value and reports ``Formula``
+        as empty; only an expression such as "AAA * 2" reads back. The
+        ``value`` in the result is what Solid Edge actually computed.
+
         Args:
             name: Variable display name
-            formula: New formula string (e.g., '0.025', 'V1 * 2')
+            formula: Formula or value as a string. Give the unit -- "25 mm",
+                not "0.025" -- unless you mean document units.
 
         Returns:
-            Dict with old/new formula and current value
+            Dict with old/new formula and the value Solid Edge computed
         """
         try:
             doc = self.doc_manager.get_active_document()
             variables = doc.Variables
 
-            for i in range(1, variables.Count + 1):
-                try:
-                    var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
-                    if display_name == name:
-                        old_formula = ""
-                        with contextlib.suppress(Exception):
-                            old_formula = var.Formula
-                        var.Formula = formula
-                        result = {
-                            "status": "updated",
-                            "name": name,
-                            "old_formula": old_formula,
-                            "new_formula": formula,
-                        }
-                        with contextlib.suppress(Exception):
-                            result["value"] = var.Value
-                        return result
-                except Exception:
-                    continue
+            var = self._find_variable(variables, name)
+            if var is None:
+                return {"error": f"Variable '{name}' not found"}
 
-            return {"error": f"Variable '{name}' not found"}
+            old_formula = com_get(var, "Formula", "")
+            var.Formula = formula
+            result: dict[str, Any] = {
+                "status": "updated",
+                "name": name,
+                "old_formula": old_formula,
+                "new_formula": formula,
+            }
+            with contextlib.suppress(Exception):
+                result["value"] = var.Value
+            return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def query_variables(self, pattern: str = "*", case_insensitive: bool = True) -> dict[str, Any]:
-        """
-        Search variables by name pattern.
+        """Search variables by name pattern.
 
-        Uses Variables.Query(pFindCriterium, NamedBy, VarType, CaseInsensitive)
-        to find matching variables. Supports wildcards (* and ?).
+        ``Variables.Query(pFindCriterium, NamedBy, VarType, CaseInsensitive)``.
+        VarType takes a ``seVariableTypeConstants`` value, and this used to pass
+        0, which is not a member of that enum: Solid Edge answered every query
+        with an empty collection, so variable search never found anything at
+        all. Verified on Solid Edge 2026, where ``Query("*", 0, 0, True)``
+        returns nothing and ``Query("*", 0, seVariableType_UserDefined, True)``
+        returns the user variables.
+
+        The enum has no "all" member, so each type is queried and the results
+        merged. CaseInsensitive only takes effect when VarType is supplied --
+        a bare ``Query("w*")`` misses ``Width`` -- which is the other reason
+        to pass it explicitly.
+
+        NamedBy picks the name space the pattern is matched in, and it is a
+        filter, not a preference: seVariableNameByUser sees only user-named
+        variables, seVariableNameBySystem only system-named ones (dimensions
+        such as ``Dimension 346`` / ``RevolvedProtrusion_1_FiniteAngle`` and
+        the PhysicalProperties_* pair). Passing ByUser, as this did, hid every
+        dimension and physical property; ByBoth finds all of them (Solid Edge
+        2026, where the per-type union with ByBoth returned every variable
+        the bare ``Query("*")`` does).
 
         Args:
-            pattern: Search pattern with wildcards (e.g., "*Length*", "V?")
-            case_insensitive: Whether to ignore case (default True)
+            pattern: Search pattern with wildcards (e.g., "*Length*", "V?").
+            case_insensitive: Whether to ignore case (default True).
 
         Returns:
-            Dict with matching variables
+            Dict with matching variables.
         """
         try:
             doc = self.doc_manager.get_active_document()
             variables = doc.Variables
 
-            # Variables.Query returns a collection of matching variables
-            # NamedBy: 0 = DisplayName, 1 = SystemName
-            # VarType: 0 = All, 1 = Dimensions, 2 = UserVariables
-            try:
-                results = variables.Query(pattern, 0, 0, case_insensitive)
-            except Exception:
-                # Fallback: manual filtering if Query method not available
-                matches = []
-                import fnmatch
-
-                for i in range(1, variables.Count + 1):
-                    try:
-                        var = variables.Item(i)
-                        name = var.Name if hasattr(var, "Name") else str(i)
-                        if case_insensitive:
-                            match = fnmatch.fnmatch(name.lower(), pattern.lower())
-                        else:
-                            match = fnmatch.fnmatch(name, pattern)
-                        if match:
-                            entry = {"name": name}
-                            with contextlib.suppress(Exception):
-                                entry["value"] = var.Value
-                            with contextlib.suppress(Exception):
-                                entry["formula"] = var.Formula
-                            matches.append(entry)
-                    except Exception:
-                        continue
-
-                return {
-                    "pattern": pattern,
-                    "matches": matches,
-                    "count": len(matches),
-                    "method": "fallback_fnmatch",
-                }
-
-            # Process Query results
-            matches = []
-            if results is not None:
+            matches: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            failures: list[str] = []
+            for var_type in (
+                seVariableTypeConstants.seVariableType_UserDefined,
+                seVariableTypeConstants.seVariableType_Dimension,
+                seVariableTypeConstants.seVariableType_Simulation,
+                seVariableTypeConstants.seVariableType_Text,
+            ):
                 try:
-                    for i in range(1, results.Count + 1):
+                    results = variables.Query(
+                        pattern,
+                        VariableNameBy.seVariableNameByBoth,
+                        var_type,
+                        case_insensitive,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(describe_exception(exc))
+                    continue
+                if results is None:
+                    continue
+                for i in range(1, com_get(results, "Count", 0) + 1):
+                    with contextlib.suppress(Exception):
                         var = results.Item(i)
-                        entry = {}
-                        try:
-                            entry["name"] = var.Name
-                        except Exception:
-                            entry["name"] = f"var_{i}"
+                        name = com_get(var, "DisplayName", "") or com_get(var, "Name", f"var_{i}")
+                        if name in seen:
+                            continue
+                        seen.add(name)
+                        entry: dict[str, Any] = {"name": name}
                         with contextlib.suppress(Exception):
                             entry["value"] = var.Value
+                            entry.update(_units_of(var))
                         with contextlib.suppress(Exception):
                             entry["formula"] = var.Formula
                         matches.append(entry)
-                except Exception:
-                    pass
+
+            # Every type raised: that is a broken query, not an empty result.
+            if failures and len(failures) == 4:
+                return {
+                    "error": f"Variables.Query failed for every variable type: {failures[0]}",
+                    "pattern": pattern,
+                }
 
             return {"pattern": pattern, "matches": matches, "count": len(matches)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_variable_formula(self, name: str) -> dict[str, Any]:
         """
@@ -289,7 +354,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == name:
                         result: dict[str, Any] = {"name": name}
                         try:
@@ -304,7 +369,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def rename_variable(self, old_name: str, new_name: str) -> dict[str, Any]:
         """
@@ -323,19 +388,22 @@ class VariablesMixin:
             doc = self.doc_manager.get_active_document()
             variables = doc.Variables
 
-            for i in range(1, variables.Count + 1):
-                try:
-                    var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
-                    if display_name == old_name:
-                        var.DisplayName = new_name
-                        return {"status": "renamed", "old_name": old_name, "new_name": new_name}
-                except Exception:
-                    continue
+            var = self._find_variable(variables, old_name)
+            if var is None:
+                return {"error": f"Variable '{old_name}' not found"}
 
-            return {"error": f"Variable '{old_name}' not found"}
+            # variable.DisplayName is read-only: Solid Edge 2026 answers
+            # "Property 'Add.DisplayName' can not be set." Variables.PutName is
+            # the rename, and it is verified against the live application.
+            variables.PutName(var, new_name)
+            return {
+                "status": "renamed",
+                "old_name": old_name,
+                "new_name": new_name,
+                "reads_back": variables.GetDisplayName(var),
+            }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def get_variable_names(self, name: str) -> dict[str, Any]:
         """
@@ -357,7 +425,7 @@ class VariablesMixin:
             for i in range(1, variables.Count + 1):
                 try:
                     var = variables.Item(i)
-                    display_name = var.DisplayName if hasattr(var, "DisplayName") else ""
+                    display_name = com_get(var, "DisplayName", "")
                     if display_name == name:
                         result = {"display_name": display_name}
                         try:
@@ -372,7 +440,7 @@ class VariablesMixin:
 
             return {"error": f"Variable '{name}' not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def translate_variable(self, name: str) -> dict[str, Any]:
         """
@@ -403,7 +471,7 @@ class VariablesMixin:
                 result["formula"] = var.Formula
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def copy_variable_to_clipboard(self, name: str) -> dict[str, Any]:
         """
@@ -424,7 +492,7 @@ class VariablesMixin:
             variables.CopyToClipboard(name)
             return {"status": "copied", "name": name}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def add_variable_from_clipboard(
         self, name: str, units_type: str | None = None
@@ -456,7 +524,7 @@ class VariablesMixin:
                 result["value"] = new_var.Value
             return result
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     # =================================================================
     # CUSTOM PROPERTIES
@@ -481,13 +549,13 @@ class VariablesMixin:
             for ps_idx in range(1, prop_sets.Count + 1):
                 try:
                     ps = prop_sets.Item(ps_idx)
-                    ps_name = ps.Name if hasattr(ps, "Name") else f"Set_{ps_idx}"
+                    ps_name = com_get(ps, "Name", f"Set_{ps_idx}")
 
                     props = {}
                     for p_idx in range(1, ps.Count + 1):
                         try:
                             prop = ps.Item(p_idx)
-                            prop_name = prop.Name if hasattr(prop, "Name") else f"Prop_{p_idx}"
+                            prop_name = com_get(prop, "Name", f"Prop_{p_idx}")
                             try:
                                 props[prop_name] = prop.Value
                             except Exception:
@@ -501,7 +569,7 @@ class VariablesMixin:
 
             return {"property_sets": properties, "count": len(properties)}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def set_custom_property(self, name: str, value: str) -> dict[str, Any]:
         """
@@ -525,7 +593,7 @@ class VariablesMixin:
             for ps_idx in range(1, prop_sets.Count + 1):
                 try:
                     ps = prop_sets.Item(ps_idx)
-                    if hasattr(ps, "Name") and ps.Name == "Custom":
+                    if com_get(ps, "Name") == "Custom":
                         custom_ps = ps
                         break
                 except Exception:
@@ -538,7 +606,7 @@ class VariablesMixin:
             for p_idx in range(1, custom_ps.Count + 1):
                 try:
                     prop = custom_ps.Item(p_idx)
-                    if hasattr(prop, "Name") and prop.Name == name:
+                    if com_get(prop, "Name") == name:
                         old_value = prop.Value
                         prop.Value = value
                         return {
@@ -554,7 +622,7 @@ class VariablesMixin:
             custom_ps.Add(name, value)
             return {"status": "created", "name": name, "value": value}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_custom_property(self, name: str) -> dict[str, Any]:
         """
@@ -574,11 +642,11 @@ class VariablesMixin:
             for ps_idx in range(1, prop_sets.Count + 1):
                 try:
                     ps = prop_sets.Item(ps_idx)
-                    if hasattr(ps, "Name") and ps.Name == "Custom":
+                    if com_get(ps, "Name") == "Custom":
                         for p_idx in range(1, ps.Count + 1):
                             try:
                                 prop = ps.Item(p_idx)
-                                if hasattr(prop, "Name") and prop.Name == name:
+                                if com_get(prop, "Name") == name:
                                     prop.Delete()
                                     return {"status": "deleted", "name": name}
                             except Exception:
@@ -589,4 +657,4 @@ class VariablesMixin:
 
             return {"error": "Custom property set not found"}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

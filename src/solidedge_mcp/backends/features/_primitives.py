@@ -1,9 +1,14 @@
 """Primitive solid feature operations (box, cylinder, sphere)."""
 
-import traceback
 from typing import Any
 
-from ..constants import DirectionConstants
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import com_get
+from ..constants import (
+    DirectionConstants,
+    ThicknessSideConstants,
+)
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
 
@@ -39,6 +44,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -67,7 +75,7 @@ class PrimitiveMixin:
                 "dimensions": {"length": length, "width": width, "height": height},
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_by_two_points(
         self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float, plane_index: int = 1
@@ -85,6 +93,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -117,7 +128,7 @@ class PrimitiveMixin:
                 "corner2": [x2, y2, z2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_by_three_points(
         self,
@@ -146,6 +157,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -187,7 +201,7 @@ class PrimitiveMixin:
                 "point3": [x3, y3, z3],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_cylinder(
         self,
@@ -212,6 +226,17 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
+            if radius <= 0 or height <= 0:
+                # Solid Edge answers a zero dimension with a bare E_INVALIDARG.
+                return {
+                    "error": (
+                        f"radius and height must be positive (got radius={radius}, "
+                        f"height={height}). Both are in meters."
+                    )
+                }
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -239,7 +264,7 @@ class PrimitiveMixin:
                 "height": height,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sphere(
         self, center_x: float, center_y: float, center_z: float, radius: float, plane_index: int = 1
@@ -257,6 +282,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
             top_plane = self._get_ref_plane(doc, plane_index)
 
@@ -283,7 +311,7 @@ class PrimitiveMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_cutout_by_two_points(
         self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float, plane_index: int = 1
@@ -291,10 +319,11 @@ class PrimitiveMixin:
         """
         Create a box-shaped cutout (boolean subtract) by two opposite corners.
 
-        Uses BoxFeatures.AddCutoutByTwoPoints with same params as AddBoxByTwoPoints.
         Requires an existing base feature to cut from.
-        Type library: AddCutoutByTwoPoints(6x VT_R8, dAngle, dDepth, pPlane,
-        ExtentSide, vbKeyPointExtent, pKeyPointObj, pKeyPointFlags).
+        Full signature: AddCutoutByTwoPoints(x1, y1, Z1, x2, y2, Z2, dAngle,
+        dDepth, pPlane, ProfileSide, ExtentSide, vbKeyPointExtent, pKeyPointObj,
+        pKeyPointFlags) - note the ProfileSide argument, which the protrusion
+        call AddByTwoPoints does not have.
 
         Args:
             x1, y1, z1: First corner coordinates (meters)
@@ -306,6 +335,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:
@@ -314,12 +346,9 @@ class PrimitiveMixin:
             top_plane = self._get_ref_plane(doc, plane_index)
             depth = abs(z2 - z1) if abs(z2 - z1) > 0 else abs(y2 - y1)
 
-            # BoxFeatures is on the Models collection level
-            box_features = models.BoxFeatures if hasattr(models, "BoxFeatures") else None
-            if box_features is None:
-                # Try via the model object
-                model = models.Item(1)
-                box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
+            # BoxFeatures belongs to Model, not to the Models collection, so
+            # the probe that used to come first here could never succeed.
+            box_features = com_get(models.Item(1), "BoxFeatures")
 
             if box_features is None:
                 return {"error": "BoxFeatures collection not accessible"}
@@ -334,6 +363,7 @@ class PrimitiveMixin:
                 0,  # dAngle
                 depth,  # dDepth
                 top_plane,  # pPlane
+                ThicknessSideConstants.igInside,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj
@@ -348,7 +378,7 @@ class PrimitiveMixin:
                 "corner2": [x2, y2, z2],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_cutout_by_center(
         self,
@@ -365,6 +395,9 @@ class PrimitiveMixin:
 
         Removes a rectangular volume centered at the given point.
         Requires an existing base feature.
+        Full signature: AddCutoutByCenter(x, y, z, dWidth, dHeight, dAngle,
+        dDepth, pPlane, ProfileSide, ExtentSide, vbKeyPointExtent, pKeyPointObj,
+        pKeyPointFlags).
 
         Args:
             center_x, center_y, center_z: Center point coordinates (meters)
@@ -378,6 +411,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:
@@ -385,10 +421,7 @@ class PrimitiveMixin:
 
             top_plane = self._get_ref_plane(doc, plane_index)
 
-            box_features = models.BoxFeatures if hasattr(models, "BoxFeatures") else None
-            if box_features is None:
-                model = models.Item(1)
-                box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
+            box_features = com_get(models.Item(1), "BoxFeatures")
 
             if box_features is None:
                 return {"error": "BoxFeatures collection not accessible"}
@@ -402,6 +435,7 @@ class PrimitiveMixin:
                 0,  # dAngle
                 height,  # dDepth
                 top_plane,  # pPlane
+                ThicknessSideConstants.igInside,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj
@@ -416,7 +450,7 @@ class PrimitiveMixin:
                 "dimensions": {"length": length, "width": width, "height": height},
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_box_cutout_by_three_points(
         self,
@@ -436,6 +470,9 @@ class PrimitiveMixin:
 
         Removes a rectangular volume defined by three corner points.
         Requires an existing base feature.
+        Full signature: AddCutoutByThreePoints(x1, y1, Z1, x2, y2, Z2, x3, y3,
+        z3, dDepth, pPlane, ProfileSide, ExtentSide, vbKeyPointExtent,
+        pKeyPointObj, pKeyPointFlags).
 
         Args:
             x1, y1, z1: First corner point (meters)
@@ -463,10 +500,7 @@ class PrimitiveMixin:
             if depth == 0:
                 depth = 0.01
 
-            box_features = models.BoxFeatures if hasattr(models, "BoxFeatures") else None
-            if box_features is None:
-                model = models.Item(1)
-                box_features = model.BoxFeatures if hasattr(model, "BoxFeatures") else None
+            box_features = com_get(models.Item(1), "BoxFeatures")
 
             if box_features is None:
                 return {"error": "BoxFeatures collection not accessible"}
@@ -483,6 +517,7 @@ class PrimitiveMixin:
                 z3,
                 depth,  # dDepth
                 top_plane,  # pPlane
+                ThicknessSideConstants.igInside,  # ProfileSide
                 DirectionConstants.igRight,  # ExtentSide
                 False,  # vbKeyPointExtent
                 None,  # pKeyPointObj
@@ -498,7 +533,7 @@ class PrimitiveMixin:
                 "point3": [x3, y3, z3],
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_cylinder_cutout(
         self,
@@ -528,6 +563,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:
@@ -535,13 +573,8 @@ class PrimitiveMixin:
 
             top_plane = self._get_ref_plane(doc, plane_index)
 
-            # CylinderFeatures collection - try on Models first, then model
-            cyl_features = models.CylinderFeatures if hasattr(models, "CylinderFeatures") else None
-            if cyl_features is None:
-                model = models.Item(1)
-                cyl_features = (
-                    model.CylinderFeatures if hasattr(model, "CylinderFeatures") else None
-                )
+            # CylinderFeatures belongs to Model, not to the Models collection.
+            cyl_features = com_get(models.Item(1), "CylinderFeatures")
 
             if cyl_features is None:
                 return {"error": "CylinderFeatures collection not accessible"}
@@ -568,7 +601,7 @@ class PrimitiveMixin:
                 "height": height,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_sphere_cutout(
         self, center_x: float, center_y: float, center_z: float, radius: float, plane_index: int = 1
@@ -592,6 +625,9 @@ class PrimitiveMixin:
         """
         try:
             doc = self.doc_manager.get_active_document()
+            err = self._require_synchronous(doc)
+            if err:
+                return err
             models = doc.Models
 
             if models.Count == 0:
@@ -599,11 +635,8 @@ class PrimitiveMixin:
 
             top_plane = self._get_ref_plane(doc, plane_index)
 
-            # SphereFeatures collection
-            sph_features = models.SphereFeatures if hasattr(models, "SphereFeatures") else None
-            if sph_features is None:
-                model = models.Item(1)
-                sph_features = model.SphereFeatures if hasattr(model, "SphereFeatures") else None
+            # SphereFeatures belongs to Model, not to the Models collection.
+            sph_features = com_get(models.Item(1), "SphereFeatures")
 
             if sph_features is None:
                 return {"error": "SphereFeatures collection not accessible"}
@@ -629,4 +662,4 @@ class PrimitiveMixin:
                 "radius": radius,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

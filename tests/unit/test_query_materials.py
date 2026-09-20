@@ -55,99 +55,177 @@ class TestGetMaterialTable:
 # ============================================================================
 
 
+def fake_material_table(libraries=None, current="", properties=None):
+    """A MatTable as Solid Edge really exposes it.
+
+    It is not a collection: no Count, no Item, and no Material object to read
+    properties off. GetMaterialLibraryList returns (names, count) while
+    GetMaterialListFromLibrary returns (count, names), which is the opposite
+    order.
+    """
+    libraries = libraries if libraries is not None else {"Materials": ["Steel", "Aluminum"]}
+    properties = properties or {}
+
+    mat_table = MagicMock()
+    del mat_table.Count
+    del mat_table.Item
+    mat_table.GetMaterialLibraryList.return_value = (tuple(libraries), len(libraries))
+    mat_table.GetMaterialListFromLibrary.side_effect = lambda lib: (
+        len(libraries[lib]),
+        tuple(libraries[lib]),
+    )
+    state = {"current": current}
+    mat_table.GetCurrentMaterialName.side_effect = lambda _doc: state["current"]
+
+    def apply(_doc, name, _lib):
+        state["current"] = name
+
+    mat_table.ApplyMaterialToDoc.side_effect = apply
+    mat_table.GetMaterialPropValueFromDoc.side_effect = lambda _doc, index: properties[index]
+    return mat_table
+
+
+def wire_material_table(qm, mat_table):
+    app = MagicMock()
+    app.GetMaterialTable.return_value = mat_table
+    qm.doc_manager.connection = MagicMock()
+    qm.doc_manager.connection.get_application.return_value = app
+    return app
+
+
 class TestGetMaterialList:
+    """MatTable.GetMaterialList raises E_FAIL; the libraries are the way in."""
+
     def test_success(self, query_mgr):
-        """Test getting material list."""
-        qm, doc = query_mgr
-
-        mat_table = MagicMock()
-        mat_table.GetMaterialList.return_value = (3, ["Steel", "Aluminum", "Copper"])
-
-        app = MagicMock()
-        app.GetMaterialTable.return_value = mat_table
-        qm.doc_manager.connection = MagicMock()
-        qm.doc_manager.connection.get_application.return_value = app
+        qm, _doc = query_mgr
+        wire_material_table(
+            qm,
+            fake_material_table({"Materials": ["Steel", "Aluminum"], "Materials-DIN": ["S235"]}),
+        )
 
         result = qm.get_material_list()
+
         assert result["count"] == 3
         assert "Steel" in result["materials"]
-        assert "Aluminum" in result["materials"]
+        assert result["libraries"]["Materials-DIN"] == ["S235"]
+
+    def test_no_materials_is_an_error_not_an_empty_success(self, query_mgr):
+        qm, _doc = query_mgr
+        wire_material_table(qm, fake_material_table({}))
+
+        result = qm.get_material_list()
+
+        assert "error" in result
+        assert result["libraries"] == []
+
+    def test_one_unreadable_library_does_not_lose_the_others(self, query_mgr):
+        qm, _doc = query_mgr
+        mat_table = fake_material_table({"Materials": ["Steel"], "Broken": ["x"]})
+
+        def read(lib):
+            if lib == "Broken":
+                raise Exception("library missing")
+            return (1, ("Steel",))
+
+        mat_table.GetMaterialListFromLibrary.side_effect = read
+        wire_material_table(qm, mat_table)
+
+        result = qm.get_material_list()
+
+        assert result["materials"] == ["Steel"]
 
     def test_com_error(self, query_mgr):
-        """Test handling COM errors."""
-        qm, doc = query_mgr
-
+        qm, _doc = query_mgr
         app = MagicMock()
         app.GetMaterialTable.side_effect = Exception("COM error")
         qm.doc_manager.connection = MagicMock()
         qm.doc_manager.connection.get_application.return_value = app
 
-        result = qm.get_material_list()
-        assert "error" in result
+        assert "error" in qm.get_material_list()
 
 
 class TestSetMaterial:
-    def test_success(self, query_mgr):
-        """Test applying a material."""
-        qm, doc = query_mgr
+    """ApplyMaterialToDoc takes the library too, and the result is verified."""
 
-        mat_table = MagicMock()
-        app = MagicMock()
-        app.GetMaterialTable.return_value = mat_table
-        qm.doc_manager.connection = MagicMock()
-        qm.doc_manager.connection.get_application.return_value = app
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        mat_table = fake_material_table()
+        wire_material_table(qm, mat_table)
 
         result = qm.set_material("Steel")
+
         assert result["status"] == "applied"
         assert result["material"] == "Steel"
-        mat_table.ApplyMaterial.assert_called_once_with(doc, "Steel")
+        assert result["library"] == "Materials"
+        mat_table.ApplyMaterialToDoc.assert_called_once_with(doc, "Steel", "Materials")
 
-    def test_invalid_material(self, query_mgr):
-        """Test applying non-existent material."""
-        qm, doc = query_mgr
+    def test_matches_a_name_case_insensitively(self, query_mgr):
+        qm, _doc = query_mgr
+        wire_material_table(qm, fake_material_table())
 
-        mat_table = MagicMock()
-        mat_table.ApplyMaterial.side_effect = Exception("Material not found")
-        app = MagicMock()
-        app.GetMaterialTable.return_value = mat_table
-        qm.doc_manager.connection = MagicMock()
-        qm.doc_manager.connection.get_application.return_value = app
+        assert qm.set_material("steel")["status"] == "applied"
 
-        result = qm.set_material("InvalidMaterial")
+    def test_invalid_material_lists_what_is_available(self, query_mgr):
+        qm, _doc = query_mgr
+        wire_material_table(qm, fake_material_table())
+
+        result = qm.set_material("Unobtainium")
+
         assert "error" in result
+        assert "Steel" in result["available"]
+
+    def test_says_so_when_solid_edge_ignores_the_change(self, query_mgr):
+        qm, _doc = query_mgr
+        mat_table = fake_material_table(current="Aluminum")
+        mat_table.ApplyMaterialToDoc.side_effect = None  # accepts, changes nothing
+        wire_material_table(qm, mat_table)
+
+        result = qm.set_material("Steel")
+
+        assert "error" in result
+        assert "still reports" in result["error"]
 
 
 class TestGetMaterialProperty:
+    """Only GetMaterialPropValueFromDoc works, and the indices start at 3."""
+
     def test_success(self, query_mgr):
-        """Test getting a material property."""
         qm, doc = query_mgr
+        mat_table = fake_material_table(properties={23: 7750.0})
+        wire_material_table(qm, mat_table)
 
-        mat_table = MagicMock()
-        mat_table.GetMatPropValue.return_value = 7850.0
-        app = MagicMock()
-        app.GetMaterialTable.return_value = mat_table
-        qm.doc_manager.connection = MagicMock()
-        qm.doc_manager.connection.get_application.return_value = app
+        result = qm.get_material_property("Steel", 23)
 
-        result = qm.get_material_property("Steel", 0)
+        assert result["value"] == 7750.0
+        assert result["property"] == "density"
+        mat_table.GetMaterialPropValueFromDoc.assert_called_once_with(doc, 23)
+
+    def test_applies_the_named_material_first(self, query_mgr):
+        qm, _doc = query_mgr
+        mat_table = fake_material_table(properties={28: 0.29})
+        wire_material_table(qm, mat_table)
+
+        qm.get_material_property("Aluminum", 28)
+
+        mat_table.ApplyMaterialToDoc.assert_called_once()
+
+    def test_an_empty_name_reads_what_is_already_applied(self, query_mgr):
+        qm, _doc = query_mgr
+        mat_table = fake_material_table(current="Steel", properties={23: 7750.0})
+        wire_material_table(qm, mat_table)
+
+        result = qm.get_material_property("", 23)
+
         assert result["material"] == "Steel"
-        assert result["property_index"] == 0
-        assert result["value"] == 7850.0
-        mat_table.GetMatPropValue.assert_called_once_with("Steel", 0)
+        mat_table.ApplyMaterialToDoc.assert_not_called()
 
     def test_com_error(self, query_mgr):
-        """Test handling COM error for invalid property."""
-        qm, doc = query_mgr
+        qm, _doc = query_mgr
+        mat_table = fake_material_table(current="Steel")
+        mat_table.GetMaterialPropValueFromDoc.side_effect = Exception("COM error")
+        wire_material_table(qm, mat_table)
 
-        mat_table = MagicMock()
-        mat_table.GetMatPropValue.side_effect = Exception("Invalid index")
-        app = MagicMock()
-        app.GetMaterialTable.return_value = mat_table
-        qm.doc_manager.connection = MagicMock()
-        qm.doc_manager.connection.get_application.return_value = app
-
-        result = qm.get_material_property("Steel", 99)
-        assert "error" in result
+        assert "error" in qm.get_material_property("", 23)
 
 
 # ============================================================================
@@ -156,85 +234,78 @@ class TestGetMaterialProperty:
 
 
 class TestGetMaterialLibrary:
+    """MatTable has no Count/Item and there is no Material object at all."""
+
     def test_success(self, query_mgr):
-        qm, doc = query_mgr
-        mat1 = MagicMock()
-        mat1.Name = "Steel"
-        mat1.Density = 7850.0
-        mat1.YoungsModulus = 2.1e11
-        mat1.PoissonsRatio = 0.3
-
-        mat2 = MagicMock()
-        mat2.Name = "Aluminum"
-        mat2.Density = 2700.0
-        mat2.YoungsModulus = 7.0e10
-        mat2.PoissonsRatio = 0.33
-
-        mat_table = MagicMock()
-        mat_table.Count = 2
-        mat_table.Item.side_effect = lambda i: [None, mat1, mat2][i]
-        doc.GetMaterialTable.return_value = mat_table
-
-        result = qm.get_material_library()
-        assert result["count"] == 2
-        assert result["materials"][0]["name"] == "Steel"
-        assert result["materials"][0]["density"] == 7850.0
-        assert result["materials"][1]["name"] == "Aluminum"
-
-    def test_empty(self, query_mgr):
-        qm, doc = query_mgr
-        mat_table = MagicMock()
-        mat_table.Count = 0
-        doc.GetMaterialTable.return_value = mat_table
+        qm, _doc = query_mgr
+        wire_material_table(
+            qm,
+            fake_material_table(
+                current="Steel",
+                properties={
+                    23: 7750.0,
+                    27: 2.0e11,
+                    28: 0.29,
+                    24: 1.2e-05,
+                    25: 50.0,
+                    26: 500.0,
+                    29: 3.1e08,
+                    30: 6.4e08,
+                    31: 0.0,
+                },
+            ),
+        )
 
         result = qm.get_material_library()
-        assert result["count"] == 0
-        assert result["materials"] == []
 
-    def test_error(self, query_mgr):
-        qm, doc = query_mgr
-        doc.GetMaterialTable.side_effect = Exception("No material table")
+        assert result["material"] == "Steel"
+        assert result["properties"]["density"] == 7750.0
+        assert result["properties"]["poisson_ratio"] == 0.29
+
+    def test_no_material_applied(self, query_mgr):
+        qm, _doc = query_mgr
+        mat_table = fake_material_table(current="")
+        mat_table.GetMaterialPropValueFromDoc.side_effect = Exception("nothing applied")
+        wire_material_table(qm, mat_table)
 
         result = qm.get_material_library()
+
         assert "error" in result
+        assert "No material is applied" in result["error"]
+
+    def test_com_error(self, query_mgr):
+        qm, _doc = query_mgr
+        app = MagicMock()
+        app.GetMaterialTable.side_effect = Exception("COM error")
+        qm.doc_manager.connection = MagicMock()
+        qm.doc_manager.connection.get_application.return_value = app
+
+        assert "error" in qm.get_material_library()
 
 
 class TestSetMaterialByName:
+    """Document.ApplyStyle and Material.Apply are not Solid Edge methods."""
+
     def test_success(self, query_mgr):
         qm, doc = query_mgr
-        mat = MagicMock()
-        mat.Name = "Steel"
-        mat.Density = 7850.0
-
-        mat_table = MagicMock()
-        mat_table.Count = 1
-        mat_table.Item.return_value = mat
-        doc.GetMaterialTable.return_value = mat_table
+        mat_table = fake_material_table(properties={23: 7750.0})
+        wire_material_table(qm, mat_table)
 
         result = qm.set_material_by_name("Steel")
+
         assert result["status"] == "applied"
-        assert result["material"] == "Steel"
+        assert result["density"] == 7750.0
+        mat_table.ApplyMaterialToDoc.assert_called_once_with(doc, "Steel", "Materials")
+        doc.ApplyStyle.assert_not_called()
 
     def test_not_found(self, query_mgr):
-        qm, doc = query_mgr
-        mat = MagicMock()
-        mat.Name = "Steel"
+        qm, _doc = query_mgr
+        wire_material_table(qm, fake_material_table())
 
-        mat_table = MagicMock()
-        mat_table.Count = 1
-        mat_table.Item.return_value = mat
-        doc.GetMaterialTable.return_value = mat_table
+        result = qm.set_material_by_name("Unobtainium")
 
-        result = qm.set_material_by_name("Titanium")
         assert "error" in result
-        assert "Titanium" in result["error"]
-
-    def test_error(self, query_mgr):
-        qm, doc = query_mgr
-        doc.GetMaterialTable.side_effect = Exception("COM error")
-
-        result = qm.set_material_by_name("Steel")
-        assert "error" in result
+        assert "no installed library" in result["error"]
 
 
 # ============================================================================
@@ -272,6 +343,7 @@ class TestGetLayers:
     def test_no_layers(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.get_layers()
         assert "error" in result
@@ -299,6 +371,7 @@ class TestAddLayer:
     def test_no_layers_support(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.add_layer("Test")
         assert "error" in result
@@ -364,6 +437,7 @@ class TestActivateLayer:
     def test_no_layers_support(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.activate_layer(0)
         assert "error" in result
@@ -433,6 +507,7 @@ class TestSetLayerProperties:
     def test_no_layers_support(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.set_layer_properties(0, show=True)
         assert "error" in result
@@ -473,6 +548,73 @@ class TestDeleteLayer:
     def test_no_layers(self, query_mgr):
         qm, doc = query_mgr
         del doc.Layers
+        del doc.ActiveSheet
 
         result = qm.delete_layer("Layer1")
         assert "error" in result
+
+
+# ============================================================================
+# LAYERS: WHERE THEY LIVE
+# ============================================================================
+
+
+class TestLayersOnADraft:
+    """A DraftDocument has no Layers of its own; a Sheet does.
+
+    The gate here used to be hasattr(doc, "Layers"), the probe CLAUDE.md
+    forbids, so every layer call on a draft answered "Active document does not
+    support layers" -- for the document type where layers matter most.
+    """
+
+    def test_a_draft_uses_the_active_sheet(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.Layers
+
+        layer = MagicMock()
+        layer.Name = "SheetLayer"
+        layer.Show = True
+        layer.Locatable = True
+        layer.IsEmpty = False
+        sheet_layers = MagicMock()
+        sheet_layers.Count = 1
+        sheet_layers.Item.return_value = layer
+        doc.ActiveSheet.Layers = sheet_layers
+
+        result = qm.get_layers()
+
+        assert result["count"] == 1
+        assert result["layers"][0]["name"] == "SheetLayer"
+
+    def test_adding_to_a_draft_goes_to_the_sheet(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.Layers
+        sheet_layers = MagicMock()
+        sheet_layers.Count = 2
+        doc.ActiveSheet.Layers = sheet_layers
+
+        result = qm.add_layer("ProbeLayer")
+
+        assert result["status"] == "added"
+        sheet_layers.Add.assert_called_once_with("ProbeLayer")
+
+    def test_a_document_own_layers_win(self, query_mgr):
+        """A part has its own; the sheet fallback must not shadow them."""
+        qm, doc = query_mgr
+        own = MagicMock()
+        own.Count = 0
+        doc.Layers = own
+
+        qm.get_layers()
+
+        doc.ActiveSheet.Layers.Item.assert_not_called()
+
+    def test_neither_is_an_honest_error(self, query_mgr):
+        qm, doc = query_mgr
+        del doc.Layers
+        del doc.ActiveSheet
+
+        result = qm.get_layers()
+
+        assert "error" in result
+        assert "active sheet" in result["error"]

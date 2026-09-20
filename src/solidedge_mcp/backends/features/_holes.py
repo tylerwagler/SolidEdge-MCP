@@ -1,11 +1,15 @@
 """Hole feature operations."""
 
-import traceback
 from typing import Any
+
+from solidedge_mcp.backends.errors import error_result
 
 from ..constants import (
     DirectionConstants,
+    ExtentTypeConstants,
     FaceQueryConstants,
+    HoleTypeConstants,
+    KeyPointExtentConstants,
 )
 from ..logging import get_logger
 from ._base import verify_geometry_on_creators
@@ -16,6 +20,15 @@ _logger = get_logger(__name__)
 @verify_geometry_on_creators
 class HolesMixin:
     """Mixin providing hole creation methods."""
+
+    def _make_hole_data(self, doc: Any, diameter: float) -> Any:
+        """Create the HoleData object every Holes.Add* overload requires.
+
+        Type library: HoleDataCollection.Add(HoleType, HoleDiameter, [19 more
+        optional parameters]). HoleType comes from
+        constant.tlb > FeaturePropertyConstants (igRegularHole = 33).
+        """
+        return doc.HoleDataCollection.Add(HoleTypeConstants.igRegularHole, diameter)
 
     def create_hole(
         self,
@@ -79,7 +92,7 @@ class HolesMixin:
                 "hole_type": hole_type,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_all(
         self, x: float, y: float, diameter: float, plane_index: int = 1, direction: str = "Normal"
@@ -133,7 +146,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def delete_hole_by_face(self, face_index: int) -> dict[str, Any]:
         """
@@ -169,7 +182,7 @@ class HolesMixin:
 
             return {"status": "created", "type": "delete_hole_by_face", "face_index": face_index}
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_from_to(
         self,
@@ -237,7 +250,7 @@ class HolesMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_next(
         self,
@@ -293,7 +306,7 @@ class HolesMixin:
                 "plane_index": plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_sync(
         self,
@@ -306,7 +319,9 @@ class HolesMixin:
         """
         Create a synchronous hole feature.
 
-        Uses Holes.AddSync(Profile, PlaneSide, Depth, HoleData).
+        Type library: Holes.AddSync(NumberOfProfiles, ProfilesArray,
+        ProfilePlaneSide, ExtentType, FiniteDepth, Data) -- six required
+        arguments; the HoleData object is built from the requested diameter.
         Note: Holes API may not cut geometry - if so, use circular cutout instead.
 
         Args:
@@ -334,8 +349,17 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+
             holes = model.Holes
-            holes.AddSync(profile, DirectionConstants.igRight, depth, None)
+            holes.AddSync(
+                1,  # NumberOfProfiles
+                (profile,),  # ProfilesArray
+                DirectionConstants.igRight,  # ProfilePlaneSide
+                ExtentTypeConstants.igFinite,  # ExtentType
+                depth,  # FiniteDepth
+                hole_data,  # Data
+            )
 
             return {
                 "status": "created",
@@ -345,7 +369,7 @@ class HolesMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_finite_ex(
         self,
@@ -359,7 +383,8 @@ class HolesMixin:
         """
         Create a finite hole using the extended API.
 
-        Uses Holes.AddFiniteEx(Profile, PlaneSide, Depth, HoleData).
+        Type library: Holes.AddFiniteEx(Profile, ProfilePlaneSide, FiniteDepth,
+        Data, bPhysicalThread) -- five required arguments.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
@@ -391,8 +416,16 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+
             holes = model.Holes
-            holes.AddFiniteEx(profile, dir_const, depth, None)
+            holes.AddFiniteEx(
+                profile,  # Profile
+                dir_const,  # ProfilePlaneSide
+                depth,  # FiniteDepth
+                hole_data,  # Data
+                False,  # bPhysicalThread
+            )
 
             return {
                 "status": "created",
@@ -403,7 +436,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_from_to_ex(
         self,
@@ -416,7 +449,8 @@ class HolesMixin:
         """
         Create a hole between two planes using the extended API.
 
-        Uses Holes.AddFromToEx(Profile, FromFace, ToFace, HoleData).
+        Type library: Holes.AddFromToEx(Profile, FromFaceOrRefPlane,
+        ToFaceOrRefPlane, Data, bPhysicalThread) -- five required arguments.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
@@ -457,8 +491,16 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+
             holes = model.Holes
-            holes.AddFromToEx(profile, from_plane, to_plane, None)
+            holes.AddFromToEx(
+                profile,  # Profile
+                from_plane,  # FromFaceOrRefPlane
+                to_plane,  # ToFaceOrRefPlane
+                hole_data,  # Data
+                False,  # bPhysicalThread
+            )
 
             return {
                 "status": "created",
@@ -469,7 +511,7 @@ class HolesMixin:
                 "to_plane_index": to_plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_next_ex(
         self,
@@ -482,7 +524,8 @@ class HolesMixin:
         """
         Create a hole through the next face using the extended API.
 
-        Uses Holes.AddThroughNextEx(Profile, PlaneSide, HoleData).
+        Type library: Holes.AddThroughNextEx(Profile, ProfilePlaneSide, Data,
+        bPhysicalThread) -- four required arguments.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
@@ -513,8 +556,15 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+
             holes = model.Holes
-            holes.AddThroughNextEx(profile, dir_const, None)
+            holes.AddThroughNextEx(
+                profile,  # Profile
+                dir_const,  # ProfilePlaneSide
+                hole_data,  # Data
+                False,  # bPhysicalThread
+            )
 
             return {
                 "status": "created",
@@ -524,7 +574,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_through_all_ex(
         self,
@@ -536,7 +586,8 @@ class HolesMixin:
         """
         Create a hole through all material using the extended API.
 
-        Uses Holes.AddThroughAllEx(Profile, PlaneSide, HoleData).
+        Type library: Holes.AddThroughAllEx(Profile, ProfilePlaneSide, Data,
+        bPhysicalThread) -- four required arguments.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
@@ -562,8 +613,15 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+
             holes = model.Holes
-            holes.AddThroughAllEx(profile, DirectionConstants.igRight, None)
+            holes.AddThroughAllEx(
+                profile,  # Profile
+                DirectionConstants.igRight,  # ProfilePlaneSide
+                hole_data,  # Data
+                False,  # bPhysicalThread
+            )
 
             return {
                 "status": "created",
@@ -573,7 +631,7 @@ class HolesMixin:
                 "plane_index": plane_index,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_sync_ex(
         self,
@@ -586,7 +644,9 @@ class HolesMixin:
         """
         Create a synchronous hole using the extended API.
 
-        Uses Holes.AddSyncEx(Profile, PlaneSide, Depth, HoleData).
+        Type library: Holes.AddSyncEx(NumberOfProfiles, ProfilesArray,
+        ProfilePlaneSide, ExtentType, FiniteDepth, Data, bPhysicalThread) --
+        seven required arguments.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
@@ -613,8 +673,18 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+
             holes = model.Holes
-            holes.AddSyncEx(profile, DirectionConstants.igRight, depth, None)
+            holes.AddSyncEx(
+                1,  # NumberOfProfiles
+                (profile,),  # ProfilesArray
+                DirectionConstants.igRight,  # ProfilePlaneSide
+                ExtentTypeConstants.igFinite,  # ExtentType
+                depth,  # FiniteDepth
+                hole_data,  # Data
+                False,  # bPhysicalThread
+            )
 
             return {
                 "status": "created",
@@ -624,7 +694,7 @@ class HolesMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_multi_body(
         self,
@@ -638,7 +708,11 @@ class HolesMixin:
         """
         Create a hole that spans multiple bodies.
 
-        Uses Holes.AddMultiBody(Profile, PlaneSide, Depth, HoleData).
+        Type library: Holes.AddMultiBody(Profile, ProfilePlaneSide, ExtentType,
+        FiniteDepth, KeyPointOrTangentFace, KeyPointFlags, FromFaceOrRefPlane,
+        ToFaceOrRefPlane, Data, NumberOfBodies, BodyArray) -- eleven required
+        arguments. A finite extent is used, so the keypoint and from/to slots
+        are empty and the body array holds the first model's body.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
@@ -670,8 +744,23 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+            body_arr = [model.Body]
+
             holes = model.Holes
-            holes.AddMultiBody(profile, dir_const, depth, None)
+            holes.AddMultiBody(
+                profile,  # Profile
+                dir_const,  # ProfilePlaneSide
+                ExtentTypeConstants.igFinite,  # ExtentType
+                depth,  # FiniteDepth
+                None,  # KeyPointOrTangentFace (finite extent -> unused)
+                KeyPointExtentConstants.igTangentNormal,  # KeyPointFlags (unused)
+                None,  # FromFaceOrRefPlane
+                None,  # ToFaceOrRefPlane
+                hole_data,  # Data
+                1,  # NumberOfBodies
+                body_arr,  # BodyArray
+            )
 
             return {
                 "status": "created",
@@ -682,7 +771,7 @@ class HolesMixin:
                 "direction": direction,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_hole_sync_multi_body(
         self,
@@ -695,7 +784,9 @@ class HolesMixin:
         """
         Create a synchronous hole that spans multiple bodies.
 
-        Uses Holes.AddSyncMultiBody(Profile, PlaneSide, Depth, HoleData).
+        Type library: Holes.AddSyncMultiBody(NumberOfProfiles, ProfilesArray,
+        ProfilePlaneSide, ExtentType, FiniteDepth, Data, NumberOfBodies,
+        BodyArray) -- eight required arguments.
 
         Args:
             x, y: Hole center coordinates on the sketch plane (meters)
@@ -722,8 +813,20 @@ class HolesMixin:
             profile.Circles2d.AddByCenterRadius(x, y, radius)
             profile.End(0)
 
+            hole_data = self._make_hole_data(doc, diameter)
+            body_arr = [model.Body]
+
             holes = model.Holes
-            holes.AddSyncMultiBody(profile, DirectionConstants.igRight, depth, None)
+            holes.AddSyncMultiBody(
+                1,  # NumberOfProfiles
+                (profile,),  # ProfilesArray
+                DirectionConstants.igRight,  # ProfilePlaneSide
+                ExtentTypeConstants.igFinite,  # ExtentType
+                depth,  # FiniteDepth
+                hole_data,  # Data
+                1,  # NumberOfBodies
+                body_arr,  # BodyArray
+            )
 
             return {
                 "status": "created",
@@ -733,4 +836,4 @@ class HolesMixin:
                 "depth": depth,
             }
         except Exception as e:
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

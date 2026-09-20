@@ -1,32 +1,38 @@
 """Document management tools for Solid Edge MCP."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import doc_manager
+from solidedge_mcp.tools._registry import register_tool
 
 # === Composite: create_document ===
 
 
 def create_document(
-    type: str = "part",
+    type: Literal["part", "assembly", "sheet_metal", "draft", "weldment"] = "part",
     template: str | None = None,
 ) -> dict[str, Any]:
-    """Create a new Solid Edge document.
+    """Create a new document of the given type; it becomes the active document.
 
-    type: 'part' | 'assembly' | 'sheet_metal' | 'draft' | 'weldment'
+    template: optional template file path, which must exist (None uses the
+    Solid Edge default).
     """
+    if template:
+        template, err = validate_path(template, must_exist=True)
+        if err:
+            return err
     match type:
         case "part":
-            return doc_manager.create_part(template)
+            return doc_manager.create_part(template=template)
         case "assembly":
-            return doc_manager.create_assembly(template)
+            return doc_manager.create_assembly(template=template)
         case "sheet_metal":
-            return doc_manager.create_sheet_metal(template)
+            return doc_manager.create_sheet_metal(template=template)
         case "draft":
-            return doc_manager.create_draft(template)
+            return doc_manager.create_draft(template=template)
         case "weldment":
-            return doc_manager.create_weldment(template)
+            return doc_manager.create_weldment(template=template)
         case _:
             return {"error": f"Unknown document type: {type}"}
 
@@ -35,32 +41,38 @@ def create_document(
 
 
 def open_document(
-    method: str = "foreground",
+    method: Literal["foreground", "background", "with_template", "dialog"] = "foreground",
     file_path: str = "",
     template: str = "",
     filename: str | None = None,
     dialog_title: str | None = None,
 ) -> dict[str, Any]:
-    """Open a document.
+    """Open an existing document.
 
-    method: 'foreground' | 'background' | 'with_template' | 'dialog'
+    foreground/background: file_path (must exist). with_template: file_path +
+    template. dialog: shows the Solid Edge open dialog (optional filename
+    preset, dialog_title).
     """
     if method in ("foreground", "background", "with_template") and file_path:
         file_path, err = validate_path(file_path, must_exist=True)
         if err:
             return err
+    # A template Solid Edge cannot find raises a modal dialog rather than an
+    # error, and that blocks the server.
+    if method == "with_template" and template:
+        template, err = validate_path(template, must_exist=True)
+        if err:
+            return err
     match method:
         case "foreground":
-            return doc_manager.open_document(file_path)
+            return doc_manager.open_document(file_path=file_path)
         case "background":
-            return doc_manager.open_in_background(file_path)
+            return doc_manager.open_in_background(file_path=file_path)
         case "with_template":
-            return doc_manager.open_with_template(
-                file_path, template
-            )
+            return doc_manager.open_with_template(file_path=file_path, template=template)
         case "dialog":
             return doc_manager.open_with_file_open_dialog(
-                filename, dialog_title
+                filename=filename, dialog_title=dialog_title
             )
         case _:
             return {"error": f"Unknown method: {method}"}
@@ -70,18 +82,21 @@ def open_document(
 
 
 def close_document(
-    scope: str = "active",
+    scope: Literal["active", "all"] = "active",
     save: bool = True,
+    discard_unsaved: bool = False,
 ) -> dict[str, Any]:
-    """Close documents.
+    """Close the active document or all documents.
 
-    scope: 'active' | 'all'
+    save=False discards unsaved changes. scope='all' closes every open
+    document, including ones you did not create; if any has unsaved changes it
+    is refused and they are named, unless discard_unsaved=true.
     """
     match scope:
         case "active":
-            return doc_manager.close_document(save)
+            return doc_manager.close_document(save=save)
         case "all":
-            return doc_manager.close_all_documents(save)
+            return doc_manager.close_all_documents(save=save, discard_unsaved=discard_unsaved)
         case _:
             return {"error": f"Unknown scope: {scope}"}
 
@@ -90,12 +105,17 @@ def close_document(
 
 
 def save_document(
-    method: str = "save",
+    method: Literal["save", "copy_as"] = "save",
     file_path: str | None = None,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """Save the active document.
 
-    method: 'save' | 'copy_as'
+    save: in place, or Save As when file_path is given.
+    copy_as: write a copy to file_path (required) and keep the current file active.
+    overwrite: required to replace an existing file. Without it the call is
+    refused, because Solid Edge would raise a modal overwrite prompt that
+    blocks the server until someone clicks it.
     """
     if file_path:
         file_path, err = validate_path(file_path, must_exist=False)
@@ -103,11 +123,11 @@ def save_document(
             return err
     match method:
         case "save":
-            return doc_manager.save_document(file_path)
+            return doc_manager.save_document(file_path=file_path, overwrite=overwrite)
         case "copy_as":
             if file_path is None:
                 return {"error": "file_path is required for 'copy_as' method"}
-            return doc_manager.save_copy_as(file_path)
+            return doc_manager.save_copy_as(file_path=file_path, overwrite=overwrite)
         case _:
             return {"error": f"Unknown method: {method}"}
 
@@ -115,11 +135,8 @@ def save_document(
 # === Composite: undo_redo ===
 
 
-def undo_redo(action: str = "undo") -> dict[str, Any]:
-    """Undo or redo the last operation.
-
-    action: 'undo' | 'redo'
-    """
+def undo_redo(action: Literal["undo", "redo"] = "undo") -> dict[str, Any]:
+    """Undo or redo the last operation in the active document."""
     match action:
         case "undo":
             return doc_manager.undo()
@@ -133,16 +150,16 @@ def undo_redo(action: str = "undo") -> dict[str, Any]:
 
 
 def activate_document(name_or_index: str | int) -> dict[str, Any]:
-    """Activate a specific open document by name or index."""
-    return doc_manager.activate_document(name_or_index)
+    """Make an open document active, by document name or 0-based index."""
+    return doc_manager.activate_document(name_or_index=name_or_index)
 
 
 def import_file(file_path: str) -> dict[str, Any]:
-    """Import an external CAD file (STEP, IGES, Parasolid, etc.)."""
+    """Import an external CAD file (STEP, IGES, Parasolid, ...) as a new document."""
     file_path, err = validate_path(file_path, must_exist=True)
     if err:
         return err
-    return doc_manager.import_file(file_path)
+    return doc_manager.import_file(file_path=file_path)
 
 
 # === Registration ===
@@ -150,12 +167,13 @@ def import_file(file_path: str) -> dict[str, Any]:
 
 def register(mcp: Any) -> None:
     """Register document tools with the MCP server."""
+    tags = {"document"}
     # Composite tools
-    mcp.tool()(create_document)
-    mcp.tool()(open_document)
-    mcp.tool()(close_document)
-    mcp.tool()(save_document)
-    mcp.tool()(undo_redo)
+    register_tool(mcp, create_document, tags=tags)
+    register_tool(mcp, open_document, tags=tags)
+    register_tool(mcp, close_document, tags=tags, destructive=True)
+    register_tool(mcp, save_document, tags=tags, idempotent=True)
+    register_tool(mcp, undo_redo, tags=tags)
     # Standalone tools
-    mcp.tool()(activate_document)
-    mcp.tool()(import_file)
+    register_tool(mcp, activate_document, tags=tags, idempotent=True)
+    register_tool(mcp, import_file, tags=tags)

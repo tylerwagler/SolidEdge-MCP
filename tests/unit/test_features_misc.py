@@ -4,9 +4,12 @@ Unit tests for FeatureManager backend methods.
 Uses unittest.mock to simulate COM objects so tests run without Solid Edge.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
+
+from solidedge_mcp.backends.constants import FaceRotateConstants
 
 
 @pytest.fixture
@@ -65,36 +68,22 @@ def feature_mgr(managers):
 
 
 class TestDeleteFaces:
-    def test_success(self, feature_mgr, managers):
+    """DeleteFaces.Add takes a single FaceSet object that cannot be built here."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
         result = feature_mgr.delete_faces([0])
-        assert result["status"] == "created"
-        assert result["type"] == "delete_faces"
-        assert result["face_count"] == 1
-        model.DeleteFaces.Add.assert_called_once()
+        assert result["unsupported"] is True
+        assert "FaceSet" in result["error"]
+        assert result["face_indices"] == [0]
+        model.DeleteFaces.Add.assert_not_called()
 
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.delete_faces([0])
-        assert "error" in result
-
-    def test_invalid_face_index(self, feature_mgr, managers):
-        result = feature_mgr.delete_faces([99])
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
-
-    def test_multiple_faces(self, feature_mgr, managers):
+    def test_unsupported_multiple_faces(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
-        # Set up 3 faces
-        faces = MagicMock()
-        faces.Count = 3
-        face1, face2, face3 = MagicMock(), MagicMock(), MagicMock()
-        faces.Item.side_effect = lambda i: {1: face1, 2: face2, 3: face3}[i]
-        model.Body.Faces.return_value = faces
         result = feature_mgr.delete_faces([0, 2])
-        assert result["status"] == "created"
-        assert result["face_count"] == 2
+        assert result["unsupported"] is True
+        assert result["face_indices"] == [0, 2]
+        model.DeleteFaces.Add.assert_not_called()
 
 
 # ============================================================================
@@ -103,24 +92,15 @@ class TestDeleteFaces:
 
 
 class TestDeleteFacesNoHeal:
-    def test_success(self, feature_mgr, managers):
+    """DeleteFaces.AddNoHeal also takes a single FaceSet object."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
         result = feature_mgr.delete_faces_no_heal([0])
-        assert result["status"] == "created"
-        assert result["type"] == "delete_faces_no_heal"
-        assert result["face_count"] == 1
-        model.DeleteFaces.AddNoHeal.assert_called_once()
-
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.delete_faces_no_heal([0])
-        assert "error" in result
-
-    def test_invalid_face_index(self, feature_mgr, managers):
-        result = feature_mgr.delete_faces_no_heal([99])
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
+        assert result["unsupported"] is True
+        assert "FaceSet" in result["error"]
+        assert result["face_indices"] == [0]
+        model.DeleteFaces.AddNoHeal.assert_not_called()
 
 
 # ============================================================================
@@ -128,22 +108,111 @@ class TestDeleteFacesNoHeal:
 # ============================================================================
 
 
+def _with_features(model, names):
+    """Give a mock body a Features collection, as Solid Edge exposes it."""
+    from unittest.mock import MagicMock
+
+    feats = []
+    for n in names:
+        f = MagicMock()
+        f.Name = n
+        f.Type = 462094706
+        f.Suppress = False
+        f.Visible = True
+        feats.append(f)
+    collection = MagicMock()
+    collection.Count = len(feats)
+    collection.Item.side_effect = lambda i: feats[i - 1]
+    model.Features = collection
+    return feats
+
+
+class TestListFeatures:
+    def test_lists_features_not_bodies(self, feature_mgr, managers):
+        """Regression: this walked doc.Models, so it always returned one entry.
+
+        doc.Models is the list of bodies. A part has one, so the resource
+        reported a single "Design Model" however many features existed.
+        Verified against Solid Edge 2026, where a box with a hole has two.
+        """
+        _, _, _, models, model, _ = managers
+        _with_features(model, ["ExtrudedProtrusion_1", "ExtrudedCutout_1"])
+
+        result = feature_mgr.list_features()
+        assert result["count"] == 2
+        assert [f["name"] for f in result["features"]] == [
+            "ExtrudedProtrusion_1",
+            "ExtrudedCutout_1",
+        ]
+        assert [f["index"] for f in result["features"]] == [0, 1]
+
+    def test_no_features_collection_is_not_an_error(self, feature_mgr, managers):
+        _, _, doc, _models, model, _ = managers
+        del model.Features
+        doc.DesignEdgebarFeatures.Count = 0
+
+        result = feature_mgr.list_features()
+
+        assert result == {"features": [], "count": 0}
+
+    def test_falls_back_to_the_edgebar_when_the_ordered_tree_is_empty(self, feature_mgr, managers):
+        """A part switched from ordered to synchronous empties Models.Features.
+
+        Verified on Solid Edge 2026: the Pathfinder still shows the features
+        and DesignEdgebarFeatures still lists them, so reporting none was
+        wrong. Reference planes share that collection and must stay out.
+        """
+        _, _, doc, _models, model, _ = managers
+        model.Features.Count = 0
+
+        planes = MagicMock()
+        planes.Count = 3
+        plane_names = ["RefPlane_1", "RefPlane_2", "RefPlane_3"]
+        planes.Item.side_effect = lambda i: MagicMock(Name=plane_names[i - 1])
+        doc.RefPlanes = planes
+
+        entries = [
+            MagicMock(Name="RefPlane_1"),
+            MagicMock(Name="RefPlane_2"),
+            MagicMock(Name="RefPlane_3"),
+            MagicMock(Name="ExtrudedProtrusion_1"),
+        ]
+        edgebar = MagicMock()
+        edgebar.Count = len(entries)
+        edgebar.Item.side_effect = lambda i: entries[i - 1]
+        doc.DesignEdgebarFeatures = edgebar
+
+        result = feature_mgr.list_features()
+
+        assert [f["name"] for f in result["features"]] == ["ExtrudedProtrusion_1"]
+        assert result["features"][0]["source"] == "edgebar"
+        # It must resolve to the edgebar entry, not to a reference plane.
+        found, err = feature_mgr._get_feature_by_index(0)
+        assert err is None
+        assert found is entries[3]
+
+
 class TestGetFeatureInfo:
     def test_success(self, feature_mgr, managers):
         _, _, _, models, model, _ = managers
-        model.Name = "ExtrudedProtrusion_1"
-        model.Type = 3
-        model.Visible = True
-        model.Suppressed = False
-        result = feature_mgr.get_feature_info(0)
-        assert result["index"] == 0
-        assert result["name"] == "ExtrudedProtrusion_1"
+        _with_features(model, ["ExtrudedProtrusion_1", "ExtrudedCutout_1"])
+
+        result = feature_mgr.get_feature_info(1)
+        assert result["index"] == 1
+        assert result["name"] == "ExtrudedCutout_1"
+        assert result["suppressed"] is False
+        assert result["visible"] is True
 
     def test_invalid_index(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        _with_features(model, ["ExtrudedProtrusion_1"])
         result = feature_mgr.get_feature_info(99)
         assert "error" in result
+        assert "1 feature" in result["error"]
 
     def test_negative_index(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        _with_features(model, ["ExtrudedProtrusion_1"])
         result = feature_mgr.get_feature_info(-1)
         assert "error" in result
 
@@ -226,7 +295,9 @@ class TestCreateRib:
         result = feature_mgr.create_rib(0.005)
         assert result["status"] == "created"
         assert result["type"] == "rib"
-        ribs.Add.assert_called_once_with(profile, 1, 0, 2, 0.005)
+        # Ribs.Add(RibProfile, ProfileExtensionType, ThicknessType,
+        # MaterialSide, ThicknessSide, Thickness)
+        ribs.Add.assert_called_once_with(profile, 9, 12, 2, 3, 0.005)
 
     def test_symmetric(self, feature_mgr, managers):
         _, _, _, _, model, _ = managers
@@ -249,20 +320,17 @@ class TestCreateRib:
 
 
 class TestCreateLip:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
+    """Lips.Add needs body edges plus a side face and a cap face."""
+
+    def test_unsupported(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
         lips = MagicMock()
         model.Lips = lips
         result = feature_mgr.create_lip(0.003)
-        assert result["status"] == "created"
-        assert result["type"] == "lip"
-        lips.Add.assert_called_once_with(profile, 2, 0.003)
-
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_lip(0.003)
-        assert "error" in result
+        assert result["unsupported"] is True
+        assert result["depth"] == 0.003
+        assert "cap face" in result["error"]
+        lips.Add.assert_not_called()
 
 
 # ============================================================================
@@ -278,7 +346,8 @@ class TestCreateDrawnCutout:
         result = feature_mgr.create_drawn_cutout(0.002)
         assert result["status"] == "created"
         assert result["type"] == "drawn_cutout"
-        drawn_cutouts.Add.assert_called_once_with(profile, 2, 0.002)
+        # DrawnCutouts.Add(Profile, Depth, ProfileSide, DepthSide, MaterialSide)
+        drawn_cutouts.Add.assert_called_once_with(profile, 0.002, 6, 2, 3)
 
     def test_reverse(self, feature_mgr, managers):
         _, _, _, _, model, profile = managers
@@ -286,7 +355,7 @@ class TestCreateDrawnCutout:
         model.DrawnCutouts = drawn_cutouts
         result = feature_mgr.create_drawn_cutout(0.002, "Reverse")
         assert result["status"] == "created"
-        drawn_cutouts.Add.assert_called_once_with(profile, 1, 0.002)
+        drawn_cutouts.Add.assert_called_once_with(profile, 0.002, 6, 1, 3)
 
     def test_no_base_feature(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -301,20 +370,41 @@ class TestCreateDrawnCutout:
 
 
 class TestCreateBead:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
-        beads = MagicMock()
-        model.Beads = beads
-        result = feature_mgr.create_bead(0.003)
-        assert result["status"] == "created"
-        assert result["type"] == "bead"
-        beads.Add.assert_called_once_with(profile, 2, 0.003)
+    """Beads.Add with a UI-made bead's shape and a *SideDummy side (SE 2026: 6 -> 20 faces)."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_bead(0.003)
-        assert "error" in result
+    @staticmethod
+    def _open(profile):
+        for name in ("Circles2d", "Ellipses2d", "Boundaries2d"):
+            getattr(profile, name).Count = 0
+
+    def test_builds_with_the_circular_rounded_punched_shape(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        self._open(profile)
+
+        result = feature_mgr.create_bead(0.004)
+
+        assert result["status"] == "created"
+        assert result["width"] == pytest.approx(0.006)
+        args = model.Beads.Add.call_args.args
+        assert args[:5] == (1, [profile], 120, 0.004, pytest.approx(0.006))
+        assert args[5] == pytest.approx(math.radians(15.0))
+        assert args[6:] == (0.004, 0.0, 0.002, 101, 7, 123, pytest.approx(0.006))
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_reverse_uses_the_other_side_dummy_and_a_given_width(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        self._open(profile)
+        feature_mgr.create_bead(0.004, direction="Reverse", width=0.01)
+        args = model.Beads.Add.call_args.args
+        assert args[4] == 0.01 and args[10] == 8 and args[12] == 0.01
+
+    def test_a_closed_profile_or_no_depth_is_refused(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        profile.Circles2d.Count = 1
+        assert "error" in feature_mgr.create_bead(0.004)
+        self._open(profile)
+        assert "error" in feature_mgr.create_bead(0.0)
+        model.Beads.Add.assert_not_called()
 
 
 # ============================================================================
@@ -323,20 +413,21 @@ class TestCreateBead:
 
 
 class TestCreateLouver:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
+    """Louvers.Add records a louver Solid Edge 2026 never solves; no call is made."""
+
+    def test_refuses_with_the_evidence(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
         louvers = MagicMock()
         model.Louvers = louvers
-        result = feature_mgr.create_louver(0.005)
-        assert result["status"] == "created"
-        assert result["type"] == "louver"
-        louvers.Add.assert_called_once_with(profile, 2, 0.005)
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_louver(0.005)
-        assert "error" in result
+        result = feature_mgr.create_louver(0.005, "Reverse", height=0.008)
+
+        assert result["unsupported"] is True
+        assert "never solves" in result["error"]
+        assert result["depth"] == 0.005
+        assert result["direction"] == "Reverse"
+        assert result["height"] == 0.008
+        louvers.Add.assert_not_called()
 
 
 # ============================================================================
@@ -352,7 +443,13 @@ class TestCreateGusset:
         result = feature_mgr.create_gusset(0.002)
         assert result["status"] == "created"
         assert result["type"] == "gusset"
-        gussets.Add.assert_called_once_with(profile, 2, 0.002)
+        # Gussets has no Add; AddByProfile is the real one.
+        gussets.Add.assert_not_called()
+        gussets.AddByProfile.assert_called_once()
+        args = gussets.AddByProfile.call_args.args
+        assert args[0] is profile
+        assert args[1] == 2  # igRight
+        assert args[3] == 0.002  # gusset width
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -366,99 +463,53 @@ class TestCreateGusset:
 # ============================================================================
 
 
-class TestCreateThread:
-    def test_success(self, feature_mgr, managers):
-        _, _, doc, _, model, _ = managers
-        cyl_face = MagicMock()
-        end_face = MagicMock()
-        faces = MagicMock()
-        faces.Count = 6
-        faces.Item.return_value = cyl_face
-        model.Body.Faces.return_value = faces
-
-        # Mock geometry for auto-diameter detection
-        cyl_face.Geometry.Radius = 0.005
-
-        # Mock _find_cylinder_end_face to return end_face
-        cyl_edges = MagicMock()
-        cyl_edges.Count = 1
-        cyl_edge = MagicMock()
-        cyl_edges.Item.return_value = cyl_edge
-        cyl_face.Edges = cyl_edges
-        # The end_face shares an edge with cyl_face
-        end_edges = MagicMock()
-        end_edges.Count = 1
-        end_edges.Item.return_value = cyl_edge  # same edge object
-        end_face.Edges = end_edges
-        # Make faces.Item return end_face for second call (fi=1 candidate)
-        # but cyl_face for the thread target (face_index+1=3)
-        def faces_item_side_effect(idx):
-            if idx == 3:  # face_index=2, 1-based=3
-                return cyl_face
-            return end_face
-        faces.Item.side_effect = faces_item_side_effect
-
-        # Mock HoleDataCollection
-        hole_data = MagicMock()
-        doc.HoleDataCollection.Add.return_value = hole_data
-
-        threads = MagicMock()
-        model.Threads = threads
-
-        result = feature_mgr.create_thread(2)
-        assert result["status"] == "created"
-        assert result["type"] == "cosmetic_thread"
-        assert result["face_index"] == 2
-        threads.Add.assert_called_once()
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        faces = MagicMock()
-        faces.Count = 3
-        model.Body.Faces.return_value = faces
-
-        result = feature_mgr.create_thread(5)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
-
-    def test_no_base_feature(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
-        models = MagicMock()
-        models.Count = 0
-        doc.Models = models
-
-        result = feature_mgr.create_thread(0)
-        assert "error" in result
-
-
 # ============================================================================
 # SLOT
 # ============================================================================
 
 
 class TestCreateSlot:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
-        slots = MagicMock()
-        model.Slots = slots
-        result = feature_mgr.create_slot(0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "slot"
-        slots.Add.assert_called_once_with(profile, 2, 0.01)
+    """Slots.Add with a line path, igRight and a finite extent cuts (SE 2026: 6 -> 10)."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_slot(0.01)
+    @staticmethod
+    def _open_profile(profile):
+        for name in ("Circles2d", "Ellipses2d", "Boundaries2d"):
+            getattr(profile, name).Count = 0
+
+    def test_cuts_a_finite_slot(self, feature_mgr, managers):
+        _, sketch_mgr, _, _, model, profile = managers
+        self._open_profile(profile)
+
+        result = feature_mgr.create_slot(0.004, 0.01)
+
+        assert result["status"] == "created"
+        assert result["extent"] == "finite"
+        args = model.Slots.Add.call_args.args
+        assert args[0] is profile
+        assert args[1:9] == (235, 0, 0.004, 0.0, 0.0, 13, 2, 0.01)
+        assert args[10] is None and args[15] is None and args[16] is None and args[19] is None
+        assert len(args) == 22
+        sketch_mgr.clear_accumulated_profiles.assert_called_once()
+
+    def test_depth_zero_cuts_through_all(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        self._open_profile(profile)
+        result = feature_mgr.create_slot(0.004, 0.0)
+        assert result["extent"] == "through_all"
+        assert model.Slots.Add.call_args.args[6] == 16
+
+    def test_reverse_is_refused_as_a_verified_no_op(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_slot(0.004, 0.01, direction="Reverse")
+        assert result["unsupported"] is True
+        model.Slots.Add.assert_not_called()
+
+    def test_a_closed_profile_is_refused(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        profile.Circles2d.Count = 1
+        result = feature_mgr.create_slot(0.004, 0.01)
         assert "error" in result
-
-    def test_reverse_direction(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
-        slots = MagicMock()
-        model.Slots = slots
-        result = feature_mgr.create_slot(0.01, "Reverse")
-        assert result["status"] == "created"
-        slots.Add.assert_called_once_with(profile, 1, 0.01)
+        model.Slots.Add.assert_not_called()
 
 
 # ============================================================================
@@ -467,20 +518,35 @@ class TestCreateSlot:
 
 
 class TestCreateSplit:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, profile = managers
-        splits = MagicMock()
-        model.Splits = splits
-        result = feature_mgr.create_split()
-        assert result["status"] == "created"
-        assert result["type"] == "split"
-        splits.Add.assert_called_once_with(profile, 2)
+    """Splits.Add(1, [Body], 1, [RefPlane], multiple-bodies options) splits the box."""
 
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_split()
-        assert "error" in result
+    def test_splits_the_body_with_a_reference_plane(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        doc.RefPlanes.Count = 4
+        plane = doc.RefPlanes.Item.return_value
+        model.Splits.Count = 1
+
+        result = feature_mgr.create_split(plane_index=4)
+
+        assert result["status"] == "created"
+        assert result["plane_index"] == 4
+        model.Splits.Add.assert_called_once_with(1, [model.Body], 1, [plane], 0, 0)
+        doc.RefPlanes.Item.assert_called_once_with(4)
+
+    def test_a_plane_index_out_of_range_is_refused(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        doc.RefPlanes.Count = 3
+
+        result = feature_mgr.create_split(plane_index=4)
+
+        assert "Invalid plane index" in result["error"]
+        model.Splits.Add.assert_not_called()
+
+    def test_no_base_feature(self, feature_mgr, managers):
+        _, _, _, models, model, _ = managers
+        models.Count = 0
+        assert "error" in feature_mgr.create_split()
+        model.Splits.Add.assert_not_called()
 
 
 # ============================================================================
@@ -516,114 +582,188 @@ class TestDoIdle:
 # ============================================================================
 
 
+def _two_meeting_lines(profile):
+    """Two lines sharing the corner at (0, 0), as Solid Edge reports them."""
+    from unittest.mock import MagicMock
+
+    line1, line2 = MagicMock(), MagicMock()
+    line1.GetStartPoint.return_value = (0.0, 0.0)
+    line1.GetEndPoint.return_value = (0.08, 0.0)
+    line2.GetStartPoint.return_value = (0.0, 0.0)
+    line2.GetEndPoint.return_value = (0.0, 0.05)
+    lines = MagicMock()
+    lines.Count = 2
+    lines.Item.side_effect = lambda i: [None, line1, line2][i]
+    profile.Lines2d = lines
+    return line1, line2
+
+
 class TestSketchFillet:
     def test_success(self):
+        """Arcs2d.AddAsFillet, not AddByFillet, which does not exist.
+
+        The old loop swallowed the failure per pair and returned "created"
+        with a count of zero, so a fillet never appeared and nothing said so.
+        """
         from solidedge_mcp.backends.sketching import SketchManager
 
         dm = MagicMock()
         sm = SketchManager(dm)
-
         profile = MagicMock()
-        line1 = MagicMock()
-        line2 = MagicMock()
-        lines = MagicMock()
-        lines.Count = 2
-        lines.Item.side_effect = lambda i: [None, line1, line2][i]
-        profile.Lines2d = lines
+        line1, line2 = _two_meeting_lines(profile)
         sm.active_profile = profile
 
         result = sm.sketch_fillet(0.005)
         assert result["status"] == "created"
-        assert result["type"] == "sketch_fillet"
-        profile.Arcs2d.AddByFillet.assert_called_once_with(line1, line2, 0.005)
+        assert result["fillet_count"] == 1
+        # The vertex itself is accepted for a fillet.
+        profile.Arcs2d.AddAsFillet.assert_called_once_with(line1, line2, 0.005, 0.0, 0.0)
+        profile.Arcs2d.AddByFillet.assert_not_called()
 
-    def test_no_sketch(self):
+    def test_reports_when_nothing_could_be_filleted(self):
         from solidedge_mcp.backends.sketching import SketchManager
 
         dm = MagicMock()
         sm = SketchManager(dm)
+        profile = MagicMock()
+        _two_meeting_lines(profile)
+        profile.Arcs2d.AddAsFillet.side_effect = Exception("radius too large")
+        sm.active_profile = profile
 
         result = sm.sketch_fillet(0.005)
         assert "error" in result
+        assert result["failures"]
 
+    def test_rejects_a_non_positive_radius(self):
+        from solidedge_mcp.backends.sketching import SketchManager
 
-# ============================================================================
-# SKETCH CHAMFER
-# ============================================================================
+        dm = MagicMock()
+        sm = SketchManager(dm)
+        profile = MagicMock()
+        _two_meeting_lines(profile)
+        sm.active_profile = profile
+
+        assert "must be positive" in sm.sketch_fillet(0.0)["error"]
 
 
 class TestSketchChamfer:
     def test_success(self):
+        """Lines2d.AddAsChamfer wants a point nudged inside the corner.
+
+        The vertex itself gives E_INVALIDARG, unlike the fillet. Verified
+        against Solid Edge 2026.
+        """
         from solidedge_mcp.backends.sketching import SketchManager
 
         dm = MagicMock()
         sm = SketchManager(dm)
-
         profile = MagicMock()
-        line1 = MagicMock()
-        line2 = MagicMock()
-        lines = MagicMock()
-        lines.Count = 2
-        lines.Item.side_effect = lambda i: [None, line1, line2][i]
-        profile.Lines2d = lines
+        line1, line2 = _two_meeting_lines(profile)
         sm.active_profile = profile
 
-        result = sm.sketch_chamfer(0.003)
+        result = sm.sketch_chamfer(0.005)
         assert result["status"] == "created"
-        assert result["type"] == "sketch_chamfer"
-        profile.Lines2d.AddByChamfer.assert_called_once_with(line1, line2, 0.003, 0.003)
-
-    def test_no_sketch(self):
-        from solidedge_mcp.backends.sketching import SketchManager
-
-        dm = MagicMock()
-        sm = SketchManager(dm)
-
-        result = sm.sketch_chamfer(0.003)
-        assert "error" in result
-
-
-# ============================================================================
-# SKETCH MIRROR
-# ============================================================================
+        assert result["chamfer_count"] == 1
+        args = profile.Lines2d.AddAsChamfer.call_args[0]
+        assert args[0] is line1 and args[1] is line2
+        assert (args[2], args[3]) != (0.0, 0.0)  # nudged off the vertex
+        assert args[4:] == (0.005, 0.005)
+        profile.Lines2d.AddByChamfer.assert_not_called()
 
 
 class TestSketchMirror:
-    def test_mirror_x(self):
+    """Line2d has GetStartPoint, not StartPoint.X.
+
+    Reading the property that does not exist raised inside a bare except, so
+    every element was skipped and the result still said "created" with a count
+    of zero.
+    """
+
+    def _profile(self, lines=(), circles=(), arcs=()):
+        profile = MagicMock()
+        for name, items in (("Lines2d", lines), ("Circles2d", circles), ("Arcs2d", arcs)):
+            collection = MagicMock()
+            collection.Count = len(items)
+            collection.Item.side_effect = lambda i, items=items: items[i - 1]
+            setattr(profile, name, collection)
+        return profile
+
+    def _line(self, x1, y1, x2, y2):
+        line = MagicMock()
+        line.GetStartPoint.return_value = (x1, y1)
+        line.GetEndPoint.return_value = (x2, y2)
+        del line.StartPoint
+        del line.EndPoint
+        return line
+
+    def _manager(self, profile):
         from solidedge_mcp.backends.sketching import SketchManager
 
-        dm = MagicMock()
-        sm = SketchManager(dm)
+        manager = SketchManager(MagicMock())
+        manager.active_profile = profile
+        return manager
 
-        profile = MagicMock()
-        line = MagicMock()
-        line.StartPoint.X = 0.01
-        line.StartPoint.Y = 0.02
-        line.EndPoint.X = 0.03
-        line.EndPoint.Y = 0.04
-        lines = MagicMock()
-        lines.Count = 1
-        lines.Item.return_value = line
-        profile.Lines2d = lines
+    def test_mirror_x_flips_y(self):
+        profile = self._profile(lines=[self._line(0.01, 0.02, 0.03, 0.04)])
+        manager = self._manager(profile)
 
-        circles = MagicMock()
-        circles.Count = 0
-        profile.Circles2d = circles
-        sm.active_profile = profile
+        result = manager.sketch_mirror("X")
 
-        result = sm.sketch_mirror("X")
         assert result["status"] == "created"
         assert result["mirrored_elements"] == 1
         profile.Lines2d.AddBy2Points.assert_called_once_with(0.01, -0.02, 0.03, -0.04)
 
+    def test_mirror_y_flips_x(self):
+        profile = self._profile(lines=[self._line(0.01, 0.02, 0.03, 0.04)])
+        manager = self._manager(profile)
+
+        manager.sketch_mirror("Y")
+
+        profile.Lines2d.AddBy2Points.assert_called_once_with(-0.01, 0.02, -0.03, 0.04)
+
+    def test_mirrors_a_circle(self):
+        circle = MagicMock()
+        circle.GetCenterPoint.return_value = (0.05, 0.02)
+        circle.Radius = 0.01
+        profile = self._profile(circles=[circle])
+        manager = self._manager(profile)
+
+        result = manager.sketch_mirror("X")
+
+        assert result["mirrored_elements"] == 1
+        profile.Circles2d.AddByCenterRadius.assert_called_once_with(0.05, -0.02, 0.01)
+
+    def test_mirrors_an_arc_with_its_ends_swapped(self):
+        """Mirroring reverses the sweep, so start and end change places."""
+        arc = MagicMock()
+        arc.GetCenterPoint.return_value = (0.0, 0.0)
+        arc.GetStartPoint.return_value = (0.01, 0.0)
+        arc.GetEndPoint.return_value = (0.0, 0.01)
+        profile = self._profile(arcs=[arc])
+        manager = self._manager(profile)
+
+        result = manager.sketch_mirror("X")
+
+        assert result["mirrored_elements"] == 1
+        profile.Arcs2d.AddByCenterStartEnd.assert_called_once_with(0.0, 0.0, 0.0, -0.01, 0.01, 0.0)
+
+    def test_an_empty_sketch_is_an_error_not_a_zero_count(self):
+        manager = self._manager(self._profile())
+
+        result = manager.sketch_mirror("X")
+
+        assert "error" in result
+        assert "Nothing was mirrored" in result["error"]
+
+    def test_invalid_axis(self):
+        manager = self._manager(self._profile(lines=[self._line(0, 0, 1, 1)]))
+
+        assert "error" in manager.sketch_mirror("Z")
+
     def test_no_sketch(self):
         from solidedge_mcp.backends.sketching import SketchManager
 
-        dm = MagicMock()
-        sm = SketchManager(dm)
-
-        result = sm.sketch_mirror()
-        assert "error" in result
+        assert "error" in SketchManager(MagicMock()).sketch_mirror()
 
 
 # ============================================================================
@@ -667,7 +807,16 @@ class TestFaceRotateByEdge:
         assert result["status"] == "created"
         assert result["type"] == "face_rotate"
         assert result["method"] == "by_edge"
-        model.FaceRotates.Add.assert_called_once()
+        # FaceRotateConstants: ByGeometry=2, RecreateBlends=6, AxisEnd=4. The
+        # literals 1, 1 and 2 this replaced raised E_INVALIDARG on Solid Edge 2026.
+        args = model.FaceRotates.Add.call_args.args
+        assert args[1:3] == (
+            FaceRotateConstants.igFaceRotateByGeometry,
+            FaceRotateConstants.igFaceRotateRecreateBlends,
+        )
+        assert args[3] is None and args[4] is None
+        assert args[6] == FaceRotateConstants.igFaceRotateAxisEnd
+        assert args[7] == pytest.approx(math.radians(5.0))
 
     def test_invalid_face(self):
         fm, model = self._make_fm_with_body()
@@ -723,7 +872,17 @@ class TestFaceRotateByPoints:
         result = fm.create_face_rotate_by_points(0, 0, 1, 5.0)
         assert result["status"] == "created"
         assert result["method"] == "by_points"
-        model.FaceRotates.Add.assert_called_once()
+        # ByPoints=1, RecreateBlends=6, the two vertices, no axis object, None=0.
+        model.FaceRotates.Add.assert_called_once_with(
+            face,
+            FaceRotateConstants.igFaceRotateByPoints,
+            FaceRotateConstants.igFaceRotateRecreateBlends,
+            v1,
+            v2,
+            None,
+            FaceRotateConstants.igFaceRotateNone,
+            pytest.approx(math.radians(5.0)),
+        )
 
     def test_no_features(self):
         from solidedge_mcp.backends.features import FeatureManager
@@ -957,90 +1116,22 @@ class TestCreateDimpleEx:
 # ============================================================================
 
 
-class TestCreateThreadEx:
-    def test_success(self, feature_mgr, managers):
-        _, _, doc, _, model, _ = managers
-        cyl_face = MagicMock()
-        end_face = MagicMock()
-        faces = MagicMock()
-        faces.Count = 2
-        # face_index=0 → 1-based=1 → cyl_face; fi=2 → end_face (candidate)
-        def faces_item_side_effect(idx):
-            if idx == 1:
-                return cyl_face
-            return end_face
-        faces.Item.side_effect = faces_item_side_effect
-        model.Body.Faces.return_value = faces
-
-        cyl_face.Geometry.Radius = 0.005
-        cyl_edges = MagicMock()
-        cyl_edges.Count = 1
-        cyl_edge = MagicMock()
-        cyl_edges.Item.return_value = cyl_edge
-        cyl_face.Edges = cyl_edges
-        end_edges = MagicMock()
-        end_edges.Count = 1
-        end_edges.Item.return_value = cyl_edge
-        end_face.Edges = end_edges
-
-        hole_data = MagicMock()
-        doc.HoleDataCollection.Add.return_value = hole_data
-
-        threads = MagicMock()
-        model.Threads = threads
-
-        result = feature_mgr.create_thread_ex(0, 0.01, 0.001)
-        assert result["status"] == "created"
-        assert result["type"] == "physical_thread"
-        assert result["face_index"] == 0
-        threads.AddEx.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_thread_ex(0, 0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        faces = MagicMock()
-        faces.Count = 1
-        model.Body.Faces.return_value = faces
-        result = feature_mgr.create_thread_ex(5, 0.01)
-        assert "error" in result
-        assert "Invalid face index" in result["error"]
-
-
 # ============================================================================
 # BATCH 9: SLOT EX
 # ============================================================================
 
 
 class TestCreateSlotEx:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+    """Slots.AddEx needs 18 arguments including a KeyPointOrTangentFace."""
+
+    def test_unsupported(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
         result = feature_mgr.create_slot_ex(0.005, 0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "slot_ex"
+        assert result["unsupported"] is True
         assert result["width"] == 0.005
         assert result["depth"] == 0.01
-        model.Slots.AddEx.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
-
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_slot_ex(0.005, 0.01)
-        assert "error" in result
-        assert "No active sketch" in result["error"]
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_slot_ex(0.005, 0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
+        assert "KeyPointOrTangentFace" in result["error"]
+        model.Slots.AddEx.assert_not_called()
 
 
 # ============================================================================
@@ -1049,29 +1140,16 @@ class TestCreateSlotEx:
 
 
 class TestCreateSlotSync:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+    """Slots.AddSync needs the same 18 arguments as Slots.AddEx."""
+
+    def test_unsupported(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
         result = feature_mgr.create_slot_sync(0.005, 0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "slot_sync"
+        assert result["unsupported"] is True
         assert result["width"] == 0.005
         assert result["depth"] == 0.01
-        model.Slots.AddSync.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
-
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_slot_sync(0.005, 0.01)
-        assert "error" in result
-        assert "No active sketch" in result["error"]
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_slot_sync(0.005, 0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
+        assert "KeyPointOrTangentFace" in result["error"]
+        model.Slots.AddSync.assert_not_called()
 
 
 # ============================================================================
@@ -1086,8 +1164,21 @@ class TestCreateDrawnCutoutEx:
         assert result["status"] == "created"
         assert result["type"] == "drawn_cutout_ex"
         assert result["depth"] == 0.005
-        model.DrawnCutouts.AddEx.assert_called_once()
+        assert result["profile_count"] == 1
+        # AddEx(NumberOfProfiles, ProfileArray, Depth, ProfileSide, DepthSide,
+        # MaterialSide)
+        args = model.DrawnCutouts.AddEx.call_args.args
+        assert len(args) == 6
+        assert args[0] == 1
+        assert (args[2], args[3], args[4], args[5]) == (0.005, 6, 2, 3)
         sketch_mgr.clear_accumulated_profiles.assert_called()
+
+    def test_reverse(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_drawn_cutout_ex(0.005, "Reverse")
+        assert result["status"] == "created"
+        args = model.DrawnCutouts.AddEx.call_args.args
+        assert args[4] == 1  # DepthSide -> seDrawnCutoutDepthLeft
 
     def test_no_profile(self, feature_mgr, managers):
         _, sketch_mgr, _, _, _, _ = managers
@@ -1110,28 +1201,15 @@ class TestCreateDrawnCutoutEx:
 
 
 class TestCreateLouverSync:
-    def test_success(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, model, _ = managers
+    """Louvers.AddSync is face-based with origin/orientation arrays."""
+
+    def test_unsupported(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
         result = feature_mgr.create_louver_sync(0.003)
-        assert result["status"] == "created"
-        assert result["type"] == "louver_sync"
+        assert result["unsupported"] is True
         assert result["depth"] == 0.003
-        model.Louvers.AddSync.assert_called_once()
-        sketch_mgr.clear_accumulated_profiles.assert_called()
-
-    def test_no_profile(self, feature_mgr, managers):
-        _, sketch_mgr, _, _, _, _ = managers
-        sketch_mgr.get_active_sketch.return_value = None
-        result = feature_mgr.create_louver_sync(0.003)
-        assert "error" in result
-        assert "No active sketch" in result["error"]
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_louver_sync(0.003)
-        assert "error" in result
-        assert "No base feature" in result["error"]
+        assert "orientation" in result["error"]
+        model.Louvers.AddSync.assert_not_called()
 
 
 # ============================================================================
@@ -1140,27 +1218,22 @@ class TestCreateLouverSync:
 
 
 class TestCreateThickenSync:
-    def test_success(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_thicken_sync(0.002)
+    """The same AddThickenFeature call, in either mode."""
+
+    def test_delegates_to_the_basic_thicken(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        doc.Constructions.Count = 1
+        faces = doc.Constructions.Item.return_value.Body.Faces.return_value
+        faces.Count = 2
+        face_objects = [MagicMock(), MagicMock()]
+        faces.Item.side_effect = lambda i: face_objects[i - 1]
+
+        result = feature_mgr.create_thicken_sync(0.003, direction="Reverse")
+
         assert result["status"] == "created"
         assert result["type"] == "thicken_sync"
-        assert result["thickness"] == 0.002
-        model.Thickens.AddSync.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_thicken_sync(0.002)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_direction_reverse(self, feature_mgr, managers):
-        _, _, _, _, model, _ = managers
-        result = feature_mgr.create_thicken_sync(0.003, direction="Reverse")
-        assert result["status"] == "created"
         assert result["direction"] == "Reverse"
-        model.Thickens.AddSync.assert_called_once()
+        models.AddThickenFeature.assert_called_once_with(1, 0.003, 2, face_objects)
 
 
 # ============================================================================
@@ -1186,40 +1259,20 @@ def _setup_feature_lookup(doc, feature_name="Extrude1"):
 
 
 class TestCreateMirrorSyncEx:
-    def test_success(self, feature_mgr, managers):
+    """AddSyncEx needs an [in,out] SAFEARRAY that late binding cannot pass."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Extrude1")
         mc = MagicMock()
-        mirror = MagicMock()
-        mirror.Name = "Mirror1"
-        mc.AddSyncEx.return_value = mirror
         model.MirrorCopies = mc
 
         result = feature_mgr.create_mirror_sync_ex("Extrude1", 1)
-        assert result["status"] == "created"
-        assert result["type"] == "mirror_sync_ex"
+        assert result["unsupported"] is True
         assert result["feature"] == "Extrude1"
-        mc.AddSyncEx.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_mirror_sync_ex("Extrude1", 1)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_feature_not_found(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
-        feat = MagicMock()
-        feat.Name = "OtherFeature"
-        features = MagicMock()
-        features.Count = 1
-        features.Item.return_value = feat
-        doc.DesignEdgebarFeatures = features
-
-        result = feature_mgr.create_mirror_sync_ex("NonExistent", 1)
-        assert "error" in result
-        assert "not found" in result["error"]
+        assert result["mirror_plane"] == 1
+        assert "AddSyncEx" in result["error"]
+        mc.AddSyncEx.assert_not_called()
 
 
 # ============================================================================
@@ -1240,7 +1293,27 @@ class TestCreatePatternRectangularEx:
         assert result["type"] == "pattern_rectangular_ex"
         assert result["x_count"] == 3
         assert result["y_count"] == 2
-        model.Patterns.AddByRectangularEx.assert_called_once()
+        assert result["plane_index"] == 1
+        # AddByRectangularEx(NumberOfFeatures, FeatureArray, ReferencePlane,
+        # XDirectionCount, YDirectionCount, XDirectionSpacing,
+        # YDirectionSpacing, RectangleAngle, PatternMethod, ReferenceIndex,
+        # PatternType)
+        args = model.Patterns.AddByRectangularEx.call_args.args
+        assert len(args) == 11
+        assert args[0] == 1
+        assert args[2] is doc.RefPlanes.Item.return_value
+        assert args[3:] == (3, 2, 0.01, 0.02, 0.0, 2, 0, 0)
+
+    def test_invalid_plane_index(self, feature_mgr, managers):
+        _, _, doc, _, model, _ = managers
+        _setup_feature_lookup(doc, "Hole1")
+
+        result = feature_mgr.create_pattern_rectangular_ex(
+            "Hole1", 3, 2, 0.01, 0.02, plane_index=99
+        )
+        assert "error" in result
+        assert "Invalid plane_index" in result["error"]
+        model.Patterns.AddByRectangularEx.assert_not_called()
 
     def test_no_model(self, feature_mgr, managers):
         _, _, _, models, _, _ = managers
@@ -1269,37 +1342,18 @@ class TestCreatePatternRectangularEx:
 
 
 class TestCreatePatternCircularEx:
-    def test_success(self, feature_mgr, managers):
+    """AddByCircularEx needs a reference plane and an AxisPoint array."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Hole1")
-        pattern = MagicMock()
-        pattern.Name = "CircPattern1"
-        model.Patterns.AddByCircularEx.return_value = pattern
 
         result = feature_mgr.create_pattern_circular_ex("Hole1", 6, 360.0, 0)
-        assert result["status"] == "created"
-        assert result["type"] == "pattern_circular_ex"
+        assert result["unsupported"] is True
         assert result["count"] == 6
         assert result["angle"] == 360.0
-        model.Patterns.AddByCircularEx.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_pattern_circular_ex("Hole1", 6, 360.0, 0)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, doc, _, model, _ = managers
-        _setup_feature_lookup(doc, "Hole1")
-        faces = MagicMock()
-        faces.Count = 1
-        model.Body.Faces.return_value = faces
-
-        result = feature_mgr.create_pattern_circular_ex("Hole1", 6, 360.0, 5)
-        assert "error" in result
-        assert "Invalid axis_face_index" in result["error"]
+        assert "AxisPoint" in result["error"]
+        model.Patterns.AddByCircularEx.assert_not_called()
 
 
 # ============================================================================
@@ -1308,38 +1362,17 @@ class TestCreatePatternCircularEx:
 
 
 class TestCreatePatternDuplicate:
-    def test_success(self, feature_mgr, managers):
+    """AddDuplicate needs a FromReference and instance references."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Extrude1")
-        pattern = MagicMock()
-        pattern.Name = "Dup1"
-        model.Patterns.AddDuplicate.return_value = pattern
 
         result = feature_mgr.create_pattern_duplicate("Extrude1")
-        assert result["status"] == "created"
-        assert result["type"] == "pattern_duplicate"
+        assert result["unsupported"] is True
         assert result["feature"] == "Extrude1"
-        model.Patterns.AddDuplicate.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_pattern_duplicate("Extrude1")
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_feature_not_found(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
-        feat = MagicMock()
-        feat.Name = "OtherFeature"
-        features = MagicMock()
-        features.Count = 1
-        features.Item.return_value = feat
-        doc.DesignEdgebarFeatures = features
-
-        result = feature_mgr.create_pattern_duplicate("Missing")
-        assert "error" in result
-        assert "not found" in result["error"]
+        assert "FromReference" in result["error"]
+        model.Patterns.AddDuplicate.assert_not_called()
 
 
 # ============================================================================
@@ -1348,36 +1381,17 @@ class TestCreatePatternDuplicate:
 
 
 class TestCreatePatternByFill:
-    def test_success(self, feature_mgr, managers):
+    """AddByFill needs region profiles, not a body face."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Hole1")
-        pattern = MagicMock()
-        pattern.Name = "FillPattern1"
-        model.Patterns.AddByFill.return_value = pattern
 
         result = feature_mgr.create_pattern_by_fill("Hole1", 0, 0.01, 0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "pattern_by_fill"
+        assert result["unsupported"] is True
         assert result["fill_region_face_index"] == 0
-        model.Patterns.AddByFill.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_pattern_by_fill("Hole1", 0, 0.01, 0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, doc, _, model, _ = managers
-        _setup_feature_lookup(doc, "Hole1")
-        faces = MagicMock()
-        faces.Count = 1
-        model.Body.Faces.return_value = faces
-
-        result = feature_mgr.create_pattern_by_fill("Hole1", 5, 0.01, 0.01)
-        assert "error" in result
-        assert "Invalid fill_region_face_index" in result["error"]
+        assert "region profiles" in result["error"]
+        model.Patterns.AddByFill.assert_not_called()
 
 
 # ============================================================================
@@ -1386,32 +1400,17 @@ class TestCreatePatternByFill:
 
 
 class TestCreatePatternByTable:
-    def test_success(self, feature_mgr, managers):
+    """AddPatternByTable is Excel- and KeyPoint-driven."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Hole1")
-        pattern = MagicMock()
-        pattern.Name = "TablePattern1"
-        model.Patterns.AddPatternByTable.return_value = pattern
 
         result = feature_mgr.create_pattern_by_table("Hole1", [0.01, 0.02], [0.01, 0.02])
-        assert result["status"] == "created"
-        assert result["type"] == "pattern_by_table"
-        assert result["point_count"] == 2
-        model.Patterns.AddPatternByTable.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_pattern_by_table("Hole1", [0.01], [0.01])
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_mismatched_offsets(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
-        _setup_feature_lookup(doc, "Hole1")
-        result = feature_mgr.create_pattern_by_table("Hole1", [0.01, 0.02], [0.01])
-        assert "error" in result
-        assert "same length" in result["error"]
+        assert result["unsupported"] is True
+        assert result["x_offsets"] == [0.01, 0.02]
+        assert "Excel" in result["error"]
+        model.Patterns.AddPatternByTable.assert_not_called()
 
 
 # ============================================================================
@@ -1420,32 +1419,17 @@ class TestCreatePatternByTable:
 
 
 class TestCreatePatternByTableSync:
-    def test_success(self, feature_mgr, managers):
+    """AddPatternByTableSync is Excel- and KeyPoint-driven."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Hole1")
-        pattern = MagicMock()
-        pattern.Name = "TablePatternSync1"
-        model.Patterns.AddPatternByTableSync.return_value = pattern
 
         result = feature_mgr.create_pattern_by_table_sync("Hole1", [0.01, 0.02], [0.01, 0.02])
-        assert result["status"] == "created"
-        assert result["type"] == "pattern_by_table_sync"
-        assert result["point_count"] == 2
-        model.Patterns.AddPatternByTableSync.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_pattern_by_table_sync("Hole1", [0.01], [0.01])
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_mismatched_offsets(self, feature_mgr, managers):
-        _, _, doc, _, _, _ = managers
-        _setup_feature_lookup(doc, "Hole1")
-        result = feature_mgr.create_pattern_by_table_sync("Hole1", [0.01, 0.02], [0.01])
-        assert "error" in result
-        assert "same length" in result["error"]
+        assert result["unsupported"] is True
+        assert result["y_offsets"] == [0.01, 0.02]
+        assert "Excel" in result["error"]
+        model.Patterns.AddPatternByTableSync.assert_not_called()
 
 
 # ============================================================================
@@ -1454,42 +1438,17 @@ class TestCreatePatternByTableSync:
 
 
 class TestCreatePatternByFillEx:
-    def test_success(self, feature_mgr, managers):
+    """AddByFillEx needs region profiles, not a body face."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Hole1")
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 3
-        faces.Item.return_value = MagicMock()
-        body.Faces.return_value = faces
-
-        pattern = MagicMock()
-        pattern.Name = "FillPatternEx1"
-        model.Patterns.AddByFillEx.return_value = pattern
 
         result = feature_mgr.create_pattern_by_fill_ex("Hole1", 0, 0.01, 0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "pattern_by_fill_ex"
-        model.Patterns.AddByFillEx.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_pattern_by_fill_ex("Hole1", 0, 0.01, 0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_face(self, feature_mgr, managers):
-        _, _, doc, _, model, _ = managers
-        _setup_feature_lookup(doc, "Hole1")
-        body = model.Body
-        faces = MagicMock()
-        faces.Count = 1
-        body.Faces.return_value = faces
-
-        result = feature_mgr.create_pattern_by_fill_ex("Hole1", 5, 0.01, 0.01)
-        assert "error" in result
-        assert "Invalid fill_region_face_index" in result["error"]
+        assert result["unsupported"] is True
+        assert result["stagger_offset"] == 0.0
+        assert "region profiles" in result["error"]
+        model.Patterns.AddByFillEx.assert_not_called()
 
 
 # ============================================================================
@@ -1498,43 +1457,18 @@ class TestCreatePatternByFillEx:
 
 
 class TestCreatePatternByCurveEx:
-    def test_success(self, feature_mgr, managers):
+    """AddByCurveEx needs 23 arguments including an anchor KeyPoint."""
+
+    def test_unsupported(self, feature_mgr, managers):
         _, _, doc, _, model, _ = managers
         _setup_feature_lookup(doc, "Hole1")
-        body = model.Body
-        edges = MagicMock()
-        edges.Count = 3
-        edges.Item.return_value = MagicMock()
-        body.Edges.return_value = edges
-
-        pattern = MagicMock()
-        pattern.Name = "CurvePatternEx1"
-        model.Patterns.AddByCurveEx.return_value = pattern
 
         result = feature_mgr.create_pattern_by_curve_ex("Hole1", 0, 5, 0.01)
-        assert result["status"] == "created"
-        assert result["type"] == "pattern_by_curve_ex"
+        assert result["unsupported"] is True
         assert result["count"] == 5
-        model.Patterns.AddByCurveEx.assert_called_once()
-
-    def test_no_model(self, feature_mgr, managers):
-        _, _, _, models, _, _ = managers
-        models.Count = 0
-        result = feature_mgr.create_pattern_by_curve_ex("Hole1", 0, 5, 0.01)
-        assert "error" in result
-        assert "No base feature" in result["error"]
-
-    def test_invalid_edge(self, feature_mgr, managers):
-        _, _, doc, _, model, _ = managers
-        _setup_feature_lookup(doc, "Hole1")
-        body = model.Body
-        edges = MagicMock()
-        edges.Count = 1
-        body.Edges.return_value = edges
-
-        result = feature_mgr.create_pattern_by_curve_ex("Hole1", 5, 5, 0.01)
-        assert "error" in result
-        assert "Invalid curve_edge_index" in result["error"]
+        assert result["spacing"] == 0.01
+        assert "KeyPoint" in result["error"]
+        model.Patterns.AddByCurveEx.assert_not_called()
 
 
 # ============================================================================
@@ -1719,3 +1653,224 @@ class TestCreateSlotSyncMultiBody:
         result = feature_mgr.create_slot_sync_multi_body(0.005, 0.01, "Reverse")
         assert result["status"] == "created"
         assert result["direction"] == "Reverse"
+
+
+# ============================================================================
+# BODY CREATION
+# ============================================================================
+
+
+class TestAddBody:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.add_body()
+        assert result["status"] == "created"
+        assert result["body_type"] == "Solid"
+        assert result["body_name"] == "Body"
+        # Models.AddBody(igBodyType, BodyName); igPartType = 1
+        models.AddBody.assert_called_once_with(1, "Body")
+
+    def test_sheet_metal_with_name(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.add_body("SheetMetal", "Panel")
+        assert result["status"] == "created"
+        # igSheetMetalType = 2
+        models.AddBody.assert_called_once_with(2, "Panel")
+
+    def test_unknown_body_type(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.add_body("Surface")
+        assert "error" in result
+        assert "Unknown body_type" in result["error"]
+        models.AddBody.assert_not_called()
+
+
+class TestAddBodyByMesh:
+    def test_unsupported(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.add_body_by_mesh()
+        assert result["unsupported"] is True
+        assert "facet vertex" in result["error"]
+        models.AddBodyByMeshFacets.assert_not_called()
+
+
+class TestAddBodyFeature:
+    def test_success(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.add_body_feature("C:/parts/base.par")
+        assert result["status"] == "created"
+        assert result["import_file_name"] == "C:/parts/base.par"
+        # Models.AddBodyFeature(ImportFileName)
+        models.AddBodyFeature.assert_called_once_with("C:/parts/base.par")
+
+    def test_file_name_required(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.add_body_feature()
+        assert "error" in result
+        assert "import_file_name" in result["error"]
+        models.AddBodyFeature.assert_not_called()
+
+
+class TestAddByConstruction:
+    def test_success(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        constructions = MagicMock()
+        constructions.Count = 2
+        construction = MagicMock()
+        constructions.Item.return_value = construction
+        doc.Constructions = constructions
+
+        result = feature_mgr.add_by_construction(1)
+        assert result["status"] == "created"
+        assert result["construction_index"] == 1
+        constructions.Item.assert_called_once_with(2)
+        # Models.AddByConstruction(ConstructionSolid)
+        models.AddByConstruction.assert_called_once_with(construction)
+
+    def test_no_constructions(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        constructions = MagicMock()
+        constructions.Count = 0
+        doc.Constructions = constructions
+
+        result = feature_mgr.add_by_construction()
+        assert "error" in result
+        assert "No construction bodies" in result["error"]
+        models.AddByConstruction.assert_not_called()
+
+    def test_invalid_index(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        constructions = MagicMock()
+        constructions.Count = 1
+        doc.Constructions = constructions
+
+        result = feature_mgr.add_by_construction(7)
+        assert "error" in result
+        assert "Invalid construction_index" in result["error"]
+        models.AddByConstruction.assert_not_called()
+
+
+# ============================================================================
+# THICKEN / SIMPLIFY (unsupported)
+# ============================================================================
+
+
+class TestThickenSurface:
+    """AddThickenFeature over a construction body's faces; verified live for every side."""
+
+    @staticmethod
+    def _surface(doc, n_faces=6):
+        doc.Constructions.Count = 1
+        faces = doc.Constructions.Item.return_value.Body.Faces.return_value
+        faces.Count = n_faces
+        face_objects = [MagicMock(name=f"face{i}") for i in range(n_faces)]
+        faces.Item.side_effect = lambda i: face_objects[i - 1]
+        return face_objects
+
+    @pytest.mark.parametrize("direction, side", [("Both", 3), ("Normal", 2), ("Reverse", 1)])
+    def test_thickens_every_face_of_the_first_construction_body(
+        self, feature_mgr, managers, direction, side
+    ):
+        _, _, doc, models, _, _ = managers
+        face_objects = self._surface(doc)
+
+        result = feature_mgr.thicken_surface(0.002, direction=direction)
+
+        assert result["status"] == "created"
+        assert result["faces_thickened"] == 6
+        models.AddThickenFeature.assert_called_once_with(side, 0.002, 6, face_objects)
+        doc.Constructions.Item.assert_called_once_with(1)
+
+    def test_a_missing_surface_is_refused(self, feature_mgr, managers):
+        _, _, doc, models, _, _ = managers
+        doc.Constructions.Count = 0
+
+        result = feature_mgr.thicken_surface(0.002)
+
+        assert "Invalid surface index" in result["error"]
+        models.AddThickenFeature.assert_not_called()
+
+    def test_a_bad_direction_is_refused(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        assert "Invalid direction" in feature_mgr.thicken_surface(0.002, direction="Up")["error"]
+        models.AddThickenFeature.assert_not_called()
+
+
+class TestSimplify:
+    def test_auto_simplify_unsupported(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.auto_simplify()
+        assert result["unsupported"] is True
+        assert "occurrences" in result["error"]
+        models.AddAutoSimplify.assert_not_called()
+
+    def test_simplify_enclosure_unsupported(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.simplify_enclosure()
+        assert result["unsupported"] is True
+        models.AddSimplifyEnclosure.assert_not_called()
+
+    def test_simplify_duplicate_unsupported(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.simplify_duplicate()
+        assert result["unsupported"] is True
+        models.AddSimplifyDuplicate.assert_not_called()
+
+    def test_local_simplify_enclosure_unsupported(self, feature_mgr, managers):
+        _, _, _, models, _, _ = managers
+        result = feature_mgr.local_simplify_enclosure()
+        assert result["unsupported"] is True
+        assert "topology proxy" in result["error"]
+        models.AddLocalSimplifyEnclosure.assert_not_called()
+
+
+class TestDraftSide:
+    """Drafts.Add takes igInside (4) or igOutside (5), never igLeft or igRight.
+
+    Verified on Solid Edge 2026: 4 and 5 both work on every face of a box,
+    while 1, 2 and 3 fail with a bare E_FAIL whatever plane is named. The
+    face array goes as a plain list; no VARIANT wrapper is needed.
+    """
+
+    def _part(self, managers):
+        _, _, doc, models, model, _ = managers
+        faces = MagicMock()
+        faces.Count = 6
+        face = MagicMock()
+        faces.Item.return_value = face
+        model.Body.Faces.return_value = faces
+        doc.RefPlanes.Count = 3
+        return model, face
+
+    def test_inside_is_the_default(self, feature_mgr, managers):
+        model, face = self._part(managers)
+
+        result = feature_mgr.create_draft_angle(face_index=0, angle=3.0)
+
+        assert result["status"] == "created"
+        assert result["side"] == "inside"
+        args = model.Drafts.Add.call_args.args
+        assert args[2] == [face]  # a plain list, not a VARIANT
+        assert args[4] == 4  # igInside
+
+    def test_outside_is_five(self, feature_mgr, managers):
+        model, _face = self._part(managers)
+
+        feature_mgr.create_draft_angle(face_index=0, angle=3.0, side="outside")
+
+        assert model.Drafts.Add.call_args.args[4] == 5  # igOutside
+
+    def test_the_angle_reaches_com_in_radians(self, feature_mgr, managers):
+        model, _face = self._part(managers)
+
+        feature_mgr.create_draft_angle(face_index=0, angle=90.0)
+
+        assert model.Drafts.Add.call_args.args[3] == [pytest.approx(math.pi / 2)]
+
+    def test_an_unknown_side_is_refused(self, feature_mgr, managers):
+        model, _face = self._part(managers)
+
+        result = feature_mgr.create_draft_angle(face_index=0, angle=3.0, side="sideways")
+
+        assert "error" in result
+        model.Drafts.Add.assert_not_called()

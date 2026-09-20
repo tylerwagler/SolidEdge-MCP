@@ -1,15 +1,22 @@
 """Assembly-level feature operations."""
 
-import contextlib
 import math
-import traceback
 from typing import Any
 
+import pythoncom
+from win32com.client import VARIANT
+
+from solidedge_mcp.backends.errors import error_result
+
+from ..comutil import profile_origin
 from ..constants import (
     AssemblyFeaturePropertyConstants,
     ExtentTypeConstants,
+    HoleTypeConstants,
 )
+from ..features._base import verifies_collection_growth
 from ..logging import get_logger
+from ._base import com_get, verifies_assembly_geometry
 
 _logger = get_logger(__name__)
 
@@ -35,7 +42,9 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating component pattern: index=%d, count=%d, spacing=%s",
-                component_index, count, spacing,
+                component_index,
+                count,
+                spacing,
             )
             doc = self.doc_manager.get_active_document()
             occurrences = doc.Occurrences
@@ -53,7 +62,7 @@ class AssemblyFeaturesMixin:
 
             # Get source position
             try:
-                base_matrix = list(source.GetMatrix())
+                base_matrix = self._get_occurrence_matrix(source)
             except Exception:
                 base_matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
@@ -65,7 +74,7 @@ class AssemblyFeaturesMixin:
                 matrix = list(base_matrix)
                 matrix[dir_idx] = base_matrix[dir_idx] + (spacing * i)
                 occ = occurrences.AddWithMatrix(file_path, matrix)
-                placed.append(occ.Name if hasattr(occ, "Name") else f"copy_{i}")
+                placed.append(com_get(occ, "Name", f"copy_{i}"))
 
             return {
                 "status": "pattern_created",
@@ -77,7 +86,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create component pattern: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def _get_assembly_features(self) -> tuple[Any, Any]:
         """Get the AssemblyFeatures object from the active assembly document."""
@@ -86,20 +95,30 @@ class AssemblyFeaturesMixin:
         return doc, af
 
     def recompute_assembly_features(self, options: int = 0) -> dict[str, Any]:
-        """
-        Recompute all assembly features.
+        """Update the assembly.
+
+        ``AssemblyFeatures.Recompute(options)`` matches the type library but
+        answers E_FAIL on Solid Edge 2026 whatever it is given -- verified on
+        an empty assembly and on one holding a component, with options 0. The
+        object is not a normal collection either: it has no Count.
+
+        ``AssemblyDocument.UpdateAll()`` is the update that works, and it is
+        what this does.
 
         Args:
-            options: Recompute options (0 = default)
+            options: Accepted for compatibility; UpdateAll takes no options.
         """
         try:
-            _logger.info(f"Recomputing assembly features with options={options}")
-            _doc, af = self._get_assembly_features()
-            af.Recompute(options)
-            return {"status": "recomputed", "options": options}
+            _logger.info("Updating assembly (options=%s ignored by UpdateAll)", options)
+            doc = self.doc_manager.get_active_document()
+            err = self._require_assembly(doc)
+            if err:
+                return err
+            doc.UpdateAll()
+            return {"status": "recomputed", "method": "AssemblyDocument.UpdateAll"}
         except Exception as e:
-            _logger.error(f"Failed to recompute assembly features: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            _logger.error(f"Failed to update assembly: {e}")
+            return error_result(e)
 
     def _map_extent_type(self, extent_type: str) -> int:
         """Map extent type string to constant."""
@@ -128,6 +147,7 @@ class AssemblyFeaturesMixin:
         occurrences = doc.Occurrences
         return [occurrences.Item(idx + 1) for idx in scope_parts]
 
+    @verifies_assembly_geometry
     def create_assembly_extruded_cutout(
         self,
         scope_parts: list[int],
@@ -151,7 +171,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly extruded cutout: dist=%s, extent=%s",
-                distance, extent_type,
+                distance,
+                extent_type,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
@@ -182,8 +203,9 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly extruded cutout: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_assembly_geometry
     def create_assembly_revolved_cutout(
         self,
         scope_parts: list[int],
@@ -236,14 +258,16 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly revolved cutout: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    @verifies_assembly_geometry
     def create_assembly_hole(
         self,
         scope_parts: list[int],
         extent_type: str = "Finite",
         extent_side: str = "OneSide",
         depth: float = 0.01,
+        diameter: float = 0.006,
     ) -> dict[str, Any]:
         """
         Create an assembly-level hole feature across multiple components.
@@ -255,6 +279,7 @@ class AssemblyFeaturesMixin:
             extent_type: 'Finite' or 'ThroughAll'
             extent_side: 'OneSide' or 'BothSides'
             depth: Hole depth in meters (for Finite)
+            diameter: Hole diameter in meters
         """
         try:
             _logger.info(f"Creating assembly hole: depth={depth}, extent={extent_type}")
@@ -264,6 +289,19 @@ class AssemblyFeaturesMixin:
                 return {"error": "No profiles available. Create and close a sketch first."}
 
             scope = self._get_scope_parts_array(doc, scope_parts)
+            # pHoledata is what makes this a hole. Passed None, Solid Edge
+            # 2026 records nothing and raises nothing: AssemblyFeaturesHoles
+            # .Count stayed 0. With a HoleData from the assembly's own
+            # collection the same call records the feature and cuts the
+            # placed part, faces 6 -> 7. Verified live.
+            hole_data_collection = com_get(doc, "HoleDataCollection")
+            if hole_data_collection is None:
+                return {
+                    "error": "This document has no HoleDataCollection; no hole data can be built."
+                }
+            hole_data = hole_data_collection.Add(
+                HoleType=HoleTypeConstants.igRegularHole, HoleDiameter=diameter
+            )
             holes = af.AssemblyFeaturesHoles
             holes.Add(
                 len(scope),
@@ -271,7 +309,7 @@ class AssemblyFeaturesMixin:
                 len(profiles),
                 profiles,
                 self._map_extent_side(extent_side),
-                None,  # pHoledata
+                hole_data,
                 self._map_extent_type(extent_type),
                 depth,
                 None,
@@ -284,11 +322,17 @@ class AssemblyFeaturesMixin:
                 "type": "assembly_hole",
                 "extent_type": extent_type,
                 "depth": depth,
+                "diameter": diameter,
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly hole: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    # A protrusion takes no scope parts, so there is no occurrence body for
+    # it to change and the occurrence-face check can only ever say "nothing
+    # happened". Verified live: ExtrudedProtrusions.Count goes 0 -> 1 while
+    # every occurrence keeps its faces. The feature collection is the signal.
+    @verifies_collection_growth("AssemblyFeatures.ExtrudedProtrusions")
     def create_assembly_extruded_protrusion(
         self,
         extent_type: str = "Finite",
@@ -310,13 +354,23 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly extruded protrusion: dist=%s, extent=%s",
-                distance, extent_type,
+                distance,
+                extent_type,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if not profiles:
                 return {"error": "No profiles available. Create and close a sketch first."}
 
+            # AssemblyFeatures exposes AssemblyFeaturesExtrudedProtrusions; the
+            # bare ExtrudedProtrusions name belongs to Part.tlb, whose Add takes
+            # 35 arguments. Add here is (nNumProfiles, pProfiles, ExtentType,
+            # pExtentSide, profileSide, pdDistance, pKeyPoint, pKeyPointFlags,
+            # pFromSurfOrPlane, pToSurfOrPlane).
+            # The PROPERTY is ExtrudedProtrusions; its TYPE is the
+            # interface AssemblyFeaturesExtrudedProtrusions. Reading the
+            # interface name off AssemblyFeatures raises, and the member
+            # check cannot see it because that name is real elsewhere.
             protrusions = af.ExtrudedProtrusions
             protrusions.Add(
                 len(profiles),
@@ -338,8 +392,10 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly extruded protrusion: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
+    # As above: no scope parts, so the feature collection is the signal.
+    @verifies_collection_growth("AssemblyFeatures.RevolvedProtrusions")
     def create_assembly_revolved_protrusion(
         self,
         extent_type: str = "Finite",
@@ -361,13 +417,19 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly revolved protrusion: angle=%s, extent=%s",
-                angle, extent_type,
+                angle,
+                extent_type,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
             if not profiles:
                 return {"error": "No profiles available. Create and close a sketch first."}
 
+            # AssemblyFeaturesRevolvedProtrusions.Add(nNumProfiles, pProfiles,
+            #     pRefAxis, ExtentType, ExtentSide, profileSide, pdAngle,
+            #     KeyPointOrTangentFace, KeyPointFlags, pFromSurface, pToSurface)
+            # As above: the property is RevolvedProtrusions, the interface
+            # it returns is AssemblyFeaturesRevolvedProtrusions.
             protrusions = af.RevolvedProtrusions
             protrusions.Add(
                 len(profiles),
@@ -390,7 +452,7 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly revolved protrusion: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)
 
     def create_assembly_mirror(
         self,
@@ -401,54 +463,37 @@ class AssemblyFeaturesMixin:
         """
         Mirror assembly features across a reference plane.
 
+        NOT AVAILABLE via COM automation. ``AssemblyFeaturesMirrors.Add``
+        returns E_ACCESSDENIED (0x80070005) on Solid Edge 2025/2026 in every
+        argument combination tested, so this method never touches COM and
+        always returns an ``unsupported`` error dict. The signature is kept so
+        tool dispatch keeps working.
+
         Args:
             feature_indices: List of assembly feature indices to mirror (0-based)
-            plane_index: Reference plane index (1-based: 1=Top, 2=Front, 3=Right)
+            plane_index: Reference plane index (1-based: 1=Top/XY, 2=Right/YZ, 3=Front/XZ)
             mirror_type: Mirror option from FeaturePropertyConstants
         """
-        try:
-            _logger.info(
-                "Creating assembly mirror: features=%s, plane=%d",
-                feature_indices, plane_index,
-            )
-            doc, af = self._get_assembly_features()
-
-            # Get the mirror plane
-            plane = doc.RefPlanes.Item(plane_index)
-
-            # Get features to mirror from the assembly features collection
-            features_to_mirror = []
-            # Iterate available assembly feature collections to find features
-            for collection_name in [
-                "AssemblyFeaturesExtrudedCutouts",
-                "AssemblyFeaturesRevolvedCutouts",
-                "AssemblyFeaturesHoles",
-            ]:
-                with contextlib.suppress(Exception):
-                    coll = getattr(af, collection_name)
-                    for fi in feature_indices:
-                        with contextlib.suppress(Exception):
-                            features_to_mirror.append(coll.Item(fi + 1))
-
-            if not features_to_mirror:
-                return {"error": "No features found at the specified indices"}
-
-            mirrors = af.AssemblyFeaturesMirrors
-            mirrors.Add(
-                len(features_to_mirror),
-                features_to_mirror,
-                plane,
-                mirror_type,
-            )
-            return {
-                "status": "created",
-                "type": "assembly_mirror",
-                "num_features": len(features_to_mirror),
-                "plane_index": plane_index,
-            }
-        except Exception as e:
-            _logger.error(f"Failed to create assembly mirror: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+        _logger.warning(
+            "Assembly mirror requested (features=%s, plane=%d) but "
+            "AssemblyFeaturesMirrors.Add is not usable through COM; refusing.",
+            feature_indices,
+            plane_index,
+        )
+        return {
+            "error": (
+                "Assembly-level mirror is not available through Solid Edge COM "
+                "automation (AssemblyFeaturesMirrors.Add returns E_ACCESSDENIED "
+                "0x80070005 on SE 2025/2026). Mirror the feature in the part "
+                "document instead, or create individual assembly features at "
+                "each position."
+            ),
+            "unsupported": True,
+            "type": "assembly_mirror",
+            "feature_indices": list(feature_indices),
+            "plane_index": plane_index,
+            "mirror_type": mirror_type,
+        }
 
     def create_assembly_pattern(
         self,
@@ -458,58 +503,37 @@ class AssemblyFeaturesMixin:
         """
         Pattern assembly features.
 
+        NOT AVAILABLE via COM automation. ``AssemblyFeaturesPatterns.Add``
+        returns E_ACCESSDENIED (0x80070005) on Solid Edge 2025/2026 in every
+        argument combination tested, so this method never touches COM and
+        always returns an ``unsupported`` error dict. The signature is kept so
+        tool dispatch keeps working.
+
         Args:
             feature_indices: List of assembly feature indices to pattern (0-based)
             pattern_type: 'Rectangular' or 'Circular'
         """
-        try:
-            _logger.info(
-                "Creating assembly pattern: features=%s, type=%s",
-                feature_indices, pattern_type,
-            )
-            doc, af = self._get_assembly_features()
-            profiles = self.sketch_manager.get_accumulated_profiles()
+        _logger.warning(
+            "Assembly pattern requested (features=%s, type=%s) but "
+            "AssemblyFeaturesPatterns.Add is not usable through COM; refusing.",
+            feature_indices,
+            pattern_type,
+        )
+        return {
+            "error": (
+                "Assembly-level feature pattern is not available through Solid Edge "
+                "COM automation (AssemblyFeaturesPatterns.Add returns E_ACCESSDENIED "
+                "0x80070005 on SE 2025/2026). Pattern the feature in the part "
+                "document instead, use pattern_component() to pattern whole "
+                "components, or create individual assembly features at each position."
+            ),
+            "unsupported": True,
+            "type": "assembly_pattern",
+            "feature_indices": list(feature_indices),
+            "pattern_type": pattern_type,
+        }
 
-            pattern_map = {
-                "Rectangular": 1,  # igRectangularPattern
-                "Circular": 2,  # igCircularPattern
-            }
-            pattern_const = pattern_map.get(pattern_type, 1)
-
-            # Get features to pattern
-            features_to_pattern = []
-            for collection_name in [
-                "AssemblyFeaturesExtrudedCutouts",
-                "AssemblyFeaturesRevolvedCutouts",
-                "AssemblyFeaturesHoles",
-            ]:
-                with contextlib.suppress(Exception):
-                    coll = getattr(af, collection_name)
-                    for fi in feature_indices:
-                        with contextlib.suppress(Exception):
-                            features_to_pattern.append(coll.Item(fi + 1))
-
-            if not features_to_pattern:
-                return {"error": "No features found at the specified indices"}
-
-            profile = profiles[0] if profiles else None
-            patterns = af.AssemblyFeaturesPatterns
-            patterns.Add(
-                len(features_to_pattern),
-                features_to_pattern,
-                profile,
-                pattern_const,
-            )
-            return {
-                "status": "created",
-                "type": "assembly_pattern",
-                "pattern_type": pattern_type,
-                "num_features": len(features_to_pattern),
-            }
-        except Exception as e:
-            _logger.error(f"Failed to create assembly pattern: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
-
+    @verifies_assembly_geometry
     def create_assembly_swept_protrusion(
         self,
         num_trace_curves: int = 1,
@@ -528,7 +552,8 @@ class AssemblyFeaturesMixin:
         try:
             _logger.info(
                 "Creating assembly swept protrusion: traces=%d, sections=%d",
-                num_trace_curves, num_cross_sections,
+                num_trace_curves,
+                num_cross_sections,
             )
             doc, af = self._get_assembly_features()
             profiles = self.sketch_manager.get_accumulated_profiles()
@@ -541,13 +566,14 @@ class AssemblyFeaturesMixin:
             trace_curves = profiles[:num_trace_curves]
             cross_sections = profiles[num_trace_curves : num_trace_curves + num_cross_sections]
 
-            import pythoncom
-            from win32com.client import VARIANT
+            # A SAFEARRAY of SAFEARRAY(VT_R8): the inner VARIANTs are required, only
 
-            v_origins = VARIANT(
-                pythoncom.VT_ARRAY | pythoncom.VT_VARIANT,
-                [VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, [0.0, 0.0]) for _ in cross_sections],
-            )
+            # the outer wrapper is not. Dropping them broke the lofted cutout.
+
+            v_origins = [
+                VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, list(profile_origin(p)))
+                for p in cross_sections
+            ]
 
             swept = af.AssemblyFeaturesSweptProtrusions
             swept.Add(
@@ -565,4 +591,4 @@ class AssemblyFeaturesMixin:
             }
         except Exception as e:
             _logger.error(f"Failed to create assembly swept protrusion: {e}")
-            return {"error": str(e), "traceback": traceback.format_exc()}
+            return error_result(e)

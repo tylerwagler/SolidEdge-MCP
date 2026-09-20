@@ -6,9 +6,16 @@ sheet collections, and drawing view counts/scales.
 Uses unittest.mock to simulate COM objects.
 """
 
-from unittest.mock import MagicMock
+import contextlib
+from unittest.mock import MagicMock, patch
 
 import pytest
+
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
 
 
 @pytest.fixture
@@ -18,6 +25,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -46,7 +54,7 @@ class TestAddDraftSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_draft_sheet()
         assert "error" in result
@@ -80,14 +88,30 @@ class TestCreateDraftDocument:
         assert result["status"] == "created"
         app.Documents.Add.assert_called_once()
 
-    def test_with_template(self, doc_mgr):
+    def test_with_a_template_that_exists(self, doc_mgr, tmp_path):
         dm, app = doc_mgr
+        template = tmp_path / "a3.dft"
+        template.write_bytes(b"")
         draft_doc = MagicMock()
         draft_doc.Name = "Draft1.dft"
         app.Documents.Add.return_value = draft_doc
 
-        result = dm.create_draft("C:/templates/a3.dft")
+        result = dm.create_draft(str(template))
+
         assert result["status"] == "created"
+        app.Documents.Add.assert_called_once_with(str(template))
+
+    def test_a_template_that_does_not_exist_is_refused_not_ignored(self, doc_mgr):
+        """This used to fall through silently to the default draft, so a
+        caller who asked for a template got a plain sheet and no word that
+        their path had been ignored."""
+        dm, app = doc_mgr
+
+        result = dm.create_draft("C:/templates/a3.dft")
+
+        assert "error" in result
+        assert "Template not found" in result["error"]
+        app.Documents.Add.assert_not_called()
 
 
 # ============================================================================
@@ -117,7 +141,7 @@ class TestAddAssemblyDrawingView:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.add_assembly_drawing_view()
         assert "error" in result
@@ -167,7 +191,7 @@ class TestGetSheetInfo:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_info()
         assert "error" in result
@@ -204,7 +228,7 @@ class TestActivateSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.activate_sheet(0)
         assert "error" in result
@@ -232,7 +256,7 @@ class TestRenameSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.rename_sheet(0, "New Name")
         assert "error" in result
@@ -277,7 +301,7 @@ class TestDeleteSheet:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.delete_sheet(0)
         assert "error" in result
@@ -314,7 +338,7 @@ class TestGetSheetDimensions:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_dimensions()
         assert "error" in result
@@ -338,8 +362,11 @@ class TestGetSheetBalloons:
         sheet = MagicMock()
         b1 = MagicMock()
         b1.BalloonText = "1"
-        b1.x = 0.05
-        b1.y = 0.1
+        # Balloon has no x/y and no GetOrigin; its position is its keypoint.
+        # Reading .x left both keys missing from every balloon this returned.
+        b1.GetKeyPoint.return_value = (0.05, 0.1, 0.0, 16384, 2)
+        del b1.x
+        del b1.y
 
         balloons = MagicMock()
         balloons.Count = 1
@@ -350,10 +377,12 @@ class TestGetSheetBalloons:
         result = em.get_sheet_balloons()
         assert result["count"] == 1
         assert result["balloons"][0]["text"] == "1"
+        assert result["balloons"][0]["x"] == 0.05
+        assert result["balloons"][0]["y"] == 0.1
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_balloons()
         assert "error" in result
@@ -376,9 +405,12 @@ class TestGetSheetTextBoxes:
         sheet = MagicMock()
         tb = MagicMock()
         tb.Text = "Hello"
-        tb.x = 0.02
-        tb.y = 0.03
         tb.Height = 0.005
+        # TextBox has no x/y properties, so the position has to come from
+        # GetOrigin's out-parameters; reading tb.x left both keys missing.
+        tb.GetOrigin.return_value = (0.02, 0.03, 0.0)
+        del tb.x
+        del tb.y
 
         text_boxes = MagicMock()
         text_boxes.Count = 1
@@ -390,10 +422,12 @@ class TestGetSheetTextBoxes:
         assert result["count"] == 1
         assert result["text_boxes"][0]["text"] == "Hello"
         assert result["text_boxes"][0]["height"] == 0.005
+        assert result["text_boxes"][0]["x"] == 0.02
+        assert result["text_boxes"][0]["y"] == 0.03
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_text_boxes()
         assert "error" in result
@@ -429,7 +463,7 @@ class TestGetSheetDrawingObjects:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_drawing_objects()
         assert "error" in result
@@ -451,23 +485,29 @@ class TestGetSheetSections:
         em, doc = export_mgr
         sheet = MagicMock()
         sec = MagicMock()
-        sec.Label = "A-A"
+        # Section has no Label; Name, Type and Sheets are what it reports.
+        del sec.Label
         sec.Name = "Section1"
         sec.Type = 1
+        sec.Sheets.Count = 2
 
         sections = MagicMock()
         sections.Count = 1
         sections.Item.return_value = sec
-        sheet.Sections = sections
+        # Sections is on DraftDocument, not on Sheet.
+        del sheet.Sections
+        doc.Sections = sections
         doc.ActiveSheet = sheet
 
         result = em.get_sheet_sections()
         assert result["count"] == 1
-        assert result["sections"][0]["label"] == "A-A"
+        assert result["sections"][0]["name"] == "Section1"
+        assert result["sections"][0]["sheet_count"] == 2
+        assert "label" not in result["sections"][0]
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.ActiveSheet
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_sheet_sections()
         assert "error" in result
@@ -477,7 +517,9 @@ class TestGetSheetSections:
         sheet = MagicMock()
         sections = MagicMock()
         sections.Count = 0
-        sheet.Sections = sections
+        # Sections is on DraftDocument, not on Sheet.
+        del sheet.Sections
+        doc.Sections = sections
         doc.ActiveSheet = sheet
 
         result = em.get_sheet_sections()
@@ -497,12 +539,16 @@ class TestCreatePartsList:
         dvs = MagicMock()
         dvs.Count = 1
         dvs.Item.return_value = dv
+        # Skip the late-binding branch, as the other drawing-view tests do.
+        del dvs._oleobj_
         sheet.DrawingViews = dvs
 
         parts_lists = MagicMock()
         parts_lists.Count = 1
         parts_lists.Add.return_value = MagicMock()
-        sheet.PartsLists = parts_lists
+        # PartsLists is on DraftDocument, not on Sheet.
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
@@ -516,6 +562,8 @@ class TestCreatePartsList:
         sheet = MagicMock()
         dvs = MagicMock()
         dvs.Count = 0
+        # Skip the late-binding branch, as the other drawing-view tests do.
+        del dvs._oleobj_
         sheet.DrawingViews = dvs
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
@@ -526,7 +574,7 @@ class TestCreatePartsList:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.create_parts_list()
         assert "error" in result
@@ -538,12 +586,16 @@ class TestCreatePartsList:
         dvs = MagicMock()
         dvs.Count = 1
         dvs.Item.return_value = dv
+        # Skip the late-binding branch, as the other drawing-view tests do.
+        del dvs._oleobj_
         sheet.DrawingViews = dvs
 
         parts_lists = MagicMock()
         parts_lists.Count = 1
         parts_lists.Add.return_value = MagicMock()
-        sheet.PartsLists = parts_lists
+        # PartsLists is on DraftDocument, not on Sheet.
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
         doc.ActiveSheet = sheet
         doc.Sheets = MagicMock()
 
@@ -551,6 +603,61 @@ class TestCreatePartsList:
         assert result["status"] == "created"
         assert result["auto_balloon"] is False
         parts_lists.Add.assert_called_once_with(dv, "", 0, 1)
+
+    def test_position_is_applied(self, export_mgr):
+        """x/y were accepted and dropped: Solid Edge chose the position and
+        the result echoed the one the caller asked for."""
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dv = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = dv
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+
+        parts_list = MagicMock()
+        parts_lists = MagicMock()
+        parts_lists.Count = 1
+        parts_lists.Add.return_value = parts_list
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.create_parts_list(x=0.12, y=0.22)
+
+        # PartsLists.Add takes no position; PartsList.SetOrigin is the API.
+        parts_list.SetOrigin.assert_called_once_with(0.12, 0.22)
+        assert result["position"] == [0.12, 0.22]
+        assert result["positioned"] is True
+
+    def test_position_failure_is_reported_not_claimed(self, export_mgr):
+        """A table that could not be moved must not report a position."""
+        em, doc = export_mgr
+        sheet = MagicMock()
+        dv = MagicMock()
+        dvs = MagicMock()
+        dvs.Count = 1
+        dvs.Item.return_value = dv
+        del dvs._oleobj_
+        sheet.DrawingViews = dvs
+
+        parts_list = MagicMock()
+        parts_list.SetOrigin.side_effect = Exception("E_FAIL")
+        parts_lists = MagicMock()
+        parts_lists.Count = 1
+        parts_lists.Add.return_value = parts_list
+        del sheet.PartsLists
+        doc.PartsLists = parts_lists
+        doc.ActiveSheet = sheet
+        doc.Sheets = MagicMock()
+
+        result = em.create_parts_list(x=0.12, y=0.22)
+
+        assert result["status"] == "created"
+        assert result["positioned"] is False
+        assert result["position"] is None
 
 
 # ============================================================================
@@ -575,7 +682,7 @@ class TestGetDrawingViewCount:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_drawing_view_count()
         assert "error" in result
@@ -619,7 +726,109 @@ class TestGetDrawingViewScale:
 
     def test_not_draft(self, export_mgr):
         em, doc = export_mgr
-        del doc.Sheets
+        doc.Type = IG_PART_DOCUMENT
 
         result = em.get_drawing_view_scale(0)
         assert "error" in result
+
+
+# ============================================================================
+# CREATE DRAWING
+# ============================================================================
+
+
+class TestCreateDrawing:
+    """The orientation constant this passes decides what the view looks like.
+
+    It used to carry its own DrawingViewOrientationConstants, with Front=5 and
+    Top=6. DrawingViews.AddPartView declares ViewOrientationConstants, where 5
+    is igBottomView and 6 is igBackView, so every "Front" view this server
+    made was a bottom view and every "Top" a back view. Nothing caught it:
+    there was no test for this method at all, and the constants test carried an
+    exclusion calling the values "empirically verified".
+    """
+
+    @contextlib.contextmanager
+    def _draft(self, source="C:/parts/bracket.par"):
+        """An ExportManager whose draft document is entirely mocked.
+
+        create_drawing forces late binding with
+        ``dyn.Dispatch(sheet.DrawingViews._oleobj_)`` and does not guard it,
+        because on a real proxy _oleobj_ is always there. Patching Dispatch is
+        how a mock gets through that without reshaping the code to suit a test.
+        """
+        import win32com.client.dynamic as dyn
+
+        doc = MagicMock()
+        doc.Type = IG_PART_DOCUMENT
+        doc.FullName = source
+        app = MagicMock()
+        doc_mgr = MagicMock()
+        doc_mgr.get_active_document.return_value = doc
+        doc_mgr.connection.get_application.return_value = app
+
+        draft_doc = MagicMock()
+        draft_doc.Name = "Draft1"
+        app.Documents.Add.return_value = draft_doc
+        model_link = MagicMock()
+        draft_doc.ModelLinks.Add.return_value = model_link
+
+        dvs = MagicMock()
+
+        from solidedge_mcp.backends.export import ExportManager
+
+        with patch.object(dyn, "Dispatch", return_value=dvs):
+            yield ExportManager(doc_mgr), dvs, model_link
+
+    def test_orientations_match_the_type_library(self):
+        with self._draft() as (em, dvs, _link):
+            result = em.create_drawing(views=["Front", "Top", "Right", "Isometric"])
+
+            assert result["views_added"] == ["Front", "Top", "Right", "Isometric"]
+            passed = [call.args[1] for call in dvs.AddPartView.call_args_list]
+            # constant.tlb > ViewOrientationConstants: igFrontView, igTopView,
+            # igRightView, igTopFrontRightView.
+            assert passed == [4, 1, 2, 9]
+
+    def test_the_model_link_and_view_type_are_passed(self):
+        with self._draft() as (em, dvs, model_link):
+            em.create_drawing(views=["Front"])
+
+            dvs.AddPartView.assert_called_once_with(model_link, 4, 1.0, 0.10, 0.15, 0)
+
+    def test_an_unknown_orientation_is_skipped(self):
+        with self._draft() as (em, dvs, _link):
+            result = em.create_drawing(views=["Front", "Sideways"])
+
+            assert result["views_added"] == ["Front"]
+            assert dvs.AddPartView.call_count == 1
+
+    def test_a_dropped_view_says_why(self):
+        """A failed view used to leave nothing behind but its absence."""
+        with self._draft() as (em, dvs, _link):
+            dvs.AddPartView.side_effect = Exception("no part view here")
+            dvs.Add.side_effect = Exception("nor a generic one")
+
+            result = em.create_drawing(views=["Front"])
+
+            assert result["views_added"] == []
+            assert "Front" in result["views_failed"]
+            assert "no part view here" in result["views_failed"]["Front"]
+            assert "nor a generic one" in result["views_failed"]["Front"]
+
+    def test_the_generic_add_is_the_fallback(self):
+        with self._draft() as (em, dvs, model_link):
+            dvs.AddPartView.side_effect = Exception("not a part")
+
+            result = em.create_drawing(views=["Front"])
+
+            dvs.Add.assert_called_once_with(model_link, 4, 1.0, 0.10, 0.15)
+            assert result["views_added"] == ["Front"]
+            assert "views_failed" not in result
+
+    def test_an_unsaved_document_is_refused(self):
+        with self._draft(source="") as (em, _dvs, _link):
+            result = em.create_drawing()
+
+            assert "error" in result
+            assert "must be saved" in result["error"]

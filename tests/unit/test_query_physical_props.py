@@ -63,6 +63,8 @@ class TestGetVolume:
 
 
 class TestGetSurfaceArea:
+    """Body has no SurfaceArea property; the faces are summed instead."""
+
     def test_success(self, query_mgr):
         qm, doc = query_mgr
         model = MagicMock()
@@ -71,11 +73,35 @@ class TestGetSurfaceArea:
         models.Item.return_value = model
         doc.Models = models
 
-        model.Body.SurfaceArea = 0.06  # 60000 mm²
+        faces = MagicMock()
+        faces.Count = 2
+        first = MagicMock()
+        first.Area = 0.04
+        second = MagicMock()
+        second.Area = 0.02
+        faces.Item.side_effect = lambda i: {1: first, 2: second}[i]
+        model.Body.Faces.return_value = faces
+        del model.Body.SurfaceArea
 
         result = qm.get_surface_area()
-        assert result["surface_area"] == 0.06
-        assert result["surface_area_mm2"] == 60000.0
+
+        assert result["surface_area"] == pytest.approx(0.06)
+        assert result["surface_area_mm2"] == pytest.approx(60000.0)
+        assert result["face_count"] == 2
+        assert result["method"] == "sum_of_faces"
+
+    def test_a_body_without_faces_is_an_error(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        faces = MagicMock()
+        faces.Count = 0
+        model.Body.Faces.return_value = faces
+
+        assert "error" in qm.get_surface_area()
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -83,8 +109,7 @@ class TestGetSurfaceArea:
         models.Count = 0
         doc.Models = models
 
-        result = qm.get_surface_area()
-        assert "error" in result
+        assert "error" in qm.get_surface_area()
 
 
 # ============================================================================
@@ -171,25 +196,38 @@ class TestGetMomentsOfInertia:
         models.Item.return_value = model
         doc.Models = models
 
-        moi = (1.0, 2.0, 3.0)
+        # GlobalMomentsOfInteria is six values: Ixx Iyy Izz Ixy Ixz Iyz. This
+        # test used to feed three and assert a bare list, which pinned both
+        # the wrong length and the shape that hid which value was which.
+        moi = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
         principal = (1.5, 2.5, 3.5)
         model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
             0.001,
             0.06,
             7.85,
             (0, 0, 0),
-            (0,),
+            (0, 0, 0),
             moi,
             principal,
-            (0,),
-            (0,),
-            0,
+            (0,) * 9,
+            (0.1, 0.2, 0.3),
+            0.0,
             0,
         )
 
         result = qm.get_moments_of_inertia()
-        assert result["moments_of_inertia"] == [1.0, 2.0, 3.0]
+        assert result["moments_of_inertia"] == {
+            "Ixx": 1.0,
+            "Iyy": 2.0,
+            "Izz": 3.0,
+            "Ixy": 4.0,
+            "Ixz": 5.0,
+            "Iyz": 6.0,
+        }
         assert result["principal_moments"] == [1.5, 2.5, 3.5]
+        assert result["radii_of_gyration"] == [0.1, 0.2, 0.3]
+        assert result["density"] == 7850.0, "the assumed density is now visible"
+        assert result["units"]["moments_of_inertia"] == "kg·m²"
 
 
 # ============================================================================
@@ -248,9 +286,7 @@ class TestGetUserPhysicalProperties:
         # the method must compute from geometry instead of erroring.
         qm, doc = query_mgr
         doc.GetUserPhysicalProperties.side_effect = Exception("Not a part doc")
-        qm.get_mass_properties = MagicMock(
-            return_value={"status": "computed", "mass": 0.44}
-        )
+        qm.get_mass_properties = MagicMock(return_value={"status": "computed", "mass": 0.44})
 
         result = qm.get_user_physical_properties(density=2700.0)
         qm.get_mass_properties.assert_called_once_with(2700.0)
@@ -295,37 +331,173 @@ class TestMeasureAngle:
 # ============================================================================
 
 
-class TestSetBodyColor:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+class TestOwnedFaceStyle:
+    """Colour, opacity and reflectivity are three fields of one FaceStyle.
 
+    They used to be written to three different places: colour to a style
+    named after the colour, opacity and reflectivity to ``Body.FaceStyle``,
+    a member no Solid Edge interface has. Against a MagicMock that assignment
+    looked like it worked -- the old tests asserted
+    ``model.Body.FaceStyle.Opacity == 0.5`` and passed -- and against Solid
+    Edge 2026 it raised ``AttributeError: Body.FaceStyle`` every time.
+    """
+
+    def _part(self, doc, current_style=None):
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = current_style
+
+        style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, styles, style
+
+    def test_the_style_is_named_after_the_body(self, query_mgr):
+        qm, doc = query_mgr
+        _model, styles, _style = self._part(doc)
+
+        qm.set_body_color(255, 0, 0)
+
+        styles.Add.assert_called_once_with("MCP Design Body_1", "")
+
+    def test_all_three_share_one_style(self, query_mgr):
+        """Setting opacity must not discard a colour set before it."""
+        qm, doc = query_mgr
+        model, styles, style = self._part(doc)
+
+        qm.set_body_color(255, 0, 0)
+        # The body now carries our style, so the next call reuses it.
+        model.Body.Style = style
+        qm.set_body_opacity(0.5)
+        qm.set_body_reflectivity(0.3)
+
+        styles.Add.assert_called_once()
+        style.SetDiffuse.assert_called_once_with(1.0, 0.0, 0.0)
+        assert style.Opacity == 0.5
+        assert style.Reflectivity == 0.3
+
+    def test_a_stock_style_is_never_written_to(self, query_mgr):
+        """A style Solid Edge ships may be shared across the whole document."""
+        qm, doc = query_mgr
+        stock = MagicMock()
+        stock.StyleName = "Steel"
+        stock.GetDiffuse.return_value = (0.2, 0.2, 0.2)
+        stock.Opacity = 0.8
+        stock.Reflectivity = 0.1
+        model, _styles, style = self._part(doc, current_style=stock)
+
+        qm.set_body_opacity(0.5)
+
+        assert stock.Opacity == 0.8, "the stock style must be left alone"
+        assert style.Opacity == 0.5
+        assert model.Body.Style is style
+
+    def test_the_previous_look_is_carried_over(self, query_mgr):
+        """Changing one property must not reset the other two."""
+        qm, doc = query_mgr
+        stock = MagicMock()
+        stock.StyleName = "Steel"
+        stock.GetDiffuse.return_value = (0.2, 0.4, 0.6)
+        stock.Opacity = 0.8
+        stock.Reflectivity = 0.1
+        _model, _styles, style = self._part(doc, current_style=stock)
+
+        qm.set_body_reflectivity(0.3)
+
+        style.SetDiffuse.assert_called_once_with(0.2, 0.4, 0.6)
+        assert style.Opacity == 0.8
+        assert style.Reflectivity == 0.3
+
+    def test_a_style_we_already_own_is_reused(self, query_mgr):
+        qm, doc = query_mgr
+        mine = MagicMock()
+        mine.StyleName = "MCP Design Body_1"
+        _model, styles, _style = self._part(doc, current_style=mine)
+
+        qm.set_body_opacity(0.5)
+
+        styles.Add.assert_not_called()
+        assert mine.Opacity == 0.5
+
+
+class TestSetBodyColor:
+    """A body is coloured by assigning it a FaceStyle with a diffuse colour.
+
+    Style.SetForegroundColor is in no Solid Edge type library, and Body.Style
+    is None until something assigns one.
+    """
+
+    def _part(self, doc):
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = None
+        style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, styles, style
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model, styles, style = self._part(doc)
 
         result = qm.set_body_color(255, 0, 0)
+
         assert result["status"] == "set"
-        assert result["color"]["red"] == 255
-        assert result["color"]["green"] == 0
-        assert result["color"]["blue"] == 0
         assert result["hex"] == "#ff0000"
-        model.Body.Style.SetForegroundColor.assert_called_once_with(255, 0, 0)
+        assert result["style"] == "MCP Design Body_1"
+        # SetDiffuse takes 0.0-1.0, not 0-255.
+        style.SetDiffuse.assert_called_once_with(1.0, 0.0, 0.0)
+        assert model.Body.Style is style
+        style.SetForegroundColor.assert_not_called()
+
+    def test_reuses_a_style_it_already_made(self, query_mgr):
+        qm, doc = query_mgr
+        _model, styles, _style = self._part(doc)
+        existing = MagicMock()
+        existing.StyleName = "MCP Design Body_1"
+        styles.Item.side_effect = None
+        styles.Item.return_value = existing
+
+        qm.set_body_color(0, 128, 255)
+
+        styles.Add.assert_not_called()
+        existing.SetDiffuse.assert_called_once()
 
     def test_clamps_values(self, query_mgr):
         qm, doc = query_mgr
+        self._part(doc)
 
+        result = qm.set_body_color(300, -10, 128)
+
+        assert result["color"]["red"] == 255
+        assert result["color"]["green"] == 0
+        assert result["color"]["blue"] == 128
+
+    def test_a_document_without_face_styles(self, query_mgr):
+        qm, doc = query_mgr
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.Style = None
+        doc.FaceStyles = None
 
-        result = qm.set_body_color(300, -10, 128)
-        assert result["color"]["red"] == 255
-        assert result["color"]["green"] == 0
-        assert result["color"]["blue"] == 128
+        assert "error" in qm.set_body_color(255, 0, 0)
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -333,8 +505,63 @@ class TestSetBodyColor:
         models.Count = 0
         doc.Models = models
 
-        result = qm.set_body_color(255, 0, 0)
+        assert "error" in qm.set_body_color(255, 0, 0)
+
+
+# ============================================================================
+# FACESTYLE: GET BODY COLOUR
+# ============================================================================
+
+
+class TestGetBodyColour:
+    """FaceStyle.GetDiffuse reports 0.0-1.0 per channel."""
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.Style.GetDiffuse.return_value = (1.0, 0.0, 0.5)
+
+        result = qm.get_body_color()
+
+        assert result["red"] == 255
+        assert result["green"] == 0
+        assert result["blue"] == 128
+        assert result["hex"] == "#ff0080"
+
+    def test_reports_the_rest_of_the_style(self, query_mgr):
+        """Opacity and reflectivity live on the same style, so read them too."""
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.Style.GetDiffuse.return_value = (1.0, 0.0, 0.5)
+        model.Body.Style.Opacity = 0.4
+        model.Body.Style.Reflectivity = 0.6
+
+        result = qm.get_body_color()
+
+        assert result["opacity"] == 0.4
+        assert result["reflectivity"] == 0.6
+
+    def test_a_body_without_a_style_says_so(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        models = MagicMock()
+        models.Count = 1
+        models.Item.return_value = model
+        doc.Models = models
+        model.Body.Style = None
+
+        result = qm.get_body_color()
+
         assert "error" in result
+        assert "default colour" in result["error"]
 
 
 # ============================================================================
@@ -343,34 +570,52 @@ class TestSetBodyColor:
 
 
 class TestSetBodyOpacity:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+    def _part(self, doc):
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = None
+        style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, style
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model, style = self._part(doc)
 
         result = qm.set_body_opacity(0.5)
+
         assert result["status"] == "set"
         assert result["opacity"] == 0.5
-        assert model.Body.FaceStyle.Opacity == 0.5
+        # Opacity belongs to the FaceStyle, which Body.Style holds.
+        assert style.Opacity == 0.5
+        assert model.Body.Style is style
 
     def test_clamps_values(self, query_mgr):
         qm, doc = query_mgr
+        self._part(doc)
+
+        assert qm.set_body_opacity(1.5)["opacity"] == 1.0
+        assert qm.set_body_opacity(-0.5)["opacity"] == 0.0
+
+    def test_a_document_without_face_styles(self, query_mgr):
+        qm, doc = query_mgr
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.Style = None
+        doc.FaceStyles = None
 
-        result = qm.set_body_opacity(1.5)
-        assert result["status"] == "set"
-        assert result["opacity"] == 1.0
-
-        result = qm.set_body_opacity(-0.5)
-        assert result["status"] == "set"
-        assert result["opacity"] == 0.0
+        assert "error" in qm.set_body_opacity(0.5)
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -378,8 +623,7 @@ class TestSetBodyOpacity:
         models.Count = 0
         doc.Models = models
 
-        result = qm.set_body_opacity(0.5)
-        assert "error" in result
+        assert "error" in qm.set_body_opacity(0.5)
 
 
 # ============================================================================
@@ -388,30 +632,38 @@ class TestSetBodyOpacity:
 
 
 class TestSetBodyReflectivity:
-    def test_success(self, query_mgr):
-        qm, doc = query_mgr
+    def _part(self, doc):
         model = MagicMock()
         models = MagicMock()
         models.Count = 1
         models.Item.return_value = model
         doc.Models = models
+        model.Body.DisplayName = "Design Body_1"
+        model.Body.Style = None
+        style = MagicMock()
+        style.StyleName = "MCP Design Body_1"
+        styles = MagicMock()
+        styles.Item.side_effect = Exception("no such style")
+        styles.Add.return_value = style
+        doc.FaceStyles = styles
+        return model, style
+
+    def test_success(self, query_mgr):
+        qm, doc = query_mgr
+        model, style = self._part(doc)
 
         result = qm.set_body_reflectivity(0.7)
+
         assert result["status"] == "set"
         assert result["reflectivity"] == 0.7
-        assert model.Body.FaceStyle.Reflectivity == 0.7
+        assert style.Reflectivity == 0.7
+        assert model.Body.Style is style
 
     def test_clamps_values(self, query_mgr):
         qm, doc = query_mgr
-        model = MagicMock()
-        models = MagicMock()
-        models.Count = 1
-        models.Item.return_value = model
-        doc.Models = models
+        self._part(doc)
 
-        result = qm.set_body_reflectivity(2.0)
-        assert result["status"] == "set"
-        assert result["reflectivity"] == 1.0
+        assert qm.set_body_reflectivity(2.0)["reflectivity"] == 1.0
 
     def test_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -419,8 +671,7 @@ class TestSetBodyReflectivity:
         models.Count = 0
         doc.Models = models
 
-        result = qm.set_body_reflectivity(0.5)
-        assert "error" in result
+        assert "error" in qm.set_body_reflectivity(0.5)
 
 
 # ============================================================================
@@ -463,3 +714,151 @@ class TestSetMaterialDensity:
         result = qm.set_material_density(-100)
         assert "error" in result
         assert "positive" in result["error"]
+
+
+# ============================================================================
+# COM CALL SIGNATURES
+#
+# Expected argument lists come from reference/typelib_dump.json; see
+# scripts/audit_com_signatures.py.
+# ============================================================================
+
+import pythoncom  # noqa: E402
+from win32com.client import VARIANT  # noqa: E402
+
+VT_R8_ARRAY = pythoncom.VT_ARRAY | pythoncom.VT_R8
+
+
+def _shape(arg):
+    if isinstance(arg, VARIANT):
+        return (arg.varianttype, list(arg.value))
+    return arg
+
+
+def call_shape(mock_method):
+    """(positional_args, keyword_args) of the single call, VARIANTs normalised."""
+    assert mock_method.call_count == 1, mock_method.call_args_list
+    args, kwargs = mock_method.call_args
+    return tuple(_shape(a) for a in args), {k: _shape(v) for k, v in kwargs.items()}
+
+
+def _model(doc):
+    model = MagicMock()
+    models = MagicMock()
+    models.Count = 1
+    models.Item.return_value = model
+    doc.Models = models
+    return model
+
+
+#: Part.tlb Model.ComputePhysicalPropertiesWithSpecifiedDensity - the six
+#: SAFEARRAY [in,out] buffers, keyed by the type library's parameter names
+#: (including the "Interia" typo).
+#: Plain lists, not VARIANTs: verified against Solid Edge 2026, a VARIANT
+#: wrapper on an [in,out] SAFEARRAY raises "Objects for SAFEARRAYS must be
+#: sequences". See backends/query/_base.py::r8_array.
+EXPECTED_MASS_BUFFERS = {
+    "CenterOfGravity": [0.0] * 3,
+    "CenterOfVolume": [0.0] * 3,
+    "GlobalMomentsOfInteria": [0.0] * 6,
+    "PrincipalMomentsOfInteria": [0.0] * 3,
+    "PrincipalAxes": [0.0] * 9,
+    "RadiiOfGyration": [0.0] * 3,
+}
+
+
+class TestComputePhysicalPropertiesSignature:
+    def test_mass_properties_passes_density_accuracy_and_six_buffers(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
+            0.001,
+            0.06,
+            7.85,
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0,) * 6,
+            (0.0,) * 3,
+            (0.0,) * 9,
+            (0.0,) * 3,
+            0.99,
+            0,
+        )
+
+        result = qm.get_mass_properties(7850)
+        assert result["status"] == "computed"
+
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 7850, "Accuracy": 0.99, **EXPECTED_MASS_BUFFERS}
+
+    def test_center_of_gravity_fallback_uses_the_same_call(self, query_mgr):
+        qm, doc = query_mgr
+        doc.Variables.Count = 0
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
+            0.001,
+            0.06,
+            7.85,
+            (0.01, 0.02, 0.03),
+        )
+
+        result = qm.get_center_of_gravity()
+        assert result["center_of_gravity"] == [0.01, 0.02, 0.03]
+
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 7850.0, "Accuracy": 0.001, **EXPECTED_MASS_BUFFERS}
+
+    def test_moments_of_inertia_uses_the_same_call(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (
+            0.0,
+            0.0,
+            0.0,
+            (0,),
+            (0,),
+            (1.0, 2.0, 3.0),
+            (1.5, 2.5, 3.5),
+        )
+
+        qm.get_moments_of_inertia()
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 7850.0, "Accuracy": 0.001, **EXPECTED_MASS_BUFFERS}
+
+    def test_set_material_density_uses_the_same_call(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.return_value = (0.001, 0.06, 7.85)
+
+        qm.set_material_density(2700)
+        args, kwargs = call_shape(model.ComputePhysicalPropertiesWithSpecifiedDensity)
+        assert args == ()
+        assert kwargs == {"Density": 2700, "Accuracy": 0.99, **EXPECTED_MASS_BUFFERS}
+
+    def test_a_com_failure_is_reported_not_raised(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.ComputePhysicalPropertiesWithSpecifiedDensity.side_effect = Exception(
+            "0x8002000F Parameter not optional"
+        )
+
+        result = qm.get_mass_properties()
+        assert "error" in result
+
+
+class TestGetRangeSignature:
+    def test_bounding_box_passes_two_r8_buffers(self, query_mgr):
+        qm, doc = query_mgr
+        model = _model(doc)
+        model.Body.GetRange.return_value = ((0.0, 0.0, 0.0), (0.1, 0.2, 0.3))
+
+        result = qm.get_bounding_box()
+        assert result["min"] == [0.0, 0.0, 0.0]
+        assert result["max"] == [0.1, 0.2, 0.3]
+        assert result["dimensions"] == {"x": 0.1, "y": 0.2, "z": 0.3}
+
+        # Plain lists: Body.GetRange rejects a VARIANT wrapper on Solid Edge 2026.
+        assert call_shape(model.Body.GetRange) == (([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]), {})

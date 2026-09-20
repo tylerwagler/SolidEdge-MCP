@@ -12,6 +12,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import (
+    AssemblyFeaturePropertyConstants,
+    DocumentTypeConstants,
+    ExtentTypeConstants,
+)
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def asm_mgr():
@@ -20,6 +30,7 @@ def asm_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm), doc
 
@@ -32,6 +43,7 @@ def asm_mgr_with_sketch():
     dm = MagicMock()
     sm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_ASSEMBLY_DOCUMENT
     dm.get_active_document.return_value = doc
     return AssemblyManager(dm, sm), doc, sm
 
@@ -96,17 +108,49 @@ class TestAssemblyRevolvedCutout:
 
 
 class TestAssemblyHole:
-    def test_success(self, asm_mgr_with_sketch):
+    """pHoledata is what makes this a hole.
+
+    Passed None, Solid Edge 2026 recorded nothing and raised nothing --
+    AssemblyFeaturesHoles.Count stayed 0. With a HoleData from the assembly's
+    own HoleDataCollection the same call records the feature and cuts the
+    placed part, faces 6 -> 7. Verified live.
+    """
+
+    def test_builds_hole_data_and_passes_it(self, asm_mgr_with_sketch):
+        from solidedge_mcp.backends.constants import HoleTypeConstants
+
         am, doc, sm = asm_mgr_with_sketch
         sm.get_accumulated_profiles.return_value = [MagicMock()]
         doc.Occurrences.Item.return_value = MagicMock()
         holes = MagicMock()
         doc.AssemblyFeatures.AssemblyFeaturesHoles = holes
+        hole_data = MagicMock()
+        doc.HoleDataCollection.Add.return_value = hole_data
 
-        result = am.create_assembly_hole([0], depth=0.005)
+        result = am.create_assembly_hole([0], depth=0.005, diameter=0.008)
+
         assert result["status"] == "created"
         assert result["depth"] == 0.005
-        holes.Add.assert_called_once()
+        assert result["diameter"] == 0.008
+        doc.HoleDataCollection.Add.assert_called_once_with(
+            HoleType=HoleTypeConstants.igRegularHole, HoleDiameter=0.008
+        )
+        args = holes.Add.call_args.args
+        assert args[5] is hole_data, "pHoledata is the sixth positional argument"
+
+    def test_a_document_without_hole_data_is_refused_before_com(self, asm_mgr_with_sketch):
+        am, doc, sm = asm_mgr_with_sketch
+        sm.get_accumulated_profiles.return_value = [MagicMock()]
+        doc.Occurrences.Item.return_value = MagicMock()
+        holes = MagicMock()
+        doc.AssemblyFeatures.AssemblyFeaturesHoles = holes
+        del doc.HoleDataCollection
+
+        result = am.create_assembly_hole([0])
+
+        assert "error" in result
+        assert "HoleDataCollection" in result["error"]
+        holes.Add.assert_not_called()
 
     def test_no_profiles(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
@@ -119,14 +163,33 @@ class TestAssemblyHole:
 class TestAssemblyExtrudedProtrusion:
     def test_success(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        sm.get_accumulated_profiles.return_value = [MagicMock()]
+        profile = MagicMock()
+        profiles = [profile]
+        sm.get_accumulated_profiles.return_value = profiles
         protrusions = MagicMock()
+        # The property is ExtrudedProtrusions; AssemblyFeaturesExtrudedProtrusions
+        # is the interface it returns. Reading the interface name off
+        # AssemblyFeatures raises, and every protrusion call did.
         doc.AssemblyFeatures.ExtrudedProtrusions = protrusions
 
         result = am.create_assembly_extruded_protrusion(distance=0.05)
         assert result["status"] == "created"
         assert result["type"] == "assembly_extruded_protrusion"
-        protrusions.Add.assert_called_once()
+        # ExtrudedProtrusions.Add(nNumProfiles, pProfiles,
+        #   ExtentType, pExtentSide, profileSide, pdDistance, pKeyPoint,
+        #   pKeyPointFlags, pFromSurfOrPlane, pToSurfOrPlane)
+        protrusions.Add.assert_called_once_with(
+            1,
+            profiles,
+            ExtentTypeConstants.igFinite,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureOneSide,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureProfileLeft,
+            0.05,
+            None,
+            0,
+            None,
+            None,
+        )
 
     def test_no_profiles(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
@@ -139,14 +202,33 @@ class TestAssemblyExtrudedProtrusion:
 class TestAssemblyRevolvedProtrusion:
     def test_success(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        sm.get_accumulated_profiles.return_value = [MagicMock()]
+        import math
+
+        profile = MagicMock()
+        profiles = [profile]
+        sm.get_accumulated_profiles.return_value = profiles
         protrusions = MagicMock()
         doc.AssemblyFeatures.RevolvedProtrusions = protrusions
 
         result = am.create_assembly_revolved_protrusion(angle=90.0)
         assert result["status"] == "created"
         assert result["angle"] == 90.0
-        protrusions.Add.assert_called_once()
+        # RevolvedProtrusions.Add(nNumProfiles, pProfiles,
+        #   pRefAxis, ExtentType, ExtentSide, profileSide, pdAngle,
+        #   KeyPointOrTangentFace, KeyPointFlags, pFromSurface, pToSurface)
+        protrusions.Add.assert_called_once_with(
+            1,
+            profiles,
+            None,
+            ExtentTypeConstants.igFinite,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureOneSide,
+            AssemblyFeaturePropertyConstants.igAssemblyFeatureProfileLeft,
+            pytest.approx(math.radians(90.0)),
+            None,
+            0,
+            None,
+            None,
+        )
 
     def test_no_profiles(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
@@ -157,60 +239,83 @@ class TestAssemblyRevolvedProtrusion:
 
 
 class TestAssemblyMirror:
-    def test_success(self, asm_mgr_with_sketch):
+    """AssemblyFeaturesMirrors.Add returns E_ACCESSDENIED on SE 2025/2026 in
+    every argument combination, so the backend must refuse without touching COM."""
+
+    def test_returns_unsupported_without_calling_com(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
         feat = MagicMock()
         cutouts_coll = MagicMock()
         cutouts_coll.Item.return_value = feat
         doc.AssemblyFeatures.AssemblyFeaturesExtrudedCutouts = cutouts_coll
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts.Item.side_effect = Exception
-        doc.AssemblyFeatures.AssemblyFeaturesHoles = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesHoles.Item.side_effect = Exception
         mirrors = MagicMock()
         doc.AssemblyFeatures.AssemblyFeaturesMirrors = mirrors
         plane = MagicMock()
         doc.RefPlanes.Item.return_value = plane
 
         result = am.create_assembly_mirror([0], plane_index=2)
-        assert result["status"] == "created"
-        mirrors.Add.assert_called_once()
+        assert "status" not in result
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        assert "part document" in result["error"]
+        assert result["plane_index"] == 2
+        assert result["feature_indices"] == [0]
+        mirrors.Add.assert_not_called()
+        cutouts_coll.Item.assert_not_called()
+        doc.RefPlanes.Item.assert_not_called()
+        # Never even fetched the assembly-features collection.
+        assert not doc.AssemblyFeatures.method_calls
 
-    def test_no_features(self, asm_mgr_with_sketch):
-        am, doc, sm = asm_mgr_with_sketch
-        for coll_name in [
-            "AssemblyFeaturesExtrudedCutouts",
-            "AssemblyFeaturesRevolvedCutouts",
-            "AssemblyFeaturesHoles",
-        ]:
-            coll = MagicMock()
-            coll.Item.side_effect = Exception("not found")
-            setattr(doc.AssemblyFeatures, coll_name, coll)
+    def test_unsupported_even_without_active_document(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+
+        dm = MagicMock()
+        dm.get_active_document.side_effect = RuntimeError("no document")
+        am = AssemblyManager(dm, MagicMock())
 
         result = am.create_assembly_mirror([99])
-        assert "error" in result
-        assert "No features" in result["error"]
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        dm.get_active_document.assert_not_called()
 
 
 class TestAssemblyPattern:
-    def test_success(self, asm_mgr_with_sketch):
+    """AssemblyFeaturesPatterns.Add returns E_ACCESSDENIED on SE 2025/2026 in
+    every argument combination, so the backend must refuse without touching COM."""
+
+    def test_returns_unsupported_without_calling_com(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
         sm.get_accumulated_profiles.return_value = [MagicMock()]
         feat = MagicMock()
         cutouts_coll = MagicMock()
         cutouts_coll.Item.return_value = feat
         doc.AssemblyFeatures.AssemblyFeaturesExtrudedCutouts = cutouts_coll
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesRevolvedCutouts.Item.side_effect = Exception
-        doc.AssemblyFeatures.AssemblyFeaturesHoles = MagicMock()
-        doc.AssemblyFeatures.AssemblyFeaturesHoles.Item.side_effect = Exception
         patterns = MagicMock()
         doc.AssemblyFeatures.AssemblyFeaturesPatterns = patterns
 
         result = am.create_assembly_pattern([0], pattern_type="Circular")
-        assert result["status"] == "created"
+        assert "status" not in result
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        assert "pattern_component" in result["error"]
         assert result["pattern_type"] == "Circular"
-        patterns.Add.assert_called_once()
+        assert result["feature_indices"] == [0]
+        patterns.Add.assert_not_called()
+        cutouts_coll.Item.assert_not_called()
+        sm.get_accumulated_profiles.assert_not_called()
+        assert not doc.AssemblyFeatures.method_calls
+
+    def test_unsupported_even_without_active_document(self):
+        from solidedge_mcp.backends.assembly import AssemblyManager
+
+        dm = MagicMock()
+        dm.get_active_document.side_effect = RuntimeError("no document")
+        am = AssemblyManager(dm, MagicMock())
+
+        result = am.create_assembly_pattern([0])
+        assert result["unsupported"] is True
+        assert "E_ACCESSDENIED" in result["error"]
+        dm.get_active_document.assert_not_called()
 
 
 class TestAssemblySweptProtrusion:
@@ -236,18 +341,36 @@ class TestAssemblySweptProtrusion:
 
 
 class TestRecomputeAssemblyFeatures:
-    def test_success(self, asm_mgr_with_sketch):
+    """AssemblyFeatures.Recompute answers E_FAIL whatever it is given.
+
+    Verified on Solid Edge 2026, on an empty assembly and on one holding a
+    component, with options 0. The object is not a normal collection either --
+    it has no Count. AssemblyDocument.UpdateAll is the update that works.
+    """
+
+    def test_it_updates_the_document(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        af = MagicMock()
-        doc.AssemblyFeatures = af
 
         result = am.recompute_assembly_features()
+
         assert result["status"] == "recomputed"
-        af.Recompute.assert_called_once_with(0)
+        doc.UpdateAll.assert_called_once_with()
+        doc.AssemblyFeatures.Recompute.assert_not_called()
 
     def test_com_error(self, asm_mgr_with_sketch):
         am, doc, sm = asm_mgr_with_sketch
-        doc.AssemblyFeatures.Recompute.side_effect = Exception("fail")
+        doc.UpdateAll.side_effect = Exception("fail")
 
         result = am.recompute_assembly_features()
         assert "error" in result
+
+    def test_not_an_assembly(self, asm_mgr_with_sketch):
+        from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+        am, doc, sm = asm_mgr_with_sketch
+        doc.Type = DocumentTypeConstants.igPartDocument
+
+        result = am.recompute_assembly_features()
+
+        assert "error" in result
+        doc.UpdateAll.assert_not_called()

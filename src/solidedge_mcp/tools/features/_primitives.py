@@ -1,13 +1,15 @@
 """Primitive solid creation and cutout tools."""
 
-from typing import Any
+from typing import Any, Literal
 
 from solidedge_mcp.backends.validation import validate_numerics
 from solidedge_mcp.managers import feature_manager
 
 
 def create_primitive(
-    shape: str = "box_two_points",
+    shape: Literal[
+        "box_two_points", "box_center", "box_three_points", "cylinder", "sphere"
+    ] = "box_two_points",
     x1: float = 0.0,
     y1: float = 0.0,
     z1: float = 0.0,
@@ -24,57 +26,81 @@ def create_primitive(
     depth: float = 0.0,
     plane_index: int = 1,
 ) -> dict[str, Any]:
-    """Create a primitive solid shape.
+    """Create a primitive solid (no sketch needed).
 
-    shape: 'box_two_points' | 'box_center' | 'box_three_points'
-        | 'cylinder' | 'sphere'
-
-    All coordinates/dimensions in meters.
-    plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    All coordinates/dimensions in meters. box_two_points: (x1,y1,z1)-(x2,y2,z2)
+    corners. box_center: center (x1,y1,z1) + length/width/height.
+    box_three_points: three corner points. cylinder: center (x1,y1,z1),
+    radius, depth. sphere: center (x1,y1,z1), radius.
+    plane_index is 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(
-        x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2,
-        x3=x3, y3=y3, z3=z3, length=length, width=width,
-        height=height, radius=radius, depth=depth,
+        x1=x1,
+        y1=y1,
+        z1=z1,
+        x2=x2,
+        y2=y2,
+        z2=z2,
+        x3=x3,
+        y3=y3,
+        z3=z3,
+        length=length,
+        width=width,
+        height=height,
+        radius=radius,
+        depth=depth,
     )
     if err:
         return err
     match shape:
         case "box_two_points":
-            return feature_manager.create_box_by_two_points(x1, y1, z1, x2, y2, z2, plane_index)
+            return feature_manager.create_box_by_two_points(
+                x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2, plane_index=plane_index
+            )
         case "box_center":
             return feature_manager.create_box_by_center(
-                x1,
-                y1,
-                z1,
-                length,
-                width,
-                height,
-                plane_index,
+                center_x=x1,
+                center_y=y1,
+                center_z=z1,
+                length=length,
+                width=width,
+                height=height,
+                plane_index=plane_index,
             )
         case "box_three_points":
             return feature_manager.create_box_by_three_points(
-                x1,
-                y1,
-                z1,
-                x2,
-                y2,
-                z2,
-                x3,
-                y3,
-                z3,
-                plane_index,
+                x1=x1,
+                y1=y1,
+                z1=z1,
+                x2=x2,
+                y2=y2,
+                z2=z2,
+                x3=x3,
+                y3=y3,
+                z3=z3,
+                plane_index=plane_index,
             )
         case "cylinder":
-            return feature_manager.create_cylinder(x1, y1, z1, radius, depth, plane_index)
+            # A cylinder's axial length is "height" to most callers; "depth" is
+            # accepted too because that is what the COM parameter is called.
+            return feature_manager.create_cylinder(
+                base_center_x=x1,
+                base_center_y=y1,
+                base_center_z=z1,
+                radius=radius,
+                height=height or depth,
+                plane_index=plane_index,
+            )
         case "sphere":
-            return feature_manager.create_sphere(x1, y1, z1, radius, plane_index)
+            return feature_manager.create_sphere(
+                center_x=x1, center_y=y1, center_z=z1, radius=radius, plane_index=plane_index
+            )
         case _:
             return {"error": f"Unknown shape: {shape}"}
 
 
 def create_primitive_cutout(
-    shape: str = "box",
+    shape: Literal["box", "cylinder", "sphere"] = "box",
     x1: float = 0.0,
     y1: float = 0.0,
     z1: float = 0.0,
@@ -85,27 +111,41 @@ def create_primitive_cutout(
     height: float = 0.0,
     plane_index: int = 1,
 ) -> dict[str, Any]:
-    """Create a primitive cutout (removes material).
+    """Create a primitive cutout (removes material; no sketch needed).
 
-    shape: 'box' | 'cylinder' | 'sphere'
-
-    All coordinates/dimensions in meters.
-    plane_index: 1=Top/XY, 2=Right/YZ, 3=Front/XZ.
+    All coordinates/dimensions in meters. box: (x1,y1,z1)-(x2,y2,z2) corners.
+    cylinder: center (x1,y1,z1), radius, height. sphere: center, radius.
+    plane_index is 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     """
     err = validate_numerics(
-        x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2,
-        radius=radius, height=height,
+        x1=x1,
+        y1=y1,
+        z1=z1,
+        x2=x2,
+        y2=y2,
+        z2=z2,
+        radius=radius,
+        height=height,
     )
     if err:
         return err
     match shape:
         case "box":
             return feature_manager.create_box_cutout_by_two_points(
-                x1, y1, z1, x2, y2, z2, plane_index
+                x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2, plane_index=plane_index
             )
         case "cylinder":
-            return feature_manager.create_cylinder_cutout(x1, y1, z1, radius, height, plane_index)
+            return feature_manager.create_cylinder_cutout(
+                center_x=x1,
+                center_y=y1,
+                center_z=z1,
+                radius=radius,
+                height=height,
+                plane_index=plane_index,
+            )
         case "sphere":
-            return feature_manager.create_sphere_cutout(x1, y1, z1, radius, plane_index)
+            return feature_manager.create_sphere_cutout(
+                center_x=x1, center_y=y1, center_z=z1, radius=radius, plane_index=plane_index
+            )
         case _:
             return {"error": f"Unknown shape: {shape}"}

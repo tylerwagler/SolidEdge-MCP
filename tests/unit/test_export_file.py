@@ -9,6 +9,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from solidedge_mcp.backends.constants import DocumentTypeConstants
+
+IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
+IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
+IG_PART_DOCUMENT = DocumentTypeConstants.igPartDocument
+
 
 @pytest.fixture
 def export_mgr():
@@ -17,6 +23,7 @@ def export_mgr():
 
     dm = MagicMock()
     doc = MagicMock()
+    doc.Type = IG_DRAFT_DOCUMENT
     dm.get_active_document.return_value = doc
     return ExportManager(dm), doc
 
@@ -35,7 +42,10 @@ class TestExportFlatDxf:
         result = em.export_flat_dxf("C:/output/flat.dxf")
         assert result["status"] == "exported"
         assert result["format"] == "Flat DXF"
-        flat_models.SaveAsFlatDXFEx.assert_called_once()
+        # SaveAsFlatDXFEx is on Models; FlatPatternModels only proves the
+        # document is sheet metal.
+        doc.Models.SaveAsFlatDXFEx.assert_called_once()
+        flat_models.SaveAsFlatDXFEx.assert_not_called()
 
     def test_not_sheet_metal(self, export_mgr):
         em, doc = export_mgr
