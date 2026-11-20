@@ -23,6 +23,9 @@ number below is measured by the commands in `reference/VERIFICATION_STATUS.md`.
 
 ### Fixed
 
+- An idle server no longer burns a CPU core on Windows. FastMCP's in-memory docket worker
+  (background tasks, which this server does not use) busy-polls its fakeredis backend; the
+  server now skips that lifespan. Idle CPU went from about 99 % of a core to under 1 %.
 - More than 140 COM calls that could never have worked: members that exist on no
   interface, members read off the wrong interface, wrong argument counts, SAFEARRAY
   wrappers Solid Edge rejects, constants from the wrong enum, writes to read-only

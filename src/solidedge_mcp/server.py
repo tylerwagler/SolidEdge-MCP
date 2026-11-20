@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from importlib.metadata import PackageNotFoundError, version
 
 from fastmcp import FastMCP
@@ -18,6 +20,12 @@ def _package_version() -> str:
         return "0.0.0"
 
 
+@asynccontextmanager
+async def _no_docket() -> AsyncIterator[None]:
+    """Stand-in for FastMCP's docket lifespan: start nothing, just yield."""
+    yield
+
+
 def create_server() -> FastMCP:
     """Build a fully registered server instance (used by main() and tests)."""
     configure_logging()
@@ -28,6 +36,12 @@ def create_server() -> FastMCP:
         website_url="https://github.com/tylerwagler/SolidEdge-MCP",
     )
     register_tools(server)
+    # FastMCP starts an in-memory docket worker for background tasks. Its
+    # fakeredis backend busy-polls, burning a full core while idle on Windows,
+    # and this server uses no background tasks, so skip it. Guarded so a
+    # FastMCP upgrade that renames the hook does not break startup.
+    if hasattr(server, "_docket_lifespan"):
+        server._docket_lifespan = _no_docket  # type: ignore[method-assign]
     return server
 
 
